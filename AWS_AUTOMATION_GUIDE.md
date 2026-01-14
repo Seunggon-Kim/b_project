@@ -417,6 +417,102 @@ mkdir -p /home/ubuntu/b_project/logs
 
 ---
 
+## 📧 이메일 알림 설정 (선택사항)
+
+크롤링 완료 시 이메일 알림을 받을 수 있습니다.
+
+### Step 1: Gmail 앱 비밀번호 생성
+
+#### 1. Google 계정 보안 설정
+
+- <https://myaccount.google.com/security> 접속
+- Gmail 계정으로 로그인
+
+#### 2. 2단계 인증 활성화 (필수)
+
+1. **"Google에 로그인"** 섹션 찾기
+2. **"2단계 인증"** 클릭
+3. 아직 활성화되지 않았다면 **"시작하기"** 클릭
+4. 휴대폰 번호 입력 및 인증
+
+#### 3. 앱 비밀번호 생성
+
+1. 2단계 인증 페이지 하단의 **"앱 비밀번호"** 클릭
+2. **앱 선택**: "메일"
+3. **기기 선택**: "기타" → "KBO Crawler" 또는 "b_project" 입력
+4. **"생성"** 클릭
+5. **16자리 비밀번호** 복사 (예: `abcd efgh ijkl mnop`)
+
+### Step 2: 이메일 설정 파일 생성
+
+AWS SSH에서:
+
+```bash
+# 설정 파일 생성
+nano config/email_config.json
+```
+
+다음 내용 입력 (본인 정보로 수정):
+
+```json
+{
+    "smtp_server": "smtp.gmail.com",
+    "smtp_port": 587,
+    "sender_email": "본인이메일@gmail.com",
+    "sender_password": "앱비밀번호16자리",
+    "receiver_email": "알림받을이메일@gmail.com"
+}
+```
+
+**주의사항:**
+
+- `sender_password`: 16자리 앱 비밀번호 (공백 제거)
+- `receiver_email`: 같은 주소 사용 가능
+
+저장: `Ctrl + O` → `Enter` → `Ctrl + X`
+
+### Step 3: 이메일 알림 테스트
+
+```bash
+# 성공 알림 테스트
+python data_collection/email_notifier.py --success
+
+# 실패 알림 테스트 (선택)
+python data_collection/email_notifier.py --fail
+```
+
+받은편지함에서 이메일 확인!
+
+### Step 4: Crontab에 이메일 알림 추가
+
+```bash
+crontab -e
+```
+
+기존 Crontab 줄 끝에 이메일 알림 추가:
+
+```bash
+# KBO 타자 통계 자동 수집 (매일 새벽 2시) + 이메일 알림
+0 2 * * * mkdir -p /home/ubuntu/b_project/logs && cd /home/ubuntu/b_project && /home/ubuntu/b_project/venv/bin/python data_collection/selenium_batter_scraper.py && /home/ubuntu/b_project/venv/bin/python data_collection/kbo_to_db.py && /home/ubuntu/b_project/venv/bin/python data_collection/email_notifier.py --success >> /home/ubuntu/b_project/logs/cron.log 2>&1
+```
+
+저장: `Ctrl + O` → `Enter` → `Ctrl + X` → `y`
+
+### Step 5: 이메일 알림 내용
+
+매일 새벽 2시 크롤링 완료 후 다음 내용의 이메일을 받게 됩니다:
+
+**제목:** KBO 공식 통계 수집 완료 - YYYY-MM-DD
+
+**내용:**
+
+- 📊 수집 일시
+- 📈 수집 결과 (타자, 투수, 팀 수)
+- 💾 저장 위치 (DB, CSV)
+- ✅ 상태 메시지
+
+---
+
 ## 🌐 대시보드 배포 (선택사항)
 
 ### 방법 1: nohup으로 백그라운드 실행
@@ -650,6 +746,7 @@ find ~/b_project/database -name "*.backup_*" -mtime +30 -delete
 - [ ] 크롤러 테스트 성공
 - [ ] 데이터베이스 저장 확인
 - [ ] Crontab 자동화 설정
+- [ ] **이메일 알림 설정** (선택) ✨
 - [ ] 대시보드 배포 (선택)
 - [ ] 외부에서 대시보드 접속 확인
 
