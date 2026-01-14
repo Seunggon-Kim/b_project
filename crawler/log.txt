@@ -1,0 +1,39 @@
+
+
+====================================
+Current Time : 2026-01-11T08:08:34.131073
+====================================
+====================================
+Start date : 20250101
+End date : 20251231
+Successfully downloaded games : 717
+Skipped games(already exists) : 0
+Broken games(bad data) : 3
+====================================
+Total 2098.71 sec elapsed with 721 games
+
+
+====================================
+Current Time : 2026-01-11T09:13:37.523211
+====================================
+====================================
+Start date : 20250628
+End date : 20250628
+Successfully downloaded games : 0
+Skipped games(already exists) : 4
+Broken games(bad data) : 1
+====================================
+Total 2.27 sec elapsed with 5 games
+
+
+====================================
+Current Time : 2026-01-11T22:29:54.436567
+====================================
+====================================
+Start date : 20250101
+End date : 20251231
+Successfully downloaded games : 717
+Skipped games(already exists) : 0
+Broken games(bad data) : 3
+====================================
+Total 1589.84 sec elapsed with 721 games
