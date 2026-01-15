@@ -16,6 +16,8 @@ import json
 import logging
 from pathlib import Path
 import os
+import pandas as pd
+import glob
 
 # 프로젝트 루트 경로
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -53,6 +55,43 @@ def load_email_config():
     except Exception as e:
         logging.error(f"❌ 설정 파일 로드 실패: {e}")
         return None
+
+
+def get_data_counts():
+    """크롤링된 데이터 개수 자동 계산"""
+    batter_count = 0
+    pitcher_count = 0
+    team_count = 10  # 기본값
+    
+    try:
+        # 타자 CSV 파일 찾기 (최신 파일)
+        batter_pattern = str(PROJECT_ROOT / 'crawler' / 'save' / 'official_stats' / 'batter_stats_*.csv')
+        batter_files = glob.glob(batter_pattern)
+        
+        if batter_files:
+            # 가장 최신 파일 선택
+            latest_batter_file = max(batter_files, key=os.path.getmtime)
+            df_batter = pd.read_csv(latest_batter_file)
+            batter_count = len(df_batter)
+            logging.info(f"📊 타자 데이터: {batter_count}명 (파일: {os.path.basename(latest_batter_file)})")
+        
+        # 투수 CSV 파일 찾기 (최신 파일)
+        pitcher_pattern = str(PROJECT_ROOT / 'crawler' / 'save' / 'official_stats' / 'pitcher_stats_*.csv')
+        pitcher_files = glob.glob(pitcher_pattern)
+        
+        if pitcher_files:
+            # 가장 최신 파일 선택
+            latest_pitcher_file = max(pitcher_files, key=os.path.getmtime)
+            df_pitcher = pd.read_csv(latest_pitcher_file)
+            pitcher_count = len(df_pitcher)
+            logging.info(f"📊 투수 데이터: {pitcher_count}명 (파일: {os.path.basename(latest_pitcher_file)})")
+        
+    except Exception as e:
+        logging.warning(f"⚠️ 데이터 개수 자동 계산 실패: {e}")
+        logging.warning("기본값 사용: 타자 0명, 투수 0명")
+    
+    return batter_count, pitcher_count, team_count
+
 
 
 def send_success_email(batter_count, pitcher_count=0, team_count=0):
@@ -155,15 +194,29 @@ def main():
     parser = argparse.ArgumentParser(description='KBO 통계 수집 이메일 알림')
     parser.add_argument('--success', action='store_true', help='성공 알림')
     parser.add_argument('--fail', action='store_true', help='실패 알림')
-    parser.add_argument('--batter', type=int, default=0, help='타자 수')
-    parser.add_argument('--pitcher', type=int, default=0, help='투수 수')
-    parser.add_argument('--team', type=int, default=0, help='팀 수')
+    parser.add_argument('--batter', type=int, default=0, help='타자 수 (0이면 자동 계산)')
+    parser.add_argument('--pitcher', type=int, default=0, help='투수 수 (0이면 자동 계산)')
+    parser.add_argument('--team', type=int, default=0, help='팀 수 (0이면 자동 계산)')
     parser.add_argument('--error', type=str, default='알 수 없는 오류', help='오류 메시지')
     
     args = parser.parse_args()
     
     if args.success:
-        return send_success_email(args.batter, args.pitcher, args.team)
+        # 타자/투수 수가 0이면 자동으로 계산
+        if args.batter == 0 or args.pitcher == 0 or args.team == 0:
+            logging.info("📊 데이터 개수 자동 계산 중...")
+            auto_batter, auto_pitcher, auto_team = get_data_counts()
+            
+            # 사용자가 입력한 값이 있으면 우선 사용, 없으면 자동 계산 값 사용
+            batter_count = args.batter if args.batter > 0 else auto_batter
+            pitcher_count = args.pitcher if args.pitcher > 0 else auto_pitcher
+            team_count = args.team if args.team > 0 else auto_team
+        else:
+            batter_count = args.batter
+            pitcher_count = args.pitcher
+            team_count = args.team
+        
+        return send_success_email(batter_count, pitcher_count, team_count)
     elif args.fail:
         return send_failure_email(args.error)
     else:
