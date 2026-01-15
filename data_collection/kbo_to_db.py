@@ -105,7 +105,7 @@ def save_batter_stats(conn, csv_path):
         
         # 기존 (player_id, season) 조합 조회
         cursor.execute("SELECT player_id, season FROM kbo_official_batter_stats WHERE season = ?", (season,))
-        existing_keys = set((row[0], row[1]) for row in cursor.fetchall())
+        existing_keys = set((str(row[0]), int(row[1])) for row in cursor.fetchall())
         
         logging.info(f"  📂 기존 DB 선수 ({season}년): {len(existing_keys)}명")
         
@@ -121,10 +121,10 @@ def save_batter_stats(conn, csv_path):
         
         # 각 행을 UPSERT
         for idx, row in df.iterrows():
-            player_id = row.get('player_id', '')
+            player_id = str(row.get('player_id', ''))  # 문자열로 명시적 변환
             
             # player_id가 비어있으면 건너뛰기
-            if pd.isna(player_id) or player_id == '':
+            if pd.isna(player_id) or player_id == '' or player_id == 'nan':
                 skip_count += 1
                 continue
             
