@@ -22,11 +22,16 @@ def load_player_data():
         
     conn = sqlite3.connect(db_path)
     
-    # KBO 공식 타자 데이터 로드 (전체 스키마)
+    # KBO 공식 타자 데이터 로드 (전체 스키마, 최신 시즌만)
     try:
-        df_batters = pd.read_sql_query("""
+        # 최신 시즌 조회
+        max_season_df = pd.read_sql_query("SELECT MAX(season) as max_season FROM kbo_official_batter_stats", conn)
+        max_season = max_season_df['max_season'].iloc[0] if not max_season_df.empty else datetime.now().year
+        
+        df_batters = pd.read_sql_query(f"""
             SELECT 
                 player_id,
+                season AS 시즌,
                 player_name AS 선수명,
                 player_team AS 팀,
                 batting_average AS 타율,
@@ -66,6 +71,7 @@ def load_player_data():
                 created_at AS 등록일시,
                 updated_at AS 업데이트일시
             FROM kbo_official_batter_stats 
+            WHERE season = {max_season}
             ORDER BY 타율 DESC
         """, conn)
         

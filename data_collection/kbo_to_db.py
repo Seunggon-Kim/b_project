@@ -25,13 +25,14 @@ logging.basicConfig(
 
 
 def create_tables(conn):
-    """KBO 공식 통계 테이블 생성 (전체 스키마)"""
+    """KBO 공식 통계 테이블 생성 (복합 PRIMARY KEY)"""
     cursor = conn.cursor()
     
-    # 타자 통계 테이블 (전체 35개 컬럼)
+    # 타자 통계 테이블 (season 컬럼 추가, 복합 PRIMARY KEY)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS kbo_official_batter_stats (
-        player_id TEXT PRIMARY KEY,
+        player_id TEXT,
+        season INTEGER,
         player_name TEXT,
         player_team TEXT,
         batting_average REAL,
@@ -69,19 +70,29 @@ def create_tables(conn):
         extended_runs REAL,
         gross_production_average REAL,
         created_at TEXT,
-        updated_at TEXT
+        updated_at TEXT,
+        PRIMARY KEY (player_id, season)
     )
     """)
     
-    logging.info("✅ 테이블 생성 완료 (전체 스키마, UPSERT 방식)")
+    logging.info("✅ 테이블 생성 완료 (복합 PRIMARY KEY: player_id, season)")
     conn.commit()
 
 
 def save_batter_stats(conn, csv_path):
-    """타자 통계 저장 (UPSERT)"""
+    """타자 통계 저장 (복합 PRIMARY KEY UPSERT)"""
     logging.info(f"📊 타자 통계 저장 중: {csv_path}")
     
     try:
+        # CSV 파일명에서 시즌 추출 (예: batter_stats_2026.csv → 2026)
+        import re
+        season_match = re.search(r'_(\d{4})\.csv$', str(csv_path))
+        if not season_match:
+            logging.error(f"  ❌ 파일명에서 시즌을 추출할 수 없습니다: {csv_path}")
+            return False, 0
+        season = int(season_match.group(1))
+        logging.info(f"  📅 시즌: {season}")
+        
         # CSV 읽기
         df = pd.read_csv(csv_path, encoding='utf-8-sig')
         
@@ -92,9 +103,11 @@ def save_batter_stats(conn, csv_path):
         
         cursor = conn.cursor()
         
-        # 기존 player_id와 created_at 조회
-        cursor.execute("SELECT player_id, created_at FROM kbo_official_batter_stats")
-        existing_data = {row[0]: row[1] for row in cursor.fetchall()}
+        # 기존 (player_id, season) 조합 조회
+        cursor.execute("SELECT player_id, season FROM kbo_official_batter_stats WHERE season = ?", (season,))
+        existing_keys = set((row[0], row[1]) for row in cursor.fetchall())
+        
+        logging.info(f"  📂 기존 DB 선수 ({season}년): {len(existing_keys)}명")
         
         new_count = 0
         update_count = 0
@@ -106,7 +119,7 @@ def save_batter_stats(conn, csv_path):
                 return None
             return val
         
-        # 각 행을 UPSERT (INSERT OR REPLACE 사용)
+        # 각 행을 UPSERT
         for idx, row in df.iterrows():
             player_id = row.get('player_id', '')
             
@@ -115,69 +128,125 @@ def save_batter_stats(conn, csv_path):
                 skip_count += 1
                 continue
             
-            # 기존 선수인지 확인
-            is_new = player_id not in existing_data
-            created_at = current_time if is_new else existing_data[player_id]
-            
-            # INSERT OR REPLACE 사용 (created_at 유지)
-            cursor.execute("""
-                INSERT OR REPLACE INTO kbo_official_batter_stats (
-                    player_id, player_name, player_team, batting_average,
-                    games, plate_appearance, at_bat, run, single, double, triple,
-                    home_run, total_bases, run_batted_in, sacrifice_bunts,
-                    sacrifice_fly, base_on_balls, intentional_base_on_balls,
-                    hit_by_pitch, strikeout, ground_into_double_play,
-                    slugging_percentage, on_base_percentage, on_base_plus_slugging,
-                    multi_hits, runners_in_scoring_position, pinch_hit_batting_average,
-                    extra_base_hits, ground_outs, air_outs, go_ao, gw_rbi,
-                    bb_k, p_pa, isop, extended_runs, gross_production_average,
-                    created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                player_id,
-                safe_value(row.get('player_name')),
-                safe_value(row.get('player_team')),
-                safe_value(row.get('batting_average')),
-                safe_value(row.get('games')),
-                safe_value(row.get('plate_appearance')),
-                safe_value(row.get('at_bat')),
-                safe_value(row.get('run')),
-                safe_value(row.get('single')),
-                safe_value(row.get('double')),
-                safe_value(row.get('triple')),
-                safe_value(row.get('home_run')),
-                safe_value(row.get('total_bases')),
-                safe_value(row.get('run_batted_in')),
-                safe_value(row.get('sacrifice_bunts')),
-                safe_value(row.get('sacrifice_fly')),
-                safe_value(row.get('base_on_balls')),
-                safe_value(row.get('intentional_base_on_balls')),
-                safe_value(row.get('hit_by_pitch')),
-                safe_value(row.get('strikeout')),
-                safe_value(row.get('ground_into_double_play')),
-                safe_value(row.get('slugging_percentage')),
-                safe_value(row.get('on_base_percentage')),
-                safe_value(row.get('on_base_plus_slugging')),
-                safe_value(row.get('multi_hits')),
-                safe_value(row.get('runners_in_scoring_position')),
-                safe_value(row.get('pinch_hit_batting_average')),
-                safe_value(row.get('extra_base_hits')),
-                safe_value(row.get('ground_outs')),
-                safe_value(row.get('air_outs')),
-                safe_value(row.get('go_ao')),
-                safe_value(row.get('gw_rbi')),
-                safe_value(row.get('bb_k')),
-                safe_value(row.get('p_pa')),
-                safe_value(row.get('isop')),
-                safe_value(row.get('extended_runs')),
-                safe_value(row.get('gross_production_average')),
-                created_at,
-                current_time
-            ))
+            # 기존 선수인지 확인 (player_id + season 조합)
+            is_new = (player_id, season) not in existing_keys
             
             if is_new:
+                # 새 선수: INSERT
+                cursor.execute("""
+                    INSERT INTO kbo_official_batter_stats (
+                        player_id, season, player_name, player_team, batting_average,
+                        games, plate_appearance, at_bat, run, single, double, triple,
+                        home_run, total_bases, run_batted_in, sacrifice_bunts,
+                        sacrifice_fly, base_on_balls, intentional_base_on_balls,
+                        hit_by_pitch, strikeout, ground_into_double_play,
+                        slugging_percentage, on_base_percentage, on_base_plus_slugging,
+                        multi_hits, runners_in_scoring_position, pinch_hit_batting_average,
+                        extra_base_hits, ground_outs, air_outs, go_ao, gw_rbi,
+                        bb_k, p_pa, isop, extended_runs, gross_production_average,
+                        created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    player_id,
+                    season,
+                    safe_value(row.get('player_name')),
+                    safe_value(row.get('player_team')),
+                    safe_value(row.get('batting_average')),
+                    safe_value(row.get('games')),
+                    safe_value(row.get('plate_appearance')),
+                    safe_value(row.get('at_bat')),
+                    safe_value(row.get('run')),
+                    safe_value(row.get('single')),
+                    safe_value(row.get('double')),
+                    safe_value(row.get('triple')),
+                    safe_value(row.get('home_run')),
+                    safe_value(row.get('total_bases')),
+                    safe_value(row.get('run_batted_in')),
+                    safe_value(row.get('sacrifice_bunts')),
+                    safe_value(row.get('sacrifice_fly')),
+                    safe_value(row.get('base_on_balls')),
+                    safe_value(row.get('intentional_base_on_balls')),
+                    safe_value(row.get('hit_by_pitch')),
+                    safe_value(row.get('strikeout')),
+                    safe_value(row.get('ground_into_double_play')),
+                    safe_value(row.get('slugging_percentage')),
+                    safe_value(row.get('on_base_percentage')),
+                    safe_value(row.get('on_base_plus_slugging')),
+                    safe_value(row.get('multi_hits')),
+                    safe_value(row.get('runners_in_scoring_position')),
+                    safe_value(row.get('pinch_hit_batting_average')),
+                    safe_value(row.get('extra_base_hits')),
+                    safe_value(row.get('ground_outs')),
+                    safe_value(row.get('air_outs')),
+                    safe_value(row.get('go_ao')),
+                    safe_value(row.get('gw_rbi')),
+                    safe_value(row.get('bb_k')),
+                    safe_value(row.get('p_pa')),
+                    safe_value(row.get('isop')),
+                    safe_value(row.get('extended_runs')),
+                    safe_value(row.get('gross_production_average')),
+                    current_time,
+                    current_time
+                ))
                 new_count += 1
+                existing_keys.add((player_id, season))
             else:
+                # 기존 선수: UPDATE만 실행 (created_at 유지)
+                cursor.execute("""
+                    UPDATE kbo_official_batter_stats SET
+                        player_name = ?, player_team = ?, batting_average = ?,
+                        games = ?, plate_appearance = ?, at_bat = ?, run = ?,
+                        single = ?, double = ?, triple = ?, home_run = ?,
+                        total_bases = ?, run_batted_in = ?, sacrifice_bunts = ?,
+                        sacrifice_fly = ?, base_on_balls = ?, intentional_base_on_balls = ?,
+                        hit_by_pitch = ?, strikeout = ?, ground_into_double_play = ?,
+                        slugging_percentage = ?, on_base_percentage = ?, on_base_plus_slugging = ?,
+                        multi_hits = ?, runners_in_scoring_position = ?, pinch_hit_batting_average = ?,
+                        extra_base_hits = ?, ground_outs = ?, air_outs = ?, go_ao = ?,
+                        gw_rbi = ?, bb_k = ?, p_pa = ?, isop = ?, extended_runs = ?,
+                        gross_production_average = ?, updated_at = ?
+                    WHERE player_id = ? AND season = ?
+                """, (
+                    safe_value(row.get('player_name')),
+                    safe_value(row.get('player_team')),
+                    safe_value(row.get('batting_average')),
+                    safe_value(row.get('games')),
+                    safe_value(row.get('plate_appearance')),
+                    safe_value(row.get('at_bat')),
+                    safe_value(row.get('run')),
+                    safe_value(row.get('single')),
+                    safe_value(row.get('double')),
+                    safe_value(row.get('triple')),
+                    safe_value(row.get('home_run')),
+                    safe_value(row.get('total_bases')),
+                    safe_value(row.get('run_batted_in')),
+                    safe_value(row.get('sacrifice_bunts')),
+                    safe_value(row.get('sacrifice_fly')),
+                    safe_value(row.get('base_on_balls')),
+                    safe_value(row.get('intentional_base_on_balls')),
+                    safe_value(row.get('hit_by_pitch')),
+                    safe_value(row.get('strikeout')),
+                    safe_value(row.get('ground_into_double_play')),
+                    safe_value(row.get('slugging_percentage')),
+                    safe_value(row.get('on_base_percentage')),
+                    safe_value(row.get('on_base_plus_slugging')),
+                    safe_value(row.get('multi_hits')),
+                    safe_value(row.get('runners_in_scoring_position')),
+                    safe_value(row.get('pinch_hit_batting_average')),
+                    safe_value(row.get('extra_base_hits')),
+                    safe_value(row.get('ground_outs')),
+                    safe_value(row.get('air_outs')),
+                    safe_value(row.get('go_ao')),
+                    safe_value(row.get('gw_rbi')),
+                    safe_value(row.get('bb_k')),
+                    safe_value(row.get('p_pa')),
+                    safe_value(row.get('isop')),
+                    safe_value(row.get('extended_runs')),
+                    safe_value(row.get('gross_production_average')),
+                    current_time,
+                    player_id,
+                    season
+                ))
                 update_count += 1
         
         conn.commit()
