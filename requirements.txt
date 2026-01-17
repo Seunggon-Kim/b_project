@@ -17,6 +17,8 @@ beautifulsoup4>=4.12.0
 lxml>=4.9.0
 requests>=2.31.0
 regex>=2023.0.0
+selenium>=4.15.0
+webdriver-manager>=4.0.0
 
 # 유틸리티
 tqdm>=4.66.0

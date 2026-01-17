@@ -48,7 +48,9 @@ python pbp.py -f 20250101 -t 20251231 -j
 **주요 스크립트**:
 
 - `selenium_batter_scraper.py` ⭐ - 타자 통계 크롤링
-- `kbo_to_db.py` ⭐ - DB 저장 (UPSERT 방식)
+- `selenium_pitcher_scraper.py` ⭐ - 투수 통계 크롤링
+- `kbo_to_db.py` ⭐ - 타자 DB 저장 (UPSERT 방식)
+- `pitcher_to_db.py` ⭐ - 투수 DB 저장 (UPSERT 방식)
 - `email_notifier.py` - 이메일 알림
 - `csv_to_db.py` - PBP CSV → DB
 - `calculate_stats.py` - 선수 통계 계산
@@ -76,7 +78,8 @@ python pbp.py -f 20250101 -t 20251231 -j
 - `game_team_stats` - 팀 통계
 - `batter_stats_temp` - PBP 계산 타자 통계
 - `pitcher_stats_temp` - PBP 계산 투수 통계
-- `kbo_official_batter_stats` - KBO 공식 타자 통계
+- `kbo_official_batter_stats` - KBO 공식 타자 통계 (복합 PK: player_id, season)
+- `kbo_official_pitcher_stats` - KBO 공식 투수 통계 (복합 PK: player_id, season)
 
 ---
 
@@ -146,9 +149,12 @@ streamlit run dashboard/Home.py
 
 - `README.md` - 프로젝트 개요
 - `SELENIUM_SETUP_GUIDE.md` - Selenium 설정 가이드
+- `PITCHER_CRAWLING_GUIDE.md` ⭐ - **투수 통계 크롤링 가이드**
 - `SAMPLE_DATA.md` - 샘플 데이터 설명
 - `AWS_AUTOMATION_GUIDE.md` ⭐ - **AWS 24/7 자동화 가이드**
+- `WHY_NO_EMAIL.md` 🔧 - **메일 미수신 문제 해결 가이드**
 - `check_kbo_stats.py` - KBO 공식 통계 DB 검증 (수집 데이터 확인용)
+- `check_pitcher_db.py` - 투수 통계 DB 검증
 
 ### 🔧 유틸리티 스크립트
 
@@ -161,8 +167,10 @@ streamlit run dashboard/Home.py
 
 ### 🚀 배치 파일
 
-- `run_crawler.bat` - 크롤러 실행
-- `selenium_daily_collector.bat` - 일일 자동 수집
+- `run_crawler.bat` - PBP 크롤러 실행
+- `selenium_daily_collector.bat` - 타자 일일 자동 수집
+- `selenium_pitcher_collector.bat` ⭐ - 투수 자동 수집 (크롤링 + DB + 이메일)
+- `selenium_all_stats_collector.bat` ⭐ - 타자 + 투수 전체 자동 수집
 
 ### 📦 설정
 
@@ -208,6 +216,8 @@ python calculate_stats.py
 
 ### 3️⃣ **공식 통계 수집**
 
+**타자 통계**:
+
 ```bash
 # 크롤링
 python data_collection/selenium_batter_scraper.py
@@ -215,9 +225,24 @@ python data_collection/selenium_batter_scraper.py
 # DB 저장 (UPSERT)
 python data_collection/kbo_to_db.py
 
-# 이메일 알림
-python data_collection/email_notifier.py --success --batter 450
+# 이메일 알림 (개수 자동 계산)
+python data_collection/email_notifier.py --success
 ```
+
+**투수 통계**:
+
+```bash
+# 크롤링
+python data_collection/selenium_pitcher_scraper.py
+
+# DB 저장 (UPSERT)
+python data_collection/pitcher_to_db.py
+
+# 확인
+python check_pitcher_db.py
+```
+
+**상세 가이드**: `PITCHER_CRAWLING_GUIDE.md`
 
 ### 4️⃣ **대시보드 실행**
 
@@ -239,8 +264,9 @@ streamlit run dashboard/Home.py
 ### 2️⃣ AWS EC2 (24/7 자동용) ⭐
 
 - **장점:** 컴퓨터를 꺼도 클라우드 서버에서 24시간 수집 및 대시보드 호스팅 가능.
-- **도구:** Crontab 또는 Airflow 사용.
+- **스케줄:** 매일 새벽 1시 30분 자동 실행 (Crontab)
 - **가이드:** `AWS_AUTOMATION_GUIDE.md` 참고
+- **문제 해결:** 메일이 안 오면 `WHY_NO_EMAIL.md` 참고
 
 ---
 
