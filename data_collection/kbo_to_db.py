@@ -279,8 +279,9 @@ def main():
         # 테이블 생성
         create_tables(conn)
         
-        # 타자 통계 저장
-        batter_csv = CSV_DIR / f'batter_stats_{datetime.now().year}.csv'
+        # 타자 통계 저장 (2025 시즌 데이터 고정)
+        target_year = 2025
+        batter_csv = CSV_DIR / f'batter_stats_{target_year}.csv'
         if batter_csv.exists():
             success, count = save_batter_stats(conn, batter_csv)
             if not success:

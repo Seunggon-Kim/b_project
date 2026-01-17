@@ -22,8 +22,12 @@ import pandas as pd
 
 # 프로젝트 루트 경로
 PROJECT_ROOT = Path(__file__).parent.parent
-SAVE_DIR = PROJECT_ROOT / 'crawler' / 'save' / 'official_stats'
+
+# 저장 경로 설정 (2025 시즌 데이터 고정)
+current_year = 2025
+SAVE_DIR = PROJECT_ROOT / 'crawler' / 'save' / 'official_stats' / str(current_year)
 SAVE_DIR.mkdir(parents=True, exist_ok=True)
+CSV_FILE_PATH = SAVE_DIR / f'batter_stats_{current_year}.csv'
 
 # 로그 설정
 LOG_DIR = PROJECT_ROOT / 'logs'

@@ -337,8 +337,9 @@ def main():
         # 테이블 생성
         create_pitcher_table(conn)
         
-        # 투수 통계 저장
-        pitcher_csv = CSV_DIR / f'pitcher_stats_{datetime.now().year}.csv'
+        # 투수 통계 저장 (2025 시즌 데이터 고정)
+        target_year = 2025
+        pitcher_csv = CSV_DIR / f'pitcher_stats_{target_year}.csv'
         if pitcher_csv.exists():
             success, count = save_pitcher_stats(conn, pitcher_csv)
             if not success:
