@@ -23,7 +23,7 @@ import pandas as pd
 # 프로젝트 루트 경로
 PROJECT_ROOT = Path(__file__).parent.parent
 
-# 저장 경로 설정 (2026년이지만 2025 시즌 데이터를 크롤링하므로 2025로 고정)
+# 저장 경로 설정 (2025 시즌 데이터 고정)
 current_year = 2025 
 SAVE_DIR = PROJECT_ROOT / 'crawler' / 'save' / 'official_stats'
 SAVE_DIR.mkdir(parents=True, exist_ok=True)
