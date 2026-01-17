@@ -25,7 +25,7 @@ PROJECT_ROOT = Path(__file__).parent.parent
 
 # 저장 경로 설정 (2025 시즌 데이터 고정)
 current_year = 2025
-SAVE_DIR = PROJECT_ROOT / 'crawler' / 'save' / 'official_stats' / str(current_year)
+SAVE_DIR = PROJECT_ROOT / 'crawler' / 'save' / 'official_stats'
 SAVE_DIR.mkdir(parents=True, exist_ok=True)
 CSV_FILE_PATH = SAVE_DIR / f'batter_stats_{current_year}.csv'
 
