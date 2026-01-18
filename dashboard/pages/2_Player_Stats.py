@@ -80,6 +80,8 @@ def load_batter_data():
                 air_outs,
                 go_ao,
                 gw_rbi,
+                strikeout_per_pa,
+                base_on_balls_per_pa,
                 bb_k,
                 p_pa,
                 isop,
@@ -141,6 +143,8 @@ def load_pitcher_data():
                 total_saves,
                 k_9,
                 bb_9,
+                strikeout_per_pa,
+                base_on_balls_per_pa,
                 on_base_percentage,
                 slugging_percentage,
                 on_base_plus_slugging
@@ -252,6 +256,8 @@ python data_collection/kbo_to_db.py
             'air_outs': '뜬공아웃',
             'go_ao': '땅뜬비율',
             'gw_rbi': '결승타',
+            'strikeout_per_pa': 'K%',
+            'base_on_balls_per_pa': 'BB%',
             'bb_k': '볼삼비율',
             'p_pa': '타석당투구수',
             'isop': 'ISOP',
@@ -263,7 +269,7 @@ python data_collection/kbo_to_db.py
         default_columns = [
             'player_name', 'player_team', 'games', 'plate_appearance', 
             'home_run', 'run', 'run_batted_in', 'isop', 
-            'batting_average', 'on_base_percentage', 
+            'batting_average', 'on_base_percentage', 'strikeout_per_pa', 'base_on_balls_per_pa',
             'slugging_percentage', 'on_base_plus_slugging'
         ]
         
@@ -290,6 +296,7 @@ python data_collection/kbo_to_db.py
     if 'player_name' not in selected_columns:
         selected_columns = ['player_name'] + selected_columns
     
+
     st.markdown("---")
     
     # 테이블 표시
@@ -323,6 +330,8 @@ python data_collection/kbo_to_db.py
         for col in df_display.columns:
             if col in ['타율', '장타율', '출루율', 'OPS', 'ISOP', 'GPA', '득점권타율', '대타타율']:
                 column_config[col] = st.column_config.NumberColumn(format="%.3f")
+            elif col in ['K%', 'BB%']:
+                column_config[col] = st.column_config.NumberColumn(format="%.1f%%")
             elif col in ['타석당투구수']:
                 column_config[col] = st.column_config.NumberColumn(format="%.2f")
         
@@ -428,6 +437,8 @@ python data_collection/pitcher_to_db.py
             'total_saves': '세이브홀드',
             'k_9': 'K/9',
             'bb_9': 'BB/9',
+            'strikeout_per_pa': 'K%',
+            'base_on_balls_per_pa': 'BB%',
             'on_base_percentage': '피출루율',
             'slugging_percentage': '피장타율',
             'on_base_plus_slugging': '피OPS'
@@ -437,7 +448,7 @@ python data_collection/pitcher_to_db.py
         default_columns = [
             'player_name', 'player_team', 'games', 'innings_pitched',
             'wins', 'losses', 'save', 'earned_run_average',
-            'walks_plus_hits_per_inning_pitched', 'strikeout', 'k_9'
+            'walks_plus_hits_per_inning_pitched', 'strikeout', 'k_9', 'strikeout_per_pa', 'base_on_balls_per_pa'
         ]
         
         # 컬럼 선택 개수 반영
@@ -514,6 +525,8 @@ python data_collection/pitcher_to_db.py
         for col in df_display.columns:
             if col in ['평균자책점', 'WHIP', 'K/9', 'BB/9', '승률', '피안타율', '피출루율', '피장타율', '피OPS']:
                 column_config[col] = st.column_config.NumberColumn(format="%.2f")
+            elif col in ['K%', 'BB%']:
+                column_config[col] = st.column_config.NumberColumn(format="%.1f%%")
         
         st.dataframe(
             df_display,

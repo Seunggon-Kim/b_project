@@ -80,6 +80,8 @@ def create_pitcher_table(conn):
         p_ip REAL,
         k_9 REAL,
         bb_9 REAL,
+        strikeout_per_pa REAL,
+        base_on_balls_per_pa REAL,
         k_bb TEXT,
         on_base_percentage REAL,
         slugging_percentage REAL,
@@ -161,10 +163,12 @@ def save_pitcher_stats(conn, csv_path):
                         wins_game_started, wins_game_relieved, games_finished,
                         save_opportunity, total_saves, ground_into_double_play,
                         ground_outs, air_outs, go_ao, batting_average_on_balls_in_play,
-                        p_g, p_ip, k_9, bb_9, k_bb, on_base_percentage,
+                        p_g, p_ip, k_9, bb_9,
+                        strikeout_per_pa, base_on_balls_per_pa,
+                        k_bb, on_base_percentage,
                         slugging_percentage, on_base_plus_slugging,
                         created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     player_id,
                     season,
@@ -215,7 +219,18 @@ def save_pitcher_stats(conn, csv_path):
                     safe_value(row.get('p_ip')),
                     safe_value(row.get('k_9')),
                     safe_value(row.get('bb_9')),
-                    safe_value(row.get('k/bb')),
+                    # K% & BB% 계산 (투수는 total_batters_faced 사용)
+                    (lambda tbf, ibb, so: round(so / (tbf - ibb) * 100, 1) if (tbf and ibb is not None and tbf > ibb and so is not None) else None)(
+                        safe_value(row.get('total_batters_faced')), 
+                        safe_value(row.get('intentional_base_on_balls')), 
+                        safe_value(row.get('strikeout'))
+                    ),
+                    (lambda tbf, ibb, bb: round((bb - ibb) / (tbf - ibb) * 100, 1) if (tbf and ibb is not None and tbf > ibb and bb is not None) else None)(
+                        safe_value(row.get('total_batters_faced')), 
+                        safe_value(row.get('intentional_base_on_balls')), 
+                        safe_value(row.get('base_on_balls'))
+                    ),
+                    safe_value(row.get('k_bb')),
                     safe_value(row.get('on_base_percentage')),
                     safe_value(row.get('slugging_percentage')),
                     safe_value(row.get('on_base_plus_slugging')),
@@ -245,7 +260,9 @@ def save_pitcher_stats(conn, csv_path):
                         ground_into_double_play = ?, ground_outs = ?,
                         air_outs = ?, go_ao = ?,
                         batting_average_on_balls_in_play = ?, p_g = ?,
-                        p_ip = ?, k_9 = ?, bb_9 = ?, k_bb = ?,
+                        p_ip = ?, k_9 = ?, bb_9 = ?, 
+                        strikeout_per_pa = ?, base_on_balls_per_pa = ?,
+                        k_bb = ?,
                         on_base_percentage = ?, slugging_percentage = ?,
                         on_base_plus_slugging = ?, updated_at = ?
                     WHERE player_id = ? AND season = ?
@@ -297,7 +314,18 @@ def save_pitcher_stats(conn, csv_path):
                     safe_value(row.get('p_ip')),
                     safe_value(row.get('k_9')),
                     safe_value(row.get('bb_9')),
-                    safe_value(row.get('k/bb')),
+                    # K% & BB% 계산
+                    (lambda tbf, ibb, so: round(so / (tbf - ibb) * 100, 1) if (tbf and ibb is not None and tbf > ibb and so is not None) else None)(
+                        safe_value(row.get('total_batters_faced')), 
+                        safe_value(row.get('intentional_base_on_balls')), 
+                        safe_value(row.get('strikeout'))
+                    ),
+                    (lambda tbf, ibb, bb: round((bb - ibb) / (tbf - ibb) * 100, 1) if (tbf and ibb is not None and tbf > ibb and bb is not None) else None)(
+                        safe_value(row.get('total_batters_faced')), 
+                        safe_value(row.get('intentional_base_on_balls')), 
+                        safe_value(row.get('base_on_balls'))
+                    ),
+                    safe_value(row.get('k_bb')),
                     safe_value(row.get('on_base_percentage')),
                     safe_value(row.get('slugging_percentage')),
                     safe_value(row.get('on_base_plus_slugging')),

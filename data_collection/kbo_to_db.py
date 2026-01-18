@@ -64,6 +64,8 @@ def create_tables(conn):
         air_outs INTEGER,
         go_ao TEXT,
         gw_rbi INTEGER,
+        strikeout_per_pa REAL,
+        base_on_balls_per_pa REAL,
         bb_k TEXT,
         p_pa REAL,
         isop REAL,
@@ -143,9 +145,10 @@ def save_batter_stats(conn, csv_path):
                         slugging_percentage, on_base_percentage, on_base_plus_slugging,
                         multi_hits, runners_in_scoring_position, pinch_hit_batting_average,
                         extra_base_hits, ground_outs, air_outs, go_ao, gw_rbi,
+                        strikeout_per_pa, base_on_balls_per_pa,
                         bb_k, p_pa, isop, extended_runs, gross_production_average,
                         created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     player_id,
                     season,
@@ -180,6 +183,17 @@ def save_batter_stats(conn, csv_path):
                     safe_value(row.get('air_outs')),
                     safe_value(row.get('go_ao')),
                     safe_value(row.get('gw_rbi')),
+                    # K% & BB% 계산
+                    (lambda pa, ibb, so: round(so / (pa - ibb) * 100, 1) if (pa and ibb is not None and pa > ibb and so is not None) else None)(
+                        safe_value(row.get('plate_appearance')), 
+                        safe_value(row.get('intentional_base_on_balls')), 
+                        safe_value(row.get('strikeout'))
+                    ),
+                    (lambda pa, ibb, bb: round((bb - ibb) / (pa - ibb) * 100, 1) if (pa and ibb is not None and pa > ibb and bb is not None) else None)(
+                        safe_value(row.get('plate_appearance')), 
+                        safe_value(row.get('intentional_base_on_balls')), 
+                        safe_value(row.get('base_on_balls'))
+                    ),
                     safe_value(row.get('bb_k')),
                     safe_value(row.get('p_pa')),
                     safe_value(row.get('isop')),
@@ -203,7 +217,9 @@ def save_batter_stats(conn, csv_path):
                         slugging_percentage = ?, on_base_percentage = ?, on_base_plus_slugging = ?,
                         multi_hits = ?, runners_in_scoring_position = ?, pinch_hit_batting_average = ?,
                         extra_base_hits = ?, ground_outs = ?, air_outs = ?, go_ao = ?,
-                        gw_rbi = ?, bb_k = ?, p_pa = ?, isop = ?, extended_runs = ?,
+                        gw_rbi = ?, 
+                        strikeout_per_pa = ?, base_on_balls_per_pa = ?,
+                        bb_k = ?, p_pa = ?, isop = ?, extended_runs = ?,
                         gross_production_average = ?, updated_at = ?
                     WHERE player_id = ? AND season = ?
                 """, (
@@ -238,6 +254,17 @@ def save_batter_stats(conn, csv_path):
                     safe_value(row.get('air_outs')),
                     safe_value(row.get('go_ao')),
                     safe_value(row.get('gw_rbi')),
+                    # K% & BB% 계산
+                    (lambda pa, ibb, so: round(so / (pa - ibb) * 100, 1) if (pa and ibb is not None and pa > ibb and so is not None) else None)(
+                        safe_value(row.get('plate_appearance')), 
+                        safe_value(row.get('intentional_base_on_balls')), 
+                        safe_value(row.get('strikeout'))
+                    ),
+                    (lambda pa, ibb, bb: round((bb - ibb) / (pa - ibb) * 100, 1) if (pa and ibb is not None and pa > ibb and bb is not None) else None)(
+                        safe_value(row.get('plate_appearance')), 
+                        safe_value(row.get('intentional_base_on_balls')), 
+                        safe_value(row.get('base_on_balls'))
+                    ),
                     safe_value(row.get('bb_k')),
                     safe_value(row.get('p_pa')),
                     safe_value(row.get('isop')),
