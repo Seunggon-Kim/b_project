@@ -416,9 +416,8 @@ def main():
         if all_teams_data:
             final_df = pd.concat(all_teams_data, ignore_index=True)
             
-            # CSV 저장
-            current_year = datetime.now().year
-            csv_path = SAVE_DIR / f'batter_stats_{current_year}.csv'
+            # CSV 저장 (2025 시즌 고정)
+            csv_path = SAVE_DIR / f'batter_stats_2025.csv'
             final_df.to_csv(csv_path, index=False, encoding='utf-8-sig')
             
             logging.info("\n" + "=" * 80)

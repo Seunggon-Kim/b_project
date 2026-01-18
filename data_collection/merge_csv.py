@@ -12,7 +12,7 @@ import sys
 # 경로 설정
 PROJECT_ROOT = Path(__file__).parent.parent
 CSV_DIR = PROJECT_ROOT / 'crawler' / 'save' / '2025'
-OUTPUT_FILE = PROJECT_ROOT / 'crawler' / 'save' / '2025_combined.csv'
+OUTPUT_FILE = PROJECT_ROOT / 'crawler' / 'save' / 'kbo_2025_regular_season.csv'
 
 def merge_csv_files():
     """모든 CSV 파일을 하나로 병합"""

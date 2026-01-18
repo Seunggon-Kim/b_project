@@ -51,6 +51,7 @@ python pbp.py -f 20250101 -t 20251231 -j
 - `selenium_pitcher_scraper.py` ⭐ - 투수 통계 크롤링
 - `kbo_to_db.py` ⭐ - 타자 DB 저장 (UPSERT 방식)
 - `pitcher_to_db.py` ⭐ - 투수 DB 저장 (UPSERT 방식)
+- `merge_csv.py` - CSV 파일 병합 (2025 → kbo_2025_regular_season.csv)
 - `email_notifier.py` - 이메일 알림
 - `csv_to_db.py` - PBP CSV → DB
 - `calculate_stats.py` - 선수 통계 계산
@@ -70,16 +71,26 @@ python pbp.py -f 20250101 -t 20251231 -j
 - `kbo_stats.db` - 메인 데이터베이스
 - `kbo_stats.db.backup` - 백업 파일
 - `init_db.py` - DB 초기화 스크립트
+- `schema.sql` - DB 스키마 정의
 
 **테이블**:
 
-- `games` - 경기 정보
-- `play_by_play` - 타석별 상세 기록
+- `teams` - 팀 정보 (10개 팀)
+- `players` - 선수 정보
+- `games` - 경기 정보 (2025 시즌: **719개 경기**)
+- `play_by_play` - 타석별 상세 기록 (2025 시즌: **약 667,000개 플레이**)
 - `game_team_stats` - 팀 통계
 - `batter_stats_temp` - PBP 계산 타자 통계
 - `pitcher_stats_temp` - PBP 계산 투수 통계
 - `kbo_official_batter_stats` - KBO 공식 타자 통계 (복합 PK: player_id, season)
 - `kbo_official_pitcher_stats` - KBO 공식 투수 통계 (복합 PK: player_id, season)
+
+**2025 시즌 데이터 현황**:
+
+- ✅ 정규시즌 전체 경기 데이터 수집 완료
+- ✅ 개별 CSV 파일: `crawler/save/2025/` (720개 파일)
+- ✅ 병합 CSV 파일: `crawler/save/kbo_2025_regular_season.csv` (100.2 MB)
+- ✅ DB 저장 완료: 719개 경기, 667,000개 플레이
 
 ---
 
@@ -148,6 +159,7 @@ streamlit run dashboard/Home.py
 ### 📚 문서
 
 - `README.md` - 프로젝트 개요
+- `DATABASE_STRUCTURE.md` ⭐ - **데이터베이스 구조 상세 문서**
 - `SELENIUM_SETUP_GUIDE.md` - Selenium 설정 가이드
 - `PITCHER_CRAWLING_GUIDE.md` ⭐ - **투수 통계 크롤링 가이드**
 - `SAMPLE_DATA.md` - 샘플 데이터 설명
@@ -161,9 +173,12 @@ streamlit run dashboard/Home.py
 - `reset_and_recrawl.py` - DB 초기화 및 재크롤링
 - `verify_db.py` - DB 검증
 - `check_db_stats.py` - DB 통계 확인
+- `check_db_2025.py` - 2025 시즌 DB 상태 확인
 - `compare_csv_db.py` - CSV와 DB 비교
 - `show_data.py` - 데이터 조회
 - `drop_table.py` - 테이블 삭제
+- `csv_to_db_2025.py` ⭐ - 2025 시즌 CSV 파일 일괄 DB 삽입
+- `robust_merge.py` - CSV 파일 병합 (구버전)
 
 ### 🚀 배치 파일
 
@@ -315,6 +330,6 @@ SQLite DB (database/kbo_stats.db)
 
 ---
 
-**프로젝트 버전**: v2.0  
-**마지막 업데이트**: 2026-01-12  
+**프로젝트 버전**: v2.1  
+**마지막 업데이트**: 2026-01-18  
 **관리자**: USERNAME
