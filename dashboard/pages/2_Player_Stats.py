@@ -293,22 +293,13 @@ python data_collection/kbo_to_db.py
     st.markdown("---")
     
     # 테이블 표시
-    st.subheader(f"📊 {selected_season} 시즌 타자 순위 - {selected_pa_label}")
+    st.subheader(f"📊 {selected_season} 시즌 타자 통계 - {selected_pa_label}")
     
     if df_filtered.empty:
         st.info(f"⚠️ {selected_pa_label} 기준을 충족하는 선수가 없습니다.")
     else:
-        # 순위 및 시즌 컬럼 추가
-        # df_filtered_with_rank = df_filtered.copy() # df_filtered already has rank
-        # df_filtered_with_rank = df_filtered_with_rank.reset_index(drop=True) # already reset
-        # df_filtered_with_rank['rank'] = df_filtered_with_rank.index + 1 # already calculated
-        
-        # 선택된 컬럼에 rank와 season 추가
+        # 시즌 컬럼 추가
         display_cols = selected_columns.copy()
-        
-        # rank를 가장 처음에 추가
-        if 'rank' not in display_cols:
-            display_cols.insert(0, 'rank')
             
         # 선수명 바로 다음에 season 추가
         if 'player_name' in display_cols and 'season' not in display_cols:
@@ -495,20 +486,13 @@ python data_collection/pitcher_to_db.py
     st.markdown("---")
     
     # 테이블 표시
-    st.subheader(f"📊 {selected_season} 시즌 투수 - {selected_ip_label}")
+    st.subheader(f"📊 {selected_season} 시즌 투수 통계 - {selected_ip_label}")
     
     if df_filtered.empty:
         st.info(f"⚠️ {selected_ip_label} 기준을 충족하는 선수가 없습니다.")
     else:
         # 시즌 컬럼 추가
-        df_filtered_with_season = df_filtered.copy()
-            
-        # 선택된 컬럼에 rank와 season 추가
         display_cols = selected_columns.copy()
-        
-        # rank를 가장 처음에 추가
-        # if 'rank' not in display_cols:
-        #     display_cols.insert(0, 'rank')
             
         # 선수명 바로 다음에 season 추가
         if 'player_name' in display_cols and 'season' not in display_cols:
@@ -516,13 +500,11 @@ python data_collection/pitcher_to_db.py
             display_cols.insert(name_idx + 1, 'season')
         
         # 컬럼명 변경
-        df_display = df_filtered_with_season[display_cols].copy()
+        df_display = df_filtered[display_cols].copy()
         col_names = []
         for col in display_cols:
             if col == 'season':
                 col_names.append('시즌')
-            # elif col == 'rank':
-            #     col_names.append('순위')
             else:
                 col_names.append(all_columns.get(col, col))
         df_display.columns = col_names
