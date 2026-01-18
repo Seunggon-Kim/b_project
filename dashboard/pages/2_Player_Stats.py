@@ -161,8 +161,17 @@ python data_collection/kbo_to_db.py
         """)
         st.stop()
     
-    # 드롭다운 3개
-    col1, col2, col3 = st.columns(3)
+    # 드롭다운 4개 (선수 타입 + 연도 + 타석 + 컬럼)
+    col0, col1, col2, col3 = st.columns(4)
+    
+    with col0:
+        # 0. 선수 타입 선택 (여기로 이동)
+        player_type_display = st.selectbox(
+            "👤 선수 타입",
+            options=["⚾ 타자", "🎯 투수"],
+            index=0 if player_type == "타자" else 1,
+            key="player_type_batter"
+        )
     
     with col1:
         # 1. 연도 선택
@@ -246,17 +255,19 @@ python data_collection/kbo_to_db.py
             'slugging_percentage', 'on_base_plus_slugging'
         ]
         
+        # 컬럼 선택 개수만 표시
+        num_selected = len(default_columns)
         selected_columns = st.multiselect(
-            f"📊 표시 컬럼 ({len(default_columns)}개 선택)",
+            f"📊 표시 컬럼 선택",
             options=list(all_columns.keys()),
             default=default_columns,
             format_func=lambda x: all_columns[x],
-            label_visibility="visible"
+            label_visibility="collapsed"
         )
         
-        # 선택된 컬럼 개수 업데이트를 위한 트릭
+        # 선택된 개수만 표시
         if selected_columns:
-            st.caption(f"✅ {len(selected_columns)}개 컬럼 선택됨")
+            st.markdown(f"**📊 표시 컬럼 ({len(selected_columns)}개 선택)**")
     
     # 필터 적용
     df_filtered = df_batters[df_batters['season'] == selected_season].copy()
@@ -274,9 +285,24 @@ python data_collection/kbo_to_db.py
     if df_filtered.empty:
         st.info(f"⚠️ {selected_pa_label} 기준을 충족하는 선수가 없습니다.")
     else:
+        # 시즌 컬럼 추가
+        df_filtered_with_season = df_filtered.copy()
+        
+        # 선택된 컬럼에 season 추가 (선수명 다음)
+        display_cols = selected_columns.copy()
+        if 'player_name' in display_cols and 'season' not in display_cols:
+            name_idx = display_cols.index('player_name')
+            display_cols.insert(name_idx + 1, 'season')
+        
         # 컬럼명 변경
-        df_display = df_filtered[selected_columns].copy()
-        df_display.columns = [all_columns[col] for col in selected_columns]
+        df_display = df_filtered_with_season[display_cols].copy()
+        col_names = []
+        for col in display_cols:
+            if col == 'season':
+                col_names.append('시즌')
+            else:
+                col_names.append(all_columns.get(col, col))
+        df_display.columns = col_names
         
         # 숫자 포맷 설정
         column_config = {}
@@ -309,8 +335,17 @@ python data_collection/pitcher_to_db.py
         """)
         st.stop()
     
-    # 드롭다운 3개
-    col1, col2, col3 = st.columns(3)
+    # 드롭다운 4개 (선수 타입 + 연도 + 이닝 + 컬럼)
+    col0, col1, col2, col3 = st.columns(4)
+    
+    with col0:
+        # 0. 선수 타입 선택 (여기로 이동)
+        player_type_display = st.selectbox(
+            "👤 선수 타입",
+            options=["⚾ 타자", "🎯 투수"],
+            index=0 if player_type == "타자" else 1,
+            key="player_type_pitcher"
+        )
     
     with col1:
         # 1. 연도 선택
@@ -387,17 +422,19 @@ python data_collection/pitcher_to_db.py
             'walks_plus_hits_per_inning_pitched', 'strikeout', 'k_9'
         ]
         
+        # 컬럼 선택 개수만 표시
+        num_selected = len(default_columns)
         selected_columns = st.multiselect(
-            f"📊 표시 컬럼 ({len(default_columns)}개 선택)",
+            f"📊 표시 컬럼 선택",
             options=list(all_columns.keys()),
             default=default_columns,
             format_func=lambda x: all_columns[x],
-            label_visibility="visible"
+            label_visibility="collapsed"
         )
         
-        # 선택된 컬럼 개수 업데이트를 위한 트릭
+        # 선택된 개수만 표시
         if selected_columns:
-            st.caption(f"✅ {len(selected_columns)}개 컬럼 선택됨")
+            st.markdown(f"**📊 표시 컬럼 ({len(selected_columns)}개 선택)**")
     
     # 이닝 파싱 함수
     def parse_innings(ip_str):
@@ -428,7 +465,6 @@ python data_collection/pitcher_to_db.py
         selected_columns = ['player_name'] + selected_columns
     
     st.markdown("---")
-    st.markdown("---")
     
     # 테이블 표시
     st.subheader(f"📊 {selected_season} 시즌 투수 순위 ({selected_ip_label})")
@@ -436,9 +472,24 @@ python data_collection/pitcher_to_db.py
     if df_filtered.empty:
         st.info(f"⚠️ {selected_ip_label} 기준을 충족하는 선수가 없습니다.")
     else:
+        # 시즌 컬럼 추가
+        df_filtered_with_season = df_filtered.copy()
+        
+        # 선택된 컬럼에 season 추가 (선수명 다음)
+        display_cols = selected_columns.copy()
+        if 'player_name' in display_cols and 'season' not in display_cols:
+            name_idx = display_cols.index('player_name')
+            display_cols.insert(name_idx + 1, 'season')
+        
         # 컬럼명 변경
-        df_display = df_filtered[selected_columns].copy()
-        df_display.columns = [all_columns[col] for col in selected_columns]
+        df_display = df_filtered_with_season[display_cols].copy()
+        col_names = []
+        for col in display_cols:
+            if col == 'season':
+                col_names.append('시즌')
+            else:
+                col_names.append(all_columns.get(col, col))
+        df_display.columns = col_names
         
         # 숫자 포맷 설정
         column_config = {}
