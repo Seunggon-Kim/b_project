@@ -29,17 +29,11 @@ st.markdown("---")
 # DB 경로
 DB_PATH = Path(__file__).parent.parent.parent / 'database' / 'kbo_stats.db'
 
-# 선수 타입 선택 (드롭다운)
-player_type = st.selectbox(
-    "👤 선수 타입 선택",
-    options=["⚾ 타자", "🎯 투수"],
-    index=0
-)
+# 기본 선수 타입 (세션 상태로 관리)
+if 'player_type' not in st.session_state:
+    st.session_state['player_type'] = '타자'
 
-# 이모지 제거
-player_type = player_type.replace("⚾ ", "").replace("🎯 ", "")
-
-st.markdown("---")
+player_type = st.session_state['player_type']
 
 # 데이터 로드
 @st.cache_data
@@ -179,12 +173,16 @@ python data_collection/kbo_to_db.py
     col0, col1, col2, col3 = st.columns(4)
     
     with col0:
-        # 0. 선수 타입 선택 (여기로 이동)
-        player_type_display = st.selectbox(
+        # 0. 선수 타입 선택
+        def update_player_type_batter():
+            st.session_state['player_type'] = st.session_state['player_type_batter'].replace("⚾ ", "").replace("🎯 ", "")
+
+        st.selectbox(
             "👤 선수 타입",
             options=["⚾ 타자", "🎯 투수"],
             index=0 if player_type == "타자" else 1,
-            key="player_type_batter"
+            key="player_type_batter",
+            on_change=update_player_type_batter
         )
     
     with col1:
@@ -199,19 +197,19 @@ python data_collection/kbo_to_db.py
     with col2:
         # 2. 타석 선택
         pa_options = {
-            "규정타석 (446+)": 446,
-            "10타석": 10,
-            "25타석": 25,
-            "50타석": 50,
-            "75타석": 75,
-            "100타석": 100,
-            "150타석": 150,
-            "200타석": 200,
-            "250타석": 250,
-            "300타석": 300,
-            "350타석": 350,
-            "400타석": 400,
-            "500타석": 500
+            "규정타석 (446+ 이상)": 446,
+            "10타석 이상": 10,
+            "25타석 이상": 25,
+            "50타석 이상": 50,
+            "75타석 이상": 75,
+            "100타석 이상": 100,
+            "150타석 이상": 150,
+            "200타석 이상": 200,
+            "250타석 이상": 250,
+            "300타석 이상": 300,
+            "350타석 이상": 350,
+            "400타석 이상": 400,
+            "500타석 이상": 500
         }
         selected_pa_label = st.selectbox(
             "🎯 타석 기준",
@@ -294,21 +292,31 @@ python data_collection/kbo_to_db.py
     if df_filtered.empty:
         st.info(f"⚠️ {selected_pa_label} 기준을 충족하는 선수가 없습니다.")
     else:
-        # 시즌 컬럼 추가
-        df_filtered_with_season = df_filtered.copy()
+        # 순위 및 시즌 컬럼 추가
+        df_filtered_with_rank = df_filtered.copy()
+        df_filtered_with_rank = df_filtered_with_rank.reset_index(drop=True)
+        df_filtered_with_rank['rank'] = df_filtered_with_rank.index + 1
         
-        # 선택된 컬럼에 season 추가 (선수명 다음)
+        # 선택된 컬럼에 rank와 season 추가
         display_cols = selected_columns.copy()
+        
+        # rank를 가장 처음에 추가
+        if 'rank' not in display_cols:
+            display_cols.insert(0, 'rank')
+            
+        # 선수명 바로 다음에 season 추가
         if 'player_name' in display_cols and 'season' not in display_cols:
             name_idx = display_cols.index('player_name')
             display_cols.insert(name_idx + 1, 'season')
         
         # 컬럼명 변경
-        df_display = df_filtered_with_season[display_cols].copy()
+        df_display = df_filtered_with_rank[display_cols].copy()
         col_names = []
         for col in display_cols:
             if col == 'season':
                 col_names.append('시즌')
+            elif col == 'rank':
+                col_names.append('순위')
             else:
                 col_names.append(all_columns.get(col, col))
         df_display.columns = col_names
@@ -348,12 +356,16 @@ python data_collection/pitcher_to_db.py
     col0, col1, col2, col3 = st.columns(4)
     
     with col0:
-        # 0. 선수 타입 선택 (여기로 이동)
-        player_type_display = st.selectbox(
+        # 0. 선수 타입 선택
+        def update_player_type_pitcher():
+            st.session_state['player_type'] = st.session_state['player_type_pitcher'].replace("⚾ ", "").replace("🎯 ", "")
+
+        st.selectbox(
             "👤 선수 타입",
             options=["⚾ 타자", "🎯 투수"],
             index=0 if player_type == "타자" else 1,
-            key="player_type_pitcher"
+            key="player_type_pitcher",
+            on_change=update_player_type_pitcher
         )
     
     with col1:
@@ -368,13 +380,13 @@ python data_collection/pitcher_to_db.py
     with col2:
         # 2. 이닝 선택 (투수는 이닝 기준)
         ip_options = {
-            "규정이닝 (144+)": 144,
-            "10이닝": 10,
-            "25이닝": 25,
-            "50이닝": 50,
-            "75이닝": 75,
-            "100이닝": 100,
-            "150이닝": 150
+            "규정이닝 (144+ 이상)": 144,
+            "10이닝 이상": 10,
+            "25이닝 이상": 25,
+            "50이닝 이상": 50,
+            "75이닝 이상": 75,
+            "100이닝 이상": 100,
+            "150이닝 이상": 150
         }
         selected_ip_label = st.selectbox(
             "🎯 이닝 기준",
@@ -476,21 +488,31 @@ python data_collection/pitcher_to_db.py
     if df_filtered.empty:
         st.info(f"⚠️ {selected_ip_label} 기준을 충족하는 선수가 없습니다.")
     else:
-        # 시즌 컬럼 추가
-        df_filtered_with_season = df_filtered.copy()
+        # 순위 및 시즌 컬럼 추가
+        df_filtered_with_rank = df_filtered.copy()
+        df_filtered_with_rank = df_filtered_with_rank.reset_index(drop=True)
+        df_filtered_with_rank['rank'] = df_filtered_with_rank.index + 1
         
-        # 선택된 컬럼에 season 추가 (선수명 다음)
+        # 선택된 컬럼에 rank와 season 추가
         display_cols = selected_columns.copy()
+        
+        # rank를 가장 처음에 추가
+        if 'rank' not in display_cols:
+            display_cols.insert(0, 'rank')
+            
+        # 선수명 바로 다음에 season 추가
         if 'player_name' in display_cols and 'season' not in display_cols:
             name_idx = display_cols.index('player_name')
             display_cols.insert(name_idx + 1, 'season')
         
         # 컬럼명 변경
-        df_display = df_filtered_with_season[display_cols].copy()
+        df_display = df_filtered_with_rank[display_cols].copy()
         col_names = []
         for col in display_cols:
             if col == 'season':
                 col_names.append('시즌')
+            elif col == 'rank':
+                col_names.append('순위')
             else:
                 col_names.append(all_columns.get(col, col))
         df_display.columns = col_names
