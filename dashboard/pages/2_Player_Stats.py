@@ -280,30 +280,12 @@ python data_collection/kbo_to_db.py
         if selected_columns:
             st.markdown(f"**📊 표시 컬럼 ({len(selected_columns)}개)**")
 
-    # 추가 필터 (정렬 기준)
-    st.markdown(" ")
-    col_sort1, col_sort2, _ = st.columns([1, 1, 2])
-    with col_sort1:
-        sort_metric = st.selectbox(
-            "🔃 정렬 기준",
-            options=list(all_columns.keys()),
-            index=list(all_columns.keys()).index('batting_average'), # 기본 타율
-            format_func=lambda x: all_columns[x]
-        )
-    with col_sort2:
-        sort_dir = st.selectbox(
-            "↕️ 정렬 방향",
-            options=["내림차순", "오름차순"],
-            index=0 # 기본 내림차순
-        )
-    
     # 필터 적용
     df_filtered = df_batters[df_batters['season'] == selected_season].copy()
     df_filtered = df_filtered[df_filtered['plate_appearance'] >= selected_pa]
     
-    # 정렬 및 순위 계산
-    ascending = True if sort_dir == "오름차순" else False
-    df_filtered = df_filtered.sort_values(by=sort_metric, ascending=ascending).reset_index(drop=True)
+    # 기본 정렬 및 순위 계산 (타율 내림차순)
+    df_filtered = df_filtered.sort_values(by='batting_average', ascending=False).reset_index(drop=True)
     df_filtered['rank'] = df_filtered.index + 1
     
     # 선수명은 항상 첫 번째 컬럼
@@ -482,23 +464,6 @@ python data_collection/pitcher_to_db.py
         if selected_columns:
             st.markdown(f"**📊 표시 컬럼 ({len(selected_columns)}개)**")
 
-    # 추가 필터 (정렬 기준)
-    st.markdown(" ")
-    col_sort1, col_sort2, _ = st.columns([1, 1, 2])
-    with col_sort1:
-        sort_metric = st.selectbox(
-            "🔃 정렬 기준",
-            options=list(all_columns.keys()),
-            index=list(all_columns.keys()).index('earned_run_average'), # 기본 ERA
-            format_func=lambda x: all_columns[x]
-        )
-    with col_sort2:
-        sort_dir = st.selectbox(
-            "↕️ 정렬 방향",
-            options=["오름차순", "내림차순"],
-            index=0 # 기본 오름차순 (ERA는 낮을수록 좋으므로)
-        )
-    
     # 이닝 파싱 함수
     def parse_innings(ip_str):
         """이닝 문자열을 숫자로 변환 (예: '180 2/3' -> 180.67)"""
@@ -523,9 +488,8 @@ python data_collection/pitcher_to_db.py
     df_filtered['innings_numeric'] = df_filtered['innings_pitched'].apply(parse_innings)
     df_filtered = df_filtered[df_filtered['innings_numeric'] >= selected_ip]
     
-    # 정렬 및 순위 계산
-    ascending = True if sort_dir == "오름차순" else False
-    df_filtered = df_filtered.sort_values(by=sort_metric, ascending=ascending).reset_index(drop=True)
+    # 기본 정렬 및 순위 계산 (ERA 오름차순)
+    df_filtered = df_filtered.sort_values(by='earned_run_average', ascending=True).reset_index(drop=True)
     df_filtered['rank'] = df_filtered.index + 1
     
     # 선수명은 항상 첫 번째 컬럼
