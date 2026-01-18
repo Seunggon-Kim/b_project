@@ -269,16 +269,42 @@ python data_collection/kbo_to_db.py
         
         # 컬럼 선택
         selected_columns = st.multiselect(
-            f"📊 표시 컬럼 ({len(default_columns)}개)",
+            f"📊 표시 컬럼 선택",
             options=list(all_columns.keys()),
             default=default_columns,
             format_func=lambda x: all_columns[x],
-            label_visibility="visible"
+            label_visibility="collapsed"
+        )
+        
+        # 선택된 개수만 표시
+        if selected_columns:
+            st.markdown(f"**📊 표시 컬럼 ({len(selected_columns)}개)**")
+
+    # 추가 필터 (정렬 기준)
+    st.markdown(" ")
+    col_sort1, col_sort2, _ = st.columns([1, 1, 2])
+    with col_sort1:
+        sort_metric = st.selectbox(
+            "🔃 정렬 기준",
+            options=list(all_columns.keys()),
+            index=list(all_columns.keys()).index('batting_average'), # 기본 타율
+            format_func=lambda x: all_columns[x]
+        )
+    with col_sort2:
+        sort_dir = st.selectbox(
+            "↕️ 정렬 방향",
+            options=["내림차순", "오름차순"],
+            index=0 # 기본 내림차순
         )
     
     # 필터 적용
     df_filtered = df_batters[df_batters['season'] == selected_season].copy()
     df_filtered = df_filtered[df_filtered['plate_appearance'] >= selected_pa]
+    
+    # 정렬 및 순위 계산
+    ascending = True if sort_dir == "오름차순" else False
+    df_filtered = df_filtered.sort_values(by=sort_metric, ascending=ascending).reset_index(drop=True)
+    df_filtered['rank'] = df_filtered.index + 1
     
     # 선수명은 항상 첫 번째 컬럼
     if 'player_name' not in selected_columns:
@@ -287,15 +313,15 @@ python data_collection/kbo_to_db.py
     st.markdown("---")
     
     # 테이블 표시
-    st.subheader(f"📊 {selected_season} 시즌 타자 순위 ({selected_pa_label})")
+    st.subheader(f"📊 {selected_season} 시즌 타자 순위 - {selected_pa_label}")
     
     if df_filtered.empty:
         st.info(f"⚠️ {selected_pa_label} 기준을 충족하는 선수가 없습니다.")
     else:
         # 순위 및 시즌 컬럼 추가
-        df_filtered_with_rank = df_filtered.copy()
-        df_filtered_with_rank = df_filtered_with_rank.reset_index(drop=True)
-        df_filtered_with_rank['rank'] = df_filtered_with_rank.index + 1
+        # df_filtered_with_rank = df_filtered.copy() # df_filtered already has rank
+        # df_filtered_with_rank = df_filtered_with_rank.reset_index(drop=True) # already reset
+        # df_filtered_with_rank['rank'] = df_filtered_with_rank.index + 1 # already calculated
         
         # 선택된 컬럼에 rank와 season 추가
         display_cols = selected_columns.copy()
@@ -310,7 +336,7 @@ python data_collection/kbo_to_db.py
             display_cols.insert(name_idx + 1, 'season')
         
         # 컬럼명 변경
-        df_display = df_filtered_with_rank[display_cols].copy()
+        df_display = df_filtered[display_cols].copy()
         col_names = []
         for col in display_cols:
             if col == 'season':
@@ -445,11 +471,32 @@ python data_collection/pitcher_to_db.py
         
         # 컬럼 선택
         selected_columns = st.multiselect(
-            f"📊 표시 컬럼 ({len(default_columns)}개)",
+            f"📊 표시 컬럼 선택",
             options=list(all_columns.keys()),
             default=default_columns,
             format_func=lambda x: all_columns[x],
-            label_visibility="visible"
+            label_visibility="collapsed"
+        )
+        
+        # 선택된 개수만 표시
+        if selected_columns:
+            st.markdown(f"**📊 표시 컬럼 ({len(selected_columns)}개)**")
+
+    # 추가 필터 (정렬 기준)
+    st.markdown(" ")
+    col_sort1, col_sort2, _ = st.columns([1, 1, 2])
+    with col_sort1:
+        sort_metric = st.selectbox(
+            "🔃 정렬 기준",
+            options=list(all_columns.keys()),
+            index=list(all_columns.keys()).index('earned_run_average'), # 기본 ERA
+            format_func=lambda x: all_columns[x]
+        )
+    with col_sort2:
+        sort_dir = st.selectbox(
+            "↕️ 정렬 방향",
+            options=["오름차순", "내림차순"],
+            index=0 # 기본 오름차순 (ERA는 낮을수록 좋으므로)
         )
     
     # 이닝 파싱 함수
@@ -476,6 +523,11 @@ python data_collection/pitcher_to_db.py
     df_filtered['innings_numeric'] = df_filtered['innings_pitched'].apply(parse_innings)
     df_filtered = df_filtered[df_filtered['innings_numeric'] >= selected_ip]
     
+    # 정렬 및 순위 계산
+    ascending = True if sort_dir == "오름차순" else False
+    df_filtered = df_filtered.sort_values(by=sort_metric, ascending=ascending).reset_index(drop=True)
+    df_filtered['rank'] = df_filtered.index + 1
+    
     # 선수명은 항상 첫 번째 컬럼
     if 'player_name' not in selected_columns:
         selected_columns = ['player_name'] + selected_columns
@@ -483,13 +535,12 @@ python data_collection/pitcher_to_db.py
     st.markdown("---")
     
     # 테이블 표시
-    st.subheader(f"📊 {selected_season} 시즌 투수 순위 ({selected_ip_label})")
+    st.subheader(f"📊 {selected_season} 시즌 투수 순위 - {selected_ip_label}")
     
     if df_filtered.empty:
         st.info(f"⚠️ {selected_ip_label} 기준을 충족하는 선수가 없습니다.")
     else:
         # 순위 및 시즌 컬럼 추가
-        df_filtered_with_rank = df_filtered.copy()
         df_filtered_with_rank = df_filtered_with_rank.reset_index(drop=True)
         df_filtered_with_rank['rank'] = df_filtered_with_rank.index + 1
         
