@@ -9,6 +9,20 @@ from pathlib import Path
 
 st.set_page_config(page_title="선수 통계", page_icon="👤", layout="wide")
 
+# CSS: multiselect의 선택된 항목 태그 숨기기
+st.markdown("""
+<style>
+    /* multiselect 선택된 항목 숨기기 */
+    [data-baseweb="tag"] {
+        display: none !important;
+    }
+    /* multiselect 컨테이너 높이 조정 */
+    div[data-baseweb="select"] > div {
+        min-height: 38px !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 st.title("👤 선수 통계")
 st.markdown("---")
 
