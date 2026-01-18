@@ -15,25 +15,15 @@ st.markdown("---")
 # DB 경로
 DB_PATH = Path(__file__).parent.parent.parent / 'database' / 'kbo_stats.db'
 
-# 선수 타입 선택 (버튼)
-st.subheader("선수 타입 선택")
-col_btn1, col_btn2 = st.columns(2)
+# 선수 타입 선택 (드롭다운)
+player_type = st.selectbox(
+    "👤 선수 타입 선택",
+    options=["⚾ 타자", "🎯 투수"],
+    index=0
+)
 
-with col_btn1:
-    batter_btn = st.button("⚾ 타자", use_container_width=True, type="primary" if st.session_state.get('player_type', '타자') == '타자' else "secondary")
-    if batter_btn:
-        st.session_state['player_type'] = '타자'
-
-with col_btn2:
-    pitcher_btn = st.button("🎯 투수", use_container_width=True, type="primary" if st.session_state.get('player_type', '타자') == '투수' else "secondary")
-    if pitcher_btn:
-        st.session_state['player_type'] = '투수'
-
-# 기본값 설정
-if 'player_type' not in st.session_state:
-    st.session_state['player_type'] = '타자'
-
-player_type = st.session_state['player_type']
+# 이모지 제거
+player_type = player_type.replace("⚾ ", "").replace("🎯 ", "")
 
 st.markdown("---")
 
@@ -257,11 +247,16 @@ python data_collection/kbo_to_db.py
         ]
         
         selected_columns = st.multiselect(
-            "📊 표시 컬럼 선택",
+            f"📊 표시 컬럼 ({len(default_columns)}개 선택)",
             options=list(all_columns.keys()),
             default=default_columns,
-            format_func=lambda x: all_columns[x]
+            format_func=lambda x: all_columns[x],
+            label_visibility="visible"
         )
+        
+        # 선택된 컬럼 개수 업데이트를 위한 트릭
+        if selected_columns:
+            st.caption(f"✅ {len(selected_columns)}개 컬럼 선택됨")
     
     # 필터 적용
     df_filtered = df_batters[df_batters['season'] == selected_season].copy()
@@ -270,22 +265,6 @@ python data_collection/kbo_to_db.py
     # 선수명은 항상 첫 번째 컬럼
     if 'player_name' not in selected_columns:
         selected_columns = ['player_name'] + selected_columns
-    
-    st.markdown("---")
-    
-    # 통계 요약
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("총 선수", f"{len(df_filtered)}명")
-    with col2:
-        if not df_filtered.empty:
-            st.metric("평균 타율", f"{df_filtered['batting_average'].mean():.3f}")
-    with col3:
-        if not df_filtered.empty:
-            st.metric("총 홈런", f"{df_filtered['home_run'].sum():.0f}개")
-    with col4:
-        if not df_filtered.empty:
-            st.metric("평균 OPS", f"{df_filtered['on_base_plus_slugging'].mean():.3f}")
     
     st.markdown("---")
     
@@ -409,11 +388,16 @@ python data_collection/pitcher_to_db.py
         ]
         
         selected_columns = st.multiselect(
-            "📊 표시 컬럼 선택",
+            f"📊 표시 컬럼 ({len(default_columns)}개 선택)",
             options=list(all_columns.keys()),
             default=default_columns,
-            format_func=lambda x: all_columns[x]
+            format_func=lambda x: all_columns[x],
+            label_visibility="visible"
         )
+        
+        # 선택된 컬럼 개수 업데이트를 위한 트릭
+        if selected_columns:
+            st.caption(f"✅ {len(selected_columns)}개 컬럼 선택됨")
     
     # 이닝 파싱 함수
     def parse_innings(ip_str):
@@ -444,21 +428,6 @@ python data_collection/pitcher_to_db.py
         selected_columns = ['player_name'] + selected_columns
     
     st.markdown("---")
-    
-    # 통계 요약
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("총 선수", f"{len(df_filtered)}명")
-    with col2:
-        if not df_filtered.empty:
-            st.metric("평균 ERA", f"{df_filtered['earned_run_average'].mean():.2f}")
-    with col3:
-        if not df_filtered.empty:
-            st.metric("총 승", f"{df_filtered['wins'].sum():.0f}승")
-    with col4:
-        if not df_filtered.empty:
-            st.metric("평균 WHIP", f"{df_filtered['walks_plus_hits_per_inning_pitched'].mean():.2f}")
-    
     st.markdown("---")
     
     # 테이블 표시
