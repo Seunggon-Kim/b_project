@@ -269,19 +269,14 @@ python data_collection/kbo_to_db.py
             'slugging_percentage', 'on_base_plus_slugging'
         ]
         
-        # 컬럼 선택 개수만 표시
-        num_selected = len(default_columns)
+        # 컬럼 선택
         selected_columns = st.multiselect(
-            f"📊 표시 컬럼 선택",
+            f"📊 표시 컬럼 ({len(default_columns)}개)",
             options=list(all_columns.keys()),
             default=default_columns,
             format_func=lambda x: all_columns[x],
-            label_visibility="collapsed"
+            label_visibility="visible"
         )
-        
-        # 선택된 개수만 표시
-        if selected_columns:
-            st.markdown(f"**📊 표시 컬럼 ({len(selected_columns)}개 선택)**")
     
     # 필터 적용
     df_filtered = df_batters[df_batters['season'] == selected_season].copy()
@@ -436,19 +431,14 @@ python data_collection/pitcher_to_db.py
             'walks_plus_hits_per_inning_pitched', 'strikeout', 'k_9'
         ]
         
-        # 컬럼 선택 개수만 표시
-        num_selected = len(default_columns)
+        # 컬럼 선택
         selected_columns = st.multiselect(
-            f"📊 표시 컬럼 선택",
+            f"📊 표시 컬럼 ({len(default_columns)}개)",
             options=list(all_columns.keys()),
             default=default_columns,
             format_func=lambda x: all_columns[x],
-            label_visibility="collapsed"
+            label_visibility="visible"
         )
-        
-        # 선택된 개수만 표시
-        if selected_columns:
-            st.markdown(f"**📊 표시 컬럼 ({len(selected_columns)}개 선택)**")
     
     # 이닝 파싱 함수
     def parse_innings(ip_str):
