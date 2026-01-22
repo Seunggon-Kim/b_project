@@ -145,6 +145,7 @@ def load_pitcher_data():
                 bb_9,
                 strikeout_per_pa,
                 base_on_balls_per_pa,
+                k_bb,
                 batting_average_on_balls_in_play,
                 on_base_percentage,
                 slugging_percentage,
