@@ -9,13 +9,9 @@ from pathlib import Path
 
 st.set_page_config(page_title="선수 통계", page_icon="👤", layout="wide")
 
-# CSS: multiselect의 선택된 항목 태그 숨기기
+# CSS: multiselect 스타일 조정
 st.markdown("""
 <style>
-    /* multiselect 선택된 항목 숨기기 */
-    [data-baseweb="tag"] {
-        display: none !important;
-    }
     /* multiselect 컨테이너 높이 조정 */
     div[data-baseweb="select"] > div {
         min-height: 38px !important;
@@ -175,8 +171,8 @@ python data_collection/kbo_to_db.py
         """)
         st.stop()
     
-    # 드롭다운 4개 (선수 타입 + 연도 + 타석 + 컬럼)
-    col0, col1, col2, col3 = st.columns(4)
+    # 1행: 선수 타입, 시즌, 타석 기준
+    col0, col1, col2 = st.columns(3)
     
     with col0:
         # 0. 선수 타입 선택
@@ -224,68 +220,68 @@ python data_collection/kbo_to_db.py
         )
         selected_pa = pa_options[selected_pa_label]
     
-    with col3:
-        # 3. 컬럼 선택
-        all_columns = {
-            'player_name': '선수명',
-            'player_team': '팀',
-            'games': '경기',
-            'plate_appearance': '타석',
-            'at_bat': '타수',
-            'run': '득점',
-            'single': '안타',
-            'double': '2루타',
-            'triple': '3루타',
-            'home_run': '홈런',
-            'total_bases': '루타',
-            'run_batted_in': '타점',
-            'base_on_balls_per_pa': 'BB%',
-            'strikeout_per_pa': 'K%',
-            'sacrifice_bunts': '희생번트',
-            'sacrifice_fly': '희생플라이',
-            'base_on_balls': '볼넷',
-            'intentional_base_on_balls': '고의4구',
-            'hit_by_pitch': '몸에맞는볼',
-            'strikeout': '삼진',
-            'ground_into_double_play': '병살타',
-            'batting_average': '타율',
-            'slugging_percentage': '장타율',
-            'on_base_percentage': '출루율',
-            'on_base_plus_slugging': 'OPS',
-            'multi_hits': '멀티히트',
-            'runners_in_scoring_position': '득점권타율',
-            'pinch_hit_batting_average': '대타타율',
-            'extra_base_hits': '장타',
-            'ground_outs': '땅볼아웃',
-            'air_outs': '뜬공아웃',
-            'go_ao': '땅뜬비율',
-            'gw_rbi': '결승타',
-            'bb_k': '볼삼비율',
-            'p_pa': '타석당투구수',
-            'isop': 'ISOP',
-            'extended_runs': 'XR',
-            'gross_production_average': 'GPA'
-        }
-        
-        # 기본 표시 컬럼
-        default_columns = [
-            'player_name', 'player_team', 'games', 'plate_appearance', 
-            'home_run', 'run', 'run_batted_in', 'base_on_balls_per_pa', 'strikeout_per_pa', 
-            'isop', 'batting_average', 'on_base_percentage', 
-            'slugging_percentage', 'on_base_plus_slugging'
-        ]
-        
-        # 컬럼 선택 개수 반영
-        num_selected = len(st.session_state.get('batter_cols', default_columns))
-        
-        # 컬럼 선택
-        selected_columns = st.multiselect(
-            f"📊 표시 컬럼 ({num_selected}개)",
-            options=list(all_columns.keys()),
-            default=default_columns,
-            format_func=lambda x: all_columns[x],
-            key="batter_cols"
-        )
+    # 2행: 컬럼 선택
+    all_columns = {
+        'player_name': '선수명',
+        'player_team': '팀',
+        'games': '경기',
+        'plate_appearance': '타석',
+        'at_bat': '타수',
+        'run': '득점',
+        'single': '안타',
+        'double': '2루타',
+        'triple': '3루타',
+        'home_run': '홈런',
+        'total_bases': '루타',
+        'run_batted_in': '타점',
+        'base_on_balls_per_pa': 'BB%',
+        'strikeout_per_pa': 'K%',
+        'sacrifice_bunts': '희생번트',
+        'sacrifice_fly': '희생플라이',
+        'base_on_balls': '볼넷',
+        'intentional_base_on_balls': '고의4구',
+        'hit_by_pitch': '몸에맞는볼',
+        'strikeout': '삼진',
+        'ground_into_double_play': '병살타',
+        'batting_average': '타율',
+        'slugging_percentage': '장타율',
+        'on_base_percentage': '출루율',
+        'on_base_plus_slugging': 'OPS',
+        'multi_hits': '멀티히트',
+        'runners_in_scoring_position': '득점권타율',
+        'pinch_hit_batting_average': '대타타율',
+        'extra_base_hits': '장타',
+        'ground_outs': '땅볼아웃',
+        'air_outs': '뜬공아웃',
+        'go_ao': '땅뜬비율',
+        'gw_rbi': '결승타',
+        'bb_k': '볼삼비율',
+        'p_pa': '타석당투구수',
+        'isop': 'ISOP',
+        'extended_runs': 'XR',
+        'gross_production_average': 'GPA'
+    }
+    
+    # 기본 표시 컬럼
+    default_columns = [
+        'player_name', 'player_team', 'games', 'plate_appearance', 
+        'home_run', 'run', 'run_batted_in', 'base_on_balls_per_pa', 'strikeout_per_pa', 
+        'isop', 'batting_average', 'on_base_percentage', 
+        'slugging_percentage', 'on_base_plus_slugging'
+    ]
+    
+    # 컬럼 선택 개수 반영
+    num_selected = len(st.session_state.get('batter_cols', default_columns))
+    
+    # 컬럼 선택
+    selected_columns = st.multiselect(
+        f"📊 표시 컬럼 ({num_selected}개)",
+        options=list(all_columns.keys()),
+        default=default_columns,
+        format_func=lambda x: all_columns[x],
+        key="batter_cols"
+    )
+
     
     # 필터 적용
     df_filtered = df_batters[df_batters['season'] == selected_season].copy()
@@ -361,7 +357,8 @@ python data_collection/pitcher_to_db.py
         st.stop()
     
     # 드롭다운 4개 (선수 타입 + 연도 + 이닝 + 컬럼)
-    col0, col1, col2, col3 = st.columns(4)
+    # 1행: 선수 타입, 시즌, 이닝 기준
+    col0, col1, col2 = st.columns(3)
     
     with col0:
         # 0. 선수 타입 선택
@@ -403,69 +400,69 @@ python data_collection/pitcher_to_db.py
         )
         selected_ip = ip_options[selected_ip_label]
     
-    with col3:
-        # 3. 컬럼 선택
-        all_columns = {
-            'player_name': '선수명',
-            'player_team': '팀',
-            'games': '경기',
-            'wins': '승',
-            'losses': '패',
-            'save': '세이브',
-            'hold': '홀드',
-            'winning_percentage': '승률',
-            'innings_pitched': '이닝',
-            'hits': '피안타',
-            'home_run': '피홈런',
-            'base_on_balls': '볼넷',
-            'hit_by_pitch': '몸에맞는볼',
-            'strikeout': '삼진',
-            'run': '실점',
-            'earned_run': '자책점',
-            'earned_run_average': '평균자책점',
-            'walks_plus_hits_per_inning_pitched': 'WHIP',
-            'complete_game': '완투',
-            'shutout': '완봉',
-            'quality_start': 'QS',
-            'blown_save': '블론세이브',
-            'total_batters_faced': '타자',
-            'number_of_pitchers': '투구수',
-            'batting_average': '피안타율',
-            'games_started': '선발',
-            'wins_game_started': '선발승',
-            'wins_game_relieved': '구원승',
-            'games_finished': '마무리',
-            'save_opportunity': '세이브기회',
-            'total_saves': '세이브홀드',
-            'k_9': 'K/9',
-            'bb_9': 'BB/9',
-            'strikeout_per_pa': 'K%',
-            'base_on_balls_per_pa': 'BB%',
-            'k_bb': '볼삼비율',
-            'batting_average_on_balls_in_play': 'BABIP',
-            'on_base_percentage': '피출루율',
-            'slugging_percentage': '피장타율',
-            'on_base_plus_slugging': '피OPS'
-        }
-        
-        # 기본 표시 컬럼
-        default_columns = [
-            'player_name', 'player_team', 'wins', 'losses', 'save', 
-            'games', 'games_started', 'innings_pitched', 
-            'k_9', 'bb_9', 'batting_average_on_balls_in_play', 'earned_run_average'
-        ]
-        
-        # 컬럼 선택 개수 반영
-        num_selected = len(st.session_state.get('pitcher_cols', default_columns))
-        
-        # 컬럼 선택
-        selected_columns = st.multiselect(
-            f"📊 표시 컬럼 ({num_selected}개)",
-            options=list(all_columns.keys()),
-            default=default_columns,
-            format_func=lambda x: all_columns[x],
-            key="pitcher_cols"
-        )
+    # 2행: 컬럼 선택
+    all_columns = {
+        'player_name': '선수명',
+        'player_team': '팀',
+        'games': '경기',
+        'wins': '승',
+        'losses': '패',
+        'save': '세이브',
+        'hold': '홀드',
+        'winning_percentage': '승률',
+        'innings_pitched': '이닝',
+        'hits': '피안타',
+        'home_run': '피홈런',
+        'base_on_balls': '볼넷',
+        'hit_by_pitch': '몸에맞는볼',
+        'strikeout': '삼진',
+        'run': '실점',
+        'earned_run': '자책점',
+        'earned_run_average': '평균자책점',
+        'walks_plus_hits_per_inning_pitched': 'WHIP',
+        'complete_game': '완투',
+        'shutout': '완봉',
+        'quality_start': 'QS',
+        'blown_save': '블론세이브',
+        'total_batters_faced': '타자',
+        'number_of_pitchers': '투구수',
+        'batting_average': '피안타율',
+        'games_started': '선발',
+        'wins_game_started': '선발승',
+        'wins_game_relieved': '구원승',
+        'games_finished': '마무리',
+        'save_opportunity': '세이브기회',
+        'total_saves': '세이브홀드',
+        'k_9': 'K/9',
+        'bb_9': 'BB/9',
+        'strikeout_per_pa': 'K%',
+        'base_on_balls_per_pa': 'BB%',
+        'k_bb': '볼삼비율',
+        'batting_average_on_balls_in_play': 'BABIP',
+        'on_base_percentage': '피출루율',
+        'slugging_percentage': '피장타율',
+        'on_base_plus_slugging': '피OPS'
+    }
+    
+    # 기본 표시 컬럼
+    default_columns = [
+        'player_name', 'player_team', 'wins', 'losses', 'save', 
+        'games', 'games_started', 'innings_pitched', 
+        'k_9', 'bb_9', 'batting_average_on_balls_in_play', 'earned_run_average'
+    ]
+    
+    # 컬럼 선택 개수 반영
+    num_selected = len(st.session_state.get('pitcher_cols', default_columns))
+    
+    # 컬럼 선택
+    selected_columns = st.multiselect(
+        f"📊 표시 컬럼 ({num_selected}개)",
+        options=list(all_columns.keys()),
+        default=default_columns,
+        format_func=lambda x: all_columns[x],
+        key="pitcher_cols"
+    )
+
     
     # 이닝 파싱 함수
     def parse_innings(ip_str):
