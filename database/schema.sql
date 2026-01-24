@@ -34,12 +34,21 @@ CREATE TABLE IF NOT EXISTS players (
     player_id TEXT PRIMARY KEY,
     player_name TEXT NOT NULL,
     team_id TEXT,
+    back_number INTEGER,
     position TEXT,
-    birth_date DATE,
-    height_cm INTEGER,
-    weight_kg INTEGER,
-    bats TEXT CHECK(bats IN ('우', '좌', '양')),
-    throws TEXT CHECK(throws IN ('우', '좌')),
+    throw TEXT CHECK(throw IN ('R', 'L', 'S')),  -- R: 우투, L: 좌투, S: 양투
+    bat TEXT CHECK(bat IN ('R', 'L', 'S')),      -- R: 우타, L: 좌타, S: 양타
+    birthday DATE,
+    height INTEGER,  -- cm
+    weight INTEGER,  -- kg
+    career TEXT,
+    draft_year TEXT,
+    draft_order TEXT,
+    signing_bonus INTEGER,  -- 원 단위
+    salary INTEGER,         -- 원 단위
+    image_url TEXT,         -- 선수 이미지 URL
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (team_id) REFERENCES teams(team_id)
 );
 

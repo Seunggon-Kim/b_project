@@ -203,6 +203,7 @@
 - games, at_bats, runs, hits, doubles, triples, home_runs
 - rbis, stolen_bases, caught_stealing
 - walks, strikeouts, batting_avg, on_base_pct, slugging_pct, ops
+- **strikeout_per_pa (K%)**, **base_on_balls_per_pa (BB%)** [신규]
 - created_at
 
 **특징**:
@@ -225,6 +226,7 @@
 - innings_pitched, hits_allowed, runs_allowed, earned_runs
 - walks, strikeouts, home_runs_allowed
 - era, whip, k_per_9, bb_per_9
+- **strikeout_per_pa (K%)**, **base_on_balls_per_pa (BB%)**, **BABIP** [신규]
 - created_at
 
 **특징**:
@@ -264,9 +266,9 @@
 #### 데이터베이스
 
 - **경기 수**: 719개 (games 테이블)
-- **플레이 수**: 약 667,000개 (play_by_play 테이블)
-- **타자 통계**: KBO 공식 통계 수집 완료
-- **투수 통계**: KBO 공식 통계 수집 완료
+- **플레이 수**: 229,667개 (play_by_play 테이블)
+- **타자 통계**: 398명 (2025 시즌 공식 통계)
+- **투수 통계**: 281명 (2025 시즌 공식 통계)
 
 ---
 
@@ -380,6 +382,6 @@ python data_collection/pitcher_to_db.py
 
 ---
 
-**문서 버전**: v1.0  
-**작성일**: 2026-01-18  
+**문서 버전**: v1.1  
+**작성일**: 2026-01-18 (K%, BB%, BABIP 지표 구조 추가)  
 **작성자**: USERNAME
