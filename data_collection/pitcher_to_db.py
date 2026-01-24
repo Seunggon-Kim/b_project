@@ -230,7 +230,7 @@ def save_pitcher_stats(conn, csv_path):
                         safe_value(row.get('intentional_base_on_balls')), 
                         safe_value(row.get('base_on_balls'))
                     ),
-                    safe_value(row.get('k_bb')),
+                    safe_value(row.get('k/bb')),
                     safe_value(row.get('on_base_percentage')),
                     safe_value(row.get('slugging_percentage')),
                     safe_value(row.get('on_base_plus_slugging')),
@@ -325,7 +325,7 @@ def save_pitcher_stats(conn, csv_path):
                         safe_value(row.get('intentional_base_on_balls')), 
                         safe_value(row.get('base_on_balls'))
                     ),
-                    safe_value(row.get('k_bb')),
+                    safe_value(row.get('k/bb')),
                     safe_value(row.get('on_base_percentage')),
                     safe_value(row.get('slugging_percentage')),
                     safe_value(row.get('on_base_plus_slugging')),
