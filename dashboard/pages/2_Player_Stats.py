@@ -97,7 +97,7 @@ def load_batter_data():
         st.error(f"타자 데이터 로드 실패: {e}")
         return pd.DataFrame()
 
-@st.cache_data
+@st.cache_data(ttl=300)  # 5분마다 캐시 갱신
 def load_pitcher_data():
     """투수 데이터 로드"""
     if not DB_PATH.exists():
