@@ -527,9 +527,9 @@ python data_collection/pitcher_to_db.py
         # 숫자 포맷 설정
         column_config = {}
         for col in df_display.columns:
-            if col in ['평균자책점', 'WHIP', 'K/9', 'BB/9', '승률', '피안타율', '피출루율', '피장타율', '피OPS']:
+            if col in ['평균자책점', 'WHIP', 'K/9', 'BB/9', '승률', '피안타율']:
                 column_config[col] = st.column_config.NumberColumn(format="%.2f")
-            elif col == 'BABIP':
+            elif col in ['피출루율', '피장타율', '피OPS', 'BABIP']:
                 column_config[col] = st.column_config.NumberColumn(format="%.3f")
             elif col in ['K%', 'BB%']:
                 column_config[col] = st.column_config.NumberColumn(format="%.1f%%")
