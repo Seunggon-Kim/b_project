@@ -184,18 +184,20 @@ if search_query:
         if not player_info.empty:
             player = player_info.iloc[0]
             
-            # 1행 3열 레이아웃
-            col1, col2, col3 = st.columns([1, 1, 1])
+            # 1행: 선수 정보 (사진 + 프로필 + 시즌 성적)
+            st.markdown("## 📋 선수 정보")
             
-            # 1열: 선수 사진 + 프로필 + 시즌 성적
+            col1, col2, col3 = st.columns([1, 2, 2])
+            
+            # 선수 사진
             with col1:
-                # 선수 사진
                 if player['image_url'] and not pd.isna(player['image_url']):
                     st.image(player['image_url'], use_container_width=True)
                 else:
                     st.info("이미지 없음")
-                
-                # 프로필 정보
+            
+            # 프로필 정보
+            with col2:
                 st.markdown(f"### {player['player_name']}")
                 st.markdown(f"**{player['team_id']}** | No.{int(player['back_number']) if not pd.isna(player['back_number']) else '?'}")
                 
@@ -216,12 +218,45 @@ if search_query:
                     st.markdown("---")
                     st.markdown("#### 🏫 경력")
                     st.write(player['career'])
+            
+            # 시즌 성적
+            with col3:
+                st.markdown("### 📊 2025 시즌 성적")
                 
-                # 시즌 성적
-                st.markdown("---")
-                st.markdown("#### 📊 2025 시즌 성적")
+                # 포지션이 투수면 투수 성적 우선 표시
+                is_pitcher = player['position'] == '투수'
                 
-                if not batter_stats.empty:
+                if is_pitcher and not pitcher_stats.empty:
+                    # 투수 성적
+                    stats = pitcher_stats.iloc[0]
+                    
+                    st.markdown("**투구 성적**")
+                    
+                    # 주요 지표
+                    metric_cols = st.columns(3)
+                    with metric_cols[0]:
+                        st.metric("ERA", f"{stats['earned_run_average']:.2f}" if not pd.isna(stats['earned_run_average']) else "-")
+                    with metric_cols[1]:
+                        st.metric("승", f"{int(stats['wins'])}" if not pd.isna(stats['wins']) else "-")
+                    with metric_cols[2]:
+                        st.metric("패", f"{int(stats['losses'])}" if not pd.isna(stats['losses']) else "-")
+                    
+                    # 상세 기록 (승, 패, ERA, G, GS, SV, IP, SO, WHIP)
+                    st.write(f"**G (경기)**: {int(stats['games']) if not pd.isna(stats['games']) else '-'}")
+                    st.write(f"**GS (선발)**: {int(stats['games_started']) if not pd.isna(stats['games_started']) else '-'}")
+                    st.write(f"**SV (세이브)**: {int(stats['save']) if not pd.isna(stats['save']) else '-'}")
+                    
+                    # innings_pitched 타입 처리
+                    try:
+                        ip_value = float(stats['innings_pitched']) if not pd.isna(stats['innings_pitched']) else None
+                        st.write(f"**IP (이닝)**: {ip_value:.1f}" if ip_value is not None else "**IP (이닝)**: -")
+                    except (ValueError, TypeError):
+                        st.write(f"**IP (이닝)**: {stats['innings_pitched']}")
+                    
+                    st.write(f"**SO (탈삼진)**: {int(stats['strikeout']) if not pd.isna(stats['strikeout']) else '-'}")
+                    st.write(f"**WHIP**: {stats['whip']:.2f}" if not pd.isna(stats['whip']) else "**WHIP**: -")
+                
+                elif not batter_stats.empty:
                     # 타자 성적
                     stats = batter_stats.iloc[0]
                     
@@ -244,41 +279,20 @@ if search_query:
                     st.write(f"**홈런**: {int(stats['home_run']) if not pd.isna(stats['home_run']) else '-'}")
                     st.write(f"**OPS**: {stats['ops']:.3f}" if not pd.isna(stats['ops']) else "**OPS**: -")
                 
-                elif not pitcher_stats.empty:
-                    # 투수 성적
-                    stats = pitcher_stats.iloc[0]
-                    
-                    st.markdown("**투구 성적**")
-                    
-                    # 주요 지표
-                    metric_cols = st.columns(3)
-                    with metric_cols[0]:
-                        st.metric("ERA", f"{stats['earned_run_average']:.2f}" if not pd.isna(stats['earned_run_average']) else "-")
-                    with metric_cols[1]:
-                        st.metric("승", f"{int(stats['wins'])}" if not pd.isna(stats['wins']) else "-")
-                    with metric_cols[2]:
-                        st.metric("패", f"{int(stats['losses'])}" if not pd.isna(stats['losses']) else "-")
-                    
-                    # 상세 기록 (승, 패, ERA, G, GS, SV, IP, SO, WHIP)
-                    st.write(f"**G (경기)**: {int(stats['games']) if not pd.isna(stats['games']) else '-'}")
-                    st.write(f"**GS (선발)**: {int(stats['games_started']) if not pd.isna(stats['games_started']) else '-'}")
-                    st.write(f"**SV (세이브)**: {int(stats['save']) if not pd.isna(stats['save']) else '-'}")
-                    st.write(f"**IP (이닝)**: {stats['innings_pitched']:.1f}" if not pd.isna(stats['innings_pitched']) else "**IP (이닝)**: -")
-                    st.write(f"**SO (탈삼진)**: {int(stats['strikeout']) if not pd.isna(stats['strikeout']) else '-'}")
-                    st.write(f"**WHIP**: {stats['whip']:.2f}" if not pd.isna(stats['whip']) else "**WHIP**: -")
-                
                 else:
                     st.info("2025 시즌 성적이 없습니다.")
             
-            # 2열: 비워둠 (추후 확장용)
-            with col2:
-                st.markdown("### 📈 추가 분석")
-                st.info("추후 추가 예정")
+            st.divider()
             
-            # 3열: 비워둠 (추후 확장용)
-            with col3:
-                st.markdown("### 📊 상세 통계")
-                st.info("추후 추가 예정")
+            # 2행: 추가 분석
+            st.markdown("## 📈 추가 분석")
+            st.info("추후 추가 예정")
+            
+            st.divider()
+            
+            # 3행: 상세 통계
+            st.markdown("## 📊 상세 통계")
+            st.info("추후 추가 예정")
 
 else:
     st.info("👆 선수 이름을 검색하세요.")
