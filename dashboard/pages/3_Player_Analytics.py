@@ -100,10 +100,10 @@ def get_player_info(player_id):
             earned_run_average,
             games,
             games_started,
-            saves,
+            save,
             innings_pitched,
-            strikeouts,
-            whip
+            strikeout,
+            walk_plus_hits_per_inning_pitched as whip
         FROM kbo_official_pitcher_stats
         WHERE player_id = ? AND season = 2025
     """
@@ -262,9 +262,9 @@ if search_query:
                     # 상세 기록 (승, 패, ERA, G, GS, SV, IP, SO, WHIP)
                     st.write(f"**G (경기)**: {int(stats['games']) if not pd.isna(stats['games']) else '-'}")
                     st.write(f"**GS (선발)**: {int(stats['games_started']) if not pd.isna(stats['games_started']) else '-'}")
-                    st.write(f"**SV (세이브)**: {int(stats['saves']) if not pd.isna(stats['saves']) else '-'}")
+                    st.write(f"**SV (세이브)**: {int(stats['save']) if not pd.isna(stats['save']) else '-'}")
                     st.write(f"**IP (이닝)**: {stats['innings_pitched']:.1f}" if not pd.isna(stats['innings_pitched']) else "**IP (이닝)**: -")
-                    st.write(f"**SO (탈삼진)**: {int(stats['strikeouts']) if not pd.isna(stats['strikeouts']) else '-'}")
+                    st.write(f"**SO (탈삼진)**: {int(stats['strikeout']) if not pd.isna(stats['strikeout']) else '-'}")
                     st.write(f"**WHIP**: {stats['whip']:.2f}" if not pd.isna(stats['whip']) else "**WHIP**: -")
                 
                 else:
