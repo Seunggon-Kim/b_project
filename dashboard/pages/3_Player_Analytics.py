@@ -74,7 +74,6 @@ def get_player_info(player_id):
             double,
             triple,
             home_run,
-            stolen_bases,
             batting_average,
             on_base_percentage,
             slugging_percentage,
@@ -243,7 +242,6 @@ if search_query:
                     st.write(f"**득점**: {int(stats['run']) if not pd.isna(stats['run']) else '-'}")
                     st.write(f"**안타**: {int(stats['hits']) if not pd.isna(stats['hits']) else '-'}")
                     st.write(f"**홈런**: {int(stats['home_run']) if not pd.isna(stats['home_run']) else '-'}")
-                    st.write(f"**도루**: {int(stats['stolen_bases']) if not pd.isna(stats['stolen_bases']) else '-'}")
                     st.write(f"**OPS**: {stats['ops']:.3f}" if not pd.isna(stats['ops']) else "**OPS**: -")
                 
                 elif not pitcher_stats.empty:
