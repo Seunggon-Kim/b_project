@@ -103,7 +103,7 @@ def get_player_info(player_id):
             save,
             innings_pitched,
             strikeout,
-            walk_plus_hits_per_inning_pitched as whip
+            walks_plus_hits_per_inning_pitched as whip
         FROM kbo_official_pitcher_stats
         WHERE player_id = ? AND season = 2025
     """
