@@ -69,7 +69,7 @@ def get_player_info(player_id):
         SELECT 
             plate_appearance,
             at_bat,
-            runs,
+            run,
             hits,
             home_runs,
             stolen_bases,
@@ -229,7 +229,7 @@ if search_query:
                     # 상세 기록
                     st.write(f"**타석**: {int(stats['plate_appearance']) if not pd.isna(stats['plate_appearance']) else '-'}")
                     st.write(f"**타수**: {int(stats['at_bat']) if not pd.isna(stats['at_bat']) else '-'}")
-                    st.write(f"**득점**: {int(stats['runs']) if not pd.isna(stats['runs']) else '-'}")
+                    st.write(f"**득점**: {int(stats['run']) if not pd.isna(stats['run']) else '-'}")
                     st.write(f"**안타**: {int(stats['hits']) if not pd.isna(stats['hits']) else '-'}")
                     st.write(f"**홈런**: {int(stats['home_runs']) if not pd.isna(stats['home_runs']) else '-'}")
                     st.write(f"**도루**: {int(stats['stolen_bases']) if not pd.isna(stats['stolen_bases']) else '-'}")
