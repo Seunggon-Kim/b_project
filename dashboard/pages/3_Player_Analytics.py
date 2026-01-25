@@ -70,17 +70,28 @@ def get_player_info(player_id):
             plate_appearance,
             at_bat,
             run,
-            hits,
-            home_runs,
+            single,
+            double,
+            triple,
+            home_run,
             stolen_bases,
             batting_average,
             on_base_percentage,
             slugging_percentage,
-            ops
+            on_base_plus_slugging as ops
         FROM kbo_official_batter_stats
         WHERE player_id = ? AND season = 2025
     """
     batter_df = pd.read_sql_query(batter_query, conn, params=(player_id,))
+    
+    # 안타 합계 계산
+    if not batter_df.empty:
+        batter_df['hits'] = (
+            batter_df['single'].fillna(0) + 
+            batter_df['double'].fillna(0) + 
+            batter_df['triple'].fillna(0) + 
+            batter_df['home_run'].fillna(0)
+        )
     
     # 투수 성적 (2025 시즌)
     pitcher_query = """
@@ -231,7 +242,7 @@ if search_query:
                     st.write(f"**타수**: {int(stats['at_bat']) if not pd.isna(stats['at_bat']) else '-'}")
                     st.write(f"**득점**: {int(stats['run']) if not pd.isna(stats['run']) else '-'}")
                     st.write(f"**안타**: {int(stats['hits']) if not pd.isna(stats['hits']) else '-'}")
-                    st.write(f"**홈런**: {int(stats['home_runs']) if not pd.isna(stats['home_runs']) else '-'}")
+                    st.write(f"**홈런**: {int(stats['home_run']) if not pd.isna(stats['home_run']) else '-'}")
                     st.write(f"**도루**: {int(stats['stolen_bases']) if not pd.isna(stats['stolen_bases']) else '-'}")
                     st.write(f"**OPS**: {stats['ops']:.3f}" if not pd.isna(stats['ops']) else "**OPS**: -")
                 
