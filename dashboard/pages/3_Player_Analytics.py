@@ -184,108 +184,145 @@ if search_query:
         if not player_info.empty:
             player = player_info.iloc[0]
             
-            # 1행: 선수 정보 (사진 + 프로필 + 시즌 성적)
+            # 1행: 선수 정보 카드 (전체 너비)
             st.markdown("## 📋 선수 정보")
             
-            col1, col2, col3 = st.columns([1, 2, 2])
+            # 프로필 카드
+            col1, col2 = st.columns([1, 3])
             
-            # 선수 사진
             with col1:
+                # 선수 사진
                 if player['image_url'] and not pd.isna(player['image_url']):
                     st.image(player['image_url'], use_container_width=True)
                 else:
                     st.info("이미지 없음")
             
-            # 프로필 정보
             with col2:
-                st.markdown(f"### {player['player_name']}")
-                st.markdown(f"**{player['team_id']}** | No.{int(player['back_number']) if not pd.isna(player['back_number']) else '?'}")
+                # 선수 이름 및 기본 정보
+                st.markdown(f"# {player['player_name']}")
+                st.markdown(f"### {player['position']} | {player['team_id']} 🏟️")
                 
-                st.markdown("---")
+                # 한 줄 정보
+                info_line = f"**투타**: {format_throw_bat(player['throw'], player['bat'])} | **생년월일**: {format_birthday(player['birthday'])} | **신장/체중**: {int(player['height']) if not pd.isna(player['height']) else '?'}cm / {int(player['weight']) if not pd.isna(player['weight']) else '?'}kg | **나이**: "
                 
-                # 기본 정보, 계약 정보, 경력을 한 줄에
-                info_text = f"""
-                **📋 기본 정보**  
-                포지션: {player['position']} | 투타: {format_throw_bat(player['throw'], player['bat'])} | 생년월일: {format_birthday(player['birthday'])} | 신장/체중: {int(player['height']) if not pd.isna(player['height']) else '?'}cm / {int(player['weight']) if not pd.isna(player['weight']) else '?'}kg
-                
-                **💼 계약 정보**  
-                입단: {player['draft_year']} ({player['draft_order']}) | 계약금: {format_money(player['signing_bonus'])} | 연봉: {format_money(player['salary'])}
-                """
-                
-                if player['career'] and not pd.isna(player['career']):
-                    info_text += f"\n**🏫 경력**  \n{player['career']}"
-                
-                st.markdown(info_text)
-            
-            # 시즌 성적 (표로 표시)
-            with col3:
-                st.markdown("### 📊 2025 시즌 성적")
-                
-                # 포지션이 투수면 투수 성적 우선 표시
-                is_pitcher = player['position'] == '투수'
-                
-                if is_pitcher and not pitcher_stats.empty:
-                    # 투수 성적 테이블
-                    stats = pitcher_stats.iloc[0]
-                    
-                    st.markdown("**투구 성적**")
-                    
-                    # 데이터프레임 생성
-                    pitcher_data = {
-                        '항목': ['ERA', '승', '패', 'G', 'GS', 'SV', 'IP', 'SO', 'WHIP'],
-                        '기록': [
-                            f"{stats['earned_run_average']:.2f}" if not pd.isna(stats['earned_run_average']) else "-",
-                            f"{int(stats['wins'])}" if not pd.isna(stats['wins']) else "-",
-                            f"{int(stats['losses'])}" if not pd.isna(stats['losses']) else "-",
-                            f"{int(stats['games'])}" if not pd.isna(stats['games']) else "-",
-                            f"{int(stats['games_started'])}" if not pd.isna(stats['games_started']) else "-",
-                            f"{int(stats['save'])}" if not pd.isna(stats['save']) else "-",
-                            f"{float(stats['innings_pitched']):.1f}" if not pd.isna(stats['innings_pitched']) else "-",
-                            f"{int(stats['strikeout'])}" if not pd.isna(stats['strikeout']) else "-",
-                            f"{stats['whip']:.2f}" if not pd.isna(stats['whip']) else "-"
-                        ]
-                    }
-                    
-                    df_pitcher = pd.DataFrame(pitcher_data)
-                    st.dataframe(df_pitcher, hide_index=True, use_container_width=True)
-                
-                elif not batter_stats.empty:
-                    # 타자 성적 테이블
-                    stats = batter_stats.iloc[0]
-                    
-                    st.markdown("**타격 성적**")
-                    
-                    # 데이터프레임 생성
-                    batter_data = {
-                        '항목': ['타율', '출루율', '장타율', 'OPS', '타석', '타수', '득점', '안타', '홈런'],
-                        '기록': [
-                            f"{stats['batting_average']:.3f}" if not pd.isna(stats['batting_average']) else "-",
-                            f"{stats['on_base_percentage']:.3f}" if not pd.isna(stats['on_base_percentage']) else "-",
-                            f"{stats['slugging_percentage']:.3f}" if not pd.isna(stats['slugging_percentage']) else "-",
-                            f"{stats['ops']:.3f}" if not pd.isna(stats['ops']) else "-",
-                            f"{int(stats['plate_appearance'])}" if not pd.isna(stats['plate_appearance']) else "-",
-                            f"{int(stats['at_bat'])}" if not pd.isna(stats['at_bat']) else "-",
-                            f"{int(stats['run'])}" if not pd.isna(stats['run']) else "-",
-                            f"{int(stats['hits'])}" if not pd.isna(stats['hits']) else "-",
-                            f"{int(stats['home_run'])}" if not pd.isna(stats['home_run']) else "-"
-                        ]
-                    }
-                    
-                    df_batter = pd.DataFrame(batter_data)
-                    st.dataframe(df_batter, hide_index=True, use_container_width=True)
-                
+                # 나이 계산
+                if player['birthday'] and not pd.isna(player['birthday']):
+                    try:
+                        birth_year = int(player['birthday'][:4])
+                        age = 2025 - birth_year
+                        info_line += f"{age}"
+                    except:
+                        info_line += "?"
                 else:
-                    st.info("2025 시즌 성적이 없습니다.")
+                    info_line += "?"
+                
+                st.markdown(info_line)
+                
+                # 입단 및 계약 정보
+                draft_info = f"**입단**: {player['draft_year']} | {player['draft_order']}"
+                if player['career'] and not pd.isna(player['career']):
+                    draft_info += f" | {player['career']}"
+                
+                st.markdown(draft_info)
+                
+                # 계약 정보
+                contract_info = f"**계약금**: {format_money(player['signing_bonus'])} | **연봉**: {format_money(player['salary'])}"
+                st.markdown(contract_info)
             
             st.divider()
             
-            # 2행: 추가 분석
+            # 2행: 시즌별 성적 테이블
+            st.markdown("## 📊 시즌별 성적")
+            
+            # 포지션이 투수면 투수 성적 우선 표시
+            is_pitcher = player['position'] == '투수'
+            
+            if is_pitcher:
+                # 투수 성적 - 여러 시즌 조회
+                conn = sqlite3.connect(DB_PATH)
+                pitcher_query = """
+                    SELECT 
+                        season,
+                        wins,
+                        losses,
+                        earned_run_average,
+                        games,
+                        games_started,
+                        save,
+                        innings_pitched,
+                        strikeout,
+                        walks_plus_hits_per_inning_pitched as whip
+                    FROM kbo_official_pitcher_stats
+                    WHERE player_id = ?
+                    ORDER BY season DESC
+                """
+                df_pitcher_seasons = pd.read_sql_query(pitcher_query, conn, params=(player['player_id'],))
+                conn.close()
+                
+                if not df_pitcher_seasons.empty:
+                    # 컬럼명 변경
+                    df_pitcher_seasons.columns = ['시즌', '승', '패', 'ERA', 'G', 'GS', 'SV', 'IP', 'SO', 'WHIP']
+                    
+                    # 포맷팅
+                    df_pitcher_seasons['ERA'] = df_pitcher_seasons['ERA'].apply(lambda x: f"{x:.2f}" if not pd.isna(x) else "-")
+                    df_pitcher_seasons['IP'] = df_pitcher_seasons['IP'].apply(lambda x: f"{float(x):.1f}" if not pd.isna(x) else "-")
+                    df_pitcher_seasons['WHIP'] = df_pitcher_seasons['WHIP'].apply(lambda x: f"{x:.2f}" if not pd.isna(x) else "-")
+                    
+                    # 정수형 컬럼
+                    for col in ['승', '패', 'G', 'GS', 'SV', 'SO']:
+                        df_pitcher_seasons[col] = df_pitcher_seasons[col].apply(lambda x: int(x) if not pd.isna(x) else "-")
+                    
+                    st.dataframe(df_pitcher_seasons, hide_index=True, use_container_width=True)
+                else:
+                    st.info("투수 성적이 없습니다.")
+            
+            else:
+                # 타자 성적 - 여러 시즌 조회
+                conn = sqlite3.connect(DB_PATH)
+                batter_query = """
+                    SELECT 
+                        season,
+                        plate_appearance,
+                        at_bat,
+                        run,
+                        single + double + triple + home_run as hits,
+                        home_run,
+                        batting_average,
+                        on_base_percentage,
+                        slugging_percentage,
+                        on_base_plus_slugging as ops
+                    FROM kbo_official_batter_stats
+                    WHERE player_id = ?
+                    ORDER BY season DESC
+                """
+                df_batter_seasons = pd.read_sql_query(batter_query, conn, params=(player['player_id'],))
+                conn.close()
+                
+                if not df_batter_seasons.empty:
+                    # 컬럼명 변경
+                    df_batter_seasons.columns = ['시즌', 'PA', 'AB', 'R', 'H', 'HR', 'AVG', 'OBP', 'SLG', 'OPS']
+                    
+                    # 포맷팅
+                    for col in ['AVG', 'OBP', 'SLG', 'OPS']:
+                        df_batter_seasons[col] = df_batter_seasons[col].apply(lambda x: f"{x:.3f}" if not pd.isna(x) else "-")
+                    
+                    # 정수형 컬럼
+                    for col in ['PA', 'AB', 'R', 'H', 'HR']:
+                        df_batter_seasons[col] = df_batter_seasons[col].apply(lambda x: int(x) if not pd.isna(x) else "-")
+                    
+                    st.dataframe(df_batter_seasons, hide_index=True, use_container_width=True)
+                else:
+                    st.info("타자 성적이 없습니다.")
+            
+            st.divider()
+            
+            # 3행: 추가 분석
             st.markdown("## 📈 추가 분석")
             st.info("추후 추가 예정")
             
             st.divider()
             
-            # 3행: 상세 통계
+            # 4행: 상세 통계
             st.markdown("## 📊 상세 통계")
             st.info("추후 추가 예정")
 
