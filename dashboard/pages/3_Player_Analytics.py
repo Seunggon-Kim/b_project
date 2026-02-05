@@ -214,9 +214,9 @@ if search_query:
             col1, col2 = st.columns([1, 4])
             
             with col1:
-                # 선수 사진
+                # 선수 사진 (고정 크기로 해상도 유지)
                 if player['image_url'] and not pd.isna(player['image_url']):
-                    st.image(player['image_url'], use_container_width=True)
+                    st.image(player['image_url'], width=200)
                 else:
                     st.info("이미지 없음")
             
@@ -243,7 +243,13 @@ if search_query:
                     # 지명순위
                     draft_info = "-"
                     if not pd.isna(player['draft_year']) and not pd.isna(player['draft_order']):
-                        draft_info = f"{int(player['draft_year'])} KIA {int(player['draft_order'])}라운드 {int(player['draft_order'])}순위"
+                        try:
+                            year = int(player['draft_year'])
+                            order = int(player['draft_order'])
+                            draft_info = f"{year} KIA {order}라운드 {order}순위"
+                        except (ValueError, TypeError):
+                            # 숫자가 아닌 경우 그대로 표시
+                            draft_info = f"{player['draft_year']} {player['draft_order']}"
                     st.markdown(f"**지명순위:** {draft_info}")
                 
                 with right_col:
@@ -261,7 +267,13 @@ if search_query:
                     st.markdown(f"**연봉:** {salary_display}")
                     
                     # 입단연도
-                    draft_year = f"{int(player['draft_year'])}KIA" if not pd.isna(player['draft_year']) else "-"
+                    draft_year = "-"
+                    if not pd.isna(player['draft_year']):
+                        try:
+                            draft_year = f"{int(player['draft_year'])}KIA"
+                        except (ValueError, TypeError):
+                            # 이미 팀명이 포함된 경우 (예: "24SSG")
+                            draft_year = str(player['draft_year'])
                     st.markdown(f"**입단연도:** {draft_year}")
             
             st.divider()
