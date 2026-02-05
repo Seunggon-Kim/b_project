@@ -145,6 +145,32 @@ def format_birthday(birthday):
         return birthday
 
 
+def parse_innings(innings_str):
+    """이닝 문자열을 숫자로 변환 (예: '52 1/3' -> 52.333)"""
+    if pd.isna(innings_str):
+        return 0.0
+    
+    innings_str = str(innings_str).strip()
+    
+    # 이미 숫자면 그대로 반환
+    try:
+        return float(innings_str)
+    except ValueError:
+        pass
+    
+    # "52 1/3" 형식 처리
+    if ' ' in innings_str:
+        parts = innings_str.split()
+        whole = float(parts[0])
+        
+        if len(parts) > 1 and '/' in parts[1]:
+            frac_parts = parts[1].split('/')
+            fraction = float(frac_parts[0]) / float(frac_parts[1])
+            return whole + fraction
+    
+    return 0.0
+
+
 # 메인 페이지
 st.title("👤 선수 분석")
 
@@ -195,22 +221,48 @@ if search_query:
                     st.info("이미지 없음")
             
             with col2:
-                # 이름
-                st.markdown(f"# {player['player_name']}")
-                st.markdown(f"### {player['team_id']}")
+                # 왼쪽 열: 선수 기본 정보
+                left_col, right_col = st.columns(2)
                 
-                # 나이 계산
-                age = "?"
-                if player['birthday'] and not pd.isna(player['birthday']):
-                    try:
-                        birth_year = int(player['birthday'][:4])
-                        age = 2025 - birth_year
-                    except:
-                        pass
+                with left_col:
+                    st.markdown(f"**선수명:** {player['player_name']}")
+                    
+                    # 생년월일
+                    birth_display = format_birthday(player['birthday'])
+                    st.markdown(f"**생년월일:** {birth_display}")
+                    
+                    # 신장/체중
+                    height = f"{int(player['height'])}cm" if not pd.isna(player['height']) else "?"
+                    weight = f"{int(player['weight'])}kg" if not pd.isna(player['weight']) else "?"
+                    st.markdown(f"**신장/체중:** {height}/{weight}")
+                    
+                    # 입단 계약금
+                    signing = format_money(player['signing_bonus'])
+                    st.markdown(f"**입단 계약금:** {signing}")
+                    
+                    # 지명순위
+                    draft_info = "-"
+                    if not pd.isna(player['draft_year']) and not pd.isna(player['draft_order']):
+                        draft_info = f"{int(player['draft_year'])} KIA {int(player['draft_order'])}라운드 {int(player['draft_order'])}순위"
+                    st.markdown(f"**지명순위:** {draft_info}")
                 
-                # 한 줄 정보: 나이, 투타, 신장/체중, 생년월일
-                info_line = f"**Age**: {age} | **Bats/Throws**: {format_throw_bat(player['throw'], player['bat'])} | **{int(player['height']) if not pd.isna(player['height']) else '?'}cm / {int(player['weight']) if not pd.isna(player['weight']) else '?'}kg** | **DOB**: {format_birthday(player['birthday'])} | **{player['position']}**"
-                st.markdown(info_line)
+                with right_col:
+                    st.markdown(f"**등번호:** No.{player['back_number'] if not pd.isna(player['back_number']) else '?'}")
+                    
+                    # 포지션
+                    st.markdown(f"**포지션:** {player['position']}")
+                    
+                    # 경력
+                    career_display = player['career'] if not pd.isna(player['career']) else "-"
+                    st.markdown(f"**경력:** {career_display}")
+                    
+                    # 연봉
+                    salary_display = format_money(player['salary'])
+                    st.markdown(f"**연봉:** {salary_display}")
+                    
+                    # 입단연도
+                    draft_year = f"{int(player['draft_year'])}KIA" if not pd.isna(player['draft_year']) else "-"
+                    st.markdown(f"**입단연도:** {draft_year}")
             
             st.divider()
             
@@ -237,7 +289,7 @@ if search_query:
                             f"{int(stats['games'])}" if not pd.isna(stats['games']) else "-",
                             f"{int(stats['games_started'])}" if not pd.isna(stats['games_started']) else "-",
                             f"{int(stats['save'])}" if not pd.isna(stats['save']) else "-",
-                            f"{float(stats['innings_pitched']):.1f}" if not pd.isna(stats['innings_pitched']) else "-",
+                            f"{parse_innings(stats['innings_pitched']):.1f}" if not pd.isna(stats['innings_pitched']) else "-",
                             f"{int(stats['strikeout'])}" if not pd.isna(stats['strikeout']) else "-",
                             f"{stats['whip']:.2f}" if not pd.isna(stats['whip']) else "-"
                         ]
