@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>데이터 탐색 - KBO Analytics</title>
+    <meta name="description" content="KBO 경기 데이터 탐색">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <a href="../" class="logo">
+                <span class="logo-icon">⚾</span>
+                <span>KBO Analytics</span>
+            </a>
+            <nav class="nav">
+                <a href="../" class="nav-link">홈</a>
+                <a href="team-stats.html" class="nav-link">팀 통계</a>
+                <a href="player-stats.html" class="nav-link">선수 통계</a>
+                <a href="player-analytics.html" class="nav-link">선수 분석</a>
+                <a href="database-explorer.html" class="nav-link active">데이터 탐색</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container">
+        <h1 class="fade-in">🗄️ 데이터 탐색</h1>
+        <p class="text-secondary mb-3">2025 시즌 경기 데이터</p>
+
+        <!-- Games List -->
+        <section>
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">최근 경기 목록</h3>
+                    <div>
+                        <label for="games-limit" class="text-muted" style="margin-right: 0.5rem;">표시 개수:</label>
+                        <select id="games-limit" class="input" style="width: auto; display: inline-block;"
+                            onchange="loadGames()">
+                            <option value="20">20경기</option>
+                            <option value="50" selected>50경기</option>
+                            <option value="100">100경기</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="games-table"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Database Info -->
+        <section class="mt-3">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">📊 데이터베이스 정보</h3>
+                </div>
+                <div class="card-body">
+                    <h4 class="mb-2">주요 테이블</h4>
+                    <div class="grid grid-2">
+                        <div>
+                            <p><strong>games</strong></p>
+                            <p class="text-muted" style="font-size: 0.875rem;">경기 기본 정보 (날짜, 팀, 점수, 구장)</p>
+                        </div>
+                        <div>
+                            <p><strong>play_by_play</strong></p>
+                            <p class="text-muted" style="font-size: 0.875rem;">플레이별 상세 기록 (73개 컬럼)</p>
+                        </div>
+                        <div>
+                            <p><strong>kbo_official_batter_stats</strong></p>
+                            <p class="text-muted" style="font-size: 0.875rem;">타자 공식 통계</p>
+                        </div>
+                        <div>
+                            <p><strong>kbo_official_pitcher_stats</strong></p>
+                            <p class="text-muted" style="font-size: 0.875rem;">투수 공식 통계</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Scripts -->
+    <script src="../js/api.js"></script>
+    <script src="../js/components.js"></script>
+    <script>
+        // Load games
+        async function loadGames() {
+            const tableDiv = document.getElementById('games-table');
+            const limit = parseInt(document.getElementById('games-limit').value);
+
+            tableDiv.innerHTML = createLoadingSpinner();
+
+            try {
+                const data = await API.getGames(2025, limit);
+
+                if (data.games.length === 0) {
+                    tableDiv.innerHTML = createEmptyState('경기 데이터가 없습니다.');
+                    return;
+                }
+
+                const headers = ['경기 ID', '날짜', '홈팀', '원정팀', '점수', '구장'];
+                const rows = data.games.map(game => [
+                    game.gameID,
+                    game.date,
+                    game.home_team,
+                    game.away_team,
+                    `${game.home_score} : ${game.away_score}`,
+                    game.stadium || '-'
+                ]);
+
+                tableDiv.innerHTML = createTable(headers, rows);
+            } catch (error) {
+                tableDiv.innerHTML = createErrorMessage('경기 데이터를 불러오는데 실패했습니다.');
+            }
+        }
+
+        // Load games on page load
+        loadGames();
+    </script>
+</body>
+
+</html>

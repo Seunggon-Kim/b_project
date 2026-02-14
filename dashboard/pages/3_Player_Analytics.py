@@ -1,4 +1,4 @@
-import streamlit as st
+﻿import streamlit as st
 import sqlite3
 import pandas as pd
 from pathlib import Path
@@ -6,7 +6,7 @@ from pathlib import Path
 # 페이지 설정
 st.set_page_config(
     page_title="선수 분석",
-    page_icon="👤",
+    page_icon="??",
     layout="wide"
 )
 
@@ -172,10 +172,10 @@ def parse_innings(innings_str):
 
 
 # 메인 페이지
-st.title("👤 선수 분석")
+st.title("?? 선수 분석")
 
 # 선수 검색
-st.header("🔎 선수 검색")
+st.header("?? 선수 검색")
 search_query = st.text_input("선수 이름을 입력하세요", placeholder="예: 김현수")
 
 if search_query:
@@ -187,7 +187,7 @@ if search_query:
     else:
         # 동명이인 처리
         if len(search_results) > 1:
-            st.info(f"🔍 {len(search_results)}명의 선수가 검색되었습니다. 선택해주세요.")
+            st.info(f"?? {len(search_results)}명의 선수가 검색되었습니다. 선택해주세요.")
             
             # 선수 선택 옵션
             player_options = []
@@ -283,7 +283,7 @@ if search_query:
             
             # 1열: 2025 성적
             with col1:
-                st.markdown("### 📊 Quick Look")
+                st.markdown("### ?? Quick Look")
                 
                 # 포지션이 투수면 투수 성적 우선 표시
                 is_pitcher = player['position'] == '투수'
@@ -337,7 +337,7 @@ if search_query:
             
             # 2열: 경력 정보
             with col2:
-                st.markdown("### 💼 Roster Resource")
+                st.markdown("### ?? Roster Resource")
                 
                 st.markdown(f"**입단**: {player['draft_year']}")
                 st.markdown(f"**지명**: {player['draft_order']}")
@@ -351,13 +351,13 @@ if search_query:
             
             # 3열: 비어있음
             with col3:
-                st.markdown("### 📰 News")
+                st.markdown("### ?? News")
                 st.info("추후 추가 예정")
             
             st.divider()
             
             # 시즌별 성적 테이블
-            st.markdown("## 📊 시즌별 성적")
+            st.markdown("## ?? 시즌별 성적")
             
             if is_pitcher:
                 # 투수 성적 - 여러 시즌 조회
@@ -437,4 +437,4 @@ if search_query:
                     st.info("타자 성적이 없습니다.")
 
 else:
-    st.info("👆 선수 이름을 검색하세요.")
+    st.info("?? 선수 이름을 검색하세요.")

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KBO 야구 데이터 대시보드</title>
+    <meta name="description" content="KBO 야구 데이터 분석 및 시각화 플랫폼">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <a href="./" class="logo">
+                <span class="logo-icon">⚾</span>
+                <span>KBO Analytics</span>
+            </a>
+            <nav class="nav">
+                <a href="./" class="nav-link active">홈</a>
+                <a href="pages/team-stats.html" class="nav-link">팀 통계</a>
+                <a href="pages/player-stats.html" class="nav-link">선수 통계</a>
+                <a href="pages/player-analytics.html" class="nav-link">선수 분석</a>
+                <a href="pages/database-explorer.html" class="nav-link">데이터 탐색</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Hero Section -->
+        <section class="hero mb-3">
+            <h1 class="fade-in">⚾ KBO 야구 데이터 대시보드</h1>
+            <p class="text-secondary fade-in">한국야구위원회(KBO) 경기 데이터를 수집하여 분석하고 시각화하는 프리미엄 플랫폼</p>
+        </section>
+
+        <!-- Stats Overview -->
+        <section id="stats-overview" class="mb-3">
+            <h2 class="mb-2">📊 2025 시즌 데이터 현황</h2>
+            <div id="stats-grid" class="grid grid-4">
+                <!-- Stats will be loaded here -->
+            </div>
+        </section>
+
+        <!-- Features -->
+        <section class="mb-3">
+            <h2 class="mb-2">✨ 주요 기능</h2>
+            <div class="grid grid-2">
+                <div class="card fade-in">
+                    <div class="card-header">
+                        <h3 class="card-title">📈 팀별 통계 및 순위</h3>
+                    </div>
+                    <div class="card-body">
+                        <p>시즌별 팀 성적, 승률, 득실점 분석을 통해 팀의 전반적인 퍼포먼스를 파악할 수 있습니다.</p>
+                        <a href="pages/team-stats.html" class="btn btn-primary mt-2">팀 통계 보기 →</a>
+                    </div>
+                </div>
+
+                <div class="card fade-in">
+                    <div class="card-header">
+                        <h3 class="card-title">👤 선수별 성적 분석</h3>
+                    </div>
+                    <div class="card-body">
+                        <p>타자와 투수의 개인 기록을 상세하게 분석하고 시즌별 성적 변화를 추적합니다.</p>
+                        <a href="pages/player-stats.html" class="btn btn-primary mt-2">선수 통계 보기 →</a>
+                    </div>
+                </div>
+
+                <div class="card fade-in">
+                    <div class="card-header">
+                        <h3 class="card-title">🎯 선수 상세 분석</h3>
+                    </div>
+                    <div class="card-body">
+                        <p>선수 검색을 통해 개인 프로필, 경력, 시즌별 성적을 한눈에 확인할 수 있습니다.</p>
+                        <a href="pages/player-analytics.html" class="btn btn-primary mt-2">선수 검색 →</a>
+                    </div>
+                </div>
+
+                <div class="card fade-in">
+                    <div class="card-header">
+                        <h3 class="card-title">📊 Play-by-Play 데이터</h3>
+                    </div>
+                    <div class="card-body">
+                        <p>투구별, 타석별 상세 기록을 통해 경기의 모든 순간을 데이터로 분석합니다.</p>
+                        <a href="pages/database-explorer.html" class="btn btn-primary mt-2">데이터 탐색 →</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Data Collection -->
+        <section class="mb-3">
+            <h2 class="mb-2">🔄 데이터 수집 로직</h2>
+            <div class="grid grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">📥 Play-by-Play 데이터</h3>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>출처:</strong> Naver 스포츠 문자중계</p>
+                        <ul style="margin-top: 1rem; padding-left: 1.5rem;">
+                            <li>투구별 상세 기록 (구종, 구속, 코스)</li>
+                            <li>타석 결과 (안타, 삼진, 볼넷 등)</li>
+                            <li>주루 상황 (주자, 득점)</li>
+                            <li>PITCHf/x 트래킹 데이터</li>
+                        </ul>
+                        <p class="mt-2"><strong>수집 주기:</strong> 시즌 종료 후 일괄 수집</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">📊 공식 통계 데이터</h3>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>출처:</strong> KBO 공식 홈페이지</p>
+                        <ul style="margin-top: 1rem; padding-left: 1.5rem;">
+                            <li>타자 통계 (타율, OPS, 홈런 등)</li>
+                            <li>투수 통계 (평균자책점, WHIP, 탈삼진 등)</li>
+                            <li>팀별 집계 통계</li>
+                        </ul>
+                        <p class="mt-2"><strong>수집 주기:</strong> 매일 새벽 1:30 자동 수집 (AWS EC2)</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-2"
+                style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);">
+                <div class="card-body">
+                    <h4>💡 자동화 시스템</h4>
+                    <p>AWS EC2 서버에서 cron job을 통해 매일 자동으로 최신 데이터를 수집하고 이메일로 알림을 발송합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Database Info -->
+        <section class="mb-3">
+            <h2 class="mb-2">🗄️ 데이터베이스 구조</h2>
+            <div class="card">
+                <div class="card-body">
+                    <h4 class="mb-2">주요 테이블</h4>
+                    <div class="grid grid-2">
+                        <div>
+                            <p><strong>1. games</strong> - 경기 기본 정보</p>
+                            <p class="text-muted" style="font-size: 0.875rem;">game_id, 날짜, 홈/원정팀, 점수, 구장 등</p>
+                        </div>
+                        <div>
+                            <p><strong>2. play_by_play</strong> - 플레이별 상세 기록</p>
+                            <p class="text-muted" style="font-size: 0.875rem;">투구 정보, 타격 결과, 주루 상황, PITCHf/x 데이터</p>
+                        </div>
+                        <div>
+                            <p><strong>3. kbo_official_batter_stats</strong> - 타자 공식 통계</p>
+                            <p class="text-muted" style="font-size: 0.875rem;">타율, OPS, 홈런, 타점, 도루 등</p>
+                        </div>
+                        <div>
+                            <p><strong>4. kbo_official_pitcher_stats</strong> - 투수 공식 통계</p>
+                            <p class="text-muted" style="font-size: 0.875rem;">평균자책점, WHIP, 승패, 세이브 등</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer
+        style="text-align: center; padding: 2rem; color: var(--text-muted); border-top: 1px solid var(--border-color); margin-top: 4rem;">
+        <p>⚾ KBO 야구 데이터 대시보드 v3.0 | 데이터 출처: Naver 문자중계, KBO 공식 홈페이지</p>
+        <p style="font-size: 0.875rem; margin-top: 0.5rem;">2026 업데이트 | JavaScript Premium Edition</p>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="js/api.js"></script>
+    <script src="js/components.js"></script>
+    <script>
+        // Load dashboard stats
+        async function loadDashboardStats() {
+            const statsGrid = document.getElementById('stats-grid');
+            statsGrid.innerHTML = createLoadingSpinner();
+
+            try {
+                const data = await API.getDashboardStats();
+
+                const statsHTML = `
+                    ${createStatCard('경기 수', formatNumber(data.games), `${data.completion_rate}% 완료`, '📅')}
+                    ${createStatCard('플레이 수', formatNumber(data.plays), '투구/타석 기록', '⚾')}
+                    ${createStatCard('타자 통계', `${data.batters}명`, 'KBO 공식', '🏏')}
+                    ${createStatCard('투수 통계', `${data.pitchers}명`, 'KBO 공식', '⚡')}
+                `;
+
+                statsGrid.innerHTML = statsHTML;
+            } catch (error) {
+                statsGrid.innerHTML = createErrorMessage('데이터를 불러오는데 실패했습니다. API 서버가 실행 중인지 확인해주세요.');
+            }
+        }
+
+        // Load stats when page loads
+        loadDashboardStats();
+    </script>
+</body>
+
+</html>

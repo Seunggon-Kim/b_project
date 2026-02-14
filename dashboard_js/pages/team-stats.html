@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>팀 통계 - KBO Analytics</title>
+    <meta name="description" content="KBO 팀별 순위 및 성적">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <a href="../" class="logo">
+                <span class="logo-icon">⚾</span>
+                <span>KBO Analytics</span>
+            </a>
+            <nav class="nav">
+                <a href="../" class="nav-link">홈</a>
+                <a href="team-stats.html" class="nav-link active">팀 통계</a>
+                <a href="player-stats.html" class="nav-link">선수 통계</a>
+                <a href="player-analytics.html" class="nav-link">선수 분석</a>
+                <a href="database-explorer.html" class="nav-link">데이터 탐색</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container">
+        <h1 class="fade-in">📈 팀 통계</h1>
+        <p class="text-secondary mb-3">2025 시즌 팀별 순위 및 성적</p>
+
+        <!-- Teams List -->
+        <section>
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">KBO 리그 팀 목록</h3>
+                </div>
+                <div class="card-body">
+                    <div id="teams-list"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Info Section -->
+        <section class="mt-3">
+            <div class="card"
+                style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);">
+                <div class="card-body">
+                    <h4>📊 팀 통계 정보</h4>
+                    <p>현재 KBO 리그에 등록된 팀 목록입니다. 상세한 팀별 순위 및 성적은 추후 업데이트될 예정입니다.</p>
+                    <p class="mt-2"><strong>포함 예정 데이터:</strong></p>
+                    <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
+                        <li>팀별 승률 및 순위</li>
+                        <li>득점 및 실점 통계</li>
+                        <li>홈/원정 성적</li>
+                        <li>최근 경기 결과</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Scripts -->
+    <script src="../js/api.js"></script>
+    <script src="../js/components.js"></script>
+    <script>
+        // Load teams
+        async function loadTeams() {
+            const teamsDiv = document.getElementById('teams-list');
+            teamsDiv.innerHTML = createLoadingSpinner();
+
+            try {
+                const data = await API.getTeams();
+
+                if (data.teams.length === 0) {
+                    teamsDiv.innerHTML = createEmptyState('팀 정보가 없습니다.');
+                    return;
+                }
+
+                const headers = ['팀명', '팀 ID', '홈구장', '창단연도'];
+                const rows = data.teams.map(team => [
+                    team.team_name || '-',
+                    team.team_id,
+                    team.stadium || '-',
+                    team.founded_year || '-'
+                ]);
+
+                teamsDiv.innerHTML = createTable(headers, rows);
+            } catch (error) {
+                teamsDiv.innerHTML = createErrorMessage('팀 정보를 불러오는데 실패했습니다.');
+            }
+        }
+
+        // Load teams on page load
+        loadTeams();
+    </script>
+</body>
+
+</html>

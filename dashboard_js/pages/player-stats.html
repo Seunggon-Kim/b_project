@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>선수 통계 - KBO Analytics</title>
+    <meta name="description" content="KBO 선수별 타격 및 투구 성적">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <a href="../" class="logo">
+                <span class="logo-icon">⚾</span>
+                <span>KBO Analytics</span>
+            </a>
+            <nav class="nav">
+                <a href="../" class="nav-link">홈</a>
+                <a href="team-stats.html" class="nav-link">팀 통계</a>
+                <a href="player-stats.html" class="nav-link active">선수 통계</a>
+                <a href="player-analytics.html" class="nav-link">선수 분석</a>
+                <a href="database-explorer.html" class="nav-link">데이터 탐색</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container">
+        <h1 class="fade-in">📊 선수 통계</h1>
+        <p class="text-secondary mb-3">2025 시즌 타자 및 투수 성적</p>
+
+        <!-- Tabs -->
+        <div class="mb-3">
+            <div style="display: flex; gap: 1rem; border-bottom: 2px solid var(--border-color);">
+                <button id="tab-batters" class="btn btn-secondary" onclick="switchTab('batters')"
+                    style="border-radius: 0; border-bottom: 3px solid var(--primary);">
+                    🏏 타자 통계
+                </button>
+                <button id="tab-pitchers" class="btn btn-secondary" onclick="switchTab('pitchers')"
+                    style="border-radius: 0; border-bottom: 3px solid transparent;">
+                    ⚡ 투수 통계
+                </button>
+            </div>
+        </div>
+
+        <!-- Batter Stats -->
+        <section id="batters-section" class="fade-in">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">타자 성적 (2025 시즌)</h3>
+                    <div>
+                        <label for="batter-limit" class="text-muted" style="margin-right: 0.5rem;">표시 개수:</label>
+                        <select id="batter-limit" class="input" style="width: auto; display: inline-block;"
+                            onchange="loadBatterStats()">
+                            <option value="50">50명</option>
+                            <option value="100" selected>100명</option>
+                            <option value="200">200명</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="batters-table"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Pitcher Stats -->
+        <section id="pitchers-section" class="hidden">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">투수 성적 (2025 시즌)</h3>
+                    <div>
+                        <label for="pitcher-limit" class="text-muted" style="margin-right: 0.5rem;">표시 개수:</label>
+                        <select id="pitcher-limit" class="input" style="width: auto; display: inline-block;"
+                            onchange="loadPitcherStats()">
+                            <option value="50">50명</option>
+                            <option value="100" selected>100명</option>
+                            <option value="200">200명</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="pitchers-table"></div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Scripts -->
+    <script src="../js/api.js"></script>
+    <script src="../js/components.js"></script>
+    <script>
+        let currentTab = 'batters';
+
+        // Switch tabs
+        function switchTab(tab) {
+            currentTab = tab;
+
+            // Update tab buttons
+            document.getElementById('tab-batters').style.borderBottom =
+                tab === 'batters' ? '3px solid var(--primary)' : '3px solid transparent';
+            document.getElementById('tab-pitchers').style.borderBottom =
+                tab === 'pitchers' ? '3px solid var(--primary)' : '3px solid transparent';
+
+            // Show/hide sections
+            document.getElementById('batters-section').classList.toggle('hidden', tab !== 'batters');
+            document.getElementById('pitchers-section').classList.toggle('hidden', tab !== 'pitchers');
+
+            // Load data if not already loaded
+            if (tab === 'batters' && !document.getElementById('batters-table').innerHTML) {
+                loadBatterStats();
+            } else if (tab === 'pitchers' && !document.getElementById('pitchers-table').innerHTML) {
+                loadPitcherStats();
+            }
+        }
+
+        // Load batter stats
+        async function loadBatterStats() {
+            const tableDiv = document.getElementById('batters-table');
+            const limit = parseInt(document.getElementById('batter-limit').value);
+
+            tableDiv.innerHTML = createLoadingSpinner();
+
+            try {
+                const data = await API.getBatterStats(2025, limit);
+
+                if (data.batters.length === 0) {
+                    tableDiv.innerHTML = createEmptyState('타자 통계가 없습니다.');
+                    return;
+                }
+
+                const headers = ['순위', '선수명', '팀', '포지션', 'PA', 'AB', 'R', 'H', 'HR', 'AVG', 'OBP', 'SLG', 'OPS'];
+                const rows = data.batters.map((batter, index) => [
+                    index + 1,
+                    batter.player_name,
+                    batter.team_id,
+                    batter.position,
+                    formatNumber(batter.plate_appearance),
+                    formatNumber(batter.at_bat),
+                    formatNumber(batter.run),
+                    formatNumber(batter.hits),
+                    formatNumber(batter.home_run),
+                    formatAverage(batter.batting_average),
+                    formatAverage(batter.on_base_percentage),
+                    formatAverage(batter.slugging_percentage),
+                    formatAverage(batter.ops)
+                ]);
+
+                tableDiv.innerHTML = createTable(headers, rows);
+            } catch (error) {
+                tableDiv.innerHTML = createErrorMessage('타자 통계를 불러오는데 실패했습니다.');
+            }
+        }
+
+        // Load pitcher stats
+        async function loadPitcherStats() {
+            const tableDiv = document.getElementById('pitchers-table');
+            const limit = parseInt(document.getElementById('pitcher-limit').value);
+
+            tableDiv.innerHTML = createLoadingSpinner();
+
+            try {
+                const data = await API.getPitcherStats(2025, limit);
+
+                if (data.pitchers.length === 0) {
+                    tableDiv.innerHTML = createEmptyState('투수 통계가 없습니다.');
+                    return;
+                }
+
+                const headers = ['순위', '선수명', '팀', 'W', 'L', 'ERA', 'G', 'GS', 'SV', 'IP', 'SO', 'WHIP'];
+                const rows = data.pitchers.map((pitcher, index) => [
+                    index + 1,
+                    pitcher.player_name,
+                    pitcher.team_id,
+                    pitcher.wins || '-',
+                    pitcher.losses || '-',
+                    formatERA(pitcher.earned_run_average),
+                    pitcher.games || '-',
+                    pitcher.games_started || '-',
+                    pitcher.save || '-',
+                    pitcher.innings_pitched ? parseFloat(pitcher.innings_pitched).toFixed(1) : '-',
+                    pitcher.strikeout || '-',
+                    formatERA(pitcher.whip)
+                ]);
+
+                tableDiv.innerHTML = createTable(headers, rows);
+            } catch (error) {
+                tableDiv.innerHTML = createErrorMessage('투수 통계를 불러오는데 실패했습니다.');
+            }
+        }
+
+        // Load initial data
+        loadBatterStats();
+    </script>
+</body>
+
+</html>

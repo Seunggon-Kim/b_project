@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>선수 분석 - KBO Analytics</title>
+    <meta name="description" content="KBO 선수 검색 및 상세 분석">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <a href="../" class="logo">
+                <span class="logo-icon">⚾</span>
+                <span>KBO Analytics</span>
+            </a>
+            <nav class="nav">
+                <a href="../" class="nav-link">홈</a>
+                <a href="team-stats.html" class="nav-link">팀 통계</a>
+                <a href="player-stats.html" class="nav-link">선수 통계</a>
+                <a href="player-analytics.html" class="nav-link active">선수 분석</a>
+                <a href="database-explorer.html" class="nav-link">데이터 탐색</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container">
+        <h1 class="fade-in">🔍 선수 분석</h1>
+        <p class="text-secondary mb-3">선수 이름을 검색하여 상세 정보와 성적을 확인하세요</p>
+
+        <!-- Search Section -->
+        <section class="mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="search-box">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="player-search" class="input" placeholder="선수 이름을 입력하세요 (예: 김현수)"
+                            autocomplete="off">
+                    </div>
+
+                    <!-- Search Results -->
+                    <div id="search-results" class="mt-2"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Player Info Section -->
+        <section id="player-info-section" class="hidden">
+            <!-- Player Card -->
+            <div id="player-card" class="mb-3"></div>
+
+            <!-- Stats Tabs -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h3 class="card-title">📊 시즌별 성적</h3>
+                </div>
+                <div class="card-body">
+                    <div id="player-stats"></div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Scripts -->
+    <script src="../js/api.js"></script>
+    <script src="../js/components.js"></script>
+    <script>
+        let searchTimeout;
+        let currentPlayer = null;
+
+        // Search input handler
+        document.getElementById('player-search').addEventListener('input', (e) => {
+            const query = e.target.value.trim();
+
+            clearTimeout(searchTimeout);
+
+            if (query.length < 1) {
+                document.getElementById('search-results').innerHTML = '';
+                return;
+            }
+
+            searchTimeout = setTimeout(() => searchPlayers(query), 300);
+        });
+
+        // Search players
+        async function searchPlayers(query) {
+            const resultsDiv = document.getElementById('search-results');
+            resultsDiv.innerHTML = createLoadingSpinner();
+
+            try {
+                const data = await API.searchPlayers(query);
+
+                if (data.players.length === 0) {
+                    resultsDiv.innerHTML = `<p class="text-muted mt-2">검색 결과가 없습니다.</p>`;
+                    return;
+                }
+
+                const resultsHTML = `
+                    <div style="margin-top: 1rem;">
+                        <p class="text-muted mb-1">${data.players.length}명의 선수가 검색되었습니다</p>
+                        <div class="grid grid-2" style="gap: 0.5rem;">
+                            ${data.players.map(player => `
+                                <button 
+                                    class="btn btn-secondary" 
+                                    onclick="loadPlayerInfo('${player.player_id}')"
+                                    style="text-align: left; justify-content: flex-start;"
+                                >
+                                    ${player.player_name} (${player.team_id}) - No.${player.back_number || '?'} ${player.position}
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+
+                resultsDiv.innerHTML = resultsHTML;
+            } catch (error) {
+                resultsDiv.innerHTML = createErrorMessage('검색 중 오류가 발생했습니다.');
+            }
+        }
+
+        // Load player info
+        async function loadPlayerInfo(playerId) {
+            const section = document.getElementById('player-info-section');
+            const cardDiv = document.getElementById('player-card');
+            const statsDiv = document.getElementById('player-stats');
+
+            section.classList.remove('hidden');
+            cardDiv.innerHTML = createLoadingSpinner();
+            statsDiv.innerHTML = createLoadingSpinner();
+
+            try {
+                const player = await API.getPlayerInfo(playerId);
+                currentPlayer = player;
+
+                // Player Card
+                const imageUrl = player.image_url || 'https://via.placeholder.com/200x250?text=No+Image';
+
+                cardDiv.innerHTML = `
+                    <div class="player-card fade-in">
+                        <div>
+                            <img src="${imageUrl}" alt="${player.player_name}" class="player-image" 
+                                 onerror="this.src='https://via.placeholder.com/200x250?text=No+Image'">
+                        </div>
+                        <div class="player-info">
+                            <div class="info-item">
+                                <span class="info-label">선수명</span>
+                                <span class="info-value">${player.player_name}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">등번호</span>
+                                <span class="info-value">No.${player.back_number || '?'}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">생년월일</span>
+                                <span class="info-value">${formatBirthday(player.birthday)}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">포지션</span>
+                                <span class="info-value">${player.position}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">신장/체중</span>
+                                <span class="info-value">${player.height ? player.height + 'cm' : '-'} / ${player.weight ? player.weight + 'kg' : '-'}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">투타</span>
+                                <span class="info-value">${formatThrowBat(player.throw, player.bat)}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">입단 계약금</span>
+                                <span class="info-value">${formatMoney(player.signing_bonus)}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">연봉</span>
+                                <span class="info-value">${formatMoney(player.salary)}</span>
+                            </div>
+                            <div class="info-item" style="grid-column: 1 / -1;">
+                                <span class="info-label">경력</span>
+                                <span class="info-value">${player.career || '-'}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // Stats Table
+                const isPitcher = player.position === '투수';
+
+                if (isPitcher && player.pitcher_seasons && player.pitcher_seasons.length > 0) {
+                    // Pitcher stats
+                    const headers = ['Season', 'W', 'L', 'ERA', 'G', 'GS', 'SV', 'IP', 'SO', 'WHIP'];
+                    const rows = player.pitcher_seasons.map(s => [
+                        s.season,
+                        s.wins || '-',
+                        s.losses || '-',
+                        s.earned_run_average ? formatERA(s.earned_run_average) : '-',
+                        s.games || '-',
+                        s.games_started || '-',
+                        s.save || '-',
+                        s.innings_pitched ? parseFloat(s.innings_pitched).toFixed(1) : '-',
+                        s.strikeout || '-',
+                        s.whip ? formatERA(s.whip) : '-'
+                    ]);
+
+                    statsDiv.innerHTML = createTable(headers, rows);
+                } else if (player.batter_seasons && player.batter_seasons.length > 0) {
+                    // Batter stats
+                    const headers = ['Season', 'PA', 'AB', 'R', 'H', 'HR', 'AVG', 'OBP', 'SLG', 'OPS'];
+                    const rows = player.batter_seasons.map(s => [
+                        s.season,
+                        s.plate_appearance || '-',
+                        s.at_bat || '-',
+                        s.run || '-',
+                        s.hits || '-',
+                        s.home_run || '-',
+                        s.batting_average ? formatAverage(s.batting_average) : '-',
+                        s.on_base_percentage ? formatAverage(s.on_base_percentage) : '-',
+                        s.slugging_percentage ? formatAverage(s.slugging_percentage) : '-',
+                        s.ops ? formatAverage(s.ops) : '-'
+                    ]);
+
+                    statsDiv.innerHTML = createTable(headers, rows);
+                } else {
+                    statsDiv.innerHTML = createEmptyState('시즌별 성적이 없습니다.');
+                }
+
+                // Scroll to player info
+                section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } catch (error) {
+                cardDiv.innerHTML = createErrorMessage('선수 정보를 불러오는데 실패했습니다.');
+                statsDiv.innerHTML = '';
+            }
+        }
+    </script>
+</body>
+
+</html>
