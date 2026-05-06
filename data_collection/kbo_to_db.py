@@ -3,9 +3,11 @@ KBO 공식 통계를 DB에 저장 (전체 스키마)
 UPSERT 방식 (created_at, updated_at 관리)
 
 사용법:
-    python kbo_to_db.py
+    python kbo_to_db.py                 # 현재 연도
+    python kbo_to_db.py --year 2020     # 특정 시즌 백필
 """
 
+import argparse
 import sqlite3
 import pandas as pd
 from pathlib import Path
@@ -292,22 +294,29 @@ def save_batter_stats(conn, csv_path):
         return False, 0
 
 
-def main():
+def main(year=None):
     """메인 함수"""
+    if year is None:
+        parser = argparse.ArgumentParser(description='KBO 공식 타자 통계 DB 저장')
+        parser.add_argument('--year', type=int, default=datetime.now().year,
+                            help='시즌 연도 (default: 현재 연도)')
+        args = parser.parse_args()
+        year = args.year
+
     logging.info("=" * 60)
-    logging.info("💾 KBO 공식 통계 DB 저장 시작 (전체 스키마, UPSERT)")
+    logging.info(f"💾 KBO 공식 타자 통계 DB 저장 시작 — {year} 시즌 (UPSERT)")
     logging.info("=" * 60)
-    
+
     try:
         # DB 연결
         conn = sqlite3.connect(DB_PATH)
         logging.info(f"📂 DB 연결: {DB_PATH}")
-        
+
         # 테이블 생성
         create_tables(conn)
-        
-        # 타자 통계 저장 (2025 시즌 데이터 고정)
-        target_year = 2025
+
+        # 타자 통계 저장
+        target_year = year
         batter_csv = CSV_DIR / f'batter_stats_{target_year}.csv'
         if batter_csv.exists():
             success, count = save_batter_stats(conn, batter_csv)

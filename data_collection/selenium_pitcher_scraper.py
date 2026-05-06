@@ -3,11 +3,14 @@ KBO 공식 투수 통계 크롤러
 - Basic1 (기본기록 1페이지) + Basic2 (기본기록 2페이지) + Detail1 (세부기록 1페이지) + Detail2 (세부기록 2페이지)
 - 팀별 페이지네이션 지원
 - player_id 추출
+- 시즌 선택 지원 (--year, default=현재 연도)
 
 사용법:
-    python selenium_pitcher_scraper.py
+    python selenium_pitcher_scraper.py                  # 현재 연도
+    python selenium_pitcher_scraper.py --year 2020      # 특정 시즌 백필
 """
 
+import argparse
 import time
 import logging
 from datetime import datetime
@@ -23,11 +26,8 @@ import pandas as pd
 # 프로젝트 루트 경로
 PROJECT_ROOT = Path(__file__).parent.parent
 
-# 저장 경로 설정 (2025 시즌 데이터 고정)
-current_year = 2025 
 SAVE_DIR = PROJECT_ROOT / 'crawler' / 'save' / 'official_stats'
 SAVE_DIR.mkdir(parents=True, exist_ok=True)
-csv_file = SAVE_DIR / f'pitcher_stats_{current_year}.csv'
 
 # 로그 설정
 LOG_DIR = PROJECT_ROOT / 'logs'
@@ -124,6 +124,22 @@ def extract_player_id(link_element):
     except:
         pass
     return ''
+
+
+def select_season(driver, year):
+    """KBO ddlSeason 드롭다운에서 시즌 선택 (ASPX postback 발생)"""
+    try:
+        season_select = Select(driver.find_element(
+            By.ID,
+            "cphContents_cphContents_cphContents_ddlSeason_ddlSeason"
+        ))
+        season_select.select_by_value(str(year))
+        time.sleep(3)
+        logging.info(f"✅ 시즌 선택 완료: {year}")
+        return True
+    except Exception as e:
+        logging.error(f"❌ 시즌 선택 실패 ({year}): {e}")
+        return False
 
 
 def scrape_table_page(driver, extract_player_id_flag=False, exclude_columns=None):
@@ -456,39 +472,52 @@ def scrape_team_data(driver, team_code):
     return pd.DataFrame()
 
 
-def main():
+def main(year=None):
     """메인 함수"""
+    if year is None:
+        parser = argparse.ArgumentParser(description='KBO 공식 투수 통계 크롤러')
+        parser.add_argument('--year', type=int, default=datetime.now().year,
+                            help='시즌 연도 (default: 현재 연도)')
+        args = parser.parse_args()
+        year = args.year
+
     logging.info("=" * 80)
-    logging.info("🏟️  KBO 공식 투수 통계 크롤링 시작 (Basic1 + Basic2 + Detail1 + Detail2)")
+    logging.info(f"🏟️  KBO 공식 투수 통계 크롤링 시작 — {year} 시즌 (Basic1 + Basic2 + Detail1 + Detail2)")
     logging.info("=" * 80)
-    
+
     driver = setup_driver()
-    
+
     try:
         # 투수 기본기록 페이지 접속
         url = "https://www.koreabaseball.com/Record/Player/PitcherBasic/Basic1.aspx"
         driver.get(url)
         time.sleep(3)
         logging.info(f"✅ 페이지 접속: {url}")
-        
+
+        # 시즌 선택
+        if not select_season(driver, year):
+            logging.error("❌ 시즌 선택 실패로 중단")
+            return False
+
         all_teams_data = []
-        
+
         # 팀별 크롤링
         for team_code in TEAM_CODES:
             team_df = scrape_team_data(driver, team_code)
             if not team_df.empty:
                 all_teams_data.append(team_df)
-            
-            # 다음 팀을 위해 Basic1 페이지로 돌아가기
+
+            # 다음 팀을 위해 Basic1 페이지로 돌아가기 + 시즌 재선택
             driver.get(url)
             time.sleep(2)
-        
+            select_season(driver, year)
+
         # 전체 데이터 병합
         if all_teams_data:
             final_df = pd.concat(all_teams_data, ignore_index=True)
-            
-            # CSV 저장 (2025 시즌 고정)
-            csv_path = SAVE_DIR / f'pitcher_stats_2025.csv'
+
+            # CSV 저장 (시즌별)
+            csv_path = SAVE_DIR / f'pitcher_stats_{year}.csv'
             final_df.to_csv(csv_path, index=False, encoding='utf-8-sig')
             
             logging.info("\n" + "=" * 80)
