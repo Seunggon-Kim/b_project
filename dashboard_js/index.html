@@ -7,10 +7,11 @@
     <title>KBO 야구 데이터 대시보드</title>
     <meta name="description" content="KBO 경기 일정·결과 및 데이터 분석 플랫폼">
 
-    <!-- Google Fonts -->
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
 
     <!-- Styles -->
     <link rel="stylesheet" href="css/style.css">
@@ -22,7 +23,7 @@
     <header class="header">
         <div class="header-content">
             <a href="./" class="logo">
-                <span class="logo-icon">⚾</span>
+                <span class="material-symbols-outlined logo-icon">sports_baseball</span>
                 <span>KBO Analytics</span>
             </a>
             <nav class="nav">
@@ -41,11 +42,11 @@
         <!-- Schedule / Results -->
         <section class="schedule-section">
             <div class="schedule-bar">
-                <h2 class="schedule-title">⚾ KBO 경기</h2>
+                <h2 class="schedule-title"><span class="material-symbols-outlined">sports_baseball</span> KBO 경기</h2>
                 <div class="date-nav">
-                    <button id="date-prev" class="date-nav-btn" aria-label="이전 날짜">‹</button>
+                    <button id="date-prev" class="date-nav-btn" aria-label="이전 날짜"><span class="material-symbols-outlined">chevron_left</span></button>
                     <span id="date-label" class="date-label">—</span>
-                    <button id="date-next" class="date-nav-btn" aria-label="다음 날짜">›</button>
+                    <button id="date-next" class="date-nav-btn" aria-label="다음 날짜"><span class="material-symbols-outlined">chevron_right</span></button>
                     <button id="date-today" class="today-btn">오늘</button>
                 </div>
             </div>
@@ -55,26 +56,26 @@
 
         <!-- Quick Links -->
         <section class="mb-3">
-            <h2 class="mb-2">🔎 분석 둘러보기</h2>
+            <h2 class="mb-2"><span class="material-symbols-outlined">search</span> 분석 둘러보기</h2>
             <div class="quicklink-grid">
                 <a href="pages/team-stats.html" class="quicklink-card">
-                    <span class="ql-icon">📈</span><span class="ql-title">팀 통계</span>
+                    <span class="material-symbols-outlined ql-icon">leaderboard</span><span class="ql-title">팀 통계</span>
                     <span class="ql-desc">순위·승률·득실점</span>
                 </a>
                 <a href="pages/player-stats.html" class="quicklink-card">
-                    <span class="ql-icon">🏏</span><span class="ql-title">선수 통계</span>
+                    <span class="material-symbols-outlined ql-icon">sports_cricket</span><span class="ql-title">선수 통계</span>
                     <span class="ql-desc">타자·투수 기록</span>
                 </a>
                 <a href="pages/player-analytics.html" class="quicklink-card">
-                    <span class="ql-icon">🎯</span><span class="ql-title">선수 분석</span>
+                    <span class="material-symbols-outlined ql-icon">person_search</span><span class="ql-title">선수 분석</span>
                     <span class="ql-desc">프로필·구종·시즌추이</span>
                 </a>
                 <a href="pages/wrc-comparison.html" class="quicklink-card">
-                    <span class="ql-icon">📊</span><span class="ql-title">wRC+ 강건성</span>
+                    <span class="material-symbols-outlined ql-icon">analytics</span><span class="ql-title">wRC+ 강건성</span>
                     <span class="ql-desc">파크팩터 시나리오</span>
                 </a>
                 <a href="pages/database-explorer.html" class="quicklink-card">
-                    <span class="ql-icon">🗄️</span><span class="ql-title">데이터 탐색</span>
+                    <span class="material-symbols-outlined ql-icon">table_view</span><span class="ql-title">데이터 탐색</span>
                     <span class="ql-desc">Play-by-Play DB</span>
                 </a>
             </div>
@@ -82,7 +83,7 @@
 
         <!-- Data Overview (compact) -->
         <section id="stats-overview" class="mb-3">
-            <h2 class="mb-2">📦 데이터 현황</h2>
+            <h2 class="mb-2"><span class="material-symbols-outlined">database</span> 데이터 현황</h2>
             <div id="stats-grid" class="grid grid-4">
                 <!-- Stats loaded here -->
             </div>
@@ -92,7 +93,7 @@
     <!-- Footer -->
     <footer
         style="text-align: center; padding: 2rem; color: var(--text-muted); border-top: 1px solid var(--border-color); margin-top: 4rem;">
-        <p>⚾ KBO 야구 데이터 대시보드 v3.1 | 데이터 출처: Naver 스포츠, KBO 공식 홈페이지</p>
+        <p>KBO 야구 데이터 대시보드 v3.1 | 데이터 출처: Naver 스포츠, KBO 공식 홈페이지</p>
         <p style="font-size: 0.875rem; margin-top: 0.5rem;">경기 일정·결과 실시간 연동 | JavaScript Premium Edition</p>
     </footer>
 
@@ -114,11 +115,22 @@
         function fmtLabel(d) { return d.getFullYear() + '.' + pad2(d.getMonth() + 1) + '.' + pad2(d.getDate()) + ' (' + DOW[d.getDay()] + ')'; }
         function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
+        // 로컬 공식 KBO 엠블럼 로드 실패 시 -> Naver 엠블럼 -> 팀코드 텍스트 순으로 폴백
+        function emblemError(img) {
+            const fb = img.getAttribute('data-fallback');
+            if (fb && img.dataset.tried !== '1') { img.dataset.tried = '1'; img.src = fb; return; }
+            img.onerror = null;
+            const code = (img.getAttribute('data-code') || '').slice(0, 2);
+            const div = document.createElement('div');
+            div.className = 'team-emblem team-emblem-fallback';
+            div.textContent = code;
+            img.replaceWith(div);
+        }
+
         function teamBlock(t, side, winner) {
             const win = winner && winner.toUpperCase() === side.toUpperCase();
-            const emblem = t.emblem
-                ? `<img class="team-emblem" src="${esc(t.emblem)}" alt="" loading="lazy" onerror="this.style.display='none'">`
-                : `<div class="team-emblem team-emblem-fallback">${esc((t.code || '').slice(0, 2))}</div>`;
+            const code = t.code || '';
+            const emblem = `<img class="team-emblem" src="assets/logos/${esc(code)}.png" data-fallback="${esc(t.emblem || '')}" data-code="${esc(code)}" alt="" loading="lazy" onerror="emblemError(this)">`;
             return `<div class="team ${side}${win ? ' win' : ''}">
                 ${emblem}
                 <span class="team-name">${esc(t.name || t.code)}</span>
@@ -155,7 +167,7 @@
                     </div>
                     ${teamBlock(g.home, 'home', g.winner)}
                 </div>
-                ${g.broadChannel ? `<div class="game-card-foot">📺 ${esc(g.broadChannel)}</div>` : ''}
+                ${g.broadChannel ? `<div class="game-card-foot"><span class="material-symbols-outlined foot-icon">live_tv</span> ${esc(g.broadChannel)}</div>` : ''}
             </div>`;
         }
 
@@ -203,10 +215,10 @@
             try {
                 const data = await API.getDashboardStats();
                 statsGrid.innerHTML = `
-                    ${createStatCard('경기 수', formatNumber(data.games), `${data.completion_rate ?? ''}${data.completion_rate ? '% 완료' : ''}`, '📅')}
-                    ${createStatCard('플레이 수', formatNumber(data.plays), '투구/타석 기록', '⚾')}
-                    ${createStatCard('타자 통계', `${data.batters}명`, 'KBO 공식', '🏏')}
-                    ${createStatCard('투수 통계', `${data.pitchers}명`, 'KBO 공식', '⚡')}
+                    ${createStatCard('경기 수', formatNumber(data.games), `${data.completion_rate ?? ''}${data.completion_rate ? '% 완료' : ''}`, '<span class="material-symbols-outlined">calendar_month</span>')}
+                    ${createStatCard('플레이 수', formatNumber(data.plays), '투구/타석 기록', '<span class="material-symbols-outlined">sports_baseball</span>')}
+                    ${createStatCard('타자 통계', `${data.batters}명`, 'KBO 공식', '<span class="material-symbols-outlined">person</span>')}
+                    ${createStatCard('투수 통계', `${data.pitchers}명`, 'KBO 공식', '<span class="material-symbols-outlined">sports_baseball</span>')}
                 `;
             } catch (error) {
                 statsGrid.innerHTML = createErrorMessage('데이터를 불러오는데 실패했습니다. API 서버가 실행 중인지 확인해주세요.');
