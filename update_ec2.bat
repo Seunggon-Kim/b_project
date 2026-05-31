@@ -5,9 +5,8 @@ echo ========================================
 echo EC2 서버 업데이트 시작
 echo ========================================
 
-REM SSH 키 경로 (실제 경로로 수정 필요)
-set KEY_PATH=C:\Users\USERNAME\.ssh\kbo-key.pem
-set EC2_IP=EC2_PUBLIC_IP
+REM 접속 정보는 gitignore된 로컬 설정에서 로드 (공개 repo엔 placeholder만)
+call "%~dp0ec2_config.local.bat"
 
 echo.
 echo 📡 EC2 서버에 접속 중...
@@ -21,7 +20,7 @@ echo ========================================
 echo ✅ 업데이트 완료!
 echo ========================================
 echo.
-echo 🌐 대시보드 접속: http://EC2_PUBLIC_IP:8502
+echo 대시보드 접속: https://bstats.duckdns.org/kbo/
 echo.
 
 pause

@@ -1,3 +1,12 @@
+# ===== Secrets / credentials — NEVER commit =====
+config/email_config.json
+*token*.txt
+github_pat_*
+*.pem
+*.ppk
+# 로컬 전용 EC2 접속 설정 (실제 IP/키 경로)
+ec2_config.local.*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
