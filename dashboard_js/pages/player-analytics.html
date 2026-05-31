@@ -11,9 +11,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
 
     <!-- Styles -->
     <link rel="stylesheet" href="../css/style.css">
+    <script src="../js/theme-toggle.js"></script>
 </head>
 
 <body>
@@ -21,7 +23,7 @@
     <header class="header">
         <div class="header-content">
             <a href="../" class="logo">
-                <span class="logo-icon">⚾</span>
+                <span class="material-symbols-outlined logo-icon">sports_baseball</span>
                 <span>KBO Analytics</span>
             </a>
             <nav class="nav">
@@ -36,7 +38,7 @@
 
     <!-- Main Content -->
     <main class="container">
-        <h1 class="fade-in">🔍 선수 분석</h1>
+        <h1 class="fade-in"><span class="material-symbols-outlined">person_search</span> 선수 분석</h1>
         <p class="text-secondary mb-3">선수 이름을 검색하여 상세 정보와 성적을 확인하세요</p>
 
         <!-- Search Section -->
@@ -44,7 +46,7 @@
             <div class="card">
                 <div class="card-body">
                     <div class="search-box">
-                        <span class="search-icon">🔍</span>
+                        <span class="material-symbols-outlined search-icon">search</span>
                         <input type="text" id="player-search" class="input" placeholder="선수 이름을 입력하세요 (예: 김현수)"
                             autocomplete="off">
                     </div>
@@ -115,6 +117,32 @@
                         <!-- Pitch charts will be loaded here -->
                     </div>
                 </div>
+
+                <!-- Usage & Movement Row -->
+                <div id="usage-movement-row" class="grid-usage-movement mt-3 hidden">
+                    <!-- Pitch Usage Section (For Pitchers) -->
+                    <div id="pitch-usage-section" class="detailed-stats-container fade-in">
+                        <h3 class="card-title mb-4">Pitch Usage</h3>
+                        <div class="usage-container">
+                            <div class="usage-header">
+                                <div class="usage-label-l">vs. LHH</div>
+                                <div class="usage-label-p">Pitch</div>
+                                <div class="usage-label-r">vs. RHH</div>
+                            </div>
+                            <div id="usage-list" class="usage-list">
+                                <!-- Filled dynamically -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Movement Profile Section -->
+                    <div id="movement-profile-section" class="detailed-stats-container fade-in">
+                        <h3 class="card-title mb-4">Movement Profile (Induced Break)</h3>
+                        <div class="movement-container">
+                            <canvas id="movement-canvas"></canvas>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
     </main>
@@ -123,6 +151,34 @@
     <script src="../js/api.js"></script>
     <script src="../js/components.js"></script>
     <script>
+
+        // ===== Theme-aware chart helpers =====
+        function getThemeColors() {
+            const cs = getComputedStyle(document.documentElement);
+            return {
+                bg: cs.getPropertyValue('--plot-bg').trim() || '#fff',
+                grid: cs.getPropertyValue('--plot-grid').trim() || 'rgba(0,0,0,0.06)',
+                axes: cs.getPropertyValue('--plot-axes').trim() || 'rgba(0,0,0,0.3)',
+                label: cs.getPropertyValue('--plot-label').trim() || 'rgba(0,0,0,0.5)',
+                stroke: cs.getPropertyValue('--plot-stroke').trim() || 'rgba(0,0,0,0.5)',
+                pointStroke: cs.getPropertyValue('--plot-point-stroke').trim() || 'rgba(0,0,0,0.4)',
+                isDark: document.documentElement.getAttribute('data-theme') === 'dark',
+            };
+        }
+        // Re-render charts when theme changes
+        new MutationObserver(() => {
+            if (typeof lastArsenalData !== 'undefined' && lastArsenalData) {
+                renderMovementProfile(lastArsenalData);
+                // arsenal sub-charts
+                const types = [...new Set(lastArsenalData.map(p => p.pitch_type))];
+                types.forEach(t => {
+                    const id = `canvas-${t.replace(/\s+/g, '-')}`;
+                    const subset = lastArsenalData.filter(p => p.pitch_type === t);
+                    if (typeof renderArsenalChart === 'function') renderArsenalChart(id, subset);
+                });
+            }
+        }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
         let searchTimeout;
         let currentPlayer = null;
         let currentPitchViewMode = 'contour';
@@ -519,15 +575,13 @@
 
                         if (arsenalData.length > 0) {
                             renderPitchArsenalGrid();
+                            renderPitchUsage(playerId);
+                            renderMovementProfile(lastArsenalData);
                         } else {
                             console.log("No pitch arsenal data found for player.");
                             arsenalSection.classList.add('hidden');
+                            renderPitchUsage(playerId);
                         }
-
-                        // Scroll to stats
-                        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        // Apply Team Theme Colors
-                        applyTeamTheme(player.team_name || player.team_id);
 
                     } catch (err) {
                         console.error("Error loading arsenal data:", err);
@@ -538,7 +592,13 @@
                     detailedSection.classList.add('hidden');
                     document.getElementById('advanced-stats-section').classList.add('hidden');
                     document.getElementById('pitch-arsenal-section').classList.add('hidden');
+                    document.getElementById('usage-movement-row').classList.add('hidden');
                 }
+
+                // Scroll to stats
+                section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                // Apply Team Theme Colors (For both Batters and Pitchers)
+                applyTeamTheme(player.team_name || player.team_id);
 
             } catch (error) {
                 console.error("Critical error in loadPlayerInfo:", error);
@@ -598,6 +658,144 @@
             });
         }
 
+        async function renderPitchUsage(playerId) {
+            const usageRow = document.getElementById('usage-movement-row');
+            const usageList = document.getElementById('usage-list');
+            if (!usageRow || !usageList) return;
+
+            try {
+                const data = await API.getPitchUsage(playerId);
+                if (!data.usage || data.usage.length === 0) {
+                    usageRow.classList.add('hidden');
+                    return;
+                }
+
+                usageRow.classList.remove('hidden');
+                usageList.innerHTML = '';
+
+                data.usage.forEach(item => {
+                    const row = document.createElement('div');
+                    row.className = 'usage-row fade-in';
+
+                    row.innerHTML = `
+                        <div class="usage-left">
+                            <span class="usage-pct">${item.usage_l}%</span>
+                            <div class="usage-bar-total">
+                                <div class="usage-bar-fill pitch-${item.abbreviation}" style="width: ${item.usage_l}%"></div>
+                            </div>
+                        </div>
+                        <div class="usage-center">
+                            <div class="pitch-abb-circle pitch-${item.abbreviation}">${item.abbreviation}</div>
+                            <span class="usage-total-pct">${item.usage_all}%</span>
+                        </div>
+                        <div class="usage-right">
+                            <div class="usage-bar-total">
+                                <div class="usage-bar-fill pitch-${item.abbreviation}" style="width: ${item.usage_r}%"></div>
+                            </div>
+                            <span class="usage-pct">${item.usage_r}%</span>
+                        </div>
+                    `;
+                    usageList.appendChild(row);
+                });
+
+            } catch (err) {
+                console.error("Error loading usage data:", err);
+                usageRow.classList.add('hidden');
+            }
+        }
+
+        function renderMovementProfile(pitches) {
+            const canvas = document.getElementById('movement-canvas');
+            if (!canvas || !pitches || pitches.length === 0) return;
+
+            const ctx = canvas.getContext('2d');
+            // Fixed size for consistency
+            canvas.width = 400;
+            canvas.height = 400;
+            const W = canvas.width;
+            const H = canvas.height;
+
+            const PITCH_COLORS = {
+                '너클볼': '#3C44CD', '스위퍼': '#DDB33A', '슬러브': '#93AFD4',
+                '싱커': '#FE9D00', '투심': '#FE9D00', '직구': '#D22D49',
+                '체인지업': '#1DBE3A', '커브': '#00D1ED', '커터': '#933F2C',
+                '포크': '#3BACAC', '스플리터': '#3BACAC', '슬라이더': '#EEE716'
+            };
+
+            // Range: -60cm to 60cm
+            const minMove = -60, maxMove = 60;
+            const inchToCm = 2.54;
+
+            const transformX = (cm) => ((cm - minMove) / (maxMove - minMove)) * W;
+            const transformY = (cm) => H - (((cm - minMove) / (maxMove - minMove)) * H);
+
+            // 1. Draw Grid & Axes
+            ctx.clearRect(0, 0, W, H);
+
+            // Grid lines
+            const _MC = getThemeColors(); ctx.strokeStyle = _MC.grid;
+            ctx.lineWidth = 1;
+            for (let i = minMove + 20; i < maxMove; i += 20) {
+                // Vertical
+                ctx.beginPath();
+                ctx.moveTo(transformX(i), 0);
+                ctx.lineTo(transformX(i), H);
+                ctx.stroke();
+                // Horizontal
+                ctx.beginPath();
+                ctx.moveTo(0, transformY(i));
+                ctx.lineTo(W, transformY(i));
+                ctx.stroke();
+            }
+
+            // Central Axes (0,0)
+            ctx.strokeStyle = _MC.axes;
+            ctx.lineWidth = 1.5;
+            // Y-axis (X=0)
+            ctx.beginPath();
+            ctx.moveTo(transformX(0), 0);
+            ctx.lineTo(transformX(0), H);
+            ctx.stroke();
+            // X-axis (Y=0)
+            ctx.beginPath();
+            ctx.moveTo(0, transformY(0));
+            ctx.lineTo(W, transformY(0));
+            ctx.stroke();
+
+            // Labels
+            ctx.fillStyle = _MC.label;
+            ctx.font = '10px Inter';
+            ctx.fillText('-60', 5, transformY(0) - 5);
+            ctx.fillText('60', W - 20, transformY(0) - 5);
+            ctx.fillText('60', transformX(0) + 5, 15);
+            ctx.fillText('-60', transformX(0) + 5, H - 5);
+
+            // 2. Plot Pitches
+            pitches.forEach(p => {
+                if (p.pfx_x === null || p.pfx_z === null) return;
+
+                // pfx_x in DB is inches. Horizontal movement.
+                // pfx_z in DB is inches. Vertical movement.
+                const cmX = parseFloat(p.pfx_x) * inchToCm;
+                const cmZ = parseFloat(p.pfx_z) * inchToCm;
+
+                ctx.beginPath();
+                ctx.arc(transformX(cmX), transformY(cmZ), 3.5, 0, Math.PI * 2);
+
+                const ptype = p.pitch_type;
+                const colorKey = ptype === '싱커' ? '투심' : ptype;
+                ctx.fillStyle = PITCH_COLORS[colorKey] || '#3b82f6';
+                ctx.globalAlpha = 0.6;
+                ctx.fill();
+
+                ctx.strokeStyle = _MC.pointStroke;
+                ctx.lineWidth = 0.5;
+                ctx.globalAlpha = 0.8;
+                ctx.stroke();
+            });
+            ctx.globalAlpha = 1.0;
+        }
+
         function renderArsenalChart(canvasId, pitches) {
             const canvas = document.getElementById(canvasId);
             if (!canvas) return;
@@ -612,7 +810,7 @@
                 '너클볼': '#3C44CD', '스위퍼': '#DDB33A', '슬러브': '#93AFD4',
                 '싱커': '#FE9D00', '투심': '#FE9D00', '직구': '#D22D49',
                 '체인지업': '#1DBE3A', '커브': '#00D1ED', '커터': '#933F2C',
-                '포크': '#3BACAC', '슬라이더': '#EEE716'
+                '포크': '#3BACAC', '스플리터': '#3BACAC', '슬라이더': '#EEE716'
             };
 
             const isPitcherMode = currentPitchPerspective === 'pitcher';
@@ -680,7 +878,7 @@
                     ctx.fillStyle = baseColor;
                     ctx.globalAlpha = 0.6;
                     ctx.fill();
-                    ctx.strokeStyle = '#fff';
+                    ctx.strokeStyle = _AC.pointStroke;
                     ctx.lineWidth = 0.5;
                     ctx.stroke();
                 });
@@ -688,8 +886,9 @@
             }
 
             // --- Draw Overlays (Strike Zone & Plate) on TOP ---
-            ctx.strokeStyle = '#cbd5e1';
+            const _AC = getThemeColors(); ctx.strokeStyle = _AC.stroke;
             ctx.lineWidth = 1.8;
+            ctx.setLineDash(_AC.isDark ? [] : [4, 3]);
             // Strike Zone
             ctx.strokeRect(transformX(L_val), transformY(Top_val), transformX(R_val) - transformX(L_val), transformY(Bot_val) - transformY(Top_val));
 
@@ -713,12 +912,15 @@
                 plateY = [0, 0, -0.6, -1.0, -0.6, 0];
             }
 
+            ctx.setLineDash([]);
             ctx.beginPath();
-            ctx.strokeStyle = '#94a3b8';
+            ctx.strokeStyle = _AC.stroke;
+            ctx.globalAlpha = 0.5;
             ctx.lineWidth = 1.2;
             ctx.moveTo(transformX(plateX[0]), transformY(plateY[0]));
             plateX.forEach((px, i) => ctx.lineTo(transformX(px), transformY(plateY[i])));
             ctx.stroke();
+            ctx.globalAlpha = 1.0;
         }
 
         /**
@@ -742,7 +944,7 @@
             };
 
             // Find matching color
-            let teamColor = '#1e293b'; // Default color
+            let teamColor = '#1e293b'; // dark default — fine for badges // Default color
             for (const [name, color] of Object.entries(TEAM_COLORS)) {
                 if (teamName && teamName.includes(name)) {
                     teamColor = color;

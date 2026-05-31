@@ -1536,12 +1536,13 @@ h4 {
     margin-top: 0.75rem;
     font-size: 0.75rem;
     color: var(--text-muted);
+    text-align: right;
 }
 
 /* ===================== 퀵 링크 ===================== */
 .quicklink-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     gap: 0.85rem;
 }
 

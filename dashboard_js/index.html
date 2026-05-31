@@ -167,7 +167,7 @@
                     </div>
                     ${teamBlock(g.home, 'home', g.winner)}
                 </div>
-                ${g.broadChannel ? `<div class="game-card-foot"><span class="material-symbols-outlined foot-icon">live_tv</span> ${esc(g.broadChannel)}</div>` : ''}
+                ${g.broadChannel ? `<div class="game-card-foot"><span class="material-symbols-outlined foot-icon">live_tv</span> ${esc(g.broadChannel.replace(/\^/g, ', '))}</div>` : ''}
             </div>`;
         }
 
@@ -215,10 +215,10 @@
             try {
                 const data = await API.getDashboardStats();
                 statsGrid.innerHTML = `
-                    ${createStatCard('경기 수', formatNumber(data.games), `${data.completion_rate ?? ''}${data.completion_rate ? '% 완료' : ''}`, '<span class="material-symbols-outlined">calendar_month</span>')}
-                    ${createStatCard('플레이 수', formatNumber(data.plays), '투구/타석 기록', '<span class="material-symbols-outlined">sports_baseball</span>')}
-                    ${createStatCard('타자 통계', `${data.batters}명`, 'KBO 공식', '<span class="material-symbols-outlined">person</span>')}
-                    ${createStatCard('투수 통계', `${data.pitchers}명`, 'KBO 공식', '<span class="material-symbols-outlined">sports_baseball</span>')}
+                    ${createStatCard('경기 수', formatNumber(data.games), data.seasons ? `${data.seasons} 시즌` : '', '<span class="material-symbols-outlined">calendar_month</span>')}
+                    ${createStatCard('플레이 수', formatNumber(data.plays), '투구·타석 기록', '<span class="material-symbols-outlined">sports_baseball</span>')}
+                    ${createStatCard('타자', `${formatNumber(data.batters)}명`, 'KBO 공식 기록', '<span class="material-symbols-outlined">sports_cricket</span>')}
+                    ${createStatCard('투수', `${formatNumber(data.pitchers)}명`, 'KBO 공식 기록', '<span class="material-symbols-outlined">sports_baseball</span>')}
                 `;
             } catch (error) {
                 statsGrid.innerHTML = createErrorMessage('데이터를 불러오는데 실패했습니다. API 서버가 실행 중인지 확인해주세요.');

@@ -71,14 +71,25 @@ async def get_dashboard_stats():
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("SELECT COUNT(*) as count FROM games")
-        games = cur.fetchone()['count']
-        cur.execute("SELECT COUNT(*) as count FROM players")
-        players = cur.fetchone()['count']
-        cur.execute("SELECT COUNT(*) as count FROM teams")
-        teams = cur.fetchone()['count']
+        def one(q):
+            try:
+                cur.execute(q)
+                r = cur.fetchone()
+                return r[0] if r else 0
+            except Exception:
+                return 0
+        games = one("SELECT COUNT(*) FROM games")
+        plays = one("SELECT COUNT(*) FROM play_by_play")
+        batters = one("SELECT COUNT(DISTINCT player_id) FROM kbo_official_batter_stats")
+        pitchers = one("SELECT COUNT(DISTINCT player_id) FROM kbo_official_pitcher_stats")
+        players = one("SELECT COUNT(*) FROM players")
+        teams = one("SELECT COUNT(*) FROM teams")
+        smin = one("SELECT MIN(season) FROM games")
+        smax = one("SELECT MAX(season) FROM games")
+        seasons = str(smin) if smin == smax else f"{smin}~{smax}"
         conn.close()
-        return {"games": games, "players": players, "teams": teams, "status": "ok"}
+        return {"games": games, "plays": plays, "batters": batters, "pitchers": pitchers,
+                "players": players, "teams": teams, "seasons": seasons, "status": "ok"}
     except Exception as e:
         return {"error": str(e), "traceback": traceback.format_exc()}
 

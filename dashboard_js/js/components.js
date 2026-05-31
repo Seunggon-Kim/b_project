@@ -37,9 +37,11 @@ function formatERA(era) {
  */
 function formatBirthday(birthday) {
     if (!birthday) return '-';
-    const year = birthday.substring(0, 4);
-    const month = birthday.substring(4, 6);
-    const day = birthday.substring(6, 8);
+    // Ensure string
+    const bStr = birthday.toString();
+    const year = bStr.substring(0, 4);
+    const month = bStr.substring(4, 6);
+    const day = bStr.substring(6, 8);
     return `${year}년 ${month}월 ${day}일`;
 }
 
@@ -86,7 +88,7 @@ function createErrorMessage(message) {
     return `
         <div class="card">
             <div class="card-body text-center">
-                <h3>⚠️ 오류</h3>
+                <h3><span class="material-symbols-outlined">warning</span> 오류</h3>
                 <p>${message}</p>
             </div>
         </div>
@@ -100,7 +102,7 @@ function createEmptyState(message) {
     return `
         <div class="card">
             <div class="card-body text-center">
-                <h3>📭 데이터 없음</h3>
+                <h3><span class="material-symbols-outlined">inbox</span> 데이터 없음</h3>
                 <p>${message}</p>
             </div>
         </div>
@@ -193,6 +195,16 @@ if (document.readyState === 'loading') {
     initializePage();
 }
 
+/**
+ * Format Innings Pitched (IP)
+ */
+function formatIP(ip) {
+    if (ip === null || ip === undefined) return '-';
+    const val = parseFloat(ip);
+    if (isNaN(val)) return ip;
+    return val.toFixed(1);
+}
+
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -200,6 +212,7 @@ if (typeof module !== 'undefined' && module.exports) {
         formatMoney,
         formatAverage,
         formatERA,
+        formatIP,
         formatBirthday,
         formatThrowBat,
         createStatCard,

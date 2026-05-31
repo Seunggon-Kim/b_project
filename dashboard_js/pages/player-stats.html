@@ -11,9 +11,190 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
 
     <!-- Styles -->
     <link rel="stylesheet" href="../css/style.css">
+    <style>
+        .filter-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .column-selector {
+            margin-top: 1rem;
+            padding: 1rem;
+            background-color: var(--bg-secondary);
+            border-radius: var(--radius);
+        }
+
+        .column-checkboxes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.8rem;
+            margin-top: 0.5rem;
+        }
+
+        /* 필드 오버레이를 위한 상위 컨테이너 설정 */
+        .filter-card {
+            position: relative;
+            z-index: 10;
+            overflow: visible !important;
+        }
+
+        .filter-row {
+            position: relative;
+            z-index: 11;
+        }
+
+        .team-filter-container {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            z-index: 9999;
+            margin-top: 5px;
+            padding: 1.5rem;
+            background-color: var(--bg-secondary);
+            /* 강제 배경색 지정 (var 대신) */
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+            width: 320px;
+        }
+
+        /* 세로 스크롤 및 고정을 위해 컨테이너 설정 변경 */
+        .table-container {
+            max-height: 80vh !important;
+            overflow-y: auto !important;
+            overflow-x: auto !important;
+            width: 100%;
+            -webkit-overflow-scrolling: touch;
+            border-radius: var(--border-radius);
+            position: relative;
+        }
+
+        /* 테이블 구조 설정 */
+        table {
+            min-width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+
+        /* 헤더 고정 (Sticky Header) */
+        .table thead th {
+            position: -webkit-sticky;
+            position: sticky;
+            top: 0;
+            /* 컨테이너 상단에 고정 */
+            z-index: 100;
+            background-color: var(--bg-secondary) !important;
+            border-bottom: 2px solid var(--border-color) !important;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 첫 번째 컬럼(선수명) 가로/세로 복합 고정 */
+        .table th:first-child,
+        .table td:first-child {
+            position: -webkit-sticky;
+            position: sticky;
+            left: 0;
+            z-index: 10;
+            background-color: var(--bg-secondary) !important;
+            border-right: 1px solid var(--border-color);
+        }
+
+        /* 왼쪽 상단 모서리(선수명 헤더) 최상위 고정 */
+        .table thead th:first-child {
+            z-index: 110 !important;
+            left: 0;
+            top: 0;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 2px;
+            background: var(--bg-tertiary);
+            padding: 2px;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+        }
+
+        .btn-group .btn-xs {
+            flex: 1;
+            padding: 4px 8px;
+            font-size: 0.75rem;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: 4px;
+            transition: var(--transition);
+        }
+
+        .btn-group .btn-xs:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .team-checkboxes {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem;
+        }
+
+        /* sticky 동작을 방해하는 transform 제거한 애니메이션 */
+        .fade-in-no-transform {
+            animation: fadeInNoTransform 0.6s ease-out forwards;
+        }
+
+        @keyframes fadeInNoTransform {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            cursor: pointer;
+            padding: 6px 10px;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            transition: var(--transition);
+            white-space: nowrap;
+        }
+
+        .checkbox-label:hover {
+            background: var(--bg-glass);
+            border-color: var(--primary);
+        }
+
+        /* 고정을 방해하는 특수 효과 제거용 클래스 */
+        .stats-card-fixed {
+            backdrop-filter: none !important;
+            transform: none !important;
+            overflow: visible !important;
+        }
+    </style>
+    <script src="../js/theme-toggle.js"></script>
 </head>
 
 <body>
@@ -21,7 +202,7 @@
     <header class="header">
         <div class="header-content">
             <a href="../" class="logo">
-                <span class="logo-icon">⚾</span>
+                <span class="material-symbols-outlined logo-icon">sports_baseball</span>
                 <span>KBO Analytics</span>
             </a>
             <nav class="nav">
@@ -36,37 +217,91 @@
 
     <!-- Main Content -->
     <main class="container">
-        <h1 class="fade-in">📊 선수 통계</h1>
-        <p class="text-secondary mb-3">2025 시즌 타자 및 투수 성적</p>
+        <h1 class="fade-in"><span class="material-symbols-outlined">query_stats</span> 선수 통계</h1>
+        <p class="text-secondary mb-3">타자 및 투수 성적 상세 조회</p>
 
         <!-- Tabs -->
         <div class="mb-3">
             <div style="display: flex; gap: 1rem; border-bottom: 2px solid var(--border-color);">
                 <button id="tab-batters" class="btn btn-secondary" onclick="switchTab('batters')"
                     style="border-radius: 0; border-bottom: 3px solid var(--primary);">
-                    🏏 타자 통계
+                    <span class="material-symbols-outlined">sports_cricket</span> 타자 통계
                 </button>
                 <button id="tab-pitchers" class="btn btn-secondary" onclick="switchTab('pitchers')"
                     style="border-radius: 0; border-bottom: 3px solid transparent;">
-                    ⚡ 투수 통계
+                    <span class="material-symbols-outlined">bolt</span> 투수 통계
                 </button>
             </div>
         </div>
 
-        <!-- Batter Stats -->
-        <section id="batters-section" class="fade-in">
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title">타자 성적 (2025 시즌)</h3>
-                    <div>
-                        <label for="batter-limit" class="text-muted" style="margin-right: 0.5rem;">표시 개수:</label>
-                        <select id="batter-limit" class="input" style="width: auto; display: inline-block;"
-                            onchange="loadBatterStats()">
+        <!-- Filter Controls -->
+        <div class="card mb-3 fade-in filter-card">
+            <div class="card-body">
+                <div class="filter-controls filter-row">
+                    <!-- Common Filters -->
+                    <div class="filter-group">
+                        <label for="display-limit" class="text-muted">표시 개수:</label>
+                        <select id="display-limit" class="input" style="width: auto;" onchange="refreshStats()">
                             <option value="50">50명</option>
                             <option value="100" selected>100명</option>
                             <option value="200">200명</option>
                         </select>
                     </div>
+
+                    <div style="position: relative;">
+                        <button class="btn btn-secondary" onclick="toggleTeamSelector()">
+                            팀 선택 <span id="selected-team-count" class="badge badge-primary"
+                                style="margin-left: 5px;">전체</span>
+                        </button>
+
+                        <!-- Team Selector Dropdown -->
+                        <div id="team-selector" class="team-filter-container hidden">
+                            <div class="btn-group">
+                                <button class="btn-xs" onclick="selectAllTeams(true)">전체 선택</button>
+                                <button class="btn-xs" onclick="selectAllTeams(false)">전체 해제</button>
+                            </div>
+                            <div id="team-checkboxes" class="team-checkboxes">
+                                <!-- Team checkboxes will be injected here -->
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <div id="batter-filters" class="filter-group">
+                        <label for="min-pa" class="text-muted">최소 타석:</label>
+                        <select id="min-pa" class="input" style="width: auto;" onchange="refreshStats()">
+                            <option value="0">전체</option>
+                        </select>
+                    </div>
+
+                    <div id="pitcher-filters" class="filter-group hidden">
+                        <label for="min-ip" class="text-muted">최소 이닝:</label>
+                        <select id="min-ip" class="input" style="width: auto;" onchange="refreshStats()">
+                            <option value="0">전체</option>
+                        </select>
+                    </div>
+
+                    <button class="btn btn-secondary" onclick="toggleColumnSelector()">
+                        컬럼 선택
+                    </button>
+                </div>
+
+                <!-- Column Selector -->
+                <div id="column-selector" class="column-selector hidden">
+                    <h4 class="mb-2">표시할 데이터 선택</h4>
+                    <div id="column-checkboxes" class="column-checkboxes">
+                        <!-- Checkboxes will be injected here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        </div>
+
+        <!-- Batter Stats Table -->
+        <section id="batters-section" class="fade-in-no-transform">
+            <div class="card stats-card-fixed">
+                <div class="card-header">
+                    <h3 class="card-title">타자 순위</h3>
                 </div>
                 <div class="card-body">
                     <div id="batters-table"></div>
@@ -74,20 +309,11 @@
             </div>
         </section>
 
-        <!-- Pitcher Stats -->
-        <section id="pitchers-section" class="hidden">
-            <div class="card">
+        <!-- Pitcher Stats Table -->
+        <section id="pitchers-section" class="hidden fade-in-no-transform">
+            <div class="card stats-card-fixed">
                 <div class="card-header">
-                    <h3 class="card-title">투수 성적 (2025 시즌)</h3>
-                    <div>
-                        <label for="pitcher-limit" class="text-muted" style="margin-right: 0.5rem;">표시 개수:</label>
-                        <select id="pitcher-limit" class="input" style="width: auto; display: inline-block;"
-                            onchange="loadPitcherStats()">
-                            <option value="50">50명</option>
-                            <option value="100" selected>100명</option>
-                            <option value="200">200명</option>
-                        </select>
-                    </div>
+                    <h3 class="card-title">투수 순위</h3>
                 </div>
                 <div class="card-body">
                     <div id="pitchers-table"></div>
@@ -97,110 +323,455 @@
     </main>
 
     <!-- Scripts -->
-    <script src="../js/api.js"></script>
-    <script src="../js/components.js"></script>
+    <script src="../js/api.js?v=1.1"></script>
+    <script src="../js/components.js?v=1.1"></script>
     <script>
         let currentTab = 'batters';
 
-        // Switch tabs
-        function switchTab(tab) {
-            currentTab = tab;
+        // Column Definitions
+        const BATTER_COLUMNS = [
+            { key: 'player_name', label: '선수명', default: true },
+            { key: 'player_team', label: '팀', default: true },
+            { key: 'games', label: 'G', default: true },
+            { key: 'batting_average', label: 'AVG', default: true, format: formatAverage },
+            { key: 'plate_appearance', label: 'PA', default: true },
+            { key: 'at_bat', label: 'AB', default: true },
+            { key: 'run', label: 'R', default: true },
+            { key: 'single', label: 'H', default: true },
+            { key: 'double', label: '2B', default: true },
+            { key: 'triple', label: '3B', default: true },
+            { key: 'home_run', label: 'HR', default: true },
+            { key: 'total_bases', label: 'TB', default: true },
+            { key: 'run_batted_in', label: 'RBI', default: true },
+            { key: 'sacrifice_bunts', label: 'SH', default: false },
+            { key: 'sacrifice_fly', label: 'SF', default: false },
+            { key: 'base_on_balls', label: 'BB', default: true },
+            { key: 'intentional_base_on_balls', label: 'IBB', default: false },
+            { key: 'hit_by_pitch', label: 'HBP', default: false },
+            { key: 'strikeout', label: 'SO', default: true },
+            { key: 'ground_into_double_play', label: 'GDP', default: false },
+            { key: 'on_base_percentage', label: 'OBP', default: true, format: formatAverage },
+            { key: 'slugging_percentage', label: 'SLG', default: true, format: formatAverage },
+            { key: 'on_base_plus_slugging', label: 'OPS', default: true, format: formatAverage },
+            { key: 'multi_hits', label: '멀티히트', default: false },
+            { key: 'runners_in_scoring_position', label: '득점권타율', default: false, format: formatAverage },
+            { key: 'pinch_hit_batting_average', label: '대타타율', default: false, format: formatAverage },
+            { key: 'extra_base_hits', label: '장타', default: false },
+            { key: 'ground_outs', label: '땅볼', default: false },
+            { key: 'air_outs', label: '뜬공', default: false },
+            { key: 'go_ao', label: 'GO/AO', default: false },
+            { key: 'gw_rbi', label: '결승타', default: false },
+            { key: 'strikeout_per_pa', label: 'K%', default: true, format: (v) => (v || v === 0) ? parseFloat(v).toFixed(1) : '-' },
+            { key: 'base_on_balls_per_pa', label: 'BB%', default: true, format: (v) => (v || v === 0) ? parseFloat(v).toFixed(1) : '-' },
+            { key: 'bb_k', label: 'BB/K', default: false },
+            { key: 'p_pa', label: 'P/PA', default: false, format: (v) => (v || v === 0) ? parseFloat(v).toFixed(2) : '-' },
+            { key: 'isop', label: 'IsoP', default: false, format: formatAverage },
+            { key: 'extended_runs', label: 'XR', default: false },
+            { key: 'gross_production_average', label: 'GPA', default: false, format: formatAverage }
+        ];
 
-            // Update tab buttons
-            document.getElementById('tab-batters').style.borderBottom =
-                tab === 'batters' ? '3px solid var(--primary)' : '3px solid transparent';
-            document.getElementById('tab-pitchers').style.borderBottom =
-                tab === 'pitchers' ? '3px solid var(--primary)' : '3px solid transparent';
+        const PITCHER_COLUMNS = [
+            { key: 'player_name', label: '선수명', default: true },
+            { key: 'player_team', label: '팀', default: true },
+            { key: 'earned_run_average', label: 'ERA', default: true, format: formatERA },
+            { key: 'games', label: 'G', default: true },
+            { key: 'wins', label: 'W', default: true },
+            { key: 'losses', label: 'L', default: true },
+            { key: 'save', label: 'SV', default: true },
+            { key: 'hold', label: 'HLD', default: true },
+            { key: 'winning_percentage', label: 'WPCT', default: false, format: formatAverage },
+            { key: 'innings_pitched', label: 'IP', default: true },
+            { key: 'hits', label: 'H', default: true },
+            { key: 'home_run', label: 'HR', default: true },
+            { key: 'base_on_balls', label: 'BB', default: true },
+            { key: 'hit_by_pitch', label: 'HBP', default: false },
+            { key: 'strikeout', label: 'SO', default: true },
+            { key: 'run', label: 'R', default: false },
+            { key: 'earned_run', label: 'ER', default: false },
+            { key: 'walks_plus_hits_per_inning_pitched', label: 'WHIP', default: true, format: formatERA },
+            { key: 'complete_game', label: 'CG', default: false },
+            { key: 'shutout', label: 'SHO', default: false },
+            { key: 'quality_start', label: 'QS', default: false },
+            { key: 'blown_save', label: 'BS', default: false },
+            { key: 'total_batters_faced', label: 'TBF', default: false },
+            { key: 'number_of_pitchers', label: 'NP', default: false },
+            { key: 'batting_average', label: 'AVG', default: false, format: formatAverage },
+            { key: 'double', label: '2B', default: false },
+            { key: 'triple', label: '3B', default: false },
+            { key: 'sacrifice_bunts', label: 'SH', default: false },
+            { key: 'sacrifice_fly', label: 'SF', default: false },
+            { key: 'intentional_base_on_balls', label: 'IBB', default: false },
+            { key: 'wild_pitch', label: 'WP', default: false },
+            { key: 'balk', label: 'BK', default: false },
+            { key: 'games_started', label: 'GS', default: false },
+            { key: 'wins_game_started', label: 'Wgs', default: false },
+            { key: 'wins_game_relieved', label: 'Wgr', default: false },
+            { key: 'games_finished', label: 'GF', default: false },
+            { key: 'save_opportunity', label: 'SVO', default: false },
+            { key: 'total_saves', label: 'TSV', default: false },
+            { key: 'ground_into_double_play', label: 'GDP', default: false },
+            { key: 'ground_outs', label: 'GO', default: false },
+            { key: 'air_outs', label: 'AO', default: false },
+            { key: 'go_ao', label: 'GO/AO', default: false },
+            { key: 'batting_average_on_balls_in_play', label: 'BABIP', default: false, format: formatAverage },
+            { key: 'p_g', label: 'P/G', default: false, format: (v) => v ? parseFloat(v).toFixed(1) : '-' },
+            { key: 'p_ip', label: 'P/IP', default: false, format: (v) => v ? parseFloat(v).toFixed(1) : '-' },
+            { key: 'k_9', label: 'K/9', default: false, format: (v) => v ? parseFloat(v).toFixed(2) : '-' },
+            { key: 'bb_9', label: 'BB/9', default: false, format: (v) => v ? parseFloat(v).toFixed(2) : '-' },
+            { key: 'strikeout_per_pa', label: 'K%', default: false, format: (v) => (v || v === 0) ? parseFloat(v).toFixed(1) : '-' },
+            { key: 'base_on_balls_per_pa', label: 'BB%', default: false, format: (v) => (v || v === 0) ? parseFloat(v).toFixed(1) : '-' },
+            { key: 'k_bb', label: 'K/BB', default: false },
+            { key: 'on_base_percentage', label: 'OBP', default: false, format: formatAverage },
+            { key: 'slugging_percentage', label: 'SLG', default: false, format: formatAverage },
+            { key: 'on_base_plus_slugging', label: 'OPS', default: false, format: formatAverage }
+        ];
 
-            // Show/hide sections
-            document.getElementById('batters-section').classList.toggle('hidden', tab !== 'batters');
-            document.getElementById('pitchers-section').classList.toggle('hidden', tab !== 'pitchers');
+        // State for selected columns
+        let selectedBatterCols = BATTER_COLUMNS.filter(c => c.default).map(c => c.key);
+        let selectedPitcherCols = PITCHER_COLUMNS.filter(c => c.default).map(c => c.key);
 
-            // Load data if not already loaded
-            if (tab === 'batters' && !document.getElementById('batters-table').innerHTML) {
-                loadBatterStats();
-            } else if (tab === 'pitchers' && !document.getElementById('pitchers-table').innerHTML) {
-                loadPitcherStats();
+        // Sort state
+        let currentBatterData = [];
+        let currentPitcherData = [];
+        let batterSort = { key: 'batting_average', direction: 'desc' };
+        let pitcherSort = { key: 'earned_run_average', direction: 'asc' };
+
+        async function init() {
+            populatePAOptions();
+            populateIPOptions();
+            await loadTeams(); // 팀 목록이 로드될 때까지 대기
+            renderColumnSelector();
+            // 초기 탭 상태에 맞춰 필터 표시 및 데이터 로드
+            switchTab('batters');
+        }
+
+        async function loadTeams() {
+            try {
+                const data = await API.getTeams();
+                const container = document.getElementById('team-checkboxes');
+                if (data.teams) {
+                    container.innerHTML = data.teams.map(team => `
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="team-choice" value="${team.team_id}" checked onchange="updateTeamFilter()">
+                            ${team.team_name}
+                        </label>
+                    `).join('');
+                }
+                updateTeamCount();
+            } catch (error) {
+                console.error('Error loading teams:', error);
             }
         }
 
-        // Load batter stats
+        function toggleTeamSelector() {
+            document.getElementById('team-selector').classList.toggle('hidden');
+            // Hide column selector if open
+            document.getElementById('column-selector').classList.add('hidden');
+        }
+
+        function selectAllTeams(checked) {
+            const checkboxes = document.getElementsByName('team-choice');
+            checkboxes.forEach(cb => cb.checked = checked);
+            updateTeamFilter();
+        }
+
+        function populatePAOptions() {
+            const paSelect = document.getElementById('min-pa');
+            paSelect.innerHTML = '<option value="0">전체</option>';
+            paSelect.innerHTML += '<option value="446">규정 타석(446)</option>';
+
+            // 10 to 250 in steps of 10
+            for (let i = 10; i < 250; i += 10) {
+                paSelect.innerHTML += `<option value="${i}">${i}타석 이상</option>`;
+            }
+
+            // 250 to 600 in steps of 50
+            for (let i = 250; i <= 600; i += 50) {
+                paSelect.innerHTML += `<option value="${i}">${i}타석 이상</option>`;
+            }
+        }
+
+        function populateIPOptions() {
+            const ipSelect = document.getElementById('min-ip');
+            ipSelect.innerHTML = '<option value="0">전체</option>';
+            ipSelect.innerHTML += '<option value="144">규정 이닝(144)</option>';
+
+            for (let i = 10; i <= 250; i += 10) {
+                ipSelect.innerHTML += `<option value="${i}">${i}이닝 이상</option>`;
+            }
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+
+            // UI Updates
+            document.getElementById('tab-batters').style.borderBottom = tab === 'batters' ? '3px solid var(--primary)' : '3px solid transparent';
+            document.getElementById('tab-pitchers').style.borderBottom = tab === 'pitchers' ? '3px solid var(--primary)' : '3px solid transparent';
+
+            document.getElementById('batters-section').classList.toggle('hidden', tab !== 'batters');
+            document.getElementById('batter-filters').classList.toggle('hidden', tab !== 'batters');
+
+            document.getElementById('pitchers-section').classList.toggle('hidden', tab !== 'pitchers');
+            document.getElementById('pitcher-filters').classList.toggle('hidden', tab !== 'pitchers');
+
+            renderColumnSelector();
+
+            if (tab === 'batters') loadBatterStats();
+            else loadPitcherStats();
+        }
+
+        function refreshStats() {
+            if (currentTab === 'batters') loadBatterStats();
+            else loadPitcherStats();
+        }
+
+        function handleSort(key) {
+            const sortConfig = currentTab === 'batters' ? batterSort : pitcherSort;
+
+            if (sortConfig.key === key) {
+                sortConfig.direction = sortConfig.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortConfig.key = key;
+                sortConfig.direction = 'desc';
+            }
+
+            renderData();
+        }
+
+        function toggleColumnSelector() {
+            const el = document.getElementById('column-selector');
+            const isHidden = el.classList.contains('hidden');
+            el.classList.toggle('hidden');
+            if (isHidden) {
+                document.getElementById('team-selector').classList.add('hidden');
+            }
+        }
+
+        function updateTeamFilter() {
+            updateTeamCount();
+            refreshStats();
+        }
+
+        function updateTeamCount() {
+            const checkboxes = document.getElementsByName('team-choice');
+            const checked = Array.from(checkboxes).filter(cb => cb.checked);
+            const countSpan = document.getElementById('selected-team-count');
+
+            if (checkboxes.length === 0) {
+                countSpan.textContent = '로드 중...';
+                countSpan.className = 'badge badge-warning';
+                return;
+            }
+
+            if (checked.length === checkboxes.length) {
+                countSpan.textContent = '전체';
+                countSpan.className = 'badge badge-primary';
+            } else if (checked.length === 0) {
+                countSpan.textContent = '0';
+                countSpan.className = 'badge badge-warning';
+            } else {
+                countSpan.textContent = checked.length;
+                countSpan.className = 'badge badge-success';
+            }
+        }
+
+        function renderColumnSelector() {
+            const container = document.getElementById('column-checkboxes');
+            container.innerHTML = '';
+
+            const cols = currentTab === 'batters' ? BATTER_COLUMNS : PITCHER_COLUMNS;
+            const selected = currentTab === 'batters' ? selectedBatterCols : selectedPitcherCols;
+
+            cols.forEach(col => {
+                if (col.key === 'rank' || col.key === 'player_name') return; // Always show rank/name
+
+                const label = document.createElement('label');
+                label.className = 'checkbox-label';
+                label.innerHTML = `
+                    <input type="checkbox" value="${col.key}" ${selected.includes(col.key) ? 'checked' : ''} onchange="updateColumns('${col.key}')">
+                    ${col.label}
+                `;
+                container.appendChild(label);
+            });
+        }
+
+        function updateColumns(key) {
+            const selected = currentTab === 'batters' ? selectedBatterCols : selectedPitcherCols;
+            const idx = selected.indexOf(key);
+
+            if (idx > -1) selected.splice(idx, 1);
+            else {
+                // Keep order based on definition
+                const defs = currentTab === 'batters' ? BATTER_COLUMNS : PITCHER_COLUMNS;
+                const defIdx = defs.findIndex(c => c.key === key);
+                selected.push(key);
+                // Re-sort to match definition order
+                selected.sort((a, b) => {
+                    return defs.findIndex(c => c.key === a) - defs.findIndex(c => c.key === b);
+                });
+            }
+
+            renderData();
+        }
+
         async function loadBatterStats() {
             const tableDiv = document.getElementById('batters-table');
-            const limit = parseInt(document.getElementById('batter-limit').value);
+            const limit = parseInt(document.getElementById('display-limit').value);
+            const minPa = parseInt(document.getElementById('min-pa').value);
 
+            const allCheckboxes = document.getElementsByName('team-choice');
+
+            // 아직 팀 목록이 로드되지 않았다면 잠시 대기
+            if (allCheckboxes.length === 0) {
+                tableDiv.innerHTML = createLoadingSpinner();
+                setTimeout(loadBatterStats, 300);
+                return;
+            }
+
+            const selectedTeams = Array.from(allCheckboxes).filter(cb => cb.checked).map(cb => cb.value);
+
+            if (selectedTeams.length === 0) {
+                tableDiv.innerHTML = createEmptyState('최소 한 개의 팀을 선택해 주세요.');
+                currentBatterData = [];
+                return;
+            }
+
+            const teamIds = selectedTeams.join(',');
             tableDiv.innerHTML = createLoadingSpinner();
 
             try {
-                const data = await API.getBatterStats(2025, limit);
-
-                if (data.batters.length === 0) {
-                    tableDiv.innerHTML = createEmptyState('타자 통계가 없습니다.');
-                    return;
-                }
-
-                const headers = ['순위', '선수명', '팀', '포지션', 'PA', 'AB', 'R', 'H', 'HR', 'AVG', 'OBP', 'SLG', 'OPS'];
-                const rows = data.batters.map((batter, index) => [
-                    index + 1,
-                    batter.player_name,
-                    batter.team_id,
-                    batter.position,
-                    formatNumber(batter.plate_appearance),
-                    formatNumber(batter.at_bat),
-                    formatNumber(batter.run),
-                    formatNumber(batter.hits),
-                    formatNumber(batter.home_run),
-                    formatAverage(batter.batting_average),
-                    formatAverage(batter.on_base_percentage),
-                    formatAverage(batter.slugging_percentage),
-                    formatAverage(batter.ops)
-                ]);
-
-                tableDiv.innerHTML = createTable(headers, rows);
+                const data = await API.getBatterStats(2025, limit, minPa, teamIds);
+                currentBatterData = data.batters || [];
+                renderData();
             } catch (error) {
+                console.error(error);
                 tableDiv.innerHTML = createErrorMessage('타자 통계를 불러오는데 실패했습니다.');
             }
         }
 
-        // Load pitcher stats
         async function loadPitcherStats() {
             const tableDiv = document.getElementById('pitchers-table');
-            const limit = parseInt(document.getElementById('pitcher-limit').value);
+            const limit = parseInt(document.getElementById('display-limit').value);
+            const minIp = parseInt(document.getElementById('min-ip').value);
 
+            const allCheckboxes = document.getElementsByName('team-choice');
+
+            // 아직 팀 목록이 로드되지 않았다면 잠시 대기
+            if (allCheckboxes.length === 0) {
+                tableDiv.innerHTML = createLoadingSpinner();
+                setTimeout(loadPitcherStats, 300);
+                return;
+            }
+
+            const selectedTeams = Array.from(allCheckboxes).filter(cb => cb.checked).map(cb => cb.value);
+
+            if (selectedTeams.length === 0) {
+                tableDiv.innerHTML = createEmptyState('최소 한 개의 팀을 선택해 주세요.');
+                currentPitcherData = [];
+                return;
+            }
+
+            const teamIds = selectedTeams.join(',');
             tableDiv.innerHTML = createLoadingSpinner();
 
             try {
-                const data = await API.getPitcherStats(2025, limit);
-
-                if (data.pitchers.length === 0) {
-                    tableDiv.innerHTML = createEmptyState('투수 통계가 없습니다.');
-                    return;
-                }
-
-                const headers = ['순위', '선수명', '팀', 'W', 'L', 'ERA', 'G', 'GS', 'SV', 'IP', 'SO', 'WHIP'];
-                const rows = data.pitchers.map((pitcher, index) => [
-                    index + 1,
-                    pitcher.player_name,
-                    pitcher.team_id,
-                    pitcher.wins || '-',
-                    pitcher.losses || '-',
-                    formatERA(pitcher.earned_run_average),
-                    pitcher.games || '-',
-                    pitcher.games_started || '-',
-                    pitcher.save || '-',
-                    pitcher.innings_pitched ? parseFloat(pitcher.innings_pitched).toFixed(1) : '-',
-                    pitcher.strikeout || '-',
-                    formatERA(pitcher.whip)
-                ]);
-
-                tableDiv.innerHTML = createTable(headers, rows);
+                const data = await API.getPitcherStats(2025, limit, minIp, teamIds);
+                currentPitcherData = data.pitchers || [];
+                renderData();
             } catch (error) {
                 tableDiv.innerHTML = createErrorMessage('투수 통계를 불러오는데 실패했습니다.');
             }
         }
 
-        // Load initial data
-        loadBatterStats();
+        function renderData() {
+            if (currentTab === 'batters') renderBatterTable();
+            else renderPitcherTable();
+        }
+
+        function renderBatterTable() {
+            const tableDiv = document.getElementById('batters-table');
+            if (currentBatterData.length === 0) {
+                tableDiv.innerHTML = createEmptyState('조건에 맞는 타자 통계가 없습니다.');
+                return;
+            }
+
+            // Sort logic
+            const sorted = [...currentBatterData].sort((a, b) => {
+                let vA = a[batterSort.key];
+                let vB = b[batterSort.key];
+
+                if (vA === null || vA === undefined) vA = -999;
+                if (vB === null || vB === undefined) vB = -999;
+
+                if (typeof vA === 'string' && isNaN(vA)) {
+                    return batterSort.direction === 'asc' ? vA.localeCompare(vB) : vB.localeCompare(vA);
+                }
+                return batterSort.direction === 'asc' ? vA - vB : vB - vA;
+            });
+
+            // Header labels with interactive sort arrows
+            const headers = BATTER_COLUMNS.filter(c => selectedBatterCols.includes(c.key)).map(c => {
+                const isSorted = batterSort.key === c.key;
+                const arrow = isSorted ? (batterSort.direction === 'asc' ? ' ▲' : ' ▼') : '';
+                return `<span class="sortable-header" onclick="handleSort('${c.key}')">${c.label}${arrow}</span>`;
+            });
+
+            const rows = sorted.map((batter) => {
+                return BATTER_COLUMNS.filter(c => selectedBatterCols.includes(c.key)).map(col => {
+                    let val = batter[col.key];
+                    if (col.format) return col.format(val);
+                    return val || (val === 0 ? 0 : '-');
+                });
+            });
+
+            tableDiv.innerHTML = createTable(headers, rows);
+        }
+
+        function renderPitcherTable() {
+            const tableDiv = document.getElementById('pitchers-table');
+            if (currentPitcherData.length === 0) {
+                tableDiv.innerHTML = createEmptyState('조건에 맞는 투수 통계가 없습니다.');
+                return;
+            }
+
+            const sorted = [...currentPitcherData].sort((a, b) => {
+                let vA = a[pitcherSort.key];
+                let vB = b[pitcherSort.key];
+
+                // IP sorting logic (string to numeric)
+                if (pitcherSort.key === 'innings_pitched') {
+                    vA = parseFloat(vA || 0);
+                    vB = parseFloat(vB || 0);
+                }
+
+                if (vA === null || vA === undefined) vA = (pitcherSort.direction === 'asc' ? 999 : -999);
+                if (vB === null || vB === undefined) vB = (pitcherSort.direction === 'asc' ? 999 : -999);
+
+                if (typeof vA === 'string' && isNaN(vA)) {
+                    return pitcherSort.direction === 'asc' ? vA.localeCompare(vB) : vB.localeCompare(vA);
+                }
+                return pitcherSort.direction === 'asc' ? vA - vB : vB - vA;
+            });
+
+            const headers = PITCHER_COLUMNS.filter(c => selectedPitcherCols.includes(c.key)).map(c => {
+                const isSorted = pitcherSort.key === c.key;
+                const arrow = isSorted ? (pitcherSort.direction === 'asc' ? ' ▲' : ' ▼') : '';
+                return `<span class="sortable-header" onclick="handleSort('${c.key}')">${c.label}${arrow}</span>`;
+            });
+
+            const rows = sorted.map((pitcher) => {
+                return PITCHER_COLUMNS.filter(c => selectedPitcherCols.includes(c.key)).map(col => {
+                    let val = pitcher[col.key];
+                    if (col.format) return col.format(val);
+                    return val || (val === 0 ? 0 : '-');
+                });
+            });
+
+            tableDiv.innerHTML = createTable(headers, rows);
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', init);
     </script>
 </body>
 
