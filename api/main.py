@@ -78,14 +78,14 @@ async def get_dashboard_stats():
                 return r[0] if r else 0
             except Exception:
                 return 0
-        games = one("SELECT COUNT(*) FROM games")
+        games = one("SELECT COUNT(DISTINCT gameID) FROM play_by_play WHERE substr(gameID,1,4) GLOB '20[0-2][0-9]'")
         plays = one("SELECT COUNT(*) FROM play_by_play")
         batters = one("SELECT COUNT(DISTINCT player_id) FROM kbo_official_batter_stats")
         pitchers = one("SELECT COUNT(DISTINCT player_id) FROM kbo_official_pitcher_stats")
         players = one("SELECT COUNT(*) FROM players")
         teams = one("SELECT COUNT(*) FROM teams")
-        smin = one("SELECT MIN(season) FROM games")
-        smax = one("SELECT MAX(season) FROM games")
+        smin = one("SELECT MIN(substr(gameID,1,4)) FROM play_by_play WHERE substr(gameID,1,4) GLOB '20[0-2][0-9]'")
+        smax = one("SELECT MAX(substr(gameID,1,4)) FROM play_by_play WHERE substr(gameID,1,4) GLOB '20[0-2][0-9]'")
         seasons = str(smin) if smin == smax else f"{smin}~{smax}"
         conn.close()
         return {"games": games, "plays": plays, "batters": batters, "pitchers": pitchers,
