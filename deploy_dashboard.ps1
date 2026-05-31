@@ -23,7 +23,15 @@ Write-Host "========================================" -ForegroundColor Cyan
 scp -i $KEY_PATH -r $src "${EC2_USER}@${EC2_IP}:~/b_project/"
 
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "`n[OK] 배포 완료 — https://bstats.duckdns.org/kbo/ 에서 확인 (강력 새로고침 Ctrl+F5)" -ForegroundColor Green
+    # Windows->Linux scp가 디렉토리를 0700으로 설정 -> nginx(www-data) 403.
+    # dirs 755 / files 644 로 보정해야 nginx가 서빙 가능.
+    Write-Host "권한 보정 중 (nginx 읽기 가능하도록 dirs 755 / files 644)..." -ForegroundColor Cyan
+    ssh -i $KEY_PATH "${EC2_USER}@${EC2_IP}" "find ~/b_project/dashboard_js -type d -exec chmod 755 {} \; ; find ~/b_project/dashboard_js -type f -exec chmod 644 {} \;"
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "`n[OK] 배포 완료 — https://bstats.duckdns.org/kbo/ 에서 확인 (강력 새로고침 Ctrl+F5)" -ForegroundColor Green
+    } else {
+        Write-Host "`n[WARN] scp는 됐으나 권한 보정 실패 (exit $LASTEXITCODE) — 서버에서 chmod 확인 필요" -ForegroundColor Yellow
+    }
 } else {
     Write-Host "`n[FAIL] 배포 실패 (exit $LASTEXITCODE)" -ForegroundColor Red
 }
