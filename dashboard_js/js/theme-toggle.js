@@ -1,6 +1,6 @@
 /**
- * KBO Analytics 다크/라이트 모드 토글
- * 모든 페이지의 기본 설정. localStorage('kbo-theme')로 보존.
+ * C - Baseball Research Center 다크/라이트 모드 토글
+ * 모든 페이지의 기본 설정. localStorage('kbo-theme-v2')로 보존.
  *
  * 사용:
  *   1. <link rel="stylesheet" href="...style.css"> 다음에 이 파일 include
@@ -12,7 +12,7 @@
  */
 (function () {
     // 1. 페이지 로드 즉시 theme 적용 (FOUC 방지)
-    const stored = localStorage.getItem('kbo-theme') || 'light';
+    const stored = localStorage.getItem('kbo-theme-v2') || 'light';
     document.documentElement.setAttribute('data-theme', stored);
 
     // 2. nav에 toggle 버튼 inject
@@ -50,7 +50,7 @@
             const cur = document.documentElement.getAttribute('data-theme');
             const next = cur === 'dark' ? 'light' : 'dark';
             document.documentElement.setAttribute('data-theme', next);
-            localStorage.setItem('kbo-theme', next);
+            localStorage.setItem('kbo-theme-v2', next);
             updateLabel();
         });
 
