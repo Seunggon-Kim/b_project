@@ -13,6 +13,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
 
+    <!-- Favicon (다이아몬드) -->
+    <link rel="icon" href="assets/favicon/diamond.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon/diamond.svg">
+    <link rel="apple-touch-icon" href="assets/favicon/diamond-180.png">
+
     <!-- Styles -->
     <link rel="stylesheet" href="css/style.css">
     <script src="js/theme-toggle.js"></script>
@@ -23,7 +28,7 @@
     <header class="header">
         <div class="header-content">
             <a href="./" class="logo">
-                <span class="material-symbols-outlined logo-icon">science</span>
+                <img src="assets/favicon/diamond.svg" alt="" class="logo-icon" width="26" height="26">
                 <span>C - Baseball Research Center</span>
             </a>
             <nav class="nav">
@@ -52,6 +57,30 @@
             </div>
             <div id="games-grid" class="games-grid"></div>
             <p class="schedule-note">데이터 출처: Naver 스포츠 (KBO 정규시즌) · 30초 캐시</p>
+        </section>
+
+        <!-- 팀 순위 + 개인 순위 (2단) -->
+        <section class="rank-row mb-3">
+            <!-- 좌: 팀 순위 -->
+            <div class="rank-col-team">
+                <div class="schedule-bar">
+                    <h2 class="schedule-title"><span class="material-symbols-outlined">leaderboard</span> 팀 순위</h2>
+                </div>
+                <div id="standings-wrap" class="standings-wrap"></div>
+                <p class="schedule-note">데이터 출처: KBO 공식 (koreabaseball.com) · 5분 캐시</p>
+            </div>
+            <!-- 우: 개인 순위 -->
+            <div class="rank-col-players">
+                <div class="schedule-bar">
+                    <h2 class="schedule-title"><span class="material-symbols-outlined">emoji_events</span> 개인 순위</h2>
+                    <div class="leaders-tabs" id="leaders-tabs">
+                        <button type="button" class="leaders-tab active" data-tab="batter">타자</button>
+                        <button type="button" class="leaders-tab" data-tab="pitcher">투수</button>
+                    </div>
+                </div>
+                <div id="leaders-wrap" class="leaders-wrap"></div>
+                <p class="schedule-note" id="leaders-note">데이터 출처: KBO 공식 기록</p>
+            </div>
         </section>
 
         <!-- Quick Links -->
@@ -207,6 +236,110 @@
         document.getElementById('date-next').addEventListener('click', () => { curDate.setDate(curDate.getDate() + 1); loadSchedule(0); });
         document.getElementById('date-today').addEventListener('click', () => { curDate = kstNow(); loadSchedule(7); });
         loadSchedule(7);  // 첫 로드: 오늘 경기 없으면 다음 경기일로 자동 이동 (최대 7일)
+
+        // ===== 팀 순위 (KBO 공식) =====
+        function streakClass(s) { return /승/.test(s) ? 'streak-w' : (/패/.test(s) ? 'streak-l' : ''); }
+        function renderStandings(teams) {
+            const head = `<thead><tr>
+                <th class="rank-col">순위</th><th class="team-col">팀</th>
+                <th>경기</th><th>승</th><th>패</th><th>무</th><th>승률</th><th>게임차</th><th>연속</th>
+            </tr></thead>`;
+            const rows = teams.map(t => {
+                const emblem = t.code
+                    ? `<img class="rank-emblem" src="assets/logos/${esc(t.code)}.png" alt="" loading="lazy" onerror="this.style.display='none'">`
+                    : '';
+                return `<tr>
+                    <td class="rank-col"><span class="rank-badge rank-${t.rank}">${t.rank}</span></td>
+                    <td class="team-col"><div class="team-cell">${emblem}<span>${esc(t.team)}</span></div></td>
+                    <td>${esc(t.games)}</td>
+                    <td>${esc(t.wins)}</td>
+                    <td>${esc(t.losses)}</td>
+                    <td>${esc(t.draws)}</td>
+                    <td class="pct">${esc(t.pct)}</td>
+                    <td>${esc(t.gb)}</td>
+                    <td class="${streakClass(t.streak)}">${esc(t.streak)}</td>
+                </tr>`;
+            }).join('');
+            return `<table class="standings-table">${head}<tbody>${rows}</tbody></table>`;
+        }
+        async function loadStandings() {
+            const wrap = document.getElementById('standings-wrap');
+            wrap.innerHTML = '<div class="schedule-msg">불러오는 중…</div>';
+            try {
+                const res = await fetch(`${API_BASE_URL}/standings`);
+                const data = await res.json();
+                if (!data.teams || data.teams.length === 0) {
+                    wrap.innerHTML = '<div class="schedule-msg error">순위 정보를 불러오지 못했습니다.</div>';
+                    return;
+                }
+                wrap.innerHTML = renderStandings(data.teams);
+            } catch (e) {
+                wrap.innerHTML = '<div class="schedule-msg error">순위를 불러오지 못했습니다.</div>';
+            }
+        }
+        loadStandings();
+
+        // ===== 개인 순위 (KBO 공식 기록) =====
+        let LEADERS_DATA = null;
+        let leadersTab = 'batter';
+        // 카드 순서 = 좌열(1열) 3개 → 우열(2열) 3개. .leaders-grid가 column 방향으로 배치.
+        const LEADER_DEFS = {
+            batter: [
+                { key: 'avg', label: '타율' }, { key: 'obp', label: '출루율' }, { key: 'slg', label: '장타율' },
+                { key: 'ops', label: 'OPS' }, { key: 'woba', label: 'wOBA' }, { key: 'wrc', label: 'wRC+' },
+            ],
+            pitcher: [
+                { key: 'g', label: '경기' }, { key: 'ip', label: '이닝' }, { key: 'k', label: '탈삼진' },
+                { key: 'era', label: 'ERA' }, { key: 'kpct', label: 'K%' }, { key: 'bbpct', label: 'BB%' },
+            ],
+        };
+        function leaderCard(def, list) {
+            const rows = (list || []).map((e, i) => {
+                const emblem = e.code
+                    ? `<img class="lr-emblem" src="assets/logos/${esc(e.code)}.png" alt="" loading="lazy" onerror="this.style.display='none'">`
+                    : '';
+                return `<li class="lr-row">
+                    <span class="lr-rank">${i + 1}</span>
+                    ${emblem}
+                    <span class="lr-name">${esc(e.name)}</span>
+                    <span class="lr-val">${esc(e.value)}</span>
+                </li>`;
+            }).join('');
+            return `<div class="leader-card">
+                <div class="leader-card-title">${esc(def.label)}</div>
+                <ol class="leader-list">${rows || '<li class="lr-empty">데이터 없음</li>'}</ol>
+            </div>`;
+        }
+        function renderLeaders() {
+            const wrap = document.getElementById('leaders-wrap');
+            if (!LEADERS_DATA) { wrap.innerHTML = '<div class="schedule-msg error">개인 순위를 불러오지 못했습니다.</div>'; return; }
+            const defs = LEADER_DEFS[leadersTab];
+            const group = LEADERS_DATA[leadersTab] || {};
+            wrap.innerHTML = `<div class="leaders-grid">${defs.map(d => leaderCard(d, group[d.key])).join('')}</div>`;
+        }
+        async function loadLeaders() {
+            const wrap = document.getElementById('leaders-wrap');
+            wrap.innerHTML = '<div class="schedule-msg">불러오는 중…</div>';
+            try {
+                const res = await fetch(`${API_BASE_URL}/leaders`);
+                LEADERS_DATA = await res.json();
+                const note = document.getElementById('leaders-note');
+                if (note && LEADERS_DATA.season) {
+                    note.textContent = `${LEADERS_DATA.season} 시즌 · 규정타석(${LEADERS_DATA.qual_pa})/규정이닝(${LEADERS_DATA.qual_ip}) 기준 · wRC+는 'wRC+ 강건성' 페이지와 동일(자체 파크팩터 3년·half-PF) · 이닝·탈삼진 누적`;
+                }
+                renderLeaders();
+            } catch (e) {
+                wrap.innerHTML = '<div class="schedule-msg error">개인 순위를 불러오지 못했습니다.</div>';
+            }
+        }
+        document.getElementById('leaders-tabs').addEventListener('click', (ev) => {
+            const btn = ev.target.closest('.leaders-tab');
+            if (!btn) return;
+            leadersTab = btn.dataset.tab;
+            document.querySelectorAll('.leaders-tab').forEach(b => b.classList.toggle('active', b === btn));
+            renderLeaders();
+        });
+        loadLeaders();
 
         // ===== 데이터 현황 (기존 통계 카운트) =====
         async function loadDashboardStats() {

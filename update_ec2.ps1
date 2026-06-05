@@ -1,9 +1,7 @@
 # EC2 상태 확인 및 업데이트 스크립트
 
-# 접속 정보는 gitignore된 로컬 설정에서 로드 (공개 repo엔 placeholder만)
-$cfg = Join-Path $PSScriptRoot 'ec2_config.local.ps1'
-if (-not (Test-Path $cfg)) { Write-Host "[ERROR] ec2_config.local.ps1 없음 — IP/키 설정 필요" -ForegroundColor Red; exit 1 }
-. $cfg
+$EC2_IP = "43.200.4.183"
+$KEY_PATH = "C:\Users\김승곤\.ssh\kbo-key.pem"
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "EC2 서버 상태 확인" -ForegroundColor Cyan
@@ -61,7 +59,8 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "`n========================================" -ForegroundColor Cyan
     Write-Host "✅ 업데이트 완료!" -ForegroundColor Green
     Write-Host "========================================" -ForegroundColor Cyan
-    Write-Host "`n🌐 대시보드: https://bstats.duckdns.org/kbo/" -ForegroundColor Green
+    Write-Host "`n🌐 대시보드: http://43.200.4.183:8502" -ForegroundColor Green
+    Write-Host "🎯 투수 통계 확인: http://43.200.4.183:8502/Player_Stats" -ForegroundColor Green
 }
 else {
     Write-Host "`n❌ 업데이트 실패" -ForegroundColor Red

@@ -29,7 +29,7 @@ if ($response -eq 'Y' -or $response -eq 'y') {
     Write-Host "📝 IP 주소를 확인한 후:" -ForegroundColor Cyan
     Write-Host "   .\check_aws_status.ps1 [IP주소]" -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "   예시: .\check_aws_status.ps1 EC2_PUBLIC_IP" -ForegroundColor Gray
+    Write-Host "   예시: .\check_aws_status.ps1 43.200.4.183" -ForegroundColor Gray
     Write-Host ""
 }
 else {

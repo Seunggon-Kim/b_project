@@ -6,7 +6,7 @@
 
 ```powershell
 # 1. 프로젝트 폴더로 이동
-cd C:\Users\USERNAME\Desktop\b_project
+cd C:\Users\김승곤\Desktop\b_project
 
 # 2. EC2 IP 주소 확인 (브라우저가 자동으로 열림)
 .\get_ec2_ip.ps1
@@ -16,7 +16,7 @@ cd C:\Users\USERNAME\Desktop\b_project
 
 ```powershell
 # 3. 상태 확인 (아래 IP 주소를 실제 IP로 변경)
-.\check_aws_status.ps1 EC2_PUBLIC_IP
+.\check_aws_status.ps1 43.200.4.183
 ```
 
 ---
@@ -26,7 +26,7 @@ cd C:\Users\USERNAME\Desktop\b_project
 ### 방법 1: 프로젝트 폴더에서 바로 열기 (가장 쉬움!) ⭐
 
 1. 파일 탐색기 열기 (`Windows 키 + E`)
-2. 주소창에 입력: `C:\Users\USERNAME\Desktop\b_project`
+2. 주소창에 입력: `C:\Users\김승곤\Desktop\b_project`
 3. 주소창 클릭 → `powershell` 입력 → `Enter`
 
 ### 방법 2: 시작 메뉴에서
@@ -37,7 +37,7 @@ cd C:\Users\USERNAME\Desktop\b_project
 4. 아래 명령어 입력:
 
    ```powershell
-   cd C:\Users\USERNAME\Desktop\b_project
+   cd C:\Users\김승곤\Desktop\b_project
    ```
 
 ---
@@ -49,7 +49,7 @@ cd C:\Users\USERNAME\Desktop\b_project
 ```
 파일 탐색기 주소창:
 ┌─────────────────────────────────────────────┐
-│ C:\Users\USERNAME\Desktop\b_project            │
+│ C:\Users\김승곤\Desktop\b_project            │
 └─────────────────────────────────────────────┘
          ↓ 클릭 후 "powershell" 입력
 ┌─────────────────────────────────────────────┐
@@ -90,14 +90,14 @@ PowerShell에 입력:
 
 1. AWS 로그인 (루트 사용자)
 2. `kbo-stats-server` 인스턴스 클릭
-3. **퍼블릭 IPv4 주소** 복사 (예: `EC2_PUBLIC_IP`)
+3. **퍼블릭 IPv4 주소** 복사 (예: `43.200.4.183`)
 
 ### 4단계: 상태 확인
 
 PowerShell에 입력 (IP 주소 변경):
 
 ```powershell
-.\check_aws_status.ps1 EC2_PUBLIC_IP
+.\check_aws_status.ps1 43.200.4.183
 ```
 
 ---
@@ -111,7 +111,7 @@ PowerShell에 입력 (IP 주소 변경):
 
 ✅ SSH 키 파일 확인 완료
 
-🔌 EC2 서버 접속 중: EC2_PUBLIC_IP
+🔌 EC2 서버 접속 중: 43.200.4.183
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📋 1. Crontab 설정 확인
@@ -173,7 +173,7 @@ icacls $HOME\.ssh\kbo-key.pem /grant:r "$env:USERNAME`:R"
 
 - 매일 새벽 2시에 자동 크롤링 실행
 - 크롤링 완료 후 자동 이메일 발송
-- 받은편지함 확인: `your-email@gmail.com`
+- 받은편지함 확인: `wk120481@gmail.com`
 
 ### ⚠️ 문제가 있으면
 
@@ -188,7 +188,7 @@ PowerShell에서:
 
 ```powershell
 # SSH 접속
-ssh -i $HOME\.ssh\kbo-key.pem ubuntu@EC2_PUBLIC_IP
+ssh -i $HOME\.ssh\kbo-key.pem ubuntu@43.200.4.183
 ```
 
 SSH 접속 후:

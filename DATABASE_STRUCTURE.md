@@ -384,4 +384,4 @@ python data_collection/pitcher_to_db.py
 
 **문서 버전**: v1.1  
 **작성일**: 2026-01-18 (K%, BB%, BABIP 지표 구조 추가)  
-**작성자**: USERNAME
+**작성자**: 김승곤

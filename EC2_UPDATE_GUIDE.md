@@ -5,7 +5,7 @@
 ### 1단계: PuTTY로 EC2 접속
 
 1. **PuTTY 실행**
-2. **Host Name**: `ubuntu@EC2_PUBLIC_IP`
+2. **Host Name**: `ubuntu@43.200.4.183`
 3. **Port**: `22`
 4. **Connection > SSH > Auth**: `kbo-key.ppk` 선택
 5. **Open** 클릭
@@ -32,7 +32,7 @@ sudo systemctl status kbo-dashboard
 
 브라우저에서 접속:
 
-- <http://EC2_PUBLIC_IP:8502>
+- <http://43.200.4.183:8502>
 
 투수 통계가 보이면 성공! 🎉
 
@@ -78,7 +78,7 @@ python data_collection/pitcher_to_db.py
 - [ ] `cd ~/b_project`
 - [ ] `git pull`
 - [ ] `sudo systemctl restart kbo-dashboard`
-- [ ] 브라우저에서 확인 (<http://EC2_PUBLIC_IP:8502>)
+- [ ] 브라우저에서 확인 (<http://43.200.4.183:8502>)
 - [ ] 투수 통계 탭 확인
 
 ---
@@ -91,8 +91,8 @@ python data_collection/pitcher_to_db.py
    - GoDaddy, Namecheap, Cafe24 등
 
 2. **DNS 설정**
-   - A 레코드: `@` → `EC2_PUBLIC_IP`
-   - A 레코드: `www` → `EC2_PUBLIC_IP`
+   - A 레코드: `@` → `43.200.4.183`
+   - A 레코드: `www` → `43.200.4.183`
 
 3. **Nginx 설정** (선택사항, HTTPS용)
 

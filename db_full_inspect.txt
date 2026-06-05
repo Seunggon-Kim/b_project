@@ -1,0 +1,249 @@
+=== TABLE: teams ===
+COL: team_id
+COL: team_name
+COL: team_name_en
+COL: city
+COL: founded_year
+COL: stadium
+
+
+=== TABLE: games ===
+COL: game_id
+COL: game_date
+COL: season
+COL: game_type
+COL: home_team_id
+COL: away_team_id
+COL: home_score
+COL: away_score
+COL: stadium
+COL: attendance
+COL: game_time_minutes
+COL: weather
+COL: temperature
+
+
+=== TABLE: play_by_play ===
+COL: pbp_id
+COL: pitch_type
+COL: pitcher
+COL: batter
+COL: pitcher_ID
+COL: batter_ID
+COL: speed
+COL: pitch_result
+COL: pa_result
+COL: pa_result_detail
+COL: description
+COL: balls
+COL: strikes
+COL: outs
+COL: inning
+COL: inning_topbot
+COL: score_away
+COL: score_home
+COL: outs_on_play
+COL: runs_scored
+COL: stands
+COL: throws
+COL: on_1b
+COL: on_2b
+COL: on_3b
+COL: pos_1
+COL: pos_2
+COL: pos_3
+COL: pos_4
+COL: pos_5
+COL: pos_6
+COL: pos_7
+COL: pos_8
+COL: pos_9
+COL: on_1b_id
+COL: on_2b_id
+COL: on_3b_id
+COL: pos_1_id
+COL: pos_2_id
+COL: pos_3_id
+COL: pos_4_id
+COL: pos_5_id
+COL: pos_6_id
+COL: pos_7_id
+COL: pos_8_id
+COL: pos_9_id
+COL: px
+COL: pz
+COL: pfx_x
+COL: pfx_z
+COL: pfx_x_raw
+COL: pfx_z_raw
+COL: x0
+COL: z0
+COL: sz_top
+COL: sz_bot
+COL: y0
+COL: vx0
+COL: vy0
+COL: vz0
+COL: ax
+COL: ay
+COL: az
+COL: game_date
+COL: home
+COL: away
+COL: home_alias
+COL: away_alias
+COL: stadium
+COL: referee
+COL: pa_number
+COL: pitch_number
+COL: pitchID
+COL: gameID
+
+
+=== TABLE: sqlite_sequence ===
+COL: name
+COL: seq
+
+
+=== TABLE: game_team_stats ===
+COL: stat_id
+COL: game_id
+COL: team_id
+COL: runs
+COL: hits
+COL: errors
+COL: left_on_base
+COL: doubles
+COL: triples
+COL: home_runs
+COL: walks
+COL: strikeouts
+COL: stolen_bases
+
+
+=== TABLE: kbo_official_batter_stats ===
+COL: player_id
+COL: season
+COL: player_name
+COL: player_team
+COL: batting_average
+COL: games
+COL: plate_appearance
+COL: at_bat
+COL: run
+COL: single
+COL: double
+COL: triple
+COL: home_run
+COL: total_bases
+COL: run_batted_in
+COL: sacrifice_bunts
+COL: sacrifice_fly
+COL: base_on_balls
+COL: intentional_base_on_balls
+COL: hit_by_pitch
+COL: strikeout
+COL: ground_into_double_play
+COL: slugging_percentage
+COL: on_base_percentage
+COL: on_base_plus_slugging
+COL: multi_hits
+COL: runners_in_scoring_position
+COL: pinch_hit_batting_average
+COL: extra_base_hits
+COL: ground_outs
+COL: air_outs
+COL: go_ao
+COL: gw_rbi
+COL: strikeout_per_pa
+COL: base_on_balls_per_pa
+COL: bb_k
+COL: p_pa
+COL: isop
+COL: extended_runs
+COL: gross_production_average
+COL: created_at
+COL: updated_at
+
+
+=== TABLE: kbo_official_pitcher_stats ===
+COL: player_id
+COL: season
+COL: player_name
+COL: player_team
+COL: earned_run_average
+COL: games
+COL: wins
+COL: losses
+COL: save
+COL: hold
+COL: winning_percentage
+COL: innings_pitched
+COL: hits
+COL: home_run
+COL: base_on_balls
+COL: hit_by_pitch
+COL: strikeout
+COL: run
+COL: earned_run
+COL: walks_plus_hits_per_inning_pitched
+COL: complete_game
+COL: shutout
+COL: quality_start
+COL: blown_save
+COL: total_batters_faced
+COL: number_of_pitchers
+COL: batting_average
+COL: double
+COL: triple
+COL: sacrifice_bunts
+COL: sacrifice_fly
+COL: intentional_base_on_balls
+COL: wild_pitch
+COL: balk
+COL: games_started
+COL: wins_game_started
+COL: wins_game_relieved
+COL: games_finished
+COL: save_opportunity
+COL: total_saves
+COL: ground_into_double_play
+COL: ground_outs
+COL: air_outs
+COL: go_ao
+COL: batting_average_on_balls_in_play
+COL: p_g
+COL: p_ip
+COL: k_9
+COL: bb_9
+COL: strikeout_per_pa
+COL: base_on_balls_per_pa
+COL: k_bb
+COL: on_base_percentage
+COL: slugging_percentage
+COL: on_base_plus_slugging
+COL: created_at
+COL: updated_at
+
+
+=== TABLE: players ===
+COL: player_id
+COL: player_name
+COL: team_id
+COL: back_number
+COL: position
+COL: throw
+COL: bat
+COL: birthday
+COL: height
+COL: weight
+COL: career
+COL: draft_year
+COL: draft_order
+COL: signing_bonus
+COL: salary
+COL: image_url
+COL: created_at
+COL: updated_at
+
+

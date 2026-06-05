@@ -2,7 +2,7 @@
 REM KBO 공식 통계 전체 자동 수집 배치 파일 (타자 + 투수)
 REM Windows 작업 스케줄러에서 실행 가능
 
-cd /d C:\Users\USERNAME\Desktop\b_project
+cd /d C:\Users\김승곤\Desktop\b_project
 
 echo ========================================
 echo KBO 공식 통계 전체 자동 수집 시작

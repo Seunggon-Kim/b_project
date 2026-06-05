@@ -14,7 +14,6 @@ import traceback
 import sys
 import csv
 import io
-import json
 import requests
 import xml.etree.ElementTree as ET
 import urllib.parse
@@ -202,7 +201,7 @@ async def get_player_news(player_id: str):
         return {"player_name": "Error", "news": [], "error": str(e)}
 
 @app.get("/players/{player_id}/arsenal")
-async def get_pitch_arsenal(player_id: str):
+async def get_pitch_arsenal(player_id: str, season: int = 2026):
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -215,17 +214,17 @@ async def get_pitch_arsenal(player_id: str):
         db_pid = player['player_id']
 
         sql = """
-            SELECT pbp.pitch_type, pbp.px, pbp.pz, pbp.speed, pbp.pitch_result, pbp.pfx_x, pbp.pfx_z
+            SELECT pbp.pitch_type, pbp.px, pbp.pz, pbp.speed, pbp.pitch_result, pbp.pfx_x, pbp.pfx_z, pbp.game_date, pbp.x0, pbp.z0, pbp.sz_top, pbp.sz_bot
             FROM play_by_play pbp
-            JOIN games g ON pbp.gameID = g.game_id
+            -- (removed games join)
             WHERE pbp.pitcher_ID = ? 
-            AND g.season = 2025
+            AND substr(pbp.gameID,1,4) = CAST(? AS TEXT)
             AND pbp.px IS NOT NULL 
             AND pbp.pz IS NOT NULL
             AND pbp.pitch_type IS NOT NULL
             AND pbp.pitch_type NOT IN ('', '-', 'null')
         """
-        cur.execute(sql, (db_pid,))
+        cur.execute(sql, (db_pid, season))
         rows = cur.fetchall()
         
         arsenal = [dict(row) for row in rows]
@@ -238,7 +237,7 @@ async def get_pitch_arsenal(player_id: str):
         return {"error": str(e), "traceback": traceback.format_exc()}
 
 @app.get("/players/{player_id}/usage")
-async def get_pitch_usage(player_id: str):
+async def get_pitch_usage(player_id: str, season: int = 2026):
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -253,13 +252,13 @@ async def get_pitch_usage(player_id: str):
         sql = """
             SELECT pbp.pitch_type, pbp.stands, pbp.throws
             FROM play_by_play pbp
-            JOIN games g ON pbp.gameID = g.game_id
+            -- (removed games join)
             WHERE pbp.pitcher_ID = ? 
-            AND g.season = 2025
+            AND substr(pbp.gameID,1,4) = CAST(? AS TEXT)
             AND pbp.pitch_type IS NOT NULL
             AND pbp.pitch_type NOT IN ('', '-', 'null')
         """
-        cur.execute(sql, (db_pid,))
+        cur.execute(sql, (db_pid, season))
         rows = cur.fetchall()
         conn.close()
 
@@ -270,7 +269,7 @@ async def get_pitch_usage(player_id: str):
         abb_map = {
             '너클볼': 'KN', '스위퍼': 'ST', '슬라이더': 'SL', '슬러브': 'SV',
             '싱커': 'SI', '직구': 'FF', '체인지업': 'CH', '커브': 'CU',
-            '커터': 'FC', '투심': 'SI', '포크': 'FS'
+            '커터': 'FC', '투심': 'SI', '스플리터': 'FS'
         }
 
         pitch_counts = {} # {type: {L: 0, R: 0, Total: 0}}
@@ -395,247 +394,174 @@ async def get_games(season: int = 2025, limit: int = 50):
     conn.close()
     return {"games": data, "season": season}
 
-# ===== KBO 경기 일정/결과 (Naver 스포츠 API 프록시) =====
-import time as _time
-import concurrent.futures as _futures
 
-_SCHEDULE_CACHE = {}
-_SCHEDULE_TTL = 30  # seconds
+# ==========================================================================
+# DB Explorer - 범용 데이터 탐색 (SQLite를 직접 다루지 않고 웹에서 조회)
+# 테이블/컬럼 이름은 항상 실제 sqlite_master 목록으로 검증하여 SQL 주입을 차단
+# ==========================================================================
 
-
-def _kbo_fetch_json(url, timeout=8):
-    r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=timeout)
-    r.raise_for_status()
-    return r.json()
-
-
-def _kbo_game_meta(game_id):
-    try:
-        return _kbo_fetch_json("https://api-gw.sports.naver.com/schedule/games/" + game_id)
-    except Exception:
-        return None
+def list_table_names(cur):
+    """실제 존재하는 테이블 이름 목록 (sqlite 내부 테이블 제외)"""
+    rows = cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' "
+        "AND name NOT LIKE 'sqlite_%' ORDER BY name"
+    ).fetchall()
+    return [r[0] for r in rows]
 
 
-def _kbo_normalize_game(meta):
-    g = (meta or {}).get("result", {}).get("game", {})
-    if not g:
-        return None
-    status = g.get("statusCode", "") or ""
-    final = status in ("RESULT", "ENDED")
-    live = status in ("LIVE", "PLAYING", "STARTED")
-    show_score = final or live
-    dt = g.get("gameDateTime", "") or ""
-    time_str = dt[11:16] if len(dt) >= 16 else ""
-
-    def _score(v):
+@app.get("/db/tables")
+async def db_tables():
+    """모든 테이블 목록 + 행/컬럼 수"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    result = []
+    for name in list_table_names(cur):
         try:
-            return int(v)
-        except (TypeError, ValueError):
-            return None
+            n = cur.execute(f'SELECT COUNT(*) FROM "{name}"').fetchone()[0]
+        except Exception:
+            n = None
+        cols = cur.execute(f'PRAGMA table_info("{name}")').fetchall()
+        result.append({"name": name, "rows": n, "columns": len(cols)})
+    conn.close()
+    return {"tables": result, "count": len(result)}
 
-    def _team(prefix):
-        return {
-            "name": g.get(prefix + "TeamName", "") or "",
-            "code": g.get(prefix + "TeamCode", "") or "",
-            "emblem": g.get(prefix + "TeamEmblemUrl", "") or "",
-            "score": _score(g.get(prefix + "TeamScore")) if show_score else None,
-            "starter": g.get(prefix + "StarterName", "") or "",
-        }
+
+@app.get("/db/table/{table_name}")
+async def db_table(table_name: str, limit: int = 50, offset: int = 0):
+    """단일 테이블의 스키마 + 페이지네이션된 데이터"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    if table_name not in list_table_names(cur):
+        conn.close()
+        raise HTTPException(status_code=404, detail="Table not found")
+
+    limit = max(1, min(int(limit), 500))   # 한 번에 최대 500행
+    offset = max(0, int(offset))
+
+    cols_info = cur.execute(f'PRAGMA table_info("{table_name}")').fetchall()
+    schema = [{
+        "name": c["name"],
+        "type": c["type"] or "",
+        "pk": bool(c["pk"]),
+        "notnull": bool(c["notnull"]),
+    } for c in cols_info]
+    columns = [c["name"] for c in cols_info]
+
+    total = cur.execute(f'SELECT COUNT(*) FROM "{table_name}"').fetchone()[0]
+    rows = cur.execute(
+        f'SELECT * FROM "{table_name}" LIMIT ? OFFSET ?', (limit, offset)
+    ).fetchall()
+    data = [dict(r) for r in rows]
+    conn.close()
 
     return {
-        "gameId": g.get("gameId"),
-        "datetime": dt,
-        "time": time_str,
-        "stadium": g.get("stadium", "") or "",
-        "statusCode": status,
-        "statusInfo": g.get("statusInfo", "") or "",
-        "currentInning": g.get("currentInning", "") or "",
-        "broadChannel": g.get("broadChannel", "") or "",
-        "cancel": bool(g.get("cancel")),
-        "final": final,
-        "live": live,
-        "showScore": show_score,
-        "winner": g.get("winner", "") or "",
-        "home": _team("home"),
-        "away": _team("away"),
+        "table": table_name,
+        "schema": schema,
+        "columns": columns,
+        "rows": data,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
     }
 
 
-@app.get("/schedule")
-async def get_schedule(date: str = None):
-    """KBO 경기 일정/결과 (Naver 스포츠 API 프록시). date=YYYY-MM-DD (미지정 시 KST 오늘)."""
-    try:
-        if not date:
-            kst = datetime.datetime.utcnow() + datetime.timedelta(hours=9)
-            date = kst.strftime("%Y-%m-%d")
-        target = date.replace("-", "")
+@app.get("/db/table/{table_name}/csv")
+async def db_table_csv(table_name: str, limit: int = 0):
+    """테이블 전체(또는 limit행)를 CSV로 스트리밍 다운로드 (엑셀에서 열기 용)"""
+    # 테이블 검증 + 컬럼 목록 확보 (요청 스레드에서 먼저 처리)
+    conn = get_db_connection()
+    cur = conn.cursor()
+    valid = table_name in list_table_names(cur)
+    cols_info = cur.execute(f'PRAGMA table_info("{table_name}")').fetchall() if valid else []
+    conn.close()
+    if not valid:
+        raise HTTPException(status_code=404, detail="Table not found")
 
-        cached = _SCHEDULE_CACHE.get(date)
-        if cached and (_time.time() - cached[0] < _SCHEDULE_TTL):
-            return cached[1]
+    columns = [c["name"] for c in cols_info]
+    lim = int(limit)
 
-        cal = _kbo_fetch_json(
-            "https://api-gw.sports.naver.com/schedule/calendar"
-            "?upperCategoryId=kbaseball&categoryIds=kbo&date=" + date
-        )
-        gids = []
-        for d in cal.get("result", {}).get("dates", []):
-            dkey = str(d.get("ymd") or d.get("date") or "").replace("-", "")
-            if dkey == target:
-                for gi in (d.get("gameInfos") or []):
-                    if gi.get("gameId"):
-                        gids.append(gi.get("gameId"))
-                break
+    def generate():
+        # 스트리밍 제너레이터는 스레드풀에서 순회되므로 전용 연결을 새로 연다.
+        # check_same_thread=False: next() 호출이 직렬화되어 동시 접근은 없음.
+        gen_conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        gen_conn.row_factory = sqlite3.Row
+        gcur = gen_conn.cursor()
+        query = f'SELECT * FROM "{table_name}"'
+        if lim > 0:
+            query += f' LIMIT {lim}'
+        gcur.execute(query)
+        try:
+            buf = io.StringIO()
+            writer = csv.writer(buf)
+            buf.write("﻿")  # UTF-8 BOM: 엑셀 한글 깨짐 방지
+            writer.writerow(columns)
+            yield buf.getvalue(); buf.seek(0); buf.truncate(0)
+            for r in gcur:  # 커서를 점진적으로 순회 (대용량도 메모리 안전)
+                writer.writerow([r[c] for c in columns])
+                yield buf.getvalue(); buf.seek(0); buf.truncate(0)
+        finally:
+            gen_conn.close()
 
-        games = []
-        if gids:
-            with _futures.ThreadPoolExecutor(max_workers=8) as ex:
-                metas = list(ex.map(_kbo_game_meta, gids))
-            for m in metas:
-                ng = _kbo_normalize_game(m)
-                if ng:
-                    games.append(ng)
-            games.sort(key=lambda x: ((x.get("datetime") or ""), (x.get("gameId") or "")))
-
-        result = {"date": date, "count": len(games), "games": games}
-        _SCHEDULE_CACHE[date] = (_time.time(), result)
-        return result
-    except Exception as e:
-        return {"date": date, "count": 0, "games": [], "error": str(e)}
-
-
-# ===== KBO 팀 순위 (koreabaseball.com 공식 TeamRank.aspx 파싱) =====
-import re as _re
-import html as _html
-
-_STANDINGS_CACHE = {}
-_STANDINGS_TTL = 300  # seconds (순위는 자주 바뀌지 않음)
-
-# KBO 표기명 -> dashboard 엠블럼 코드(assets/logos/{code}.png)
-_KBO_TEAM_CODE = {
-    "LG": "LG", "KT": "KT", "두산": "OB", "삼성": "SS", "KIA": "HT",
-    "롯데": "LT", "SSG": "SK", "NC": "NC", "키움": "WO", "한화": "HH",
-}
-
-
-@app.get("/standings")
-async def get_standings():
-    """KBO 정규시즌 팀 순위 (koreabaseball.com 공식 TeamRank.aspx 스크래핑). 5분 캐시.
-    컬럼: 순위, 팀명, 경기, 승, 패, 무, 승률, 게임차, 최근10경기, 연속, 홈, 방문.
-    순위표만 파싱(summary="순위..."); 팀간승패표(summary="팀간승패표")는 제외."""
-    try:
-        cached = _STANDINGS_CACHE.get("rank")
-        if cached and (_time.time() - cached[0] < _STANDINGS_TTL):
-            return cached[1]
-
-        r = requests.get(
-            "https://www.koreabaseball.com/Record/TeamRank/TeamRank.aspx",
-            headers={"User-Agent": "Mozilla/5.0"}, timeout=8,
-        )
-        r.raise_for_status()
-        page = r.text
-
-        m = _re.search(r'<table[^>]*summary="순위[^"]*"[^>]*>(.*?)</table>', page, _re.S)
-        teams = []
-        if m:
-            tb = _re.search(r'<tbody>(.*?)</tbody>', m.group(1), _re.S)
-            body = tb.group(1) if tb else m.group(1)
-            for tr in _re.findall(r'<tr[^>]*>(.*?)</tr>', body, _re.S):
-                cells = [_html.unescape(_re.sub(r'<[^>]+>', '', c)).strip()
-                         for c in _re.findall(r'<td[^>]*>(.*?)</td>', tr, _re.S)]
-                if len(cells) >= 8 and cells[0].isdigit():
-                    name = cells[1]
-                    teams.append({
-                        "rank": int(cells[0]),
-                        "team": name,
-                        "code": _KBO_TEAM_CODE.get(name, ""),
-                        "games": cells[2],
-                        "wins": cells[3],
-                        "losses": cells[4],
-                        "draws": cells[5],
-                        "pct": cells[6],
-                        "gb": cells[7],
-                        "last10": cells[8] if len(cells) > 8 else "",
-                        "streak": cells[9] if len(cells) > 9 else "",
-                    })
-
-        result = {"count": len(teams), "teams": teams, "source": "koreabaseball.com"}
-        if teams:
-            _STANDINGS_CACHE["rank"] = (_time.time(), result)
-        return result
-    except Exception as e:
-        return {"count": 0, "teams": [], "error": str(e)}
-
-
-# ===== KBO 개인 순위 (타자/투수 Top5 — 대시보드 DB) =====
-_LEADERS_CACHE = {}
-_LEADERS_TTL = 600  # seconds
-
-# 연도별 Statiz 상수: (woba_scale, ebb, single_w, double_w, triple_w, hr_w)
-# 출처: research/data/statiz_yearly_constants.csv. wrc-comparison 페이지와 동일 산식.
-_WOBA_CONST = {
-    2011: (1.081, 0.407, 0.581, 0.972, 1.168, 1.364),
-    2012: (1.134, 0.395, 0.565, 0.947, 1.162, 1.377),
-    2013: (1.235, 0.314, 0.479, 0.821, 1.134, 1.442),
-    2014: (1.094, 0.334, 0.513, 0.853, 1.169, 1.430),
-    2015: (1.107, 0.375, 0.505, 0.808, 1.071, 1.419),
-    2016: (1.095, 0.354, 0.502, 0.859, 1.258, 1.424),
-    2017: (1.097, 0.353, 0.507, 0.869, 1.081, 1.398),
-    2018: (1.074, 0.370, 0.509, 0.831, 1.167, 1.440),
-    2019: (1.196, 0.357, 0.493, 0.802, 1.170, 1.433),
-    2020: (1.109, 0.378, 0.516, 0.879, 1.081, 1.431),
-    2021: (1.169, 0.362, 0.499, 0.867, 1.063, 1.460),
-    2022: (1.211, 0.361, 0.484, 0.804, 1.210, 1.441),
-    2023: (1.198, 0.355, 0.495, 0.865, 1.191, 1.408),
-    2024: (1.093, 0.389, 0.519, 0.852, 1.046, 1.418),
-    2025: (1.173, 0.371, 0.502, 0.801, 1.131, 1.406),
-    2026: (1.191, 0.364, 0.493, 0.802, 1.175, 1.411),
-}
-
-
-def _ip_to_outs(s):
-    """innings_pitched 문자열('68', '68 1/3', '1/3')을 아웃 수로 변환."""
-    whole = 0
-    frac = 0
-    for part in str(s or "").split():
-        if "/" in part:
-            try:
-                frac = int(part.split("/")[0])
-            except ValueError:
-                frac = 0
-        else:
-            try:
-                whole = int(part)
-            except ValueError:
-                whole = 0
-    return whole * 3 + frac
-
-
-def _team_park_factors(cur, ref_season):
-    """games 테이블에서 팀(홈구장) 파크팩터를 나무위키 기본공식으로 계산.
-    PF = (홈경기 양팀합산득점/홈경기수) / (원정경기 양팀합산득점/원정경기수). 1.0=중립."""
-    cur.execute(
-        "SELECT home_team_id AS h, away_team_id AS a, home_score AS hs, away_score AS asc_ "
-        "FROM games WHERE season=? AND home_score IS NOT NULL AND away_score IS NOT NULL",
-        (ref_season,),
+    return StreamingResponse(
+        generate(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{table_name}.csv"'},
     )
-    hr = {}
-    hg = {}
-    rr = {}
-    rg = {}
-    for row in cur.fetchall():
-        d = dict(row)
-        runs = (d["hs"] or 0) + (d["asc_"] or 0)
-        h, a = d["h"], d["a"]
-        hr[h] = hr.get(h, 0) + runs
-        hg[h] = hg.get(h, 0) + 1
-        rr[a] = rr.get(a, 0) + runs
-        rg[a] = rg.get(a, 0) + 1
-    pf = {}
-    for t in hg:
-        if hg[t] and rg.get(t) and rr.get(t):
-            pf[t] = (hr[t] / hg[t]) / (rr[t] / rg[t])
-    return pf
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+# ── AI Proxy ──────────────────────────────────────────────────────────────────
+import os
+from fastapi import Request
+
+def _get_api_keys():
+    """환경변수에서 모든 API 키를 수집 (ANTHROPIC_API_KEY, _2, _3, ...)"""
+    keys = []
+    primary = os.environ.get("ANTHROPIC_API_KEY", "")
+    if primary:
+        keys.append(primary)
+    for i in range(2, 10):
+        k = os.environ.get(f"ANTHROPIC_API_KEY_{i}", "")
+        if k:
+            keys.append(k)
+    return keys
+
+
+def _call_anthropic_with_failover(body, timeout=60):
+    """API 키 failover: 크레딧 소진 시 자동으로 다음 키로 전환"""
+    keys = _get_api_keys()
+    if not keys:
+        raise HTTPException(status_code=500, detail="No API keys configured")
+
+    last_error = None
+    for i, api_key in enumerate(keys):
+        response = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json=body,
+            timeout=timeout,
+        )
+        result = response.json()
+
+        # 크레딧 부족 또는 인증 에러면 다음 키로
+        if response.status_code in (400, 401, 403):
+            err_msg = str(result.get("error", {}).get("message", ""))
+            if "credit" in err_msg.lower() or "api key" in err_msg.lower() or "auth" in err_msg.lower():
+                print(f"API key #{i+1} failed ({err_msg[:60]}), trying next...")
+                last_error = result
+                continue
+
+        return response, result
+
+    # 모든 키 실패
+    return None, last_error
 
 
 def _eff_min_pa(cur, season, requested):
@@ -903,10 +829,256 @@ async def wrc_distribution(season: int, min_pa: int = 100):
     }
 
 
+# ===== KBO 경기 일정/결과 (Naver 스포츠 API 프록시) =====
+import time as _time
+import concurrent.futures as _futures
+
+_SCHEDULE_CACHE = {}
+_SCHEDULE_TTL = 30  # seconds
+
+
+def _kbo_fetch_json(url, timeout=8):
+    r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=timeout)
+    r.raise_for_status()
+    return r.json()
+
+
+def _kbo_game_meta(game_id):
+    try:
+        return _kbo_fetch_json("https://api-gw.sports.naver.com/schedule/games/" + game_id)
+    except Exception:
+        return None
+
+
+def _kbo_normalize_game(meta):
+    g = (meta or {}).get("result", {}).get("game", {})
+    if not g:
+        return None
+    status = g.get("statusCode", "") or ""
+    final = status in ("RESULT", "ENDED")
+    live = status in ("LIVE", "PLAYING", "STARTED")
+    show_score = final or live
+    dt = g.get("gameDateTime", "") or ""
+    time_str = dt[11:16] if len(dt) >= 16 else ""
+
+    def _score(v):
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return None
+
+    def _team(prefix):
+        return {
+            "name": g.get(prefix + "TeamName", "") or "",
+            "code": g.get(prefix + "TeamCode", "") or "",
+            "emblem": g.get(prefix + "TeamEmblemUrl", "") or "",
+            "score": _score(g.get(prefix + "TeamScore")) if show_score else None,
+            "starter": g.get(prefix + "StarterName", "") or "",
+        }
+
+    return {
+        "gameId": g.get("gameId"),
+        "datetime": dt,
+        "time": time_str,
+        "stadium": g.get("stadium", "") or "",
+        "statusCode": status,
+        "statusInfo": g.get("statusInfo", "") or "",
+        "currentInning": g.get("currentInning", "") or "",
+        "broadChannel": g.get("broadChannel", "") or "",
+        "cancel": bool(g.get("cancel")),
+        "final": final,
+        "live": live,
+        "showScore": show_score,
+        "winner": g.get("winner", "") or "",
+        "home": _team("home"),
+        "away": _team("away"),
+    }
+
+
+@app.get("/schedule")
+async def get_schedule(date: str = None):
+    """KBO 경기 일정/결과 (Naver 스포츠 API 프록시). date=YYYY-MM-DD (미지정 시 KST 오늘)."""
+    try:
+        if not date:
+            kst = datetime.datetime.utcnow() + datetime.timedelta(hours=9)
+            date = kst.strftime("%Y-%m-%d")
+        target = date.replace("-", "")
+
+        cached = _SCHEDULE_CACHE.get(date)
+        if cached and (_time.time() - cached[0] < _SCHEDULE_TTL):
+            return cached[1]
+
+        cal = _kbo_fetch_json(
+            "https://api-gw.sports.naver.com/schedule/calendar"
+            "?upperCategoryId=kbaseball&categoryIds=kbo&date=" + date
+        )
+        gids = []
+        for d in cal.get("result", {}).get("dates", []):
+            dkey = str(d.get("ymd") or d.get("date") or "").replace("-", "")
+            if dkey == target:
+                for gi in (d.get("gameInfos") or []):
+                    if gi.get("gameId"):
+                        gids.append(gi.get("gameId"))
+                break
+
+        games = []
+        if gids:
+            with _futures.ThreadPoolExecutor(max_workers=8) as ex:
+                metas = list(ex.map(_kbo_game_meta, gids))
+            for m in metas:
+                ng = _kbo_normalize_game(m)
+                if ng:
+                    games.append(ng)
+            games.sort(key=lambda x: ((x.get("datetime") or ""), (x.get("gameId") or "")))
+
+        result = {"date": date, "count": len(games), "games": games}
+        _SCHEDULE_CACHE[date] = (_time.time(), result)
+        return result
+    except Exception as e:
+        return {"date": date, "count": 0, "games": [], "error": str(e)}
+
+
+# ===== KBO 팀 순위 (koreabaseball.com 공식 TeamRank.aspx 파싱) =====
+import re as _re
+import html as _html
+
+_STANDINGS_CACHE = {}
+_STANDINGS_TTL = 300  # seconds (순위는 자주 바뀌지 않음)
+
+# KBO 표기명 -> dashboard 엠블럼 코드(assets/logos/{code}.png)
+_KBO_TEAM_CODE = {
+    "LG": "LG", "KT": "KT", "두산": "OB", "삼성": "SS", "KIA": "HT",
+    "롯데": "LT", "SSG": "SK", "NC": "NC", "키움": "WO", "한화": "HH",
+}
+
+
+@app.get("/standings")
+async def get_standings():
+    """KBO 정규시즌 팀 순위 (koreabaseball.com 공식 TeamRank.aspx 스크래핑). 5분 캐시.
+    컬럼: 순위, 팀명, 경기, 승, 패, 무, 승률, 게임차, 최근10경기, 연속, 홈, 방문.
+    순위표만 파싱(summary="순위..."); 팀간승패표(summary="팀간승패표")는 제외."""
+    try:
+        cached = _STANDINGS_CACHE.get("rank")
+        if cached and (_time.time() - cached[0] < _STANDINGS_TTL):
+            return cached[1]
+
+        r = requests.get(
+            "https://www.koreabaseball.com/Record/TeamRank/TeamRank.aspx",
+            headers={"User-Agent": "Mozilla/5.0"}, timeout=8,
+        )
+        r.raise_for_status()
+        page = r.text
+
+        m = _re.search(r'<table[^>]*summary="순위[^"]*"[^>]*>(.*?)</table>', page, _re.S)
+        teams = []
+        if m:
+            tb = _re.search(r'<tbody>(.*?)</tbody>', m.group(1), _re.S)
+            body = tb.group(1) if tb else m.group(1)
+            for tr in _re.findall(r'<tr[^>]*>(.*?)</tr>', body, _re.S):
+                cells = [_html.unescape(_re.sub(r'<[^>]+>', '', c)).strip()
+                         for c in _re.findall(r'<td[^>]*>(.*?)</td>', tr, _re.S)]
+                if len(cells) >= 8 and cells[0].isdigit():
+                    name = cells[1]
+                    teams.append({
+                        "rank": int(cells[0]),
+                        "team": name,
+                        "code": _KBO_TEAM_CODE.get(name, ""),
+                        "games": cells[2],
+                        "wins": cells[3],
+                        "losses": cells[4],
+                        "draws": cells[5],
+                        "pct": cells[6],
+                        "gb": cells[7],
+                        "last10": cells[8] if len(cells) > 8 else "",
+                        "streak": cells[9] if len(cells) > 9 else "",
+                    })
+
+        result = {"count": len(teams), "teams": teams, "source": "koreabaseball.com"}
+        if teams:
+            _STANDINGS_CACHE["rank"] = (_time.time(), result)
+        return result
+    except Exception as e:
+        return {"count": 0, "teams": [], "error": str(e)}
+
+
+# ===== KBO 개인 순위 (타자/투수 Top5 — 대시보드 DB) =====
+_LEADERS_CACHE = {}
+_LEADERS_TTL = 600  # seconds
+
+# 연도별 Statiz 상수: (woba_scale, ebb, single_w, double_w, triple_w, hr_w)
+# 출처: research/data/statiz_yearly_constants.csv. wrc-comparison 페이지와 동일 산식.
+_WOBA_CONST = {
+    2011: (1.081, 0.407, 0.581, 0.972, 1.168, 1.364),
+    2012: (1.134, 0.395, 0.565, 0.947, 1.162, 1.377),
+    2013: (1.235, 0.314, 0.479, 0.821, 1.134, 1.442),
+    2014: (1.094, 0.334, 0.513, 0.853, 1.169, 1.430),
+    2015: (1.107, 0.375, 0.505, 0.808, 1.071, 1.419),
+    2016: (1.095, 0.354, 0.502, 0.859, 1.258, 1.424),
+    2017: (1.097, 0.353, 0.507, 0.869, 1.081, 1.398),
+    2018: (1.074, 0.370, 0.509, 0.831, 1.167, 1.440),
+    2019: (1.196, 0.357, 0.493, 0.802, 1.170, 1.433),
+    2020: (1.109, 0.378, 0.516, 0.879, 1.081, 1.431),
+    2021: (1.169, 0.362, 0.499, 0.867, 1.063, 1.460),
+    2022: (1.211, 0.361, 0.484, 0.804, 1.210, 1.441),
+    2023: (1.198, 0.355, 0.495, 0.865, 1.191, 1.408),
+    2024: (1.093, 0.389, 0.519, 0.852, 1.046, 1.418),
+    2025: (1.173, 0.371, 0.502, 0.801, 1.131, 1.406),
+    2026: (1.191, 0.364, 0.493, 0.802, 1.175, 1.411),
+}
+
+
+def _ip_to_outs(s):
+    """innings_pitched 문자열('68', '68 1/3', '1/3')을 아웃 수로 변환."""
+    whole = 0
+    frac = 0
+    for part in str(s or "").split():
+        if "/" in part:
+            try:
+                frac = int(part.split("/")[0])
+            except ValueError:
+                frac = 0
+        else:
+            try:
+                whole = int(part)
+            except ValueError:
+                whole = 0
+    return whole * 3 + frac
+
+
+def _team_park_factors(cur, ref_season):
+    """games 테이블에서 팀(홈구장) 파크팩터를 나무위키 기본공식으로 계산.
+    PF = (홈경기 양팀합산득점/홈경기수) / (원정경기 양팀합산득점/원정경기수). 1.0=중립."""
+    cur.execute(
+        "SELECT home_team_id AS h, away_team_id AS a, home_score AS hs, away_score AS asc_ "
+        "FROM games WHERE season=? AND home_score IS NOT NULL AND away_score IS NOT NULL",
+        (ref_season,),
+    )
+    hr = {}
+    hg = {}
+    rr = {}
+    rg = {}
+    for row in cur.fetchall():
+        d = dict(row)
+        runs = (d["hs"] or 0) + (d["asc_"] or 0)
+        h, a = d["h"], d["a"]
+        hr[h] = hr.get(h, 0) + runs
+        hg[h] = hg.get(h, 0) + 1
+        rr[a] = rr.get(a, 0) + runs
+        rg[a] = rg.get(a, 0) + 1
+    pf = {}
+    for t in hg:
+        if hg[t] and rg.get(t) and rr.get(t):
+            pf[t] = (hr[t] / hg[t]) / (rr[t] / rg[t])
+    return pf
+
+
 @app.get("/leaders")
 async def get_leaders(season: int = None):
-    """KBO 개인 순위 Top5. 타자: 타율/OPS/wRC+, 투수: ERA/이닝/탈삼진.
-    타율·OPS·ERA·wRC+는 규정타석/규정이닝(팀 최다경기 기준) 충족자만; 이닝·탈삼진은 누적. 10분 캐시."""
+    """KBO 개인 순위 Top5. 타자: 타율/출루율/장타율/OPS/wOBA/wRC+, 투수: 경기/이닝/탈삼진/ERA/K%/BB%.
+    타율·출루율·장타율·OPS·wOBA·wRC+·ERA·K%·BB%는 규정타석/규정이닝(팀 최다경기 기준) 충족자만;
+    경기·이닝·탈삼진은 누적. 10분 캐시.
+    wRC+는 wrc-comparison 페이지와 동일 산식(wOBA->wRAA->wRC+)을 현재 데이터로 실시간 계산.
+    파크팩터는 games 테이블에서 자체 계산(나무위키 기본공식); 해당 시즌 경기 미적재 시 직전 보유 시즌 사용."""
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -930,10 +1102,11 @@ async def get_leaders(season: int = None):
         def _code(team):
             return _KBO_TEAM_CODE.get(team or "", "")
 
+        # 타율/출루율/장타율/OPS — 규정타석 충족자, 해당 컬럼 내림차순 Top5
+        # (order_col은 아래 호출부의 내부 화이트리스트 컬럼만 사용)
         def _batter_top(order_col):
             cur.execute(
-                "SELECT p.player_name AS name, p.team_id AS team, "
-                "b.batting_average AS bavg, b.on_base_plus_slugging AS bops "
+                "SELECT p.player_name AS name, p.team_id AS team, b." + order_col + " AS val "
                 "FROM kbo_official_batter_stats b JOIN players p ON b.player_id=p.player_id "
                 "WHERE b.season=? AND b.plate_appearance >= ? "
                 "ORDER BY b." + order_col + " DESC LIMIT 5",
@@ -942,12 +1115,14 @@ async def get_leaders(season: int = None):
             out = []
             for r in cur.fetchall():
                 d = dict(r)
-                val = d["bavg"] if order_col == "batting_average" else d["bops"]
+                val = d["val"]
                 out.append({"name": d["name"], "team": d["team"], "code": _code(d["team"]),
                             "value": ("%.3f" % float(val)) if val is not None else "-"})
             return out
 
         avg_top = _batter_top("batting_average")
+        obp_top = _batter_top("on_base_percentage")
+        slg_top = _batter_top("slugging_percentage")
         ops_top = _batter_top("on_base_plus_slugging")
 
         # wRC+ : wrc_plus_comparison(자체 파크팩터 3년 산식, half-PF)에서 직접 Top5 — 'wRC+ 강건성' 페이지와 동일 출처
@@ -962,9 +1137,23 @@ async def get_leaders(season: int = None):
                     "value": ("%.1f" % d["wrc"]) if d["wrc"] is not None else "-"}
                    for d in (dict(r) for r in cur.fetchall())]
 
+        # wOBA : 동일 wrc_plus_comparison 출처, 규정타석 충족자 Top5
+        cur.execute(
+            "SELECT p.player_name AS name, p.team_id AS team, ROUND(w.wOBA, 3) AS woba "
+            "FROM wrc_plus_comparison w JOIN players p ON p.player_id = CAST(w.batter_ID AS TEXT) "
+            "WHERE w.season=? AND w.PA >= ? "
+            "ORDER BY w.wOBA DESC LIMIT 5",
+            (season, qual_pa),
+        )
+        woba_top = [{"name": d["name"], "team": d["team"], "code": _code(d["team"]),
+                     "value": ("%.3f" % d["woba"]) if d["woba"] is not None else "-"}
+                    for d in (dict(r) for r in cur.fetchall())]
+
+        # 투수 (정렬 기준이 달라 파이썬에서 산정)
         cur.execute(
             "SELECT p.player_name AS name, p.team_id AS team, ps.earned_run_average AS era, "
-            "ps.innings_pitched AS ip, ps.strikeout AS k "
+            "ps.innings_pitched AS ip, ps.strikeout AS k, ps.games AS g, "
+            "ps.strikeout_per_pa AS kpct, ps.base_on_balls_per_pa AS bbpct "
             "FROM kbo_official_pitcher_stats ps JOIN players p ON ps.player_id=p.player_id "
             "WHERE ps.season=?",
             (season,),
@@ -981,17 +1170,38 @@ async def get_leaders(season: int = None):
                 d["_k"] = int(d["k"])
             except (TypeError, ValueError):
                 d["_k"] = 0
+            try:
+                d["_g"] = int(d["g"])
+            except (TypeError, ValueError):
+                d["_g"] = 0
+            try:
+                d["_kpct"] = float(d["kpct"])
+            except (TypeError, ValueError):
+                d["_kpct"] = None
+            try:
+                d["_bbpct"] = float(d["bbpct"])
+            except (TypeError, ValueError):
+                d["_bbpct"] = None
             pit.append(d)
 
         def _pit_entry(d, val):
             return {"name": d["name"], "team": d["team"], "code": _code(d["team"]), "value": val}
 
-        era_top = [_pit_entry(d, "%.2f" % d["_era"])
-                   for d in sorted([x for x in pit if x["_outs"] >= qual_outs], key=lambda x: x["_era"])[:5]]
+        # 경기/이닝/탈삼진: 누적(규정 미적용). ERA/K%/BB%: 규정이닝 충족자.
+        qual_pit = [x for x in pit if x["_outs"] >= qual_outs]
+        g_top = [_pit_entry(d, str(d["_g"]))
+                 for d in sorted(pit, key=lambda x: -x["_g"])[:5]]
         ip_top = [_pit_entry(d, str(d.get("ip") or "").strip())
                   for d in sorted(pit, key=lambda x: -x["_outs"])[:5]]
         k_top = [_pit_entry(d, str(d["_k"]))
                  for d in sorted(pit, key=lambda x: -x["_k"])[:5]]
+        era_top = [_pit_entry(d, "%.2f" % d["_era"])
+                   for d in sorted(qual_pit, key=lambda x: x["_era"])[:5]]
+        # K%는 높을수록, BB%는 낮을수록 상위
+        kpct_top = [_pit_entry(d, "%.1f%%" % d["_kpct"])
+                    for d in sorted([x for x in qual_pit if x["_kpct"] is not None], key=lambda x: -x["_kpct"])[:5]]
+        bbpct_top = [_pit_entry(d, "%.1f%%" % d["_bbpct"])
+                     for d in sorted([x for x in qual_pit if x["_bbpct"] is not None], key=lambda x: x["_bbpct"])[:5]]
 
         conn.close()
         result = {
@@ -999,162 +1209,16 @@ async def get_leaders(season: int = None):
             "qual_pa": qual_pa,
             "qual_ip": team_g,
             "wrc_pf_season": season,
-            "batter": {"avg": avg_top, "ops": ops_top, "wrc": wrc_top},
-            "pitcher": {"era": era_top, "ip": ip_top, "k": k_top},
+            "batter": {"avg": avg_top, "obp": obp_top, "slg": slg_top,
+                       "ops": ops_top, "woba": woba_top, "wrc": wrc_top},
+            "pitcher": {"g": g_top, "ip": ip_top, "k": k_top,
+                        "era": era_top, "kpct": kpct_top, "bbpct": bbpct_top},
         }
         _LEADERS_CACHE[ckey] = (_time.time(), result)
         return result
     except Exception as e:
-        return {"season": season, "batter": {"avg": [], "ops": [], "wrc": []},
-                "pitcher": {"era": [], "ip": [], "k": []}, "error": str(e)}
+        return {"season": season,
+                "batter": {"avg": [], "obp": [], "slg": [], "ops": [], "woba": [], "wrc": []},
+                "pitcher": {"g": [], "ip": [], "k": [], "era": [], "kpct": [], "bbpct": []},
+                "error": str(e)}
 
-
-# ==========================================================================
-# DB Explorer - 범용 데이터 탐색 (SQLite를 직접 다루지 않고 웹에서 조회)
-# 테이블/컬럼 이름은 항상 실제 sqlite_master 목록으로 검증하여 SQL 주입을 차단
-# ==========================================================================
-
-def list_table_names(cur):
-    """실제 존재하는 테이블 이름 목록 (sqlite 내부 테이블 제외)"""
-    rows = cur.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' "
-        "AND name NOT LIKE 'sqlite_%' ORDER BY name"
-    ).fetchall()
-    return [r[0] for r in rows]
-
-
-_COL_DICT = None
-
-def load_col_dict():
-    """데이터 사전(테이블/컬럼 설명·카테고리·업데이트 주기) 로드 (1회 캐시)"""
-    global _COL_DICT
-    if _COL_DICT is None:
-        try:
-            p = Path(__file__).parent.parent / 'database' / 'column_descriptions.json'
-            with open(p, encoding='utf-8') as f:
-                _COL_DICT = json.load(f)
-        except Exception:
-            _COL_DICT = {"categories": [], "tables": {}}
-    return _COL_DICT
-
-
-@app.get("/db/tables")
-async def db_tables():
-    """모든 테이블 목록 + 행/컬럼 수 + 분류/설명/업데이트 주기"""
-    conn = get_db_connection()
-    cur = conn.cursor()
-    meta = load_col_dict()
-    tmeta = meta.get("tables", {})
-    result = []
-    for name in list_table_names(cur):
-        try:
-            n = cur.execute(f'SELECT COUNT(*) FROM "{name}"').fetchone()[0]
-        except Exception:
-            n = None
-        cols = cur.execute(f'PRAGMA table_info("{name}")').fetchall()
-        m = tmeta.get(name, {})
-        result.append({
-            "name": name,
-            "rows": n,
-            "columns": len(cols),
-            "category": m.get("category", ""),
-            "table_desc": m.get("table_desc", ""),
-            "update_freq": m.get("update_freq", ""),
-        })
-    conn.close()
-    return {"tables": result, "count": len(result), "categories": meta.get("categories", [])}
-
-
-@app.get("/db/table/{table_name}")
-async def db_table(table_name: str, limit: int = 50, offset: int = 0):
-    """단일 테이블의 스키마 + 페이지네이션된 데이터"""
-    conn = get_db_connection()
-    cur = conn.cursor()
-    if table_name not in list_table_names(cur):
-        conn.close()
-        raise HTTPException(status_code=404, detail="Table not found")
-
-    limit = max(1, min(int(limit), 500))   # 한 번에 최대 500행
-    offset = max(0, int(offset))
-
-    tmeta = load_col_dict().get("tables", {}).get(table_name, {})
-    cdesc = tmeta.get("columns", {})
-
-    cols_info = cur.execute(f'PRAGMA table_info("{table_name}")').fetchall()
-    schema = [{
-        "name": c["name"],
-        "type": c["type"] or "",
-        "pk": bool(c["pk"]),
-        "notnull": bool(c["notnull"]),
-        "desc": cdesc.get(c["name"], ""),
-    } for c in cols_info]
-    columns = [c["name"] for c in cols_info]
-
-    total = cur.execute(f'SELECT COUNT(*) FROM "{table_name}"').fetchone()[0]
-    rows = cur.execute(
-        f'SELECT * FROM "{table_name}" LIMIT ? OFFSET ?', (limit, offset)
-    ).fetchall()
-    data = [dict(r) for r in rows]
-    conn.close()
-
-    return {
-        "table": table_name,
-        "schema": schema,
-        "columns": columns,
-        "rows": data,
-        "total": total,
-        "limit": limit,
-        "offset": offset,
-        "table_desc": tmeta.get("table_desc", ""),
-        "update_freq": tmeta.get("update_freq", ""),
-        "category": tmeta.get("category", ""),
-    }
-
-
-@app.get("/db/table/{table_name}/csv")
-async def db_table_csv(table_name: str, limit: int = 0):
-    """테이블 전체(또는 limit행)를 CSV로 스트리밍 다운로드 (엑셀에서 열기 용)"""
-    # 테이블 검증 + 컬럼 목록 확보 (요청 스레드에서 먼저 처리)
-    conn = get_db_connection()
-    cur = conn.cursor()
-    valid = table_name in list_table_names(cur)
-    cols_info = cur.execute(f'PRAGMA table_info("{table_name}")').fetchall() if valid else []
-    conn.close()
-    if not valid:
-        raise HTTPException(status_code=404, detail="Table not found")
-
-    columns = [c["name"] for c in cols_info]
-    lim = int(limit)
-
-    def generate():
-        # 스트리밍 제너레이터는 스레드풀에서 순회되므로 전용 연결을 새로 연다.
-        # check_same_thread=False: next() 호출이 직렬화되어 동시 접근은 없음.
-        gen_conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-        gen_conn.row_factory = sqlite3.Row
-        gcur = gen_conn.cursor()
-        query = f'SELECT * FROM "{table_name}"'
-        if lim > 0:
-            query += f' LIMIT {lim}'
-        gcur.execute(query)
-        try:
-            buf = io.StringIO()
-            writer = csv.writer(buf)
-            buf.write("﻿")  # UTF-8 BOM: 엑셀 한글 깨짐 방지
-            writer.writerow(columns)
-            yield buf.getvalue(); buf.seek(0); buf.truncate(0)
-            for r in gcur:  # 커서를 점진적으로 순회 (대용량도 메모리 안전)
-                writer.writerow([r[c] for c in columns])
-                yield buf.getvalue(); buf.seek(0); buf.truncate(0)
-        finally:
-            gen_conn.close()
-
-    return StreamingResponse(
-        generate(),
-        media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{table_name}.csv"'},
-    )
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)

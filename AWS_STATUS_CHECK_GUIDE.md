@@ -22,7 +22,7 @@
 1. [AWS EC2 콘솔](https://console.aws.amazon.com/ec2/home#Instances:) 접속
 2. 로그인 (루트 사용자)
 3. `kbo-stats-server` 인스턴스 클릭
-4. **퍼블릭 IPv4 주소** 복사 (예: `EC2_PUBLIC_IP`)
+4. **퍼블릭 IPv4 주소** 복사 (예: `43.200.4.183`)
 
 **방법 B: 이전에 저장한 IP 사용**
 
@@ -37,7 +37,7 @@
 
 ```powershell
 # 프로젝트 폴더로 이동
-cd C:\Users\USERNAME\Desktop\b_project
+cd C:\Users\김승곤\Desktop\b_project
 
 # 상태 확인 스크립트 실행 (IP 주소 입력)
 .\check_aws_status.ps1 [EC2_IP주소]
@@ -46,7 +46,7 @@ cd C:\Users\USERNAME\Desktop\b_project
 **예시:**
 
 ```powershell
-.\check_aws_status.ps1 EC2_PUBLIC_IP
+.\check_aws_status.ps1 43.200.4.183
 ```
 
 **이 스크립트가 자동으로 확인하는 항목:**
@@ -260,7 +260,7 @@ KBO Stats Auto Collector
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-**수신 이메일:** `your-email@gmail.com`
+**수신 이메일:** `wk120481@gmail.com`
 
 ---
 
@@ -397,7 +397,7 @@ nano ~/b_project/config/email_config.json
 1. **매일 새벽 2시**에 자동으로 크롤링 실행
 2. **크롤링 완료 후** 자동으로 DB 저장
 3. **DB 저장 후** 자동으로 이메일 발송
-4. **이메일 수신:** `your-email@gmail.com`
+4. **이메일 수신:** `wk120481@gmail.com`
 
 ---
 

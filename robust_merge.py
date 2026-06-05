@@ -2,7 +2,7 @@ import sqlite3
 import csv
 from pathlib import Path
 
-PROJECT_ROOT = Path(r'c:\Users\USERNAME\Desktop\b_project')
+PROJECT_ROOT = Path(r'c:\Users\김승곤\Desktop\b_project')
 DB_PATH = PROJECT_ROOT / 'database' / 'kbo_stats.db'
 CSV_DIR = PROJECT_ROOT / 'crawler' / 'save' / '2025'
 

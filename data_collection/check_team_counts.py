@@ -2,7 +2,7 @@ import os
 import pandas as pd
 from collections import Counter
 
-csv_dir = r"C:\Users\USERNAME\Desktop\b_project\crawler\save\2025"
+csv_dir = r"C:\Users\김승곤\Desktop\b_project\crawler\save\2025"
 files = [f for f in os.listdir(csv_dir) if f.endswith(".csv")]
 
 team_games = Counter()

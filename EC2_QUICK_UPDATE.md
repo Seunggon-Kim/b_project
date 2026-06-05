@@ -11,7 +11,7 @@
 또는 직접 명령어:
 
 ```powershell
-ssh -i C:\Users\USERNAME\.ssh\kbo-key.pem ubuntu@EC2_PUBLIC_IP
+ssh -i C:\Users\김승곤\.ssh\kbo-key.pem ubuntu@43.200.4.183
 ```
 
 ### 2단계: EC2에 접속되면 다음 명령어 실행
@@ -43,7 +43,7 @@ exit
 접속 없이 바로 업데이트:
 
 ```powershell
-ssh -i C:\Users\USERNAME\.ssh\kbo-key.pem ubuntu@EC2_PUBLIC_IP "cd ~/b_project && git pull && sudo systemctl restart kbo-dashboard && sudo systemctl status kbo-dashboard --no-pager"
+ssh -i C:\Users\김승곤\.ssh\kbo-key.pem ubuntu@43.200.4.183 "cd ~/b_project && git pull && sudo systemctl restart kbo-dashboard && sudo systemctl status kbo-dashboard --no-pager"
 ```
 
 ---
@@ -55,8 +55,8 @@ ssh -i C:\Users\USERNAME\.ssh\kbo-key.pem ubuntu@EC2_PUBLIC_IP "cd ~/b_project &
 키 파일 권한 문제. 다음 명령어 실행:
 
 ```powershell
-icacls C:\Users\USERNAME\.ssh\kbo-key.pem /inheritance:r
-icacls C:\Users\USERNAME\.ssh\kbo-key.pem /grant:r "$($env:USERNAME):(R)"
+icacls C:\Users\김승곤\.ssh\kbo-key.pem /inheritance:r
+icacls C:\Users\김승곤\.ssh\kbo-key.pem /grant:r "$($env:USERNAME):(R)"
 ```
 
 ### 오류 2: "Connection timed out"
@@ -68,7 +68,7 @@ icacls C:\Users\USERNAME\.ssh\kbo-key.pem /grant:r "$($env:USERNAME):(R)"
 ### 오류 3: "Host key verification failed"
 
 ```powershell
-ssh-keygen -R EC2_PUBLIC_IP
+ssh-keygen -R 43.200.4.183
 ```
 
 ---
@@ -90,10 +90,10 @@ winget install PuTTY.PuTTY
 ### PuTTY 사용법
 
 1. **PuTTY 실행**
-2. **Host Name**: `ubuntu@EC2_PUBLIC_IP`
+2. **Host Name**: `ubuntu@43.200.4.183`
 3. **Port**: `22`
 4. **Connection > SSH > Auth > Credentials**:
-   - Private key file: `C:\Users\USERNAME\.ssh\kbo-key.pem` 선택
+   - Private key file: `C:\Users\김승곤\.ssh\kbo-key.pem` 선택
 5. **Open** 클릭
 
 ---
@@ -105,7 +105,7 @@ winget install PuTTY.PuTTY
 git push
 
 # 2. EC2 접속
-ssh -i C:\Users\USERNAME\.ssh\kbo-key.pem ubuntu@EC2_PUBLIC_IP
+ssh -i C:\Users\김승곤\.ssh\kbo-key.pem ubuntu@43.200.4.183
 
 # 3. EC2에서 실행
 cd ~/b_project
@@ -123,7 +123,7 @@ exit
 
 ## 🌐 브라우저에서 확인
 
-<http://EC2_PUBLIC_IP:8502>
+<http://43.200.4.183:8502>
 
 투수 통계 탭이 보이면 성공! 🎉
 
@@ -143,11 +143,11 @@ notepad $PROFILE
 
 ```powershell
 function ec2 {
-    ssh -i C:\Users\USERNAME\.ssh\kbo-key.pem ubuntu@EC2_PUBLIC_IP
+    ssh -i C:\Users\김승곤\.ssh\kbo-key.pem ubuntu@43.200.4.183
 }
 
 function ec2-update {
-    ssh -i C:\Users\USERNAME\.ssh\kbo-key.pem ubuntu@EC2_PUBLIC_IP "cd ~/b_project && git pull && sudo systemctl restart kbo-dashboard"
+    ssh -i C:\Users\김승곤\.ssh\kbo-key.pem ubuntu@43.200.4.183 "cd ~/b_project && git pull && sudo systemctl restart kbo-dashboard"
 }
 ```
 

@@ -1,11 +1,9 @@
 # EC2 SSH 접속 스크립트 (PuTTY 불필요!)
 # PowerShell에서 바로 실행 가능
 
-# 접속 정보는 gitignore된 로컬 설정에서 로드 (공개 repo엔 placeholder만)
-$cfg = Join-Path $PSScriptRoot 'ec2_config.local.ps1'
-if (-not (Test-Path $cfg)) { Write-Host "[ERROR] ec2_config.local.ps1 없음 — IP/키 설정 필요" -ForegroundColor Red; exit 1 }
-. $cfg
-$USER = $EC2_USER
+$EC2_IP = "43.200.4.183"
+$KEY_PATH = "C:\Users\김승곤\.ssh\kbo-key.pem"
+$USER = "ubuntu"
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "EC2 서버 접속 준비" -ForegroundColor Cyan

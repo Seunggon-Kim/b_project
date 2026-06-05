@@ -11,14 +11,14 @@
 ### 방법 2: 직접 명령어
 
 ```powershell
-ssh -i C:\Users\USERNAME\.ssh\kbo-key.pem ubuntu@EC2_PUBLIC_IP "cd ~/b_project && git pull && sudo systemctl restart kbo-dashboard"
+ssh -i C:\Users\김승곤\.ssh\kbo-key.pem ubuntu@43.200.4.183 "cd ~/b_project && git pull && sudo systemctl restart kbo-dashboard"
 ```
 
 ### 방법 3: 접속 후 수동 실행
 
 ```powershell
 # 1. EC2 접속
-ssh -i C:\Users\USERNAME\.ssh\kbo-key.pem ubuntu@EC2_PUBLIC_IP
+ssh -i C:\Users\김승곤\.ssh\kbo-key.pem ubuntu@43.200.4.183
 
 # 2. 접속 후 실행
 cd ~/b_project
@@ -42,6 +42,6 @@ EC2 인스턴스가 중지되었을 수 있습니다.
 
 브라우저에서 접속:
 
-- <http://EC2_PUBLIC_IP:8502/Player_Stats>
+- <http://43.200.4.183:8502/Player_Stats>
 
 투수 통계 탭이 보이면 성공! 🎉

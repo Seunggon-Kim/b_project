@@ -1,0 +1,1140 @@
+"""
+KBO Baseball Analytics API
+FastAPI backend for JavaScript dashboard - v1.0.7
+Fixed: API endpoint for Pitch Usage, encoding issues, and indentation
+"""
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+import sqlite3
+from pathlib import Path
+from typing import Optional, List
+import datetime
+import traceback
+import sys
+import requests
+import xml.etree.ElementTree as ET
+import urllib.parse
+
+app = FastAPI(title="KBO Analytics API", version="1.0.7")
+
+# CORS Settings
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# DB Path
+DB_PATH = Path(__file__).parent.parent / 'database' / 'kbo_stats.db'
+
+def get_db_connection():
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        return conn
+    except Exception as e:
+        print(f"DB Connection Error: {e}")
+        raise
+
+def robust_player_lookup(cur, player_id):
+    """Try lookup by string and then int if numeric"""
+    cur.execute("SELECT * FROM players WHERE player_id = ?", (player_id,))
+    row = cur.fetchone()
+    if row: return dict(row)
+    
+    if str(player_id).isdigit():
+        cur.execute("SELECT * FROM players WHERE player_id = ?", (int(player_id),))
+        row = cur.fetchone()
+        if row: return dict(row)
+    return None
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": str(exc),
+            "type": type(exc).__name__,
+            "traceback": traceback.format_exc()
+        }
+    )
+
+@app.get("/")
+async def root():
+    return {"message": "KBO Baseball Analytics API Active", "version": "1.0.7"}
+
+@app.get("/dashboard/stats")
+async def get_dashboard_stats():
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) as count FROM games")
+        games = cur.fetchone()['count']
+        cur.execute("SELECT COUNT(*) as count FROM players")
+        players = cur.fetchone()['count']
+        cur.execute("SELECT COUNT(*) as count FROM teams")
+        teams = cur.fetchone()['count']
+        conn.close()
+        return {"games": games, "players": players, "teams": teams, "status": "ok"}
+    except Exception as e:
+        return {"error": str(e), "traceback": traceback.format_exc()}
+
+@app.get("/teams")
+async def get_teams():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM teams ORDER BY team_name")
+    teams = [dict(row) for row in cur.fetchall()]
+    conn.close()
+    return {"teams": teams}
+
+@app.get("/players/search")
+async def search_players(q: str):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM players WHERE player_name LIKE ? LIMIT 50", (f'%{q}%',))
+    players = [dict(row) for row in cur.fetchall()]
+    conn.close()
+    return {"players": players}
+
+@app.get("/players/{player_id}")
+async def get_player_info(player_id: str):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    player = robust_player_lookup(cur, player_id)
+    if not player:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Player not found")
+    
+    db_pid = player['player_id']
+    
+    # Batter Seasons
+    cur.execute("SELECT *, (single + double + triple + home_run) as hits, on_base_plus_slugging as ops FROM kbo_official_batter_stats WHERE player_id = ? ORDER BY season DESC", (db_pid,))
+    player['batter_seasons'] = [dict(r) for r in cur.fetchall()]
+    
+    # Pitcher Seasons
+    cur.execute("SELECT *, walks_plus_hits_per_inning_pitched as whip FROM kbo_official_pitcher_stats WHERE player_id = ? ORDER BY season DESC", (db_pid,))
+    player['pitcher_seasons'] = [dict(r) for r in cur.fetchall()]
+    
+    conn.close()
+    return player
+
+@app.get("/players/{player_id}/news")
+async def get_player_news(player_id: str):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("""
+            SELECT p.player_name, t.team_name 
+            FROM players p 
+            LEFT JOIN teams t ON p.team_id = t.team_id 
+            WHERE p.player_id = ?
+        """, (player_id,))
+        player = cur.fetchone()
+        if not player and str(player_id).isdigit():
+            cur.execute("""
+                SELECT p.player_name, t.team_name 
+                FROM players p 
+                LEFT JOIN teams t ON p.team_id = t.team_id 
+                WHERE p.player_id = ?
+            """, (int(player_id),))
+            player = cur.fetchone()
+             
+        conn.close()
+        
+        if not player:
+            return {"player_name": "Unknown", "news": [], "error": "Player lookup failed"}
+            
+        player_name = player['player_name']
+        team_name = player['team_name'] or ""
+        
+        query = f"{team_name} {player_name} 야구"
+        encoded_query = urllib.parse.quote(query)
+        url = f"https://news.google.com/rss/search?q={encoded_query}&hl=ko&gl=KR&ceid=KR:ko"
+        
+        response = requests.get(url, timeout=5)
+        root = ET.fromstring(response.text)
+        items = root.findall('.//item')
+        
+        news_items = []
+        for item in items[:5]:
+            title_node = item.find('title')
+            title = title_node.text if title_node is not None else "No Title"
+            link_node = item.find('link')
+            link = link_node.text if link_node is not None else "#"
+            source_node = item.find('source')
+            press = source_node.text if source_node is not None else "Google News"
+            
+            if " - " in title:
+                title = title.rsplit(" - ", 1)[0]
+                
+            news_items.append({
+                "title": title,
+                "link": link,
+                "press": press,
+                "desc": "",
+                "thumb": None
+            })
+            
+        return {"player_name": player_name, "news": news_items}
+        
+    except Exception as e:
+        print(f"Google News fetch error for {player_id}: {str(e)}")
+        return {"player_name": "Error", "news": [], "error": str(e)}
+
+@app.get("/players/{player_id}/arsenal")
+async def get_pitch_arsenal(player_id: str):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        player = robust_player_lookup(cur, player_id)
+        if not player:
+            conn.close()
+            return {"error": "Player not found"}
+        
+        db_pid = player['player_id']
+
+        sql = """
+            SELECT pbp.pitch_type, pbp.px, pbp.pz, pbp.speed, pbp.pitch_result, pbp.pfx_x, pbp.pfx_z
+            FROM play_by_play pbp
+            JOIN games g ON pbp.gameID = g.game_id
+            WHERE pbp.pitcher_ID = ? 
+            AND g.season = 2025
+            AND pbp.px IS NOT NULL 
+            AND pbp.pz IS NOT NULL
+            AND pbp.pitch_type IS NOT NULL
+            AND pbp.pitch_type NOT IN ('', '-', 'null')
+        """
+        cur.execute(sql, (db_pid,))
+        rows = cur.fetchall()
+        
+        arsenal = [dict(row) for row in rows]
+        conn.close()
+        
+        return {"player_id": player_id, "arsenal": arsenal, "count": len(arsenal)}
+        
+    except Exception as e:
+        print(f"Arsenal fetch error for {player_id}: {str(e)}")
+        return {"error": str(e), "traceback": traceback.format_exc()}
+
+@app.get("/players/{player_id}/usage")
+async def get_pitch_usage(player_id: str):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        player = robust_player_lookup(cur, player_id)
+        if not player:
+            conn.close()
+            return {"error": "Player not found"}
+        
+        db_pid = player['player_id']
+
+        sql = """
+            SELECT pbp.pitch_type, pbp.stands, pbp.throws
+            FROM play_by_play pbp
+            JOIN games g ON pbp.gameID = g.game_id
+            WHERE pbp.pitcher_ID = ? 
+            AND g.season = 2025
+            AND pbp.pitch_type IS NOT NULL
+            AND pbp.pitch_type NOT IN ('', '-', 'null')
+        """
+        cur.execute(sql, (db_pid,))
+        rows = cur.fetchall()
+        conn.close()
+
+        if not rows:
+            return {"player_id": player_id, "usage": []}
+
+        # Abbreviation Map
+        abb_map = {
+            '너클볼': 'KN', '스위퍼': 'ST', '슬라이더': 'SL', '슬러브': 'SV',
+            '싱커': 'SI', '직구': 'FF', '체인지업': 'CH', '커브': 'CU',
+            '커터': 'FC', '투심': 'SI', '포크': 'FS'
+        }
+
+        pitch_counts = {} # {type: {L: 0, R: 0, Total: 0}}
+        total_l = 0
+        total_r = 0
+        total_all = 0
+
+        for row in rows:
+            ptype = row['pitch_type']
+            stands = row['stands'] or '우'
+            throws = row['throws'] or '우'
+            
+            actual_stands = stands
+            if stands == '양':
+                if throws == '우': actual_stands = '좌'
+                elif throws == '좌': actual_stands = '우'
+            
+            if ptype not in pitch_counts:
+                pitch_counts[ptype] = {'L': 0, 'R': 0, 'Total': 0}
+            
+            pitch_counts[ptype]['Total'] += 1
+            total_all += 1
+            
+            if actual_stands == '좌':
+                pitch_counts[ptype]['L'] += 1
+                total_l += 1
+            else: # Defaults to R if not L
+                pitch_counts[ptype]['R'] += 1
+                total_r += 1
+
+        result = []
+        for ptype, counts in pitch_counts.items():
+            result.append({
+                "pitch_type": ptype,
+                "abbreviation": abb_map.get(ptype, ptype[:2].upper()),
+                "count": counts['Total'],
+                "usage_all": round(counts['Total'] / total_all * 100, 1) if total_all > 0 else 0,
+                "usage_l": round(counts['L'] / total_l * 100, 1) if total_l > 0 else 0,
+                "usage_r": round(counts['R'] / total_r * 100, 1) if total_r > 0 else 0
+            })
+        
+        result.sort(key=lambda x: x['usage_all'], reverse=True)
+
+        return {
+            "player_id": player_id,
+            "total_pitches": total_all,
+            "total_l": total_l,
+            "total_r": total_r,
+            "usage": result
+        }
+    except Exception as e:
+        return {"error": str(e), "traceback": traceback.format_exc()}
+
+@app.get("/stats/batters")
+async def get_batter_stats(season: int = 2025, limit: int = 100, min_pa: int = 0, team_ids: str = None):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    query = """
+        SELECT b.*, p.player_name, p.team_id, p.position, b.on_base_plus_slugging as ops 
+        FROM kbo_official_batter_stats b
+        JOIN players p ON b.player_id = p.player_id
+        WHERE b.season = ? AND b.plate_appearance >= ?
+    """
+    params = [season, min_pa]
+    
+    if team_ids:
+        ids = [t.strip() for t in team_ids.split(',') if t.strip()]
+        if ids:
+            placeholders = ','.join(['?'] * len(ids))
+            query += f" AND p.team_id IN ({placeholders})"
+            params.extend(ids)
+        
+    query += " ORDER BY b.batting_average DESC LIMIT ?"
+    params.append(limit)
+    
+    cur.execute(query, tuple(params))
+    data = [dict(row) for row in cur.fetchall()]
+    conn.close()
+    return {"batters": data, "season": season, "min_pa": min_pa, "team_ids": team_ids}
+
+@app.get("/stats/pitchers")
+async def get_pitcher_stats(season: int = 2025, limit: int = 100, min_ip: int = 0, team_ids: str = None):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    query = """
+        SELECT ps.*, p.player_name, p.team_id, ps.walks_plus_hits_per_inning_pitched as whip
+        FROM kbo_official_pitcher_stats ps
+        JOIN players p ON ps.player_id = p.player_id
+        WHERE ps.season = ? AND CAST(ps.innings_pitched AS REAL) >= ?
+    """
+    params = [season, min_ip]
+    
+    if team_ids:
+        ids = [t.strip() for t in team_ids.split(',') if t.strip()]
+        if ids:
+            placeholders = ','.join(['?'] * len(ids))
+            query += f" AND p.team_id IN ({placeholders})"
+            params.extend(ids)
+        
+    query += " ORDER BY ps.earned_run_average ASC LIMIT ?"
+    params.append(limit)
+    
+    cur.execute(query, tuple(params))
+    data = [dict(row) for row in cur.fetchall()]
+    conn.close()
+    return {"pitchers": data, "season": season, "min_ip": min_ip, "team_ids": team_ids}
+
+@app.get("/games")
+async def get_games(season: int = 2025, limit: int = 50):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT g.*, g.game_date as date, t1.team_name as home_team, t2.team_name as away_team
+        FROM games g
+        LEFT JOIN teams t1 ON g.home_team_id = t1.team_id
+        LEFT JOIN teams t2 ON g.away_team_id = t2.team_id
+        WHERE g.season = ?
+        ORDER BY g.game_date DESC
+        LIMIT ?
+    """, (season, limit))
+    data = [dict(row) for row in cur.fetchall()]
+    conn.close()
+    return {"games": data, "season": season}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+# ── AI Proxy ──────────────────────────────────────────────────────────────────
+import os
+from fastapi import Request
+
+def _get_api_keys():
+    """환경변수에서 모든 API 키를 수집 (ANTHROPIC_API_KEY, _2, _3, ...)"""
+    keys = []
+    primary = os.environ.get("ANTHROPIC_API_KEY", "")
+    if primary:
+        keys.append(primary)
+    for i in range(2, 10):
+        k = os.environ.get(f"ANTHROPIC_API_KEY_{i}", "")
+        if k:
+            keys.append(k)
+    return keys
+
+
+def _call_anthropic_with_failover(body, timeout=60):
+    """API 키 failover: 크레딧 소진 시 자동으로 다음 키로 전환"""
+    keys = _get_api_keys()
+    if not keys:
+        raise HTTPException(status_code=500, detail="No API keys configured")
+
+    last_error = None
+    for i, api_key in enumerate(keys):
+        response = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json=body,
+            timeout=timeout,
+        )
+        result = response.json()
+
+        # 크레딧 부족 또는 인증 에러면 다음 키로
+        if response.status_code in (400, 401, 403):
+            err_msg = str(result.get("error", {}).get("message", ""))
+            if "credit" in err_msg.lower() or "api key" in err_msg.lower() or "auth" in err_msg.lower():
+                print(f"API key #{i+1} failed ({err_msg[:60]}), trying next...")
+                last_error = result
+                continue
+
+        return response, result
+
+    # 모든 키 실패
+    return None, last_error
+
+
+@app.post("/ai-proxy")
+async def ai_proxy(request: Request):
+    """Anthropic API 프록시 - API 키 failover 지원"""
+    body = await request.json()
+    response, result = _call_anthropic_with_failover(body, timeout=120)
+
+    if response is None:
+        return JSONResponse(content=result or {"error": "All API keys exhausted"}, status_code=402)
+
+    return JSONResponse(content=result, status_code=response.status_code)
+
+
+@app.post("/github-dispatch")
+async def github_dispatch(request: Request):
+    """GitHub Actions workflow 트리거 프록시"""
+    gh_token = os.environ.get("GITHUB_PAT", "")
+    if not gh_token:
+        raise HTTPException(status_code=500, detail="GitHub PAT not configured on server")
+
+    body = await request.json()
+    report_date = body.get("report_date", "")
+
+    if not report_date:
+        raise HTTPException(status_code=400, detail="report_date is required")
+
+    response = requests.post(
+        "https://api.github.com/repos/evan-dk/dk-analytics/dispatches",
+        headers={
+            "Authorization": f"token {gh_token}",
+            "Accept": "application/vnd.github.v3+json",
+            "Content-Type": "application/json",
+        },
+        json={
+            "event_type": "generate-weekly-report",
+            "client_payload": {"report_date": report_date}
+        },
+        timeout=30,
+    )
+
+    if response.status_code == 204:
+        return {"status": "ok", "message": f"Report generation triggered for {report_date}"}
+    else:
+        return JSONResponse(content={"error": response.text}, status_code=response.status_code)
+
+
+# ── Weekly Report Generation ─────────────────────────────────────────────────
+from fastapi import BackgroundTasks
+import asyncio
+
+@app.post("/weekly-report/generate")
+async def generate_report_endpoint(request: Request, background_tasks: BackgroundTasks):
+    """주간 리포트 생성 트리거"""
+    body = await request.json()
+    report_date = body.get("report_date", "")
+    if not report_date:
+        raise HTTPException(status_code=400, detail="report_date is required")
+
+    from weekly_report.report_generator import generate_weekly_report, get_status
+    current = get_status(report_date)
+    if current.get("status") == "running":
+        return {"status": "already_running", "report_date": report_date}
+
+    log_request(report_date, "running")
+    background_tasks.add_task(generate_weekly_report, report_date)
+    return {"status": "accepted", "report_date": report_date}
+
+
+@app.get("/weekly-report/status/{report_date}")
+async def report_status(report_date: str):
+    """리포트 생성 상태 조회"""
+    from weekly_report.report_generator import get_status
+    return get_status(report_date)
+
+
+# ── Request Log ──────────────────────────────────────────────────────────────
+import json as _json
+from datetime import datetime as _dt
+
+_LOG_FILE = "/home/ubuntu/b_project/weekly_report_log.json"
+
+def _load_log():
+    try:
+        with open(_LOG_FILE, "r") as f:
+            return _json.load(f)
+    except (FileNotFoundError, _json.JSONDecodeError):
+        return []
+
+def _save_log(entries):
+    with open(_LOG_FILE, "w") as f:
+        _json.dump(entries, f, ensure_ascii=False, indent=2)
+
+def log_request(report_date: str, status: str):
+    entries = _load_log()
+    entries.insert(0, {
+        "timestamp": _dt.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "report_date": report_date,
+        "status": status,
+    })
+    _save_log(entries[:100])  # 최근 100건만 유지
+
+def update_log_status(report_date: str, status: str, error: str = None):
+    entries = _load_log()
+    for entry in entries:
+        if entry["report_date"] == report_date and entry["status"] == "running":
+            entry["status"] = status
+            if error:
+                entry["error"] = error
+            break
+    _save_log(entries)
+
+@app.get("/weekly-report/logs")
+async def get_report_logs():
+    """리포트 생성 요청 로그 조회"""
+    return _load_log()
+
+# ── Prompt Editor ────────────────────────────────────────────────────────────
+_PROMPTS_DIR = "/home/ubuntu/b_project/weekly_report/prompts"
+
+@app.get("/weekly-report/prompt")
+async def get_prompt():
+    """프롬프트 파일 내용 조회"""
+    result = {}
+    for name in ["system_prompt.txt", "report_format.txt"]:
+        filepath = os.path.join(_PROMPTS_DIR, name)
+        if os.path.exists(filepath):
+            with open(filepath, "r", encoding="utf-8") as f:
+                result[name] = f.read()
+    return result
+
+@app.put("/weekly-report/prompt")
+async def update_prompt(request: Request):
+    """프롬프트 파일 업데이트"""
+    body = await request.json()
+    filename = body.get("filename", "")
+    content = body.get("content", "")
+    if filename not in ["system_prompt.txt", "report_format.txt"]:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if not content:
+        raise HTTPException(status_code=400, detail="content is required")
+
+    import shutil
+    filepath = os.path.join(_PROMPTS_DIR, filename)
+    backup = filepath + ".bak"
+    if os.path.exists(filepath):
+        shutil.copy2(filepath, backup)
+
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(content)
+
+    # 이력 저장
+    history = _load_prompt_history()
+    history.insert(0, {
+        "timestamp": _dt.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "filename": filename,
+        "content": content,
+    })
+    history = history[:50]
+    _save_prompt_history(history)
+
+    return {"status": "saved", "filename": filename}
+
+@app.post("/weekly-report/prompt/restore")
+async def restore_prompt(request: Request):
+    """백업에서 프롬프트 복원"""
+    body = await request.json()
+    filename = body.get("filename", "")
+    if filename not in ["system_prompt.txt", "report_format.txt"]:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    filepath = os.path.join(_PROMPTS_DIR, filename)
+    backup = filepath + ".bak"
+    if not os.path.exists(backup):
+        raise HTTPException(status_code=404, detail="No backup found")
+    import shutil
+    shutil.copy2(backup, filepath)
+    return {"status": "restored", "filename": filename}
+
+
+# ── Prompt History ───────────────────────────────────────────────────────────
+_PROMPT_HISTORY_FILE = "/home/ubuntu/b_project/weekly_report_prompt_history.json"
+
+def _load_prompt_history():
+    try:
+        with open(_PROMPT_HISTORY_FILE, "r", encoding="utf-8") as f:
+            return _json.load(f)
+    except (FileNotFoundError, _json.JSONDecodeError):
+        return []
+
+def _save_prompt_history(entries):
+    with open(_PROMPT_HISTORY_FILE, "w", encoding="utf-8") as f:
+        _json.dump(entries, f, ensure_ascii=False, indent=2)
+
+@app.get("/weekly-report/prompt/history")
+async def get_prompt_history():
+    return _load_prompt_history()
+
+
+# ── Prompt Snapshot ──────────────────────────────────────────────────────────
+_SNAPSHOT_DIR = "/home/ubuntu/b_project/weekly_report/prompt_snapshots"
+
+@app.get("/weekly-report/prompt-snapshot/{report_filename}")
+async def get_prompt_snapshot(report_filename: str):
+    """리포트 생성 시 사용된 프롬프트 조회"""
+    # weekly_report_2026-03-30_022051.md -> 2026-03-30_022051
+    key = report_filename.replace("weekly_report_", "").replace(".md", "")
+
+    # 해당 키와 매칭되는 스냅샷 찾기
+    if not os.path.exists(_SNAPSHOT_DIR):
+        raise HTTPException(status_code=404, detail="No snapshots found")
+
+    # 정확히 매칭되는 파일 찾기 (날짜_시간)
+    for fname in sorted(os.listdir(_SNAPSHOT_DIR), reverse=True):
+        if fname.endswith(".json") and fname.replace(".json", "") == key:
+            with open(os.path.join(_SNAPSHOT_DIR, fname), "r", encoding="utf-8") as f:
+                return _json.load(f)
+
+    # 날짜만 매칭 (타임스탬프 없는 레거시 파일용)
+    date_part = key[:10] if len(key) >= 10 else key
+    for fname in sorted(os.listdir(_SNAPSHOT_DIR), reverse=True):
+        if fname.startswith(date_part):
+            with open(os.path.join(_SNAPSHOT_DIR, fname), "r", encoding="utf-8") as f:
+                return _json.load(f)
+
+    raise HTTPException(status_code=404, detail="Snapshot not found for this report")
+
+
+@app.get("/weekly-report/prompt/original")
+async def get_original_prompt():
+    """원본(기본) 프롬프트 조회"""
+    result = {}
+    for name in ["system_prompt.original.txt", "report_format.original.txt"]:
+        filepath = os.path.join(_PROMPTS_DIR, name)
+        if os.path.exists(filepath):
+            with open(filepath, "r", encoding="utf-8") as f:
+                result[name.replace(".original", "")] = f.read()
+    return result
+
+@app.get("/weekly-report/files")
+async def list_report_files():
+    """GitHub API를 인증된 토큰으로 호출하여 리포트 파일 목록 반환"""
+    gh_token = os.environ.get("GITHUB_PAT", "")
+    headers = {"Accept": "application/vnd.github.v3+json"}
+    if gh_token:
+        headers["Authorization"] = f"token {gh_token}"
+
+    import re
+    pattern = re.compile(r'^weekly_report_\d{4}-\d{2}-\d{2}(_\d{6})?\.md$')
+
+    response = requests.get(
+        "https://api.github.com/repos/evan-dk/dk-analytics/contents/weekly-report",
+        headers=headers,
+        timeout=30,
+    )
+    if not response.ok:
+        raise HTTPException(status_code=response.status_code, detail=response.text)
+
+    files = response.json()
+    result = [
+        {"name": f["name"], "sha": f["sha"], "size": f["size"]}
+        for f in files
+        if isinstance(f, dict) and pattern.match(f.get("name", ""))
+    ]
+    result.sort(key=lambda x: x["name"], reverse=True)
+    return result
+
+
+# -- Customer Stats (BigQuery aggregation only, no AI) -------------------------
+from google.cloud import bigquery as _bq
+import re as _re
+
+def _add_suite_filter(sql, suite_param_name="suite"):
+    """SQL에 suite 필터를 서브쿼리로 감싸서 확실하게 적용."""
+    sql = sql.rstrip().rstrip(";")
+    order_match = _re.search(r"\nORDER BY[^\n]*(?:\n|$)", sql)
+    if order_match:
+        sql = sql[:order_match.start()]
+    return f"SELECT * FROM (\n{sql}\n) _sub WHERE _sub.suite_number = @{suite_param_name}"
+
+
+@app.get("/customer-transactions")
+async def get_customer_transactions(suite: str = None, case_num: int = None):
+    """고객별 거래 내역 조회 (CSV 다운로드용)."""
+    if not suite or len(suite) > 10:
+        raise HTTPException(status_code=400, detail="Valid suite parameter is required")
+
+    import decimal as _decimal
+    from weekly_report.bigquery_client import get_client
+
+    SQL_DIR = "/home/ubuntu/dk-analytics/scripts/sql"
+    client = get_client()
+
+    cases = [case_num] if case_num and 1 <= case_num <= 5 else list(range(1, 6))
+    all_rows = []
+    for cn in cases:
+        sql_path = os.path.join(SQL_DIR, f"case_{cn}.sql")
+        if not os.path.exists(sql_path):
+            continue
+        with open(sql_path, "r", encoding="utf-8") as f:
+            sql = f.read()
+        sql = _add_suite_filter(sql)
+        try:
+            job_config = _bq.QueryJobConfig(
+                query_parameters=[_bq.ScalarQueryParameter("suite", "STRING", suite)]
+            )
+            rows = client.query(sql, job_config=job_config).result()
+            for row in rows:
+                d = dict(row)
+                for k, v in d.items():
+                    if hasattr(v, "isoformat"):
+                        d[k] = v.isoformat()
+                    elif isinstance(v, _decimal.Decimal):
+                        d[k] = float(v)
+                all_rows.append(d)
+        except Exception as e:
+            print(f"Case {cn} query error for suite {suite}: {e}")
+            continue
+
+    all_rows.sort(key=lambda x: x.get("ship_date_kst", "") or "", reverse=True)
+    return {"suite": suite, "count": len(all_rows), "transactions": all_rows}
+
+
+@app.post("/customer-stats")
+async def customer_stats(request: Request):
+    """고객별 차트 데이터: BigQuery 집계만 (AI 호출 없음, 무료, 빠름)"""
+    import decimal as _decimal
+    from collections import defaultdict
+
+    body = await request.json()
+    suite = body.get("suite", "")
+    year_filter = body.get("year", "all")  # "all", "2025", "2026"
+    if not suite or len(suite) > 10:
+        raise HTTPException(status_code=400, detail="Valid suite is required")
+
+    from weekly_report.bigquery_client import get_client
+
+    SQL_DIR = "/home/ubuntu/dk-analytics/scripts/sql"
+    client = get_client()
+
+    all_rows = []
+    for case_num in range(1, 6):
+        sql_path = os.path.join(SQL_DIR, f"case_{case_num}.sql")
+        if not os.path.exists(sql_path):
+            continue
+        with open(sql_path, "r", encoding="utf-8") as f:
+            sql = f.read()
+        sql = _add_suite_filter(sql)
+        try:
+            job_config = _bq.QueryJobConfig(
+                query_parameters=[_bq.ScalarQueryParameter("suite", "STRING", suite)]
+            )
+            rows = client.query(sql, job_config=job_config).result()
+            for row in rows:
+                d = dict(row)
+                for k, v in d.items():
+                    if hasattr(v, "isoformat"):
+                        d[k] = v.isoformat()
+                    elif isinstance(v, _decimal.Decimal):
+                        d[k] = float(v)
+                all_rows.append(d)
+        except Exception as e:
+            print(f"Stats Case {case_num} error for {suite}: {e}")
+            continue
+
+    # 연도 필터 적용
+    if year_filter and year_filter != "all":
+        all_rows = [r for r in all_rows if (r.get("ship_date_kst") or "").startswith(year_filter)]
+
+    if not all_rows:
+        raise HTTPException(status_code=404, detail="No transaction data found")
+
+    def sf(v):
+        try:
+            return float(v) if v is not None else 0.0
+        except (ValueError, TypeError):
+            return 0.0
+
+    total_rows = len(all_rows)
+    total_profit = sum(sf(r.get("profit_krw")) for r in all_rows)
+    total_revenue = sum(sf(r.get("revenue_krw", 0)) for r in all_rows)
+
+    # Case별
+    case_agg = defaultdict(lambda: {"count": 0, "profit": 0, "revenue": 0})
+    for r in all_rows:
+        c = str(r.get("profit_case", "?"))
+        case_agg[c]["count"] += 1
+        case_agg[c]["profit"] += sf(r.get("profit_krw"))
+        case_agg[c]["revenue"] += sf(r.get("revenue_krw", 0))
+
+    # 월별
+    monthly = defaultdict(lambda: {"count": 0, "profit": 0, "revenue": 0})
+    for r in all_rows:
+        m = (r.get("ship_date_kst") or "")[:7]
+        if m:
+            monthly[m]["count"] += 1
+            monthly[m]["profit"] += sf(r.get("profit_krw"))
+            monthly[m]["revenue"] += sf(r.get("revenue_krw", 0))
+
+    # 국가별 Top 10
+    country_agg = defaultdict(lambda: {"count": 0, "profit": 0})
+    for r in all_rows:
+        cn = r.get("country_name_kr") or r.get("country_name") or r.get("country_code") or "?"
+        country_agg[cn]["count"] += 1
+        country_agg[cn]["profit"] += sf(r.get("profit_krw"))
+    country_top = sorted(country_agg.items(), key=lambda x: x[1]["count"], reverse=True)[:10]
+
+    # 판매자 Top 10
+    merchant_agg = defaultdict(lambda: {"count": 0, "revenue": 0})
+    for r in all_rows:
+        m = r.get("package_merchant_clean") or r.get("package_merchant") or ""
+        if m:
+            merchant_agg[m]["count"] += 1
+            merchant_agg[m]["revenue"] += sf(r.get("revenue_krw", 0))
+    merchant_top = sorted(merchant_agg.items(), key=lambda x: x[1]["count"], reverse=True)[:10]
+
+    # 캐리어별
+    carrier_agg = defaultdict(lambda: {"count": 0, "profit": 0})
+    for r in all_rows:
+        cr = r.get("carrier") or "?"
+        carrier_agg[cr]["count"] += 1
+        carrier_agg[cr]["profit"] += sf(r.get("profit_krw"))
+
+    # 수익 구성
+    total_goods_profit = sum(sf(r.get("goods_profit_krw")) for r in all_rows)
+    total_warehouse_profit = sum(sf(r.get("warehouse_profit_krw")) for r in all_rows)
+    total_shipping_profit = sum(sf(r.get("shipping_profit_krw")) for r in all_rows)
+
+    # 상품 카테고리 Top 5
+    cat_agg = defaultdict(int)
+    for r in all_rows:
+        cat = r.get("product_category")
+        if cat:
+            cat_agg[cat] += 1
+    cat_top = sorted(cat_agg.items(), key=lambda x: x[1], reverse=True)[:5]
+
+    # 적자 패키지
+    negative_count = sum(1 for r in all_rows if sf(r.get("profit_krw")) < 0)
+
+    return {
+        "suite": suite,
+        "total": {
+            "rows": total_rows,
+            "revenue": round(total_revenue),
+            "profit": round(total_profit),
+            "profit_per_pkg": round(total_profit / total_rows) if total_rows else 0,
+            "negative_count": negative_count,
+            "negative_pct": round(negative_count / total_rows * 100, 1) if total_rows else 0,
+        },
+        "profit_composition": {
+            "goods": round(total_goods_profit),
+            "warehouse": round(total_warehouse_profit),
+            "shipping": round(total_shipping_profit),
+        },
+        "by_case": {c: v for c, v in sorted(case_agg.items())},
+        "by_month": {m: v for m, v in sorted(monthly.items())},
+        "by_country": [{"name": c, **v} for c, v in country_top],
+        "by_merchant": [{"name": m, **v} for m, v in merchant_top],
+        "by_carrier": {c: v for c, v in sorted(carrier_agg.items(), key=lambda x: x[1]["count"], reverse=True)},
+        "by_category": [{"name": c, "count": n} for c, n in cat_top],
+    }
+
+
+# ===== wRC+ Park Factor Robustness (v6) =====
+
+@app.get("/wrc/seasons")
+async def wrc_seasons(min_pa: int = 300):
+    """시즌 목록 + summary (≥min_pa, default 300)"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT season,
+               COUNT(*) AS n_batters,
+               ROUND(AVG(wRC_home), 2) AS mean_wrc_home,
+               ROUND(AVG(wRC_half), 2) AS mean_wrc_half,
+               ROUND(AVG(wRC_weighted), 2) AS mean_wrc_weighted,
+               ROUND(AVG(wRC_weighted - wRC_half), 2) AS mean_delta
+        FROM wrc_plus_comparison
+        WHERE PA >= ?
+        GROUP BY season
+        ORDER BY season
+    """, (min_pa,))
+    rows = [dict(r) for r in cur.fetchall()]
+    for r in rows:
+        cur.execute("SELECT (wRC_weighted - wRC_half) FROM wrc_plus_comparison WHERE PA>=? AND season=?",
+                    (min_pa, r["season"]))
+        deltas = [x[0] for x in cur.fetchall()]
+        n = len(deltas)
+        if n > 1:
+            mean = sum(deltas) / n
+            r["std_delta"] = round((sum((d - mean)**2 for d in deltas) / (n-1))**0.5, 2)
+        else:
+            r["std_delta"] = None
+    conn.close()
+    return rows
+
+
+@app.get("/wrc/by-stadium")
+async def wrc_by_stadium(season: int, min_pa: int = 300):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT wpf.home_stadium AS home_stadium,
+               sd.primary_team,
+               COUNT(*) AS n,
+               ROUND(AVG(wpf.home_run_pf), 1) AS home_pf,
+               ROUND(AVG(wpf.wpf_run), 1) AS weighted_pf,
+               ROUND(AVG(wrc.wRC_home), 2) AS mean_home,
+               ROUND(AVG(wrc.wRC_half), 2) AS mean_half,
+               ROUND(AVG(wrc.wRC_weighted), 2) AS mean_weighted,
+               ROUND(AVG(wrc.wRC_weighted - wrc.wRC_half), 2) AS delta_mean
+        FROM wrc_plus_comparison wrc
+        JOIN weighted_pf_by_batter_season wpf
+          ON wrc.batter_ID = wpf.batter_ID AND wrc.season = wpf.season
+        LEFT JOIN stadium_dim sd ON sd.full_name = wpf.home_stadium
+        WHERE wrc.PA >= ? AND wrc.season = ?
+        GROUP BY wpf.home_stadium, sd.primary_team
+        ORDER BY mean_half DESC
+    """, (min_pa, season))
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+@app.get("/wrc/leaderboard")
+async def wrc_leaderboard(season: int, sort: str = "half", n: int = 50, min_pa: int = 300):
+    sort_col = {"home": "wRC_home", "half": "wRC_half", "weighted": "wRC_weighted",
+                "wOBA": "wOBA"}.get(sort, "wRC_half")
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(f"""
+        SELECT wrc.batter_ID,
+               COALESCE(b.player_name, 'Unknown') AS player_name,
+               b.player_team,
+               wrc.season, wrc.PA,
+               ROUND(wrc.wOBA, 4) AS wOBA,
+               ROUND(wrc.wRAA_FG, 1) AS wRAA,
+               wpf.home_stadium,
+               ROUND(wpf.home_run_pf, 1) AS home_pf,
+               ROUND(wpf.wpf_run, 1) AS weighted_pf,
+               ROUND(wrc.wRC_home, 1) AS wRC_home,
+               ROUND(wrc.wRC_half, 1) AS wRC_half,
+               ROUND(wrc.wRC_weighted, 1) AS wRC_weighted,
+               ROUND(wrc.wRC_weighted - wrc.wRC_half, 2) AS delta_methods
+        FROM wrc_plus_comparison wrc
+        JOIN weighted_pf_by_batter_season wpf
+          ON wrc.batter_ID = wpf.batter_ID AND wrc.season = wpf.season
+        LEFT JOIN kbo_official_batter_stats b
+          ON b.player_id = CAST(wrc.batter_ID AS TEXT) AND b.season = wrc.season
+        WHERE wrc.season = ? AND wrc.PA >= ?
+        ORDER BY {sort_col} DESC
+        LIMIT ?
+    """, (season, min_pa, n))
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+@app.get("/wrc/top-changes")
+async def wrc_top_changes(season: int, direction: str = "up", n: int = 15, min_pa: int = 300):
+    if direction not in ("up", "down"):
+        raise HTTPException(status_code=400, detail="direction must be 'up' or 'down'")
+    order = "DESC" if direction == "up" else "ASC"
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(f"""
+        SELECT wrc.batter_ID,
+               COALESCE(b.player_name, 'Unknown') AS player_name,
+               b.player_team,
+               wrc.season, wrc.PA,
+               wpf.home_stadium,
+               ROUND(wpf.home_run_pf, 1) AS home_pf,
+               ROUND(wpf.wpf_run, 1) AS weighted_pf,
+               ROUND(wrc.wRC_half, 1) AS wRC_half,
+               ROUND(wrc.wRC_weighted, 1) AS wRC_weighted,
+               ROUND(wrc.wRC_weighted - wrc.wRC_half, 2) AS delta
+        FROM wrc_plus_comparison wrc
+        JOIN weighted_pf_by_batter_season wpf
+          ON wrc.batter_ID = wpf.batter_ID AND wrc.season = wpf.season
+        LEFT JOIN kbo_official_batter_stats b
+          ON b.player_id = CAST(wrc.batter_ID AS TEXT) AND b.season = wrc.season
+        WHERE wrc.season = ? AND wrc.PA >= ?
+        ORDER BY (wrc.wRC_weighted - wrc.wRC_half) {order}
+        LIMIT ?
+    """, (season, min_pa, n))
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+@app.get("/wrc/batter/{batter_id}")
+async def wrc_batter_history(batter_id: str):
+    """특정 batter 시즌별 history + Stadium별 PA 분포"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT wrc.season, wrc.PA,
+               wpf.home_stadium,
+               ROUND(wrc.wOBA, 4) AS wOBA,
+               ROUND(wrc.wRAA_FG, 1) AS wRAA,
+               ROUND(wpf.home_run_pf, 1) AS home_pf,
+               ROUND(wpf.wpf_run, 1) AS weighted_pf,
+               ROUND(wrc.wRC_home, 1) AS wRC_home,
+               ROUND(wrc.wRC_half, 1) AS wRC_half,
+               ROUND(wrc.wRC_weighted, 1) AS wRC_weighted,
+               COALESCE(b.player_name, 'Unknown') AS player_name,
+               b.player_team,
+               b.batting_average AS AVG, b.on_base_percentage AS OBP,
+               b.slugging_percentage AS SLG, b.on_base_plus_slugging AS OPS
+        FROM wrc_plus_comparison wrc
+        JOIN weighted_pf_by_batter_season wpf
+          ON wrc.batter_ID = wpf.batter_ID AND wrc.season = wpf.season
+        LEFT JOIN kbo_official_batter_stats b
+          ON b.player_id = CAST(wrc.batter_ID AS TEXT) AND b.season = wrc.season
+        WHERE wrc.batter_ID = ?
+        ORDER BY wrc.season
+    """, (batter_id,))
+    history = [dict(r) for r in cur.fetchall()]
+
+    cur.execute("""
+        SELECT substr(gameID,1,4) AS season, stadium, COUNT(*) AS pa
+        FROM play_by_play
+        WHERE batter_ID = ? AND substr(gameID,1,4) BETWEEN '2015' AND '2026'
+        GROUP BY season, stadium
+        ORDER BY season, pa DESC
+    """, (batter_id,))
+    stadium_dist = [dict(r) for r in cur.fetchall()]
+
+    name = history[0]["player_name"] if history else None
+    conn.close()
+    return {"batter_id": batter_id, "player_name": name,
+            "history": history, "stadium_distribution": stadium_dist}
+
+
+@app.get("/wrc/batter-search")
+async def wrc_batter_search(q: str = "", season: int = 0):
+    """batter 이름·ID 검색 (부분 일치). season=0이면 모든 시즌."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    where = "b.player_name LIKE ?"
+    params = [f"%{q}%"]
+    if season:
+        where += " AND b.season = ?"
+        params.append(season)
+    cur.execute(f"""
+        SELECT DISTINCT b.player_id, b.player_name, b.player_team, b.season
+        FROM kbo_official_batter_stats b
+        WHERE {where}
+        ORDER BY b.season DESC, b.player_name
+        LIMIT 50
+    """, params)
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+@app.get("/wrc/distribution")
+async def wrc_distribution(season: int, min_pa: int = 100):
+    """시즌 wRC+ 분포 (히스토그램, 5점 bin) + percentile"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT wRC_home, wRC_half, wRC_weighted
+        FROM wrc_plus_comparison
+        WHERE PA >= ? AND season = ?
+    """, (min_pa, season))
+    rows = cur.fetchall()
+    conn.close()
+
+    def stats(values):
+        v = sorted(x for x in values if x is not None)
+        n = len(v)
+        if n == 0:
+            return {"n": 0}
+        return {
+            "n": n,
+            "mean": round(sum(v) / n, 2),
+            "p10": round(v[int(n * 0.10)], 1),
+            "median": round(v[n // 2], 1),
+            "p90": round(v[int(n * 0.90)], 1),
+        }
+
+    def histogram(values, bin_size=5, min_v=40, max_v=200):
+        bins = {}
+        for v in values:
+            if v is None:
+                continue
+            b = max(min_v, min(max_v, int(v // bin_size) * bin_size))
+            bins[b] = bins.get(b, 0) + 1
+        return [{"bin": k, "count": v} for k, v in sorted(bins.items())]
+
+    home = [r[0] for r in rows]
+    half = [r[1] for r in rows]
+    weighted = [r[2] for r in rows]
+
+    return {
+        "season": season, "n": len(rows), "min_pa": min_pa,
+        "stats": {"home": stats(home), "half": stats(half), "weighted": stats(weighted)},
+        "histogram": {
+            "home": histogram(home),
+            "half": histogram(half),
+            "weighted": histogram(weighted),
+        },
+    }

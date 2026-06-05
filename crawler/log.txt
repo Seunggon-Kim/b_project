@@ -37,3 +37,142 @@ Skipped games(already exists) : 0
 Broken games(bad data) : 3
 ====================================
 Total 1589.84 sec elapsed with 721 games
+
+
+====================================
+Current Time : 2026-05-07T03:56:07.506956
+====================================
+====================================
+Start date : 20240301
+End date : 20241130
+Successfully downloaded games : 735
+Skipped games(already exists) : 0
+Broken games(bad data) : 2
+====================================
+Total 1295.39 sec elapsed with 738 games
+
+
+====================================
+Current Time : 2026-05-07T04:18:44.250984
+====================================
+====================================
+Start date : 20230301
+End date : 20231130
+Successfully downloaded games : 734
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 1342.45 sec elapsed with 735 games
+
+
+====================================
+Current Time : 2026-05-07T04:42:07.821093
+====================================
+====================================
+Start date : 20220301
+End date : 20221130
+Successfully downloaded games : 736
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 1353.79 sec elapsed with 737 games
+
+
+====================================
+Current Time : 2026-05-07T05:05:43.211446
+====================================
+====================================
+Start date : 20210301
+End date : 20211130
+Successfully downloaded games : 732
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 1345.07 sec elapsed with 732 games
+
+
+====================================
+Current Time : 2026-05-07T05:29:09.772576
+====================================
+====================================
+Start date : 20200301
+End date : 20201130
+Successfully downloaded games : 733
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 1238.44 sec elapsed with 733 games
+
+
+====================================
+Current Time : 2026-05-07T05:50:49.110642
+====================================
+====================================
+Start date : 20190301
+End date : 20191130
+Successfully downloaded games : 730
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 1258.49 sec elapsed with 731 games
+
+
+====================================
+Current Time : 2026-05-07T06:12:48.449130
+====================================
+====================================
+Start date : 20180301
+End date : 20181130
+Successfully downloaded games : 736
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 1342.95 sec elapsed with 737 games
+
+
+====================================
+Current Time : 2026-05-07T06:36:12.049876
+====================================
+====================================
+Start date : 20170301
+End date : 20171130
+Successfully downloaded games : 733
+Skipped games(already exists) : 0
+Broken games(bad data) : 1
+====================================
+Total 1334.46 sec elapsed with 735 games
+
+
+====================================
+Current Time : 2026-05-07T06:59:27.358085
+====================================
+====================================
+Start date : 20160301
+End date : 20161130
+Successfully downloaded games : 733
+Skipped games(already exists) : 0
+Broken games(bad data) : 1
+====================================
+Total 1283.81 sec elapsed with 735 games
+
+
+====================================
+Current Time : 2026-05-07T07:21:52.409115
+====================================
+=== gameID : 44441007SKWO0
+====================================
+AssertionError
+^^^^^
+assert False
+File "/home/ubuntu/b_project/crawler/download.py", line 1046, in download_pbp_files
+download_pbp_files(start_date, end_date, playoff=args.playoff,
+File "/home/ubuntu/b_project/crawler/pbp.py", line 168, in <module>
+Traceback (most recent call last):
+
+During handling of the above exception, another exception occurred:
+
+ValueError: invalid literal for int() with base 10: 'KWO0'
+^^^^^^^^^^^^^
+gid_year = int(gid[-4:])
+File "/home/ubuntu/b_project/crawler/download.py", line 952, in download_pbp_files
+Traceback (most recent call last):

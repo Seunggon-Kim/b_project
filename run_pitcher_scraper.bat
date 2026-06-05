@@ -1,7 +1,7 @@
 @echo off
 REM KBO 투수 통계 수집 배치 파일
 
-cd /d C:\Users\USERNAME\Desktop\b_project
+cd /d C:\Users\김승곤\Desktop\b_project
 
 echo ========================================
 echo KBO 투수 통계 수집 시작

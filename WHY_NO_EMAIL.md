@@ -45,7 +45,7 @@
 
 ### ✅ 3단계: 스팸함 확인
 
-**받는 이메일:** `your-email@gmail.com`
+**받는 이메일:** `wk120481@gmail.com`
 
 1. Gmail 접속
 2. **스팸함** 확인
@@ -61,7 +61,7 @@ EC2가 실행 중이고, 시간도 지났는데 메일이 안 왔다면:
 
 ```powershell
 # EC2 IP 주소를 실제 IP로 변경
-ssh -i $HOME\.ssh\kbo-key.pem ubuntu@EC2_PUBLIC_IP
+ssh -i $HOME\.ssh\kbo-key.pem ubuntu@43.200.4.183
 ```
 
 **SSH 키 파일이 없다면:**
@@ -155,7 +155,7 @@ nano ~/b_project/config/email_config.json
     "smtp_port": 587,
     "sender_email": "본인이메일@gmail.com",
     "sender_password": "앱비밀번호16자리",
-    "receiver_email": "your-email@gmail.com"
+    "receiver_email": "wk120481@gmail.com"
 }
 
 # Ctrl+O → Enter → Ctrl+X

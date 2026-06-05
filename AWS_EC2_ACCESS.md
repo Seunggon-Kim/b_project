@@ -34,7 +34,7 @@ https://ap-northeast-2.console.aws.amazon.com/ec2/home?region=ap-northeast-2#Ins
    - 상태가 "running"으로 변경될 때까지
 
 5. **IP 주소 확인**
-   - 퍼블릭 IPv4 주소: EC2_PUBLIC_IP (변경 여부 확인)
+   - 퍼블릭 IPv4 주소: 43.200.4.183 (변경 여부 확인)
 
 ---
 
@@ -43,7 +43,7 @@ https://ap-northeast-2.console.aws.amazon.com/ec2/home?region=ap-northeast-2#Ins
 EC2가 "running" 상태가 되면:
 
 ```powershell
-ssh -i C:\Users\USERNAME\.ssh\kbo-key.pem ubuntu@EC2_PUBLIC_IP
+ssh -i C:\Users\김승곤\.ssh\kbo-key.pem ubuntu@43.200.4.183
 ```
 
 접속 성공하면 다음 명령어 실행:
@@ -62,7 +62,7 @@ exit
 브라우저에서:
 
 ```
-http://EC2_PUBLIC_IP:8502/Player_Stats
+http://43.200.4.183:8502/Player_Stats
 ```
 
 투수 통계 탭 클릭 → 281명 투수 데이터 확인! 🎉
@@ -89,7 +89,7 @@ http://EC2_PUBLIC_IP:8502/Player_Stats
 │ ┌─ 인스턴스 ───────────────────┐       │
 │ │ ☑ kbo-dashboard              │       │
 │ │   상태: running              │       │
-│ │   IP: EC2_PUBLIC_IP           │       │
+│ │   IP: 43.200.4.183           │       │
 │ └───────────────────────────────┘       │
 └─────────────────────────────────────────┘
 ```

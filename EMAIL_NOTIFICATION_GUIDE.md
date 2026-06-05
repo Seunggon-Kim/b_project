@@ -166,7 +166,7 @@ pitcher_count = len(pd.read_csv(latest_pitcher))
 
 ## 📧 수신자 설정
 
-현재 수신자: `your-email@gmail.com` (고정)
+현재 수신자: `wk120481@gmail.com` (고정)
 
 변경하려면 `data_collection/email_notifier.py` 파일의 33번째 줄 수정:
 

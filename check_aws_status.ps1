@@ -16,7 +16,7 @@ if ($EC2_IP -eq "") {
     Write-Host "❌ EC2 IP 주소를 입력하세요." -ForegroundColor Red
     Write-Host ""
     Write-Host "사용법:" -ForegroundColor Yellow
-    Write-Host "  .\check_aws_status.ps1 EC2_PUBLIC_IP" -ForegroundColor Yellow
+    Write-Host "  .\check_aws_status.ps1 43.200.4.183" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "EC2 IP 주소 확인 방법:" -ForegroundColor Yellow
     Write-Host "  1. AWS 콘솔 접속 (https://aws.amazon.com/ko/)" -ForegroundColor Gray

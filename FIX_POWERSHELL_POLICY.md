@@ -40,7 +40,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 아무 메시지 없이 프롬프트로 돌아오면 성공입니다!
 
 ```powershell
-PS C:\Users\USERNAME\Desktop\b_project>
+PS C:\Users\김승곤\Desktop\b_project>
 ```
 
 ---
@@ -67,7 +67,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 .\get_ec2_ip.ps1
 
 # 3. 상태 확인 (IP 주소 변경 필요)
-.\check_aws_status.ps1 EC2_PUBLIC_IP
+.\check_aws_status.ps1 43.200.4.183
 ```
 
 ---

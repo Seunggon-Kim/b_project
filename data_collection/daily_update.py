@@ -7,7 +7,7 @@
     
 Windows Task Scheduler 설정:
     - 매일 오전 6시 실행 (전날 경기 종료 후)
-    - 작업: python C:\Users\USERNAME\Desktop\b_project\data_collection\daily_update.py
+    - 작업: python C:\Users\김승곤\Desktop\b_project\data_collection\daily_update.py
 """
 
 import subprocess

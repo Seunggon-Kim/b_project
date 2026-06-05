@@ -117,8 +117,8 @@ Win + R → taskschd.msc
 
 - 새로 만들기 클릭
 - 동작: 프로그램 시작
-- 프로그램/스크립트: `C:\Users\USERNAME\Desktop\b_project\selenium_daily_collector.bat`
-- 시작 위치: `C:\Users\USERNAME\Desktop\b_project`
+- 프로그램/스크립트: `C:\Users\김승곤\Desktop\b_project\selenium_daily_collector.bat`
+- 시작 위치: `C:\Users\김승곤\Desktop\b_project`
 
 **조건 탭:**
 
@@ -146,7 +146,7 @@ selenium_daily_collector.bat 실행
     ↓
 3. DB 저장
     ↓
-4. 이메일 발송 (your-email@gmail.com)
+4. 이메일 발송 (wk120481@gmail.com)
     ↓
 완료
 ```

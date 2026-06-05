@@ -26,7 +26,7 @@
 
 4. **퍼블릭 IP 확인**
    - 인스턴스 클릭
-   - "퍼블릭 IPv4 주소" 복사 (예: EC2_PUBLIC_IP)
+   - "퍼블릭 IPv4 주소" 복사 (예: 43.200.4.183)
 
 ---
 
@@ -70,7 +70,7 @@ ssh -i $HOME\.ssh\kbo-key.pem ubuntu@[퍼블릭_IP]
 **예시:**
 
 ```powershell
-ssh -i $HOME\.ssh\kbo-key.pem ubuntu@EC2_PUBLIC_IP
+ssh -i $HOME\.ssh\kbo-key.pem ubuntu@43.200.4.183
 ```
 
 처음 접속 시 `Are you sure you want to continue connecting?` → `yes` 입력
@@ -160,7 +160,7 @@ python data_collection/email_notifier.py --success --batter 450 --pitcher 300 --
 **확인 사항:**
 
 - "✅ 이메일 발송 완료" 메시지가 나타나는지 확인
-- 실제로 이메일이 도착하는지 확인 (<your-email@gmail.com>)
+- 실제로 이메일이 도착하는지 확인 (<wk120481@gmail.com>)
 
 ---
 

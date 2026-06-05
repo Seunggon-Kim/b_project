@@ -342,4 +342,4 @@ SQLite DB (database/kbo_stats.db)
 - 투수 데이터 캐시 TTL 설정 (5분)
 - EC2 자동 크롤링 스케줄 최적화 (매일 오전 2시)
 
-**관리자**: USERNAME
+**관리자**: 김승곤

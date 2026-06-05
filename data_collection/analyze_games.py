@@ -6,7 +6,7 @@ from pathlib import Path
 from collections import Counter
 import re
 
-CSV_DIR = Path('C:/Users/USERNAME/Desktop/b_project/crawler/save/2025')
+CSV_DIR = Path('C:/Users/김승곤/Desktop/b_project/crawler/save/2025')
 
 # 모든 CSV 파일 목록
 csv_files = list(CSV_DIR.glob('*.csv'))

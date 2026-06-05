@@ -66,7 +66,7 @@ https://console.aws.amazon.com/ec2/home#Instances:
 ```
 ✅ 인스턴스 ID: i-0123456789abcdef0
 ✅ 인스턴스 유형: t3.micro
-✅ 퍼블릭 IPv4 주소: EC2_PUBLIC_IP ← 이것이 필요!
+✅ 퍼블릭 IPv4 주소: 43.200.4.183 ← 이것이 필요!
 ✅ 프라이빗 IPv4 주소: 172.31.x.x
 ✅ 가용 영역: ap-northeast-2a
 ✅ 상태: 실행 중
@@ -81,7 +81,7 @@ https://console.aws.amazon.com/ec2/home#Instances:
 1. **인스턴스 클릭** (체크박스가 아닌 이름 클릭)
 2. 하단 **"세부 정보"** 탭에서 찾기:
    - **퍼블릭 IPv4 주소** 또는 **Public IPv4 address**
-   - 예: `EC2_PUBLIC_IP`
+   - 예: `43.200.4.183`
 
 3. **IP 주소 복사**
    - IP 주소 옆의 복사 아이콘 클릭
@@ -94,14 +94,14 @@ https://console.aws.amazon.com/ec2/home#Instances:
 IP 주소를 복사했다면, PowerShell에서 다음 명령어 실행:
 
 ```powershell
-cd C:\Users\USERNAME\Desktop\b_project
+cd C:\Users\김승곤\Desktop\b_project
 .\check_aws_status.ps1 [복사한_IP_주소]
 ```
 
 **예시:**
 
 ```powershell
-.\check_aws_status.ps1 EC2_PUBLIC_IP
+.\check_aws_status.ps1 43.200.4.183
 ```
 
 ---
@@ -144,7 +144,7 @@ cd C:\Users\USERNAME\Desktop\b_project
 │ 인스턴스                                                          │
 ├──────────────────────────────────────────────────────────────────┤
 │ ☑ 이름              인스턴스 ID    상태      퍼블릭 IPv4 주소    │
-│ ☐ kbo-stats-server  i-0abc123...  실행 중   EC2_PUBLIC_IP       │
+│ ☐ kbo-stats-server  i-0abc123...  실행 중   43.200.4.183       │
 └──────────────────────────────────────────────────────────────────┘
 ```
 

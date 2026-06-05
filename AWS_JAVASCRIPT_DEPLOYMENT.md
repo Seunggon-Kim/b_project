@@ -28,7 +28,7 @@
 로컬 PC (PowerShell)에서:
 
 ```powershell
-cd C:\Users\USERNAME\Desktop\b_project
+cd C:\Users\김승곤\Desktop\b_project
 
 # 변경사항 확인
 git status
@@ -50,7 +50,7 @@ git push origin main
 # https://ap-northeast-2.console.aws.amazon.com/ec2/home?region=ap-northeast-2#Instances:
 
 # SSH 접속
-ssh -i C:\Users\USERNAME\.ssh\kbo-key.pem ubuntu@[퍼블릭_IP]
+ssh -i C:\Users\김승곤\.ssh\kbo-key.pem ubuntu@[퍼블릭_IP]
 ```
 
 ### Step 3: 기존 Streamlit 서비스 중지

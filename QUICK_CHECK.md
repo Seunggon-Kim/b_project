@@ -17,14 +17,14 @@
 ### 2️⃣ 상태 확인 스크립트 실행
 
 ```powershell
-cd C:\Users\USERNAME\Desktop\b_project
+cd C:\Users\김승곤\Desktop\b_project
 .\check_aws_status.ps1 [EC2_IP주소]
 ```
 
 **예시:**
 
 ```powershell
-.\check_aws_status.ps1 EC2_PUBLIC_IP
+.\check_aws_status.ps1 43.200.4.183
 ```
 
 ### 3️⃣ 결과 확인

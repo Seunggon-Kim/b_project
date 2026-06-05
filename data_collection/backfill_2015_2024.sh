@@ -17,7 +17,7 @@ LOG="$LOG_DIR/backfill_$(date +%Y%m%d_%H%M%S).log"
 echo "===== 백필 시작 $(date) =====" | tee -a "$LOG"
 
 # 최신 → 과거 (중간 중단 시 최신 데이터부터 확보)
-for YEAR in 2024 2023 2022 2021 2020 2019 2018 2017 2016 2015; do
+for YEAR in 2023 2022 2021 2020 2019 2018 2017 2016 2015; do
   echo "" | tee -a "$LOG"
   echo "########## ${YEAR} 시즌 시작 $(date) ##########" | tee -a "$LOG"
 

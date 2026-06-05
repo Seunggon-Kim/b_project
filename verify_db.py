@@ -1,6 +1,6 @@
 import sqlite3
 
-db_path = r'c:\Users\USERNAME\Desktop\b_project\database\kbo_stats.db'
+db_path = r'c:\Users\김승곤\Desktop\b_project\database\kbo_stats.db'
 
 def check_db():
     try:

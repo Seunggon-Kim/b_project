@@ -65,7 +65,7 @@ python email_notifier.py --success --batter 450
 python email_notifier.py --fail --error "오류 메시지"
 ```
 
-**수신**: `your-email@gmail.com`
+**수신**: `wk120481@gmail.com`
 
 ---
 

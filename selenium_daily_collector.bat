@@ -2,7 +2,7 @@
 REM KBO 타자 통계 자동 수집 배치 파일
 REM Windows 작업 스케줄러에서 매일 오후 3시 실행
 
-cd /d C:\Users\USERNAME\Desktop\b_project
+cd /d C:\Users\김승곤\Desktop\b_project
 
 echo ========================================
 echo KBO 타자 통계 자동 수집 시작

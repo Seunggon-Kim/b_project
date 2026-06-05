@@ -30,7 +30,7 @@ logging.basicConfig(
 )
 
 # 수신자 이메일 (고정)
-RECIPIENT_EMAIL = "your-email@gmail.com"
+RECIPIENT_EMAIL = "wk120481@gmail.com"
 
 
 def load_email_config():

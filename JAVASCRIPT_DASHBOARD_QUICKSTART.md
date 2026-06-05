@@ -42,14 +42,14 @@ b_project/
 1. **터미널 1 - API 서버**
 
    ```bash
-   cd c:\Users\USERNAME\Desktop\b_project
+   cd c:\Users\김승곤\Desktop\b_project
    py -3 api\main.py
    ```
 
 2. **터미널 2 - 웹 서버**
 
    ```bash
-   cd c:\Users\USERNAME\Desktop\b_project\dashboard_js
+   cd c:\Users\김승곤\Desktop\b_project\dashboard_js
    py -3 -m http.server 8080
    ```
 
@@ -160,4 +160,4 @@ py -3 -m pip install fastapi uvicorn
 
 **버전**: 3.0.0  
 **생성일**: 2026-02-15  
-**개발자**: USERNAME
+**개발자**: 김승곤

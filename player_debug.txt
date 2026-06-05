@@ -1,0 +1,21 @@
+--- Player Table Data ---
+player_id: 69446 (<class 'str'>)
+player_name: 원태인 (<class 'str'>)
+team_id: 삼성 (<class 'str'>)
+back_number: 18 (<class 'int'>)
+position: 투수 (<class 'str'>)
+throw: R (<class 'str'>)
+bat: R (<class 'str'>)
+birthday: 20000406 (<class 'int'>)
+height: 183 (<class 'int'>)
+weight: 92 (<class 'int'>)
+career: 율하초(중구리틀)-경복중-경북고 (<class 'str'>)
+draft_year: 19삼성 (<class 'str'>)
+draft_order: 19 삼성 1차 (<class 'str'>)
+signing_bonus: 350000000 (<class 'int'>)
+salary: 630000000 (<class 'int'>)
+image_url: https://6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/person/middle/2025/69446.jpg (<class 'str'>)
+created_at: 2026-01-25 12:16:00 (<class 'str'>)
+updated_at: 2026-01-25 12:16:00 (<class 'str'>)
+
+Pitcher Stats 2025: Found

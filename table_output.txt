@@ -14,7 +14,7 @@ RemoteException
     + FullyQualifiedErrorI 
    d : NativeCommandError
  
-  File "C:\Users\USERNAME\Deskto
+  File "C:\Users\김승곤\Deskto
 p\b_project\export_table_in
 fo.py", line 77, in <module
 >

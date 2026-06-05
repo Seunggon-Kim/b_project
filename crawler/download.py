@@ -33,6 +33,7 @@ regular_start = {
     '2023': '0401',
     '2024': '0323',
     '2025': '0322',
+    '2026': '0322',
 }
 
 playoff_start = {
@@ -61,6 +62,7 @@ playoff_start = {
     '2023': '1019',
     '2024': '1002',
     '2025': '1005',
+    '2026': '1231',
 }
 
 
@@ -949,7 +951,11 @@ def download_pbp_files(start_date, end_date, playoff=False,
             if gid_year > 3000:
                 if gid_year > 8000:
                     continue
-                gid_year = int(gid[-4:])
+                try:
+                    gid_year = int(gid[-4:])
+                except ValueError:
+                    # 13자 형식 등 시즌 suffix 누락 gameID skip (postseason edge case)
+                    continue
             gid_for_save = f'{gid_year}{gid[4:]}'
             gid_to_date = datetime.date(gid_year,
                                         int(gid[4:6]),

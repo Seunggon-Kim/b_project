@@ -1,0 +1,417 @@
+====================================
+KeyError: '2026'
+~~~~~~~~~~~~~^^^^^^^^^^^
+year_regular_start = regular_start[str(year)]
+File "/home/ubuntu/b_project/crawler/download.py", line 96, in get_game_ids
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+game_ids = get_game_ids(start_date, end_date, playoff)
+File "/home/ubuntu/b_project/crawler/download.py", line 903, in download_pbp_files
+download_pbp_files(start_date, end_date, playoff=args.playoff,
+File "/home/ubuntu/b_project/crawler/pbp.py", line 168, in <module>
+Traceback (most recent call last):====================================
+KeyError: '2026'
+~~~~~~~~~~~~~^^^^^^^^^^^
+year_regular_start = regular_start[str(year)]
+File "/home/ubuntu/b_project/crawler/download.py", line 96, in get_game_ids
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+game_ids = get_game_ids(start_date, end_date, playoff)
+File "/home/ubuntu/b_project/crawler/download.py", line 903, in download_pbp_files
+download_pbp_files(start_date, end_date, playoff=args.playoff,
+File "/home/ubuntu/b_project/crawler/pbp.py", line 168, in <module>
+Traceback (most recent call last):====================================
+KeyError: '2026'
+~~~~~~~~~~~~~^^^^^^^^^^^
+year_regular_start = regular_start[str(year)]
+File "/home/ubuntu/b_project/crawler/download.py", line 96, in get_game_ids
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+game_ids = get_game_ids(start_date, end_date, playoff)
+File "/home/ubuntu/b_project/crawler/download.py", line 903, in download_pbp_files
+download_pbp_files(start_date, end_date, playoff=args.playoff,
+File "/home/ubuntu/b_project/crawler/pbp.py", line 168, in <module>
+Traceback (most recent call last):====================================
+KeyError: '2026'
+~~~~~~~~~~~~~^^^^^^^^^^^
+year_regular_start = regular_start[str(year)]
+File "/home/ubuntu/b_project/crawler/download.py", line 96, in get_game_ids
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+game_ids = get_game_ids(start_date, end_date, playoff)
+File "/home/ubuntu/b_project/crawler/download.py", line 903, in download_pbp_files
+download_pbp_files(start_date, end_date, playoff=args.playoff,
+File "/home/ubuntu/b_project/crawler/pbp.py", line 168, in <module>
+Traceback (most recent call last):
+
+====================================
+Current Time : 2026-05-09T13:54:04.954087
+====================================
+====================================
+Start date : 20260301
+End date : 20260509
+Successfully downloaded games : 191
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 279.53 sec elapsed with 191 games
+
+
+====================================
+Current Time : 2026-05-09T14:03:04.197037
+====================================
+====================================
+Start date : 20260301
+End date : 20260509
+Successfully downloaded games : 0
+Skipped games(already exists) : 191
+Broken games(bad data) : 0
+====================================
+Total 0.28 sec elapsed with 191 games
+
+
+====================================
+Current Time : 2026-05-09T18:30:03.601012
+====================================
+====================================
+Start date : 20260508
+End date : 20260508
+Successfully downloaded games : 0
+Skipped games(already exists) : 5
+Broken games(bad data) : 0
+====================================
+Total 0.14 sec elapsed with 5 games
+
+
+====================================
+Current Time : 2026-05-10T18:30:03.523472
+====================================
+====================================
+Start date : 20260509
+End date : 20260509
+Successfully downloaded games : 0
+Skipped games(already exists) : 5
+Broken games(bad data) : 0
+====================================
+Total 0.12 sec elapsed with 5 games
+
+
+====================================
+Current Time : 2026-05-11T18:30:03.404611
+====================================
+====================================
+Start date : 20260510
+End date : 20260510
+Successfully downloaded games : 5
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 7.59 sec elapsed with 5 games
+
+
+====================================
+Current Time : 2026-05-12T18:30:03.513020
+====================================
+====================================
+Start date : 20260511
+End date : 20260511
+Successfully downloaded games : 0
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 0.09 sec elapsed with 0 games
+
+
+====================================
+Current Time : 2026-05-13T18:30:03.481238
+====================================
+====================================
+Start date : 20260512
+End date : 20260512
+Successfully downloaded games : 5
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 7.03 sec elapsed with 5 games
+
+
+====================================
+Current Time : 2026-05-14T18:30:03.592989
+====================================
+====================================
+Start date : 20260513
+End date : 20260513
+Successfully downloaded games : 5
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 7.20 sec elapsed with 5 games
+
+
+====================================
+Current Time : 2026-05-15T18:30:03.310468
+====================================
+====================================
+Start date : 20260514
+End date : 20260514
+Successfully downloaded games : 5
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 7.45 sec elapsed with 5 games
+
+
+====================================
+Current Time : 2026-05-16T18:30:03.663419
+====================================
+====================================
+Start date : 20260515
+End date : 20260515
+Successfully downloaded games : 5
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 7.35 sec elapsed with 5 games
+
+
+====================================
+Current Time : 2026-05-17T18:30:03.347704
+====================================
+====================================
+Start date : 20260516
+End date : 20260516
+Successfully downloaded games : 5
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 7.56 sec elapsed with 5 games
+
+
+====================================
+Current Time : 2026-05-18T18:30:03.286498
+====================================
+====================================
+Start date : 20260517
+End date : 20260517
+Successfully downloaded games : 5
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 7.63 sec elapsed with 5 games
+
+
+====================================
+Current Time : 2026-05-19T18:30:03.468559
+====================================
+====================================
+Start date : 20260518
+End date : 20260518
+Successfully downloaded games : 0
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 0.14 sec elapsed with 0 games
+
+
+====================================
+Current Time : 2026-05-20T18:30:03.511349
+====================================
+====================================
+Start date : 20260519
+End date : 20260519
+Successfully downloaded games : 5
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 7.53 sec elapsed with 5 games
+
+
+====================================
+Current Time : 2026-05-21T18:30:03.699336
+====================================
+====================================
+Start date : 20260520
+End date : 20260520
+Successfully downloaded games : 1
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 1.56 sec elapsed with 1 games
+
+
+====================================
+Current Time : 2026-05-22T18:30:03.530901
+====================================
+====================================
+Start date : 20260521
+End date : 20260521
+Successfully downloaded games : 5
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 7.13 sec elapsed with 5 games
+
+
+====================================
+Current Time : 2026-05-23T18:30:03.700728
+====================================
+====================================
+Start date : 20260522
+End date : 20260522
+Successfully downloaded games : 5
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 6.95 sec elapsed with 5 games
+
+
+====================================
+Current Time : 2026-05-24T18:30:03.397876
+====================================
+====================================
+Start date : 20260523
+End date : 20260523
+Successfully downloaded games : 5
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 7.28 sec elapsed with 5 games
+
+
+====================================
+Current Time : 2026-05-25T18:30:03.526744
+====================================
+====================================
+Start date : 20260524
+End date : 20260524
+Successfully downloaded games : 5
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 7.30 sec elapsed with 5 games
+
+
+====================================
+Current Time : 2026-05-26T18:30:03.829984
+====================================
+====================================
+Start date : 20260525
+End date : 20260525
+Successfully downloaded games : 0
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 0.10 sec elapsed with 0 games
+
+
+====================================
+Current Time : 2026-05-27T18:30:03.525692
+====================================
+====================================
+Start date : 20260526
+End date : 20260526
+Successfully downloaded games : 3
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 3.85 sec elapsed with 3 games
+
+
+====================================
+Current Time : 2026-05-28T18:30:03.689814
+====================================
+====================================
+Start date : 20260527
+End date : 20260527
+Successfully downloaded games : 5
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 6.80 sec elapsed with 5 games
+
+
+====================================
+Current Time : 2026-05-29T18:30:03.455104
+====================================
+====================================
+Start date : 20260528
+End date : 20260528
+Successfully downloaded games : 5
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 7.54 sec elapsed with 5 games
+
+
+====================================
+Current Time : 2026-05-30T18:30:03.636476
+====================================
+====================================
+Start date : 20260529
+End date : 20260529
+Successfully downloaded games : 5
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 6.97 sec elapsed with 5 games
+
+
+====================================
+Current Time : 2026-05-31T18:30:03.751699
+====================================
+====================================
+Start date : 20260530
+End date : 20260530
+Successfully downloaded games : 5
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 7.29 sec elapsed with 5 games
+
+
+====================================
+Current Time : 2026-06-01T18:30:03.551526
+====================================
+====================================
+Start date : 20260531
+End date : 20260531
+Successfully downloaded games : 5
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 7.50 sec elapsed with 5 games
+
+
+====================================
+Current Time : 2026-06-02T18:30:03.581405
+====================================
+====================================
+Start date : 20260601
+End date : 20260601
+Successfully downloaded games : 0
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 0.13 sec elapsed with 0 games
+
+
+====================================
+Current Time : 2026-06-03T18:30:03.330859
+====================================
+====================================
+Start date : 20260602
+End date : 20260602
+Successfully downloaded games : 5
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 7.10 sec elapsed with 5 games
+
+
+====================================
+Current Time : 2026-06-04T18:30:03.756888
+====================================
+====================================
+Start date : 20260603
+End date : 20260603
+Successfully downloaded games : 5
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+====================================
+Total 7.24 sec elapsed with 5 games

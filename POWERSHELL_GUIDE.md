@@ -11,7 +11,7 @@
 
 **방법 A: 프로젝트 폴더에서 바로 열기 (추천)**
 
-1. 파일 탐색기에서 `C:\Users\USERNAME\Desktop\b_project` 폴더 열기
+1. 파일 탐색기에서 `C:\Users\김승곤\Desktop\b_project` 폴더 열기
 2. 주소창 클릭 → `powershell` 입력 → Enter
 
 **방법 B: 시작 메뉴에서**
@@ -25,7 +25,7 @@
 ### 2단계: 프로젝트 폴더로 이동 (방법 B를 사용한 경우)
 
 ```powershell
-cd C:\Users\USERNAME\Desktop\b_project
+cd C:\Users\김승곤\Desktop\b_project
 ```
 
 ---
@@ -45,7 +45,7 @@ cd C:\Users\USERNAME\Desktop\b_project
 1. 브라우저에서 <https://console.aws.amazon.com/ec2/home#Instances>: 접속
 2. AWS 로그인 (루트 사용자)
 3. `kbo-stats-server` 인스턴스 클릭
-4. **퍼블릭 IPv4 주소** 복사 (예: `EC2_PUBLIC_IP`)
+4. **퍼블릭 IPv4 주소** 복사 (예: `43.200.4.183`)
 
 ---
 
@@ -60,7 +60,7 @@ IP 주소를 확인했다면:
 **예시:**
 
 ```powershell
-.\check_aws_status.ps1 EC2_PUBLIC_IP
+.\check_aws_status.ps1 43.200.4.183
 ```
 
 ---
@@ -71,13 +71,13 @@ PowerShell에서 아래 명령어를 **순서대로** 실행하세요:
 
 ```powershell
 # 1. 프로젝트 폴더로 이동
-cd C:\Users\USERNAME\Desktop\b_project
+cd C:\Users\김승곤\Desktop\b_project
 
 # 2. EC2 IP 확인 도우미 실행 (브라우저 열림)
 .\get_ec2_ip.ps1
 
 # 3. IP 주소를 확인한 후, 아래 명령어 실행 (IP 주소 변경 필요)
-.\check_aws_status.ps1 EC2_PUBLIC_IP
+.\check_aws_status.ps1 43.200.4.183
 ```
 
 ---
@@ -123,7 +123,7 @@ cd C:\Users\USERNAME\Desktop\b_project
 
 ✅ SSH 키 파일 확인 완료
 
-🔌 EC2 서버 접속 중: EC2_PUBLIC_IP
+🔌 EC2 서버 접속 중: 43.200.4.183
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📋 1. Crontab 설정 확인
@@ -211,7 +211,7 @@ ssh -i $HOME\.ssh\kbo-key.pem ubuntu@[IP주소]
 **예시:**
 
 ```powershell
-ssh -i $HOME\.ssh\kbo-key.pem ubuntu@EC2_PUBLIC_IP
+ssh -i $HOME\.ssh\kbo-key.pem ubuntu@43.200.4.183
 ```
 
 접속 후 수동으로 확인:
