@@ -56,11 +56,8 @@
       "label": "백업",
       "tables": [
         "wrc_plus_comparison_bak",
-        "wrc_plus_comparison_bak_20260605",
         "weighted_pf_by_batter_season_bak",
-        "weighted_pf_by_batter_season_bak_20260605",
-        "team_stadium_by_season_bak",
-        "team_stadium_by_season_bak_20260605"
+        "team_stadium_by_season_bak"
       ]
     }
   ],
@@ -597,16 +594,6 @@
         "stadium": "해당 팀·시즌 홈구장명(예: 서울종합운동장 야구장), 파크팩터(PF) 귀속 구장"
       }
     },
-    "team_stadium_by_season_bak_20260605": {
-      "category": "백업",
-      "table_desc": "[백업] team_stadium_by_season 의 2026-06-05 초기 마이그레이션 스냅샷 (고정)",
-      "update_freq": "백업 — 2026-06-05 초기 마이그레이션 1회성 스냅샷 (고정)",
-      "columns": {
-        "player_team": "팀 코드(예: LG), 컬럼명과 달리 선수 아닌 팀 식별자, season과 복합 PK",
-        "season": "시즌 연도(예: 2015), player_team과 복합 PK",
-        "stadium": "해당 팀·시즌 홈구장명(예: 서울종합운동장 야구장), 파크팩터(PF) 귀속 구장"
-      }
-    },
     "weighted_pf_by_batter_season_bak": {
       "category": "백업",
       "table_desc": "[백업] weighted_pf_by_batter_season 의 직전 스냅샷 (롤링 백업)",
@@ -629,55 +616,10 @@
         "hr_pf_diff_pct": "홈구장 홈런 PF 대비 홈런 PF 편차율((wpf_hr - home_hr_pf)/home_hr_pf, %)"
       }
     },
-    "weighted_pf_by_batter_season_bak_20260605": {
-      "category": "백업",
-      "table_desc": "[백업] weighted_pf_by_batter_season 의 2026-06-05 초기 마이그레이션 스냅샷 (고정)",
-      "update_freq": "백업 — 2026-06-05 초기 마이그레이션 1회성 스냅샷 (고정)",
-      "columns": {
-        "batter_ID": "타자 고유 ID (복합 PK, play_by_play.batter_ID 참조)",
-        "season": "시즌 연도 (복합 PK)",
-        "n_PA": "가중 산출 대상 총 타석 수(PA)",
-        "wpf_run": "타석 가중 득점 파크팩터(PA-weighted run PF, 출전 구장별 PF의 PA가중 평균, 1000 기준)",
-        "wpf_hr": "타석 가중 홈런 파크팩터(PA-weighted HR PF, 1000 기준)",
-        "wpf_slg": "타석 가중 장타율 파크팩터(PA-weighted SLG PF, 1000 기준)",
-        "home_stadium": "소속 홈구장명",
-        "home_pa_n": "홈구장 소화 타석 수(home PA)",
-        "home_run_pf": "홈구장 득점 파크팩터(run PF, 1000 기준)",
-        "home_hr_pf": "홈구장 홈런 파크팩터(HR PF, 1000 기준)",
-        "home_slg_pf": "홈구장 장타율 파크팩터(SLG PF, 1000 기준)",
-        "home_share": "전체 타석 대비 홈구장 타석 비중(home_pa_n/n_PA, %)",
-        "run_pf_diff": "가중 득점 PF와 홈구장 득점 PF의 차(wpf_run - home_run_pf, 포인트)",
-        "run_pf_diff_pct": "홈구장 득점 PF 대비 득점 PF 편차율((wpf_run - home_run_pf)/home_run_pf, %)",
-        "hr_pf_diff_pct": "홈구장 홈런 PF 대비 홈런 PF 편차율((wpf_hr - home_hr_pf)/home_hr_pf, %)"
-      }
-    },
     "wrc_plus_comparison_bak": {
       "category": "백업",
       "table_desc": "[백업] wrc_plus_comparison 의 직전 스냅샷 (롤링 백업)",
       "update_freq": "백업 — park_factors 파이프라인 실행 직전 자동 갱신 (1단계 롤백용)",
-      "columns": {
-        "batter_ID": "타자 고유 ID (기본키)",
-        "season": "시즌 연도 (기본키)",
-        "PA": "타석 수(plate appearances), wRAA·wRC+ 산출 분모",
-        "OBP_denom": "wOBA 분모(타수AB+볼넷BB-고의사구IBB+사구HBP+희생플라이SF), 출루율(OBP)식 분모",
-        "wOBA": "가중출루율(wOBA), 타격 이벤트별 득점가치(run value)로 가중한 출루 지표",
-        "lg_wOBA": "리그평균 가중출루율(league wOBA), 해당 시즌 기준선",
-        "wOBA_scale": "wOBA 스케일(wOBA scale), wOBA를 득점 단위로 환산하는 연도별 계수(리그평균 OBP 척도 정합용)",
-        "wRAA_FG": "FanGraphs 방식 평균대비가중득점(wRAA), ((wOBA-lg_wOBA)/wOBA_scale)×PA",
-        "home_run_pf": "홈구장 득점 파크팩터(home park run PF), 1000=중립 기준 (샘플상 pf_home과 동일값)",
-        "wpf_run": "PA가중 득점 파크팩터(PA-weighted run PF), 방문 구장별 타석 비중 가중 평균 (샘플상 pf_weighted와 동일값)",
-        "pf_home": "홈구장 단독 적용 득점 파크팩터(home run PF), 1000=중립",
-        "pf_half": "홈-원정 절반 보정 득점 파크팩터(half run PF), 홈 PF와 중립(1000)의 산술평균",
-        "pf_weighted": "PA가중 득점 파크팩터(PA-weighted run PF), 실제 방문 구장 타석 가중 산출치",
-        "wRC_home": "홈구장 단독 PF 적용 조정득점생산(wRC+), 100=리그평균",
-        "wRC_half": "홈-원정 절반 PF 적용 조정득점생산(wRC+), 100=리그평균",
-        "wRC_weighted": "PA가중 PF 적용 조정득점생산(wRC+), 100=리그평균"
-      }
-    },
-    "wrc_plus_comparison_bak_20260605": {
-      "category": "백업",
-      "table_desc": "[백업] wrc_plus_comparison 의 2026-06-05 초기 마이그레이션 스냅샷 (고정)",
-      "update_freq": "백업 — 2026-06-05 초기 마이그레이션 1회성 스냅샷 (고정)",
       "columns": {
         "batter_ID": "타자 고유 ID (기본키)",
         "season": "시즌 연도 (기본키)",
