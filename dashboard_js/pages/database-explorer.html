@@ -199,6 +199,40 @@
             font-size: 0.8rem;
         }
 
+        /* 카테고리 그룹 */
+        .dbx-cat {
+            margin-bottom: 1.6rem;
+        }
+
+        .dbx-cat-title {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            border-left: 3px solid var(--primary);
+            padding-left: 0.6rem;
+            margin-bottom: 0.8rem;
+        }
+
+        .dbx-cat-count {
+            color: var(--text-muted);
+            font-weight: 400;
+            font-size: 0.85rem;
+        }
+
+        .dbx-table-card .tdesc {
+            margin-top: 0.45rem;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        #detail-desc {
+            font-size: 0.95rem;
+        }
+
         .h1-icon {
             vertical-align: -4px;
             margin-right: 0.25rem;
@@ -257,6 +291,8 @@
                     <span id="detail-summary" class="text-muted" style="font-size: 0.875rem;"></span>
                 </div>
                 <div class="card-body">
+                    <p id="detail-desc" class="text-secondary" style="margin-bottom: 0.4rem;"></p>
+                    <p id="detail-update" class="text-muted" style="font-size: 0.85rem; margin-bottom: 1rem;"></p>
                     <h4 class="mb-2">컬럼 구조</h4>
                     <div id="schema-table"></div>
                 </div>
@@ -325,15 +361,38 @@
                     return;
                 }
                 document.getElementById('tables-summary').textContent = `총 ${data.tables.length}개 테이블`;
-                el.innerHTML = '<div class="dbx-tables">' + data.tables.map(t => `
+
+                const byName = {};
+                data.tables.forEach(t => { byName[t.name] = t; });
+                const cats = (data.categories && data.categories.length)
+                    ? data.categories
+                    : [{ label: '전체', tables: data.tables.map(t => t.name) }];
+
+                const renderCard = (t) => `
                     <div class="dbx-table-card" data-table="${escapeHtml(t.name)}" onclick="selectTable('${escapeHtml(t.name)}')">
                         <div class="name">${escapeHtml(t.name)}</div>
+                        ${t.table_desc ? `<div class="tdesc">${escapeHtml(t.table_desc)}</div>` : ''}
                         <div class="meta">
                             <span>행 <b>${t.rows === null ? '-' : formatNumber(t.rows)}</b></span>
                             <span>컬럼 <b>${t.columns}</b></span>
                         </div>
-                    </div>
-                `).join('') + '</div>';
+                    </div>`;
+
+                const used = new Set();
+                let html = '';
+                cats.forEach(c => {
+                    const items = (c.tables || []).filter(n => byName[n]);
+                    if (!items.length) return;
+                    items.forEach(n => used.add(n));
+                    html += `<div class="dbx-cat"><h4 class="dbx-cat-title">${escapeHtml(c.label)} <span class="dbx-cat-count">${items.length}</span></h4>`
+                        + '<div class="dbx-tables">' + items.map(n => renderCard(byName[n])).join('') + '</div></div>';
+                });
+                const rest = data.tables.filter(t => !used.has(t.name));
+                if (rest.length) {
+                    html += `<div class="dbx-cat"><h4 class="dbx-cat-title">기타 <span class="dbx-cat-count">${rest.length}</span></h4>`
+                        + '<div class="dbx-tables">' + rest.map(renderCard).join('') + '</div></div>';
+                }
+                el.innerHTML = html;
             } catch (e) {
                 el.innerHTML = createErrorMessage('테이블 목록을 불러오지 못했습니다. (API 서버 확인)');
             }
@@ -361,16 +420,20 @@
 
                 document.getElementById('detail-title').textContent = res.table;
                 document.getElementById('detail-summary').textContent =
-                    `${formatNumber(res.total)}행 · ${res.schema.length}컬럼`;
+                    `${res.category ? res.category + ' · ' : ''}${formatNumber(res.total)}행 · ${res.schema.length}컬럼`;
+                document.getElementById('detail-desc').textContent = res.table_desc || '';
+                document.getElementById('detail-update').textContent =
+                    res.update_freq ? `업데이트 주기: ${res.update_freq}` : '';
 
                 // 스키마 표
-                const schemaHeaders = ['#', '컬럼명', '타입', '제약'];
+                const schemaHeaders = ['#', '컬럼명', '타입', '제약', '설명'];
                 const schemaRows = res.schema.map((c, i) => [
                     i + 1,
                     escapeHtml(c.name),
                     `<span class="dbx-type">${escapeHtml(c.type || '-')}</span>`,
                     ((c.pk ? '<span class="dbx-tag pk">PK</span>' : '') +
-                        (c.notnull ? '<span class="dbx-tag nn">NOT NULL</span>' : '')) || '-'
+                        (c.notnull ? '<span class="dbx-tag nn">NOT NULL</span>' : '')) || '-',
+                    c.desc ? escapeHtml(c.desc) : '<span class="dbx-null">-</span>'
                 ]);
                 schemaEl.innerHTML = createTable(schemaHeaders, schemaRows);
 

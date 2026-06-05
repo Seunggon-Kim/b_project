@@ -1,0 +1,701 @@
+{
+  "categories": [
+    {
+      "key": "raw",
+      "label": "원천 데이터",
+      "tables": [
+        "play_by_play",
+        "games",
+        "game_team_stats"
+      ]
+    },
+    {
+      "key": "official",
+      "label": "공식 통계",
+      "tables": [
+        "kbo_official_batter_stats",
+        "kbo_official_pitcher_stats"
+      ]
+    },
+    {
+      "key": "saber",
+      "label": "세이버메트릭스 분석",
+      "tables": [
+        "wrc_plus_comparison",
+        "weighted_pf_by_batter_season",
+        "self_park_factor",
+        "pitcher_fip",
+        "kbo_woba_weights_by_season",
+        "kbo_run_values_by_season",
+        "re24_matrix_by_season"
+      ]
+    },
+    {
+      "key": "master",
+      "label": "선수·팀·구장 마스터",
+      "tables": [
+        "teams",
+        "players",
+        "player_history",
+        "stadium_dim",
+        "stadium_alias",
+        "stadium_team_history",
+        "team_stadium_by_season"
+      ]
+    },
+    {
+      "key": "external",
+      "label": "외부 참고 (Statiz)",
+      "tables": [
+        "statiz_park_factor",
+        "statiz_yearly_constants"
+      ]
+    },
+    {
+      "key": "backup",
+      "label": "백업",
+      "tables": [
+        "wrc_plus_comparison_bak",
+        "wrc_plus_comparison_bak_20260605",
+        "weighted_pf_by_batter_season_bak",
+        "weighted_pf_by_batter_season_bak_20260605",
+        "team_stadium_by_season_bak",
+        "team_stadium_by_season_bak_20260605"
+      ]
+    }
+  ],
+  "tables": {
+    "games": {
+      "category": "원천 데이터",
+      "table_desc": "KBO 경기별 기본 메타정보(일자·시즌·경기유형·홈/원정팀·최종 스코어·구장·관중·소요시간·날씨)",
+      "update_freq": "매일 자동 (KST 03:30, PBP 수집 시 함께)",
+      "columns": {
+        "game_id": "경기 고유 식별자(PK), 일자+원정팀코드+홈팀코드+더블헤더회차+시즌 조합(예: 20250322HHKT02025=2025-03-22 한화@KT 0차전)",
+        "game_date": "경기 일자(YYYYMMDD 정수 형식)",
+        "season": "시즌 연도",
+        "game_type": "경기 유형(정규시즌/포스트시즌 등)",
+        "home_team_id": "홈팀 식별자(teams.team_id 참조, 약어·한글 혼재 예: KT, LG, 한화)",
+        "away_team_id": "원정팀 식별자(teams.team_id 참조, 약어·한글 혼재 예: 한화, 롯데, NC)",
+        "home_score": "홈팀 최종 득점",
+        "away_score": "원정팀 최종 득점",
+        "stadium": "경기 개최 구장명(예: 수원, 잠실, 광주)",
+        "attendance": "관중 수(미집계 시 null)",
+        "game_time_minutes": "경기 소요 시간(분, 미집계 시 null)",
+        "weather": "경기 당시 날씨(미집계 시 null)",
+        "temperature": "경기 당시 기온(섭씨, 미집계 시 null)"
+      }
+    },
+    "game_team_stats": {
+      "category": "원천 데이터",
+      "table_desc": "경기·팀 단위 박스스코어 집계 통계(game_id+team_id 단위)",
+      "update_freq": "미사용 (현재 0행)",
+      "columns": {
+        "stat_id": "행 고유 식별자(PK)",
+        "game_id": "경기 ID(games FK)",
+        "team_id": "팀 ID(teams FK)",
+        "runs": "팀 득점(R)",
+        "hits": "팀 안타(H, 단타+2루타+3루타+홈런)",
+        "errors": "팀 실책(E)",
+        "left_on_base": "잔루(LOB)",
+        "doubles": "2루타(2B)",
+        "triples": "3루타(3B)",
+        "home_runs": "홈런(HR)",
+        "walks": "볼넷(BB)",
+        "strikeouts": "삼진(SO/K)",
+        "stolen_bases": "도루(SB)"
+      }
+    },
+    "kbo_official_batter_stats": {
+      "category": "공식 통계",
+      "table_desc": "KBO 공식 홈페이지 수집 타자 시즌 통계(선수x시즌, 카운팅·비율·세이버 지표 포함)",
+      "update_freq": "매일 자동 (KST 02:00, Selenium 수집)",
+      "columns": {
+        "player_id": "선수 고유 ID(TEXT, 복합 PK)",
+        "season": "시즌 연도(복합 PK)",
+        "player_name": "선수명",
+        "player_team": "소속 구단(약칭)",
+        "batting_average": "타율(AVG, 안타/타수)",
+        "games": "출장 경기수(G)",
+        "plate_appearance": "타석(PA)",
+        "at_bat": "타수(AB)",
+        "run": "득점(R)",
+        "single": "1루타 개수(1B)",
+        "double": "2루타 개수(2B)",
+        "triple": "3루타 개수(3B)",
+        "home_run": "홈런 개수(HR)",
+        "total_bases": "루타수(TB)",
+        "run_batted_in": "타점(RBI)",
+        "sacrifice_bunts": "희생번트(SH)",
+        "sacrifice_fly": "희생플라이(SF)",
+        "base_on_balls": "볼넷(BB)",
+        "intentional_base_on_balls": "고의사구(IBB)",
+        "hit_by_pitch": "사구(HBP)",
+        "strikeout": "삼진(SO/K)",
+        "ground_into_double_play": "병살타(GIDP)",
+        "slugging_percentage": "장타율(SLG, 루타수/타수)",
+        "on_base_percentage": "출루율(OBP)",
+        "on_base_plus_slugging": "OPS(출루율+장타율)",
+        "multi_hits": "멀티히트 경기수(한 경기 2안타 이상)",
+        "runners_in_scoring_position": "득점권 타율(RISP AVG)",
+        "pinch_hit_batting_average": "대타 타율",
+        "extra_base_hits": "장타 개수(XBH, 2B+3B+HR)",
+        "ground_outs": "땅볼 아웃 개수(GO)",
+        "air_outs": "뜬공 아웃 개수(AO)",
+        "go_ao": "땅볼/뜬공 비율(GO/AO, 문자열·결측 가능)",
+        "gw_rbi": "결승타점(GW-RBI)",
+        "strikeout_per_pa": "삼진 비율(K%, 삼진/타석, 백분율 단위)",
+        "base_on_balls_per_pa": "볼넷 비율(BB%, 볼넷/타석, 백분율 단위)",
+        "bb_k": "볼넷/삼진 비율(BB/K, 문자열·결측 가능)",
+        "p_pa": "타석당 투구수(P/PA)",
+        "isop": "순장타율(ISO, 장타율-타율)",
+        "extended_runs": "추정 득점(XR, Furtado 선형가중 득점추정)",
+        "gross_production_average": "총생산평균(GPA, (OBP×1.8+SLG)/4)",
+        "created_at": "레코드 최초 생성 시각",
+        "updated_at": "레코드 최종 갱신 시각"
+      }
+    },
+    "kbo_official_pitcher_stats": {
+      "category": "공식 통계",
+      "table_desc": "KBO 공식 기록 시즌별 투수 성적 및 파생 지표(피출루율·BABIP·K%·BB% 등) 테이블",
+      "update_freq": "매일 자동 (KST 02:00, Selenium 수집)",
+      "columns": {
+        "player_id": "선수 고유 ID(기본키)",
+        "season": "시즌 연도(기본키)",
+        "player_name": "투수 이름",
+        "player_team": "소속 구단",
+        "earned_run_average": "평균자책점(ERA), 9이닝당 자책점",
+        "games": "등판 경기 수(G)",
+        "wins": "승리(W)",
+        "losses": "패배(L)",
+        "save": "세이브(SV)",
+        "hold": "홀드(HLD)",
+        "winning_percentage": "승률(W/(W+L)), 승패 무기록 시 null",
+        "innings_pitched": "투구이닝(IP), 분수 문자열 표기(예: '1 2/3')",
+        "hits": "피안타(H)",
+        "home_run": "피홈런(HR)",
+        "base_on_balls": "볼넷 허용(BB)",
+        "hit_by_pitch": "사구 허용(HBP)",
+        "strikeout": "탈삼진(SO/K)",
+        "run": "실점(R)",
+        "earned_run": "자책점(ER)",
+        "walks_plus_hits_per_inning_pitched": "이닝당 출루허용(WHIP), (BB+H)/IP",
+        "complete_game": "완투(CG)",
+        "shutout": "완봉(SHO)",
+        "quality_start": "퀄리티스타트(QS), 선발 6이닝 이상·자책 3 이하",
+        "blown_save": "블론세이브(BS), 세이브 기회 실패",
+        "total_batters_faced": "상대 타자 수(TBF)",
+        "number_of_pitchers": "총 투구 수(NP, 던진 공 개수, 컬럼명과 달리 투구 수)",
+        "batting_average": "피안타율(상대 타율, AVG)",
+        "double": "피2루타(2B)",
+        "triple": "피3루타(3B)",
+        "sacrifice_bunts": "허용 희생번트(SH/SAC)",
+        "sacrifice_fly": "허용 희생플라이(SF)",
+        "intentional_base_on_balls": "고의사구(IBB)",
+        "wild_pitch": "폭투(WP)",
+        "balk": "보크(BK)",
+        "games_started": "선발 등판 수(GS)",
+        "wins_game_started": "선발 등판 시 승리(선발승)",
+        "wins_game_relieved": "구원 등판 시 승리(구원승)",
+        "games_finished": "팀 경기 최종 투구 등판 수(GF)",
+        "save_opportunity": "세이브 기회(SVO)",
+        "total_saves": "KBO 통합 세이브 집계(별도 세이브 누계 필드, save 컬럼과 별개)",
+        "ground_into_double_play": "병살타 유도(GIDP)",
+        "ground_outs": "땅볼 아웃(GO)",
+        "air_outs": "뜬공 아웃(AO, 플라이아웃)",
+        "go_ao": "땅볼/뜬공 비율(GO/AO), 문자열 저장, 무기록 시 null",
+        "batting_average_on_balls_in_play": "피인플레이타구 타율(BABIP), (H-HR)/(AB-HR-K+SF)",
+        "p_g": "경기당 투구 수(NP/G)",
+        "p_ip": "이닝당 투구 수(NP/IP)",
+        "k_9": "9이닝당 탈삼진(K/9)",
+        "bb_9": "9이닝당 볼넷(BB/9)",
+        "strikeout_per_pa": "삼진 비율(K%), 상대타자 대비 탈삼진 백분율(퍼센트 포인트 저장, 예: 33.3)",
+        "base_on_balls_per_pa": "볼넷 비율(BB%), 상대타자 대비 볼넷 백분율(퍼센트 포인트 저장, 예: 16.7)",
+        "k_bb": "탈삼진/볼넷 비율(K/BB), 문자열 저장",
+        "on_base_percentage": "피출루율(상대 OBP)",
+        "slugging_percentage": "피장타율(상대 SLG)",
+        "on_base_plus_slugging": "피OPS(상대 OBP+SLG)",
+        "created_at": "레코드 생성 시각",
+        "updated_at": "레코드 갱신 시각(UPSERT)"
+      }
+    },
+    "kbo_run_values_by_season": {
+      "category": "세이버메트릭스 분석",
+      "table_desc": "KBO 시즌별 타격이벤트 유형별 평균 득점가치(run value/RV) 테이블(RE24 기반 선형가중치·wOBA 가중치 산출 원천)",
+      "update_freq": "수동/시즌 단위 재계산 (자동 갱신 아님)",
+      "columns": {
+        "season": "시즌 연도(복합PK)",
+        "event_type": "타격이벤트 유형 코드(1B 1루타·2B 2루타·3B 3루타·HR 홈런·BB 볼넷·HBP 사구·아웃 등, 복합PK)",
+        "rv_mean": "해당 이벤트의 평균 득점가치(run value/RV), RE24 상태전이 기반 평균 득점기대값(run expectancy) 변화량, 선형가중치(linear weights)·wOBA 가중치 산출의 raw 값(1B≈0.51·2B≈0.81·3B≈1.01)",
+        "n_obs": "해당 시즌·이벤트 유형 표본 관측 건수(평균 RV 산출 모수)"
+      }
+    },
+    "kbo_woba_weights_by_season": {
+      "category": "세이버메트릭스 분석",
+      "table_desc": "KBO 시즌별 wOBA 가중치(FanGraphs 방식)와 산출 근거인 리그 집계·이벤트별 득점가치(run value)·스케일 계수 테이블",
+      "update_freq": "수동/시즌 단위 재계산 (자동 갱신 아님; 파이프라인 입력)",
+      "columns": {
+        "season": "시즌 연도(기본키)",
+        "PA": "리그 전체 타석(plate appearances, PA)",
+        "AB": "리그 전체 타수(at bats, AB)",
+        "H": "리그 전체 안타(hits, H)",
+        "BB": "리그 전체 볼넷(walks, BB)",
+        "HBP": "리그 전체 사구(hit by pitch, HBP)",
+        "SF": "리그 전체 희생플라이(sacrifice fly, SF)",
+        "OBP": "리그 평균 출루율(on-base percentage, OBP), wOBA 스케일 목표값",
+        "raw_RV_1B": "1루타 원시 득점가치(run value, RV), 평균상태 대비 RE24 기반 선형가중 득점가치",
+        "raw_RV_2B": "2루타 원시 득점가치(run value, RV)",
+        "raw_RV_3B": "3루타 원시 득점가치(run value, RV)",
+        "raw_RV_HR": "홈런 원시 득점가치(run value, RV)",
+        "raw_RV_uBB": "고의4구 제외 볼넷(unintentional BB, uBB) 원시 득점가치(run value, RV)",
+        "raw_RV_HBP": "사구(HBP) 원시 득점가치(run value, RV)",
+        "avg_out_RV": "아웃 평균 득점가치(run value of an out, 음수), wOBA 가중치 영점 기준",
+        "raw_lg_wOBA": "스케일 적용 전 리그 평균 raw wOBA",
+        "wOBA_scale": "wOBA 스케일링 계수(리그 OBP / raw 리그 wOBA), 가중치를 출루율 단위로 환산",
+        "fg_w1B": "FanGraphs 방식 1루타 wOBA 가중치 ((raw_RV_1B - avg_out_RV) x wOBA_scale)",
+        "fg_w2B": "FanGraphs 방식 2루타 wOBA 가중치 ((raw_RV_2B - avg_out_RV) x wOBA_scale)",
+        "fg_w3B": "FanGraphs 방식 3루타 wOBA 가중치 ((raw_RV_3B - avg_out_RV) x wOBA_scale)",
+        "fg_wHR": "FanGraphs 방식 홈런 wOBA 가중치 ((raw_RV_HR - avg_out_RV) x wOBA_scale)",
+        "fg_wBB": "FanGraphs 방식 볼넷(고의4구 제외 uBB) wOBA 가중치 ((raw_RV_uBB - avg_out_RV) x wOBA_scale)",
+        "fg_wHBP": "FanGraphs 방식 사구(HBP) wOBA 가중치 ((raw_RV_HBP - avg_out_RV) x wOBA_scale)"
+      }
+    },
+    "pitcher_fip": {
+      "category": "세이버메트릭스 분석",
+      "table_desc": "투수별·시즌별 수비무관 평균자책(FIP) 및 산출 구성요소·보조지표 집계 테이블",
+      "update_freq": "수동/배치 재계산 (자동 스케줄 없음)",
+      "columns": {
+        "pitcher_ID": "투수 고유 ID(PK)",
+        "season": "시즌 연도(PK)",
+        "BF": "상대 타자 수(batters faced, BF)",
+        "IP": "투구 이닝(innings pitched, IP)",
+        "HR": "피홈런 수(home runs allowed, HR)",
+        "BB": "피볼넷 수(walks, BB, 고의사구 IBB 포함)",
+        "HBP": "피사구 수(hit by pitch, HBP)",
+        "SO": "탈삼진 수(strikeouts, SO/K)",
+        "uBB": "고의사구 제외 볼넷 수(unintentional walks, uBB=BB-IBB)",
+        "IBB": "고의사구 수(intentional walks, IBB)",
+        "runs_allowed": "허용 총득점(실점, runs allowed, 자책·비자책 포함)",
+        "K_pct": "탈삼진 비율(K%, SO/BF 백분율)",
+        "BB_pct": "볼넷 비율(BB%, BB/BF 백분율)",
+        "HR_pct": "피홈런 비율(HR%, HR/BF 백분율)",
+        "FIP": "수비무관 평균자책(FIP, (13·HR+3·(BB+HBP)-2·SO)/IP+FIP 상수)",
+        "FIP_minus": "리그·파크 조정 FIP(FIP-, 리그평균=100·100 미만 우수·낮을수록 우수)",
+        "lg_ERA_proxy": "FIP- 정규화 기준 리그 평균자책 근사값(league ERA proxy, PBP 기반 산출로 값 팽창)",
+        "fip_constant": "FIP 상수(리그 FIP 코어를 리그 평균자책 근사값과 일치시키는 보정 상수, FIP constant)"
+      }
+    },
+    "players": {
+      "category": "선수·팀·구장 마스터",
+      "table_desc": "KBO 선수 기본 신상·신체·계약·드래프트 정보 마스터 테이블",
+      "update_freq": "매일 자동 (KST 04:00 신규 감지) + 매월 1일 전체 갱신 (KST 13:00)",
+      "columns": {
+        "player_id": "선수 고유 ID(PK), KBO 선수 식별 코드(문자열, 예: 50030)",
+        "player_name": "선수 이름(한글)",
+        "team_id": "소속 팀 ID(영문 약칭과 한글 구단명 혼재, 예: KT·키움·LG)",
+        "back_number": "등번호(정수)",
+        "position": "포지션(투수·내야수·외야수·포수 등)",
+        "throw": "투구 손(R=우투, L=좌투)",
+        "bat": "타격 타석(R=우타, L=좌타, S=양타)",
+        "birthday": "생년월일(YYYYMMDD 형식)",
+        "height": "신장(cm, 정수)",
+        "weight": "체중(kg, 정수)",
+        "career": "출신 학교·소속팀 이력(초-중-고-대학-프로 팀 이동 경로)",
+        "draft_year": "드래프트 연도+지명 구단 코드(예: 20KT=2020년 KT 지명)",
+        "draft_order": "드래프트 지명 형태(1차 지명 또는 라운드·순번, 예: 20 KT 1차·3라운드 22순위)",
+        "signing_bonus": "입단 계약금(원)",
+        "salary": "연봉(원)",
+        "image_url": "선수 프로필 이미지 URL(Naver Cloud edge 호스팅 KBO 이미지)",
+        "created_at": "레코드 생성 시각",
+        "updated_at": "레코드 최종 수정 시각"
+      }
+    },
+    "player_history": {
+      "category": "선수·팀·구장 마스터",
+      "table_desc": "선수 속성(소속팀·등번호·포지션·신체 등) 변경 이력을 시점별로 보관하는 SCD Type 2 이력 테이블",
+      "update_freq": "매일 자동 (KST 04:00, 선수 이력 변동 시)",
+      "columns": {
+        "hist_id": "이력 레코드 고유 식별자(PK, 정수)",
+        "player_id": "선수 식별자(player 테이블 참조 키, 문자열 코드 예: 50030)",
+        "valid_from": "해당 속성값 유효 시작일(DATE)",
+        "valid_to": "해당 속성값 유효 종료일, 현재 유효 시 NULL(DATE)",
+        "team_id": "소속 구단 식별자(KT·키움·LG 등 약칭 문자열)",
+        "back_number": "등번호(정수)",
+        "position": "포지션(투수·내야수·외야수·포수 등)",
+        "throw": "투구 손(R=우투·L=좌투·S=양투)",
+        "bat": "타격 손(R=우타·L=좌타·S=양타/스위치)",
+        "height": "신장(cm, 정수)",
+        "weight": "체중(kg, 정수)",
+        "detected_at": "이력 변경 감지·적재 시각(TIMESTAMP)",
+        "detection_src": "이력 생성 출처(init=초기 적재 등)"
+      }
+    },
+    "play_by_play": {
+      "category": "원천 데이터",
+      "table_desc": "KBO 투구 단위 플레이바이플레이 원천 기록(투구 트래킹·카운트·주자·수비배치·타석 결과)",
+      "update_freq": "매일 자동 (KST 03:30, daily_kbo_pbp.sh)",
+      "columns": {
+        "pbp_id": "투구 단위 행 고유 식별자(PK, 자동증가)",
+        "pitch_type": "구종(직구·체인지업·슬라이더 등)",
+        "pitcher": "투수 이름",
+        "batter": "타자 이름",
+        "pitcher_ID": "투수 고유 ID",
+        "batter_ID": "타자 고유 ID",
+        "speed": "구속(km/h)",
+        "pitch_result": "투구 결과(볼·스트라이크·헛스윙·파울 등)",
+        "pa_result": "타석 최종 결과(타석 종료 투구 행에만 기록)",
+        "pa_result_detail": "타석 결과 세부 내역",
+        "description": "플레이 설명 텍스트",
+        "balls": "투구 직전 볼 카운트(BB 카운트 아님, 0~3)",
+        "strikes": "투구 직전 스트라이크 카운트(0~2)",
+        "outs": "투구 직전 아웃 카운트(0~2)",
+        "inning": "이닝 번호",
+        "inning_topbot": "공격 회 구분(초/말)",
+        "score_away": "투구 시점 원정팀 누적 득점",
+        "score_home": "투구 시점 홈팀 누적 득점",
+        "outs_on_play": "해당 플레이로 발생한 아웃 수",
+        "runs_scored": "해당 플레이로 득점한 점수",
+        "stands": "타자 타석 방향(좌타/우타)",
+        "throws": "투수 투구 손(좌투/우투)",
+        "on_1b": "1루 주자 이름(없으면 공백)",
+        "on_2b": "2루 주자 이름(없으면 공백)",
+        "on_3b": "3루 주자 이름(없으면 공백)",
+        "pos_1": "수비 1번 포지션(투수, P) 선수 이름",
+        "pos_2": "수비 2번 포지션(포수, C) 선수 이름",
+        "pos_3": "수비 3번 포지션(1루수, 1B) 선수 이름",
+        "pos_4": "수비 4번 포지션(2루수, 2B) 선수 이름",
+        "pos_5": "수비 5번 포지션(3루수, 3B) 선수 이름",
+        "pos_6": "수비 6번 포지션(유격수, SS) 선수 이름",
+        "pos_7": "수비 7번 포지션(좌익수, LF) 선수 이름",
+        "pos_8": "수비 8번 포지션(중견수, CF) 선수 이름",
+        "pos_9": "수비 9번 포지션(우익수, RF) 선수 이름",
+        "on_1b_id": "1루 주자 고유 ID(없으면 공백)",
+        "on_2b_id": "2루 주자 고유 ID(없으면 공백)",
+        "on_3b_id": "3루 주자 고유 ID(없으면 공백)",
+        "pos_1_id": "수비 1번 포지션(투수) 선수 ID",
+        "pos_2_id": "수비 2번 포지션(포수) 선수 ID",
+        "pos_3_id": "수비 3번 포지션(1루수) 선수 ID",
+        "pos_4_id": "수비 4번 포지션(2루수) 선수 ID",
+        "pos_5_id": "수비 5번 포지션(3루수) 선수 ID",
+        "pos_6_id": "수비 6번 포지션(유격수) 선수 ID",
+        "pos_7_id": "수비 7번 포지션(좌익수) 선수 ID",
+        "pos_8_id": "수비 8번 포지션(중견수) 선수 ID",
+        "pos_9_id": "수비 9번 포지션(우익수) 선수 ID",
+        "px": "홈플레이트 통과 시 좌우 위치(PITCHf/x, ft, 포수 시점 우측 +)",
+        "pz": "홈플레이트 통과 시 높이(PITCHf/x, ft, 지면 기준)",
+        "pfx_x": "좌우 무브먼트 보정값(PITCHf/x, 무회전 직선궤적 대비 좌우 편차, in)",
+        "pfx_z": "상하 무브먼트 보정값(PITCHf/x, 무회전 직선궤적 대비 수직 편차, in, 중력 효과 반영)",
+        "pfx_x_raw": "좌우 무브먼트 원시 부호값(PITCHf/x, 암사이드/글러브사이드 방향 포함, in)",
+        "pfx_z_raw": "상하 무브먼트 원시 부호값(PITCHf/x, 라이즈/드롭 방향 포함, in)",
+        "x0": "릴리스 추정 좌우 좌표(PITCHf/x, y=50ft 기준, ft)",
+        "z0": "릴리스 추정 높이 좌표(PITCHf/x, y=50ft 기준, ft)",
+        "sz_top": "타자 스트라이크존 상단 높이(PITCHf/x, ft)",
+        "sz_bot": "타자 스트라이크존 하단 높이(PITCHf/x, ft)",
+        "y0": "트래킹 측정 기준 거리(PITCHf/x, 홈플레이트 앞 y=50ft)",
+        "vx0": "릴리스 기준점 좌우 속도 성분(PITCHf/x, y=50ft, ft/s)",
+        "vy0": "릴리스 기준점 전후 속도 성분(PITCHf/x, 홈 방향 음수, ft/s)",
+        "vz0": "릴리스 기준점 상하 속도 성분(PITCHf/x, ft/s)",
+        "ax": "좌우 가속도 성분(PITCHf/x, ft/s^2)",
+        "ay": "전후 가속도 성분(PITCHf/x, ft/s^2)",
+        "az": "상하 가속도 성분(PITCHf/x, 중력 포함, ft/s^2)",
+        "game_date": "경기 날짜(YYYYMMDD)",
+        "home": "홈팀 코드",
+        "away": "원정팀 코드",
+        "home_alias": "홈팀 약칭",
+        "away_alias": "원정팀 약칭",
+        "stadium": "경기장(구장) 이름",
+        "referee": "주심 이름",
+        "pa_number": "경기 내 타석 일련번호",
+        "pitch_number": "해당 타석 내 투구 번호",
+        "pitchID": "투구 고유 ID(날짜_시각 기반)",
+        "gameID": "경기 고유 ID(날짜+팀코드 기반)"
+      }
+    },
+    "re24_matrix_by_season": {
+      "category": "세이버메트릭스 분석",
+      "table_desc": "시즌별 24개 베이스-아웃 상황의 득점기대값(RE24) 매트릭스, 해당 상황 이후 이닝 종료까지의 평균 기대득점",
+      "update_freq": "수동/시즌 단위 재계산 (자동 갱신 아님)",
+      "columns": {
+        "season": "시즌 연도, KBO 정규시즌 (복합 PK)",
+        "outs_before": "플레이 시작 시점 아웃 카운트 0/1/2 (복합 PK)",
+        "base_state": "주자 점유 상태, 3자리 이진-십진 인코딩 (자리값 100=1루·10=2루·1=3루), 0=무주자·1=3루·10=2루·11=2·3루·100=1루·101=1·3루·110=1·2루·111=만루, 8개 상태 (복합 PK)",
+        "re_value": "해당 베이스-아웃 상황의 득점기대값(RE), 이닝 종료까지 평균 잔여 기대득점",
+        "n_obs": "해당 베이스-아웃 상황 표본 관측 수, RE 추정 신뢰도 지표"
+      }
+    },
+    "self_park_factor": {
+      "category": "세이버메트릭스 분석",
+      "table_desc": "구장·시즌별 자체 산출 파크팩터(PF) 테이블(득점·단타·2루타·3루타·홈런·장타율, 1000=리그평균 지수, 자체 PBP 다년 윈도우 기반)",
+      "update_freq": "매일 자동 (KST 05:00, park_factors 파이프라인)",
+      "columns": {
+        "season": "기준 시즌(연도), stadium과 함께 복합 PK",
+        "stadium": "홈구장명, season과 함께 복합 PK",
+        "games": "PF 산출에 사용된 윈도우 내 해당 구장 경기 수(샘플 크기)",
+        "run_pf": "득점 파크팩터(run PF), 홈/원정 득점율 비, 1000=리그평균 지수(1000 초과=타자친화·미만=투수친화)",
+        "single_pf": "1루타 파크팩터(1B PF), 홈/원정 1루타율 비, 1000=리그평균 지수",
+        "double_pf": "2루타 파크팩터(2B PF), 홈/원정 2루타율 비, 1000=리그평균 지수",
+        "triple_pf": "3루타 파크팩터(3B PF), 홈/원정 3루타율 비, 1000=리그평균 지수",
+        "hr_pf": "홈런 파크팩터(HR PF), 홈/원정 홈런율 비, 1000=리그평균 지수",
+        "slg_pf": "장타율 파크팩터(SLG PF), 홈/원정 장타율 비, 1000=리그평균 지수",
+        "source": "산출 출처·방식(self_pbp_3y=자체 PBP 3년 윈도우 산출)",
+        "captured_at": "PF 계산·적재 시각 타임스탬프(텍스트)",
+        "yrs": "실제 PF 산출에 사용된 윈도우 연수(가용 데이터 부족 시 1, 통상 3)",
+        "window": "PF 산출에 포함된 실제 시즌 목록(콤마 구분, 다년 평활화 구간)"
+      }
+    },
+    "stadium_alias": {
+      "category": "선수·팀·구장 마스터",
+      "table_desc": "KBO 구장 약칭(잠실·사직 등)을 구장 ID(stadium_id)에 매핑하는 별칭 매핑 테이블",
+      "update_freq": "고정 마스터 (수동)",
+      "columns": {
+        "short_name": "구장 약칭(예: 잠실/사직/광주), 매핑 기본키(PK), TEXT",
+        "stadium_id": "구장 식별자(stadium ID), 구장 마스터 참조 정수 키(INTEGER)"
+      }
+    },
+    "stadium_dim": {
+      "category": "선수·팀·구장 마스터",
+      "table_desc": "KBO 홈구장(경기장) 차원 테이블, 구장별 식별자·연고팀·운영 기간·임시구장 여부 메타데이터",
+      "update_freq": "고정 마스터 (수동)",
+      "columns": {
+        "stadium_id": "구장 고유 식별자(PK), 정수 키",
+        "full_name": "구장 정식 명칭(예: 서울종합운동장 야구장, 광주-KIA 챔피언스 필드)",
+        "primary_team": "주 사용(연고) 팀, 공동 사용 시 구분자 병기(예: LG·두산)",
+        "active_from": "사용 개시 연도(시즌 기준, 예: 1982)",
+        "active_to": "사용 종료 연도, 현재 사용 중이면 null",
+        "is_temporary": "임시구장 여부 플래그(0=상설, 1=임시)",
+        "note": "비고(통칭·공동 사용 등 부가 설명, 예: 잠실, 잠실 LG/두산 공동 사용)"
+      }
+    },
+    "stadium_team_history": {
+      "category": "선수·팀·구장 마스터",
+      "table_desc": "시즌×팀별 홈구장 사용 이력 및 홈경기 수 (파크팩터 산출용 구장-팀 매핑)",
+      "update_freq": "시즌 단위 (수동/파이프라인 carry)",
+      "columns": {
+        "season": "시즌 연도(복합 PK)",
+        "team": "홈팀 구단 약칭(예: KIA·KT·LG, 복합 PK)",
+        "stadium_id": "홈구장 식별자 정수 ID(복합 PK)",
+        "stadium_full": "홈구장 정식 명칭(예: 광주-KIA 챔피언스 필드)",
+        "n_home_games": "해당 시즌·해당 구장 홈경기 수(파크팩터 가중치용)"
+      }
+    },
+    "statiz_park_factor": {
+      "category": "외부 참고 (Statiz)",
+      "table_desc": "Statiz 수집 KBO 구장별·시즌별 파크팩터(PF) 지표, 중립=1000 기준 득점 및 타구유형별 구장 영향도",
+      "update_freq": "정적 — 외부(Statiz) 참고 스냅샷, 자동 갱신 안 함",
+      "columns": {
+        "season": "시즌 연도(PK)",
+        "stadium": "구장명(PK), 예: 서울종합운동장 야구장·목동야구장",
+        "games": "해당 시즌·구장 PF 산출 표본 경기 수",
+        "run_pf": "득점 파크팩터(run PF), 중립 1000 기준 구장의 득점 증감 지수(>1000 타자친화·<1000 투수친화)",
+        "single_pf": "1루타 파크팩터(single PF), 중립 1000 기준 구장의 1루타 발생 지수",
+        "double_pf": "2루타 파크팩터(double PF), 중립 1000 기준 구장의 2루타 발생 지수",
+        "triple_pf": "3루타 파크팩터(triple PF), 중립 1000 기준 구장의 3루타 발생 지수(외야 넓이·펜스 거리 등 구장 특성 반영)",
+        "hr_pf": "홈런 파크팩터(HR PF), 중립 1000 기준 구장의 홈런 발생 지수",
+        "slg_pf": "장타율 파크팩터(SLG PF), 중립 1000 기준 구장의 장타 생산 지수",
+        "source": "데이터 출처(예: Statiz)",
+        "captured_at": "데이터 수집 시각 타임스탬프(YYYY-MM-DD HH:MM:SS)"
+      }
+    },
+    "statiz_yearly_constants": {
+      "category": "외부 참고 (Statiz)",
+      "table_desc": "Statiz(스탯티즈) 출처 KBO 시즌별 세이버메트릭스 상수(wOBA 가중치·wOBA 스케일·도루 득점가치·FIP 상수·득점/승리 환산계수) 룩업 테이블",
+      "update_freq": "정적 — 외부(Statiz) 참고 스냅샷, 자동 갱신 안 함",
+      "columns": {
+        "season": "시즌 연도(KBO 리그 연도, PK)",
+        "woba": "리그 평균 가중출루율(league wOBA), 해당 시즌 리그 기준 wOBA 값",
+        "woba_scale": "wOBA 스케일(wOBA Scale), wOBA를 출루율(OBP) 척도로 환산하는 배율 상수",
+        "ebb": "볼넷 wOBA 가중치(wBB), 고의사구 제외 볼넷(BB)·사구(HBP)의 wOBA 득점가치 가중치",
+        "single_w": "1루타 wOBA 가중치(w1B), 단타의 wOBA 득점가치",
+        "double_w": "2루타 wOBA 가중치(w2B), 2루타의 wOBA 득점가치",
+        "triple_w": "3루타 wOBA 가중치(w3B), 3루타의 wOBA 득점가치",
+        "hr_w": "홈런 wOBA 가중치(wHR), 홈런의 wOBA 득점가치",
+        "sb2": "2루 도루 득점가치(runSB, 2루행), 2루 도루(SB) 성공의 양(+) 득점가치",
+        "sb3": "3루 도루 득점가치(runSB, 3루행), 3루 도루(SB) 성공의 양(+) 득점가치(초기 시즌 미산출 시 NULL)",
+        "cs2": "2루 도루실패 득점가치(runCS, 2루행), 2루 도루자(CS)의 음(-) 득점가치",
+        "cs3": "3루 도루실패 득점가치(runCS, 3루행), 3루 도루자(CS)의 음(-) 득점가치(초기 시즌 미산출 시 NULL)",
+        "r_per_epa": "타석당 득점 baseline 오프셋(runs per PA), wOBA 환산 시 평범한 아웃을 0 부근으로 맞추는 음(-)의 소수 보정상수",
+        "rpw": "승리당 득점(runs per win, RPW), 득점을 승리로 환산하는 환산계수",
+        "cfip": "FIP 상수(FIP constant, cFIP), 수비무관평균자책(FIP)을 리그 평균자책(ERA) 척도에 맞추는 보정 상수",
+        "source": "상수 출처(Statiz, 스탯티즈)",
+        "captured_at": "데이터 수집·적재 일시(타임스탬프)"
+      }
+    },
+    "teams": {
+      "category": "선수·팀·구장 마스터",
+      "table_desc": "KBO 10개 구단 기본 정보(팀ID·명칭·연고지·홈구장) 마스터 테이블",
+      "update_freq": "고정 마스터 (수동, 거의 불변)",
+      "columns": {
+        "team_id": "팀 식별자(PK), 구단 약어 코드(예: LG, KT, SSG)",
+        "team_name": "한글 구단명(예: LG 트윈스, KT 위즈)",
+        "team_name_en": "영문 구단명(예: LG Twins, KT Wiz)",
+        "city": "연고지 도시(예: 서울, 수원, 인천)",
+        "founded_year": "창단 연도(정수), 미입력 시 null(샘플 전 행 null)",
+        "stadium": "홈구장명(예: 잠실야구장, 수원 KT 위즈 파크, SSG 랜더스필드)"
+      }
+    },
+    "team_stadium_by_season": {
+      "category": "선수·팀·구장 마스터",
+      "table_desc": "시즌별 팀-홈구장 매핑 기준표(파크팩터(PF) 산출용 팀·시즌·구장 대응표)",
+      "update_freq": "매일 자동 (KST 05:00, 파이프라인이 최신 시즌까지 carry)",
+      "columns": {
+        "player_team": "팀 코드(예: LG), 컬럼명과 달리 선수 아닌 팀 식별자, season과 복합 PK",
+        "season": "시즌 연도(예: 2015), player_team과 복합 PK",
+        "stadium": "해당 팀·시즌 홈구장명(예: 서울종합운동장 야구장), 파크팩터(PF) 귀속 구장"
+      }
+    },
+    "weighted_pf_by_batter_season": {
+      "category": "세이버메트릭스 분석",
+      "table_desc": "타자별·시즌별 출전 구장 타석(PA) 가중 파크팩터(득점·홈런·장타) 및 홈구장 대비 편차 집계 (1000 기준, Statiz식)",
+      "update_freq": "매일 자동 (KST 05:00, park_factors 파이프라인)",
+      "columns": {
+        "batter_ID": "타자 고유 ID (복합 PK, play_by_play.batter_ID 참조)",
+        "season": "시즌 연도 (복합 PK)",
+        "n_PA": "가중 산출 대상 총 타석 수(PA)",
+        "wpf_run": "타석 가중 득점 파크팩터(PA-weighted run PF, 출전 구장별 PF의 PA가중 평균, 1000 기준)",
+        "wpf_hr": "타석 가중 홈런 파크팩터(PA-weighted HR PF, 1000 기준)",
+        "wpf_slg": "타석 가중 장타율 파크팩터(PA-weighted SLG PF, 1000 기준)",
+        "home_stadium": "소속 홈구장명",
+        "home_pa_n": "홈구장 소화 타석 수(home PA)",
+        "home_run_pf": "홈구장 득점 파크팩터(run PF, 1000 기준)",
+        "home_hr_pf": "홈구장 홈런 파크팩터(HR PF, 1000 기준)",
+        "home_slg_pf": "홈구장 장타율 파크팩터(SLG PF, 1000 기준)",
+        "home_share": "전체 타석 대비 홈구장 타석 비중(home_pa_n/n_PA, %)",
+        "run_pf_diff": "가중 득점 PF와 홈구장 득점 PF의 차(wpf_run - home_run_pf, 포인트)",
+        "run_pf_diff_pct": "홈구장 득점 PF 대비 득점 PF 편차율((wpf_run - home_run_pf)/home_run_pf, %)",
+        "hr_pf_diff_pct": "홈구장 홈런 PF 대비 홈런 PF 편차율((wpf_hr - home_hr_pf)/home_hr_pf, %)"
+      }
+    },
+    "wrc_plus_comparison": {
+      "category": "세이버메트릭스 분석",
+      "table_desc": "타자×시즌 단위로 wOBA·wRAA(FanGraphs 방식)·득점 파크팩터(PF)를 산출하고, PF 적용 방식(홈구장 단독/홈-원정 절반/PA가중)별 조정득점생산(wRC+) 결과를 비교하는 세이버메트릭스 분석 테이블",
+      "update_freq": "매일 자동 (KST 05:00, park_factors 파이프라인)",
+      "columns": {
+        "batter_ID": "타자 고유 ID (기본키)",
+        "season": "시즌 연도 (기본키)",
+        "PA": "타석 수(plate appearances), wRAA·wRC+ 산출 분모",
+        "OBP_denom": "wOBA 분모(타수AB+볼넷BB-고의사구IBB+사구HBP+희생플라이SF), 출루율(OBP)식 분모",
+        "wOBA": "가중출루율(wOBA), 타격 이벤트별 득점가치(run value)로 가중한 출루 지표",
+        "lg_wOBA": "리그평균 가중출루율(league wOBA), 해당 시즌 기준선",
+        "wOBA_scale": "wOBA 스케일(wOBA scale), wOBA를 득점 단위로 환산하는 연도별 계수(리그평균 OBP 척도 정합용)",
+        "wRAA_FG": "FanGraphs 방식 평균대비가중득점(wRAA), ((wOBA-lg_wOBA)/wOBA_scale)×PA",
+        "home_run_pf": "홈구장 득점 파크팩터(home park run PF), 1000=중립 기준 (샘플상 pf_home과 동일값)",
+        "wpf_run": "PA가중 득점 파크팩터(PA-weighted run PF), 방문 구장별 타석 비중 가중 평균 (샘플상 pf_weighted와 동일값)",
+        "pf_home": "홈구장 단독 적용 득점 파크팩터(home run PF), 1000=중립",
+        "pf_half": "홈-원정 절반 보정 득점 파크팩터(half run PF), 홈 PF와 중립(1000)의 산술평균",
+        "pf_weighted": "PA가중 득점 파크팩터(PA-weighted run PF), 실제 방문 구장 타석 가중 산출치",
+        "wRC_home": "홈구장 단독 PF 적용 조정득점생산(wRC+), 100=리그평균",
+        "wRC_half": "홈-원정 절반 PF 적용 조정득점생산(wRC+), 100=리그평균",
+        "wRC_weighted": "PA가중 PF 적용 조정득점생산(wRC+), 100=리그평균"
+      }
+    },
+    "team_stadium_by_season_bak": {
+      "category": "백업",
+      "table_desc": "[백업] team_stadium_by_season 의 직전 스냅샷 (롤링 백업)",
+      "update_freq": "백업 — park_factors 파이프라인 실행 직전 자동 갱신 (1단계 롤백용)",
+      "columns": {
+        "player_team": "팀 코드(예: LG), 컬럼명과 달리 선수 아닌 팀 식별자, season과 복합 PK",
+        "season": "시즌 연도(예: 2015), player_team과 복합 PK",
+        "stadium": "해당 팀·시즌 홈구장명(예: 서울종합운동장 야구장), 파크팩터(PF) 귀속 구장"
+      }
+    },
+    "team_stadium_by_season_bak_20260605": {
+      "category": "백업",
+      "table_desc": "[백업] team_stadium_by_season 의 2026-06-05 초기 마이그레이션 스냅샷 (고정)",
+      "update_freq": "백업 — 2026-06-05 초기 마이그레이션 1회성 스냅샷 (고정)",
+      "columns": {
+        "player_team": "팀 코드(예: LG), 컬럼명과 달리 선수 아닌 팀 식별자, season과 복합 PK",
+        "season": "시즌 연도(예: 2015), player_team과 복합 PK",
+        "stadium": "해당 팀·시즌 홈구장명(예: 서울종합운동장 야구장), 파크팩터(PF) 귀속 구장"
+      }
+    },
+    "weighted_pf_by_batter_season_bak": {
+      "category": "백업",
+      "table_desc": "[백업] weighted_pf_by_batter_season 의 직전 스냅샷 (롤링 백업)",
+      "update_freq": "백업 — park_factors 파이프라인 실행 직전 자동 갱신 (1단계 롤백용)",
+      "columns": {
+        "batter_ID": "타자 고유 ID (복합 PK, play_by_play.batter_ID 참조)",
+        "season": "시즌 연도 (복합 PK)",
+        "n_PA": "가중 산출 대상 총 타석 수(PA)",
+        "wpf_run": "타석 가중 득점 파크팩터(PA-weighted run PF, 출전 구장별 PF의 PA가중 평균, 1000 기준)",
+        "wpf_hr": "타석 가중 홈런 파크팩터(PA-weighted HR PF, 1000 기준)",
+        "wpf_slg": "타석 가중 장타율 파크팩터(PA-weighted SLG PF, 1000 기준)",
+        "home_stadium": "소속 홈구장명",
+        "home_pa_n": "홈구장 소화 타석 수(home PA)",
+        "home_run_pf": "홈구장 득점 파크팩터(run PF, 1000 기준)",
+        "home_hr_pf": "홈구장 홈런 파크팩터(HR PF, 1000 기준)",
+        "home_slg_pf": "홈구장 장타율 파크팩터(SLG PF, 1000 기준)",
+        "home_share": "전체 타석 대비 홈구장 타석 비중(home_pa_n/n_PA, %)",
+        "run_pf_diff": "가중 득점 PF와 홈구장 득점 PF의 차(wpf_run - home_run_pf, 포인트)",
+        "run_pf_diff_pct": "홈구장 득점 PF 대비 득점 PF 편차율((wpf_run - home_run_pf)/home_run_pf, %)",
+        "hr_pf_diff_pct": "홈구장 홈런 PF 대비 홈런 PF 편차율((wpf_hr - home_hr_pf)/home_hr_pf, %)"
+      }
+    },
+    "weighted_pf_by_batter_season_bak_20260605": {
+      "category": "백업",
+      "table_desc": "[백업] weighted_pf_by_batter_season 의 2026-06-05 초기 마이그레이션 스냅샷 (고정)",
+      "update_freq": "백업 — 2026-06-05 초기 마이그레이션 1회성 스냅샷 (고정)",
+      "columns": {
+        "batter_ID": "타자 고유 ID (복합 PK, play_by_play.batter_ID 참조)",
+        "season": "시즌 연도 (복합 PK)",
+        "n_PA": "가중 산출 대상 총 타석 수(PA)",
+        "wpf_run": "타석 가중 득점 파크팩터(PA-weighted run PF, 출전 구장별 PF의 PA가중 평균, 1000 기준)",
+        "wpf_hr": "타석 가중 홈런 파크팩터(PA-weighted HR PF, 1000 기준)",
+        "wpf_slg": "타석 가중 장타율 파크팩터(PA-weighted SLG PF, 1000 기준)",
+        "home_stadium": "소속 홈구장명",
+        "home_pa_n": "홈구장 소화 타석 수(home PA)",
+        "home_run_pf": "홈구장 득점 파크팩터(run PF, 1000 기준)",
+        "home_hr_pf": "홈구장 홈런 파크팩터(HR PF, 1000 기준)",
+        "home_slg_pf": "홈구장 장타율 파크팩터(SLG PF, 1000 기준)",
+        "home_share": "전체 타석 대비 홈구장 타석 비중(home_pa_n/n_PA, %)",
+        "run_pf_diff": "가중 득점 PF와 홈구장 득점 PF의 차(wpf_run - home_run_pf, 포인트)",
+        "run_pf_diff_pct": "홈구장 득점 PF 대비 득점 PF 편차율((wpf_run - home_run_pf)/home_run_pf, %)",
+        "hr_pf_diff_pct": "홈구장 홈런 PF 대비 홈런 PF 편차율((wpf_hr - home_hr_pf)/home_hr_pf, %)"
+      }
+    },
+    "wrc_plus_comparison_bak": {
+      "category": "백업",
+      "table_desc": "[백업] wrc_plus_comparison 의 직전 스냅샷 (롤링 백업)",
+      "update_freq": "백업 — park_factors 파이프라인 실행 직전 자동 갱신 (1단계 롤백용)",
+      "columns": {
+        "batter_ID": "타자 고유 ID (기본키)",
+        "season": "시즌 연도 (기본키)",
+        "PA": "타석 수(plate appearances), wRAA·wRC+ 산출 분모",
+        "OBP_denom": "wOBA 분모(타수AB+볼넷BB-고의사구IBB+사구HBP+희생플라이SF), 출루율(OBP)식 분모",
+        "wOBA": "가중출루율(wOBA), 타격 이벤트별 득점가치(run value)로 가중한 출루 지표",
+        "lg_wOBA": "리그평균 가중출루율(league wOBA), 해당 시즌 기준선",
+        "wOBA_scale": "wOBA 스케일(wOBA scale), wOBA를 득점 단위로 환산하는 연도별 계수(리그평균 OBP 척도 정합용)",
+        "wRAA_FG": "FanGraphs 방식 평균대비가중득점(wRAA), ((wOBA-lg_wOBA)/wOBA_scale)×PA",
+        "home_run_pf": "홈구장 득점 파크팩터(home park run PF), 1000=중립 기준 (샘플상 pf_home과 동일값)",
+        "wpf_run": "PA가중 득점 파크팩터(PA-weighted run PF), 방문 구장별 타석 비중 가중 평균 (샘플상 pf_weighted와 동일값)",
+        "pf_home": "홈구장 단독 적용 득점 파크팩터(home run PF), 1000=중립",
+        "pf_half": "홈-원정 절반 보정 득점 파크팩터(half run PF), 홈 PF와 중립(1000)의 산술평균",
+        "pf_weighted": "PA가중 득점 파크팩터(PA-weighted run PF), 실제 방문 구장 타석 가중 산출치",
+        "wRC_home": "홈구장 단독 PF 적용 조정득점생산(wRC+), 100=리그평균",
+        "wRC_half": "홈-원정 절반 PF 적용 조정득점생산(wRC+), 100=리그평균",
+        "wRC_weighted": "PA가중 PF 적용 조정득점생산(wRC+), 100=리그평균"
+      }
+    },
+    "wrc_plus_comparison_bak_20260605": {
+      "category": "백업",
+      "table_desc": "[백업] wrc_plus_comparison 의 2026-06-05 초기 마이그레이션 스냅샷 (고정)",
+      "update_freq": "백업 — 2026-06-05 초기 마이그레이션 1회성 스냅샷 (고정)",
+      "columns": {
+        "batter_ID": "타자 고유 ID (기본키)",
+        "season": "시즌 연도 (기본키)",
+        "PA": "타석 수(plate appearances), wRAA·wRC+ 산출 분모",
+        "OBP_denom": "wOBA 분모(타수AB+볼넷BB-고의사구IBB+사구HBP+희생플라이SF), 출루율(OBP)식 분모",
+        "wOBA": "가중출루율(wOBA), 타격 이벤트별 득점가치(run value)로 가중한 출루 지표",
+        "lg_wOBA": "리그평균 가중출루율(league wOBA), 해당 시즌 기준선",
+        "wOBA_scale": "wOBA 스케일(wOBA scale), wOBA를 득점 단위로 환산하는 연도별 계수(리그평균 OBP 척도 정합용)",
+        "wRAA_FG": "FanGraphs 방식 평균대비가중득점(wRAA), ((wOBA-lg_wOBA)/wOBA_scale)×PA",
+        "home_run_pf": "홈구장 득점 파크팩터(home park run PF), 1000=중립 기준 (샘플상 pf_home과 동일값)",
+        "wpf_run": "PA가중 득점 파크팩터(PA-weighted run PF), 방문 구장별 타석 비중 가중 평균 (샘플상 pf_weighted와 동일값)",
+        "pf_home": "홈구장 단독 적용 득점 파크팩터(home run PF), 1000=중립",
+        "pf_half": "홈-원정 절반 보정 득점 파크팩터(half run PF), 홈 PF와 중립(1000)의 산술평균",
+        "pf_weighted": "PA가중 득점 파크팩터(PA-weighted run PF), 실제 방문 구장 타석 가중 산출치",
+        "wRC_home": "홈구장 단독 PF 적용 조정득점생산(wRC+), 100=리그평균",
+        "wRC_half": "홈-원정 절반 PF 적용 조정득점생산(wRC+), 100=리그평균",
+        "wRC_weighted": "PA가중 PF 적용 조정득점생산(wRC+), 100=리그평균"
+      }
+    }
+  }
+}
