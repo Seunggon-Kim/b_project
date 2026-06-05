@@ -637,6 +637,271 @@ def _team_park_factors(cur, ref_season):
     return pf
 
 
+def _eff_min_pa(cur, season, requested):
+    """진행중 시즌은 규정타석(3.1 × 팀 경기수)으로 임계값 자동 하향. 완료시즌은 요청값(기본 300) 유지."""
+    try:
+        g = cur.execute("SELECT COUNT(DISTINCT gameID) FROM play_by_play WHERE substr(gameID,1,4)=?",
+                        (str(season),)).fetchone()[0] or 0
+    except Exception:
+        g = 0
+    qual = int(round(3.1 * round(2.0 * g / 10.0)))   # 10 teams; team_games = 2*league_games/10
+    return min(requested, qual) if qual > 0 else requested
+
+
+@app.get("/wrc/seasons")
+async def wrc_seasons(min_pa: int = 300):
+    """시즌 목록 + summary. 진행중 시즌은 규정타석(3.1×팀경기)으로 min_pa 자동 하향(완료시즌 기본 300). 각 행에 적용 min_pa 포함."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        WITH gp AS (
+            SELECT CAST(substr(gameID,1,4) AS INT) AS season, COUNT(DISTINCT gameID) AS g
+            FROM play_by_play WHERE substr(gameID,1,4) BETWEEN '2015' AND '2026' GROUP BY 1
+        ),
+        thr AS (
+            SELECT season, MIN(?, CAST(ROUND(3.1 * ROUND(2.0*g/10.0)) AS INT)) AS t FROM gp
+        )
+        SELECT w.season,
+               (SELECT t FROM thr WHERE thr.season = w.season) AS min_pa,
+               COUNT(*) AS n_batters,
+               ROUND(AVG(w.wRC_home), 2) AS mean_wrc_home,
+               ROUND(AVG(w.wRC_half), 2) AS mean_wrc_half,
+               ROUND(AVG(w.wRC_weighted), 2) AS mean_wrc_weighted,
+               ROUND(AVG(w.wRC_weighted - w.wRC_half), 2) AS mean_delta
+        FROM wrc_plus_comparison w
+        JOIN thr ON thr.season = w.season
+        WHERE w.PA >= thr.t
+        GROUP BY w.season
+        ORDER BY w.season
+    """, (min_pa,))
+    rows = [dict(r) for r in cur.fetchall()]
+    for r in rows:
+        cur.execute("SELECT (wRC_weighted - wRC_half) FROM wrc_plus_comparison WHERE PA>=? AND season=?",
+                    (r["min_pa"], r["season"]))
+        deltas = [x[0] for x in cur.fetchall()]
+        n = len(deltas)
+        if n > 1:
+            mean = sum(deltas) / n
+            r["std_delta"] = round((sum((d - mean)**2 for d in deltas) / (n-1))**0.5, 2)
+        else:
+            r["std_delta"] = None
+    conn.close()
+    return rows
+
+
+@app.get("/wrc/by-stadium")
+async def wrc_by_stadium(season: int, min_pa: int = 300):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    min_pa = _eff_min_pa(cur, season, min_pa)
+    cur.execute("""
+        SELECT wpf.home_stadium AS home_stadium,
+               sd.primary_team,
+               COUNT(*) AS n,
+               ROUND(AVG(wpf.home_run_pf), 1) AS home_pf,
+               ROUND(AVG(wpf.wpf_run), 1) AS weighted_pf,
+               ROUND(AVG(wrc.wRC_home), 2) AS mean_home,
+               ROUND(AVG(wrc.wRC_half), 2) AS mean_half,
+               ROUND(AVG(wrc.wRC_weighted), 2) AS mean_weighted,
+               ROUND(AVG(wrc.wRC_weighted - wrc.wRC_half), 2) AS delta_mean
+        FROM wrc_plus_comparison wrc
+        JOIN weighted_pf_by_batter_season wpf
+          ON wrc.batter_ID = wpf.batter_ID AND wrc.season = wpf.season
+        LEFT JOIN stadium_dim sd ON sd.full_name = wpf.home_stadium
+        WHERE wrc.PA >= ? AND wrc.season = ?
+        GROUP BY wpf.home_stadium, sd.primary_team
+        ORDER BY mean_half DESC
+    """, (min_pa, season))
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+@app.get("/wrc/leaderboard")
+async def wrc_leaderboard(season: int, sort: str = "half", n: int = 50, min_pa: int = 300):
+    sort_col = {"home": "wRC_home", "half": "wRC_half", "weighted": "wRC_weighted",
+                "wOBA": "wOBA"}.get(sort, "wRC_half")
+    conn = get_db_connection()
+    cur = conn.cursor()
+    min_pa = _eff_min_pa(cur, season, min_pa)
+    cur.execute(f"""
+        SELECT wrc.batter_ID,
+               COALESCE(b.player_name, 'Unknown') AS player_name,
+               b.player_team,
+               wrc.season, wrc.PA,
+               ROUND(wrc.wOBA, 4) AS wOBA,
+               ROUND(wrc.wRAA_FG, 1) AS wRAA,
+               wpf.home_stadium,
+               ROUND(wpf.home_run_pf, 1) AS home_pf,
+               ROUND(wpf.wpf_run, 1) AS weighted_pf,
+               ROUND(wrc.wRC_home, 1) AS wRC_home,
+               ROUND(wrc.wRC_half, 1) AS wRC_half,
+               ROUND(wrc.wRC_weighted, 1) AS wRC_weighted,
+               ROUND(wrc.wRC_weighted - wrc.wRC_half, 2) AS delta_methods
+        FROM wrc_plus_comparison wrc
+        JOIN weighted_pf_by_batter_season wpf
+          ON wrc.batter_ID = wpf.batter_ID AND wrc.season = wpf.season
+        LEFT JOIN kbo_official_batter_stats b
+          ON b.player_id = CAST(wrc.batter_ID AS TEXT) AND b.season = wrc.season
+        WHERE wrc.season = ? AND wrc.PA >= ?
+        ORDER BY {sort_col} DESC
+        LIMIT ?
+    """, (season, min_pa, n))
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+@app.get("/wrc/top-changes")
+async def wrc_top_changes(season: int, direction: str = "up", n: int = 15, min_pa: int = 300):
+    if direction not in ("up", "down"):
+        raise HTTPException(status_code=400, detail="direction must be 'up' or 'down'")
+    order = "DESC" if direction == "up" else "ASC"
+    conn = get_db_connection()
+    cur = conn.cursor()
+    min_pa = _eff_min_pa(cur, season, min_pa)
+    cur.execute(f"""
+        SELECT wrc.batter_ID,
+               COALESCE(b.player_name, 'Unknown') AS player_name,
+               b.player_team,
+               wrc.season, wrc.PA,
+               wpf.home_stadium,
+               ROUND(wpf.home_run_pf, 1) AS home_pf,
+               ROUND(wpf.wpf_run, 1) AS weighted_pf,
+               ROUND(wrc.wRC_half, 1) AS wRC_half,
+               ROUND(wrc.wRC_weighted, 1) AS wRC_weighted,
+               ROUND(wrc.wRC_weighted - wrc.wRC_half, 2) AS delta
+        FROM wrc_plus_comparison wrc
+        JOIN weighted_pf_by_batter_season wpf
+          ON wrc.batter_ID = wpf.batter_ID AND wrc.season = wpf.season
+        LEFT JOIN kbo_official_batter_stats b
+          ON b.player_id = CAST(wrc.batter_ID AS TEXT) AND b.season = wrc.season
+        WHERE wrc.season = ? AND wrc.PA >= ?
+        ORDER BY (wrc.wRC_weighted - wrc.wRC_half) {order}
+        LIMIT ?
+    """, (season, min_pa, n))
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+@app.get("/wrc/batter/{batter_id}")
+async def wrc_batter_history(batter_id: str):
+    """특정 batter 시즌별 history + Stadium별 PA 분포"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT wrc.season, wrc.PA,
+               wpf.home_stadium,
+               ROUND(wrc.wOBA, 4) AS wOBA,
+               ROUND(wrc.wRAA_FG, 1) AS wRAA,
+               ROUND(wpf.home_run_pf, 1) AS home_pf,
+               ROUND(wpf.wpf_run, 1) AS weighted_pf,
+               ROUND(wrc.wRC_home, 1) AS wRC_home,
+               ROUND(wrc.wRC_half, 1) AS wRC_half,
+               ROUND(wrc.wRC_weighted, 1) AS wRC_weighted,
+               COALESCE(b.player_name, 'Unknown') AS player_name,
+               b.player_team,
+               b.batting_average AS AVG, b.on_base_percentage AS OBP,
+               b.slugging_percentage AS SLG, b.on_base_plus_slugging AS OPS
+        FROM wrc_plus_comparison wrc
+        JOIN weighted_pf_by_batter_season wpf
+          ON wrc.batter_ID = wpf.batter_ID AND wrc.season = wpf.season
+        LEFT JOIN kbo_official_batter_stats b
+          ON b.player_id = CAST(wrc.batter_ID AS TEXT) AND b.season = wrc.season
+        WHERE wrc.batter_ID = ?
+        ORDER BY wrc.season
+    """, (batter_id,))
+    history = [dict(r) for r in cur.fetchall()]
+
+    cur.execute("""
+        SELECT substr(gameID,1,4) AS season, stadium, COUNT(*) AS pa
+        FROM play_by_play
+        WHERE batter_ID = ? AND substr(gameID,1,4) BETWEEN '2015' AND '2026'
+        GROUP BY season, stadium
+        ORDER BY season, pa DESC
+    """, (batter_id,))
+    stadium_dist = [dict(r) for r in cur.fetchall()]
+
+    name = history[0]["player_name"] if history else None
+    conn.close()
+    return {"batter_id": batter_id, "player_name": name,
+            "history": history, "stadium_distribution": stadium_dist}
+
+
+@app.get("/wrc/batter-search")
+async def wrc_batter_search(q: str = "", season: int = 0):
+    """batter 이름·ID 검색 (부분 일치). season=0이면 모든 시즌."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    where = "b.player_name LIKE ?"
+    params = [f"%{q}%"]
+    if season:
+        where += " AND b.season = ?"
+        params.append(season)
+    cur.execute(f"""
+        SELECT DISTINCT b.player_id, b.player_name, b.player_team, b.season
+        FROM kbo_official_batter_stats b
+        WHERE {where}
+        ORDER BY b.season DESC, b.player_name
+        LIMIT 50
+    """, params)
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+@app.get("/wrc/distribution")
+async def wrc_distribution(season: int, min_pa: int = 100):
+    """시즌 wRC+ 분포 (히스토그램, 5점 bin) + percentile"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    min_pa = _eff_min_pa(cur, season, min_pa)
+    cur.execute("""
+        SELECT wRC_home, wRC_half, wRC_weighted
+        FROM wrc_plus_comparison
+        WHERE PA >= ? AND season = ?
+    """, (min_pa, season))
+    rows = cur.fetchall()
+    conn.close()
+
+    def stats(values):
+        v = sorted(x for x in values if x is not None)
+        n = len(v)
+        if n == 0:
+            return {"n": 0}
+        return {
+            "n": n,
+            "mean": round(sum(v) / n, 2),
+            "p10": round(v[int(n * 0.10)], 1),
+            "median": round(v[n // 2], 1),
+            "p90": round(v[int(n * 0.90)], 1),
+        }
+
+    def histogram(values, bin_size=5, min_v=40, max_v=200):
+        bins = {}
+        for v in values:
+            if v is None:
+                continue
+            b = max(min_v, min(max_v, int(v // bin_size) * bin_size))
+            bins[b] = bins.get(b, 0) + 1
+        return [{"bin": k, "count": v} for k, v in sorted(bins.items())]
+
+    home = [r[0] for r in rows]
+    half = [r[1] for r in rows]
+    weighted = [r[2] for r in rows]
+
+    return {
+        "season": season, "n": len(rows), "min_pa": min_pa,
+        "stats": {"home": stats(home), "half": stats(half), "weighted": stats(weighted)},
+        "histogram": {
+            "home": histogram(home),
+            "half": histogram(half),
+            "weighted": histogram(weighted),
+        },
+    }
+
+
 @app.get("/leaders")
 async def get_leaders(season: int = None):
     """KBO 개인 순위 Top5. 타자: 타율/OPS/wRC+, 투수: ERA/이닝/탈삼진.
@@ -684,58 +949,17 @@ async def get_leaders(season: int = None):
         avg_top = _batter_top("batting_average")
         ops_top = _batter_top("on_base_plus_slugging")
 
-        # 파크팩터 자체 계산 (해당 시즌 경기 없으면 직전 보유 시즌)
-        cur.execute("SELECT MAX(season) FROM games WHERE season <= ? AND home_score IS NOT NULL", (season,))
-        prow = cur.fetchone()
-        pf_season = prow[0] if prow and prow[0] else None
-        pf_map = _team_park_factors(cur, pf_season) if pf_season else {}
-
-        # wRC+ : wrc-comparison 산식 + 자체 파크팩터, 현재 데이터로 실시간 계산
-        wrc_top = []
-        wconst = _WOBA_CONST.get(season)
-        if wconst:
-            woba_scale, ebb, w1, w2, w3, whr = wconst
-            cur.execute(
-                "SELECT p.player_name AS name, p.team_id AS team, "
-                "b.single AS h, b.double AS d2, b.triple AS d3, b.home_run AS hr, "
-                "b.base_on_balls AS bb, b.intentional_base_on_balls AS ibb, b.hit_by_pitch AS hbp, "
-                "b.at_bat AS ab, b.sacrifice_fly AS sf, b.plate_appearance AS pa, b.run AS run "
-                "FROM kbo_official_batter_stats b JOIN players p ON b.player_id=p.player_id "
-                "WHERE b.season=?",
-                (season,),
-            )
-            brows = [dict(r) for r in cur.fetchall()]
-
-            def _wnum(r):
-                b1 = (r["h"] or 0) - (r["d2"] or 0) - (r["d3"] or 0) - (r["hr"] or 0)
-                return (ebb * ((r["bb"] or 0) - (r["ibb"] or 0)) + ebb * (r["hbp"] or 0)
-                        + w1 * b1 + w2 * (r["d2"] or 0) + w3 * (r["d3"] or 0) + whr * (r["hr"] or 0))
-
-            def _wden(r):
-                return (r["ab"] or 0) + (r["bb"] or 0) - (r["ibb"] or 0) + (r["sf"] or 0) + (r["hbp"] or 0)
-
-            tot_num = sum(_wnum(r) for r in brows)
-            tot_den = sum(_wden(r) for r in brows) or 1
-            lg_woba = tot_num / tot_den
-            tot_run = sum((r["run"] or 0) for r in brows)
-            tot_pa = sum((r["pa"] or 0) for r in brows) or 1
-            lg_rpa = tot_run / tot_pa
-
-            scored = []
-            for r in brows:
-                if (r["pa"] or 0) < qual_pa:
-                    continue
-                den = _wden(r)
-                if den <= 0:
-                    continue
-                woba = _wnum(r) / den
-                wraa_pa = (woba - lg_woba) / woba_scale
-                pf = pf_map.get(r["team"], 1.0)
-                wrc = (wraa_pa + lg_rpa + (lg_rpa - pf * lg_rpa)) / lg_rpa * 100.0
-                scored.append((wrc, r))
-            scored.sort(key=lambda x: -x[0])
-            wrc_top = [{"name": r["name"], "team": r["team"], "code": _code(r["team"]),
-                        "value": "%.1f" % wrc} for wrc, r in scored[:5]]
+        # wRC+ : wrc_plus_comparison(자체 파크팩터 3년 산식, half-PF)에서 직접 Top5 — 'wRC+ 강건성' 페이지와 동일 출처
+        cur.execute(
+            "SELECT p.player_name AS name, p.team_id AS team, ROUND(w.wRC_half, 1) AS wrc "
+            "FROM wrc_plus_comparison w JOIN players p ON p.player_id = CAST(w.batter_ID AS TEXT) "
+            "WHERE w.season=? AND w.PA >= ? "
+            "ORDER BY w.wRC_half DESC LIMIT 5",
+            (season, qual_pa),
+        )
+        wrc_top = [{"name": d["name"], "team": d["team"], "code": _code(d["team"]),
+                    "value": ("%.1f" % d["wrc"]) if d["wrc"] is not None else "-"}
+                   for d in (dict(r) for r in cur.fetchall())]
 
         cur.execute(
             "SELECT p.player_name AS name, p.team_id AS team, ps.earned_run_average AS era, "
@@ -773,7 +997,7 @@ async def get_leaders(season: int = None):
             "season": season,
             "qual_pa": qual_pa,
             "qual_ip": team_g,
-            "wrc_pf_season": pf_season,
+            "wrc_pf_season": season,
             "batter": {"avg": avg_top, "ops": ops_top, "wrc": wrc_top},
             "pitcher": {"era": era_top, "ip": ip_top, "k": k_top},
         }

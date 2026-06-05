@@ -83,7 +83,7 @@
             <div class="kpi-card">
                 <div class="kpi-label">Qualified batters</div>
                 <div class="kpi-value" id="kpi-n">—</div>
-                <div class="kpi-sub">≥300 PA</div>
+                <div class="kpi-sub" id="kpi-n-sub">≥300 PA</div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-label">평균 wRC+ (Half-PF, default)</div>
@@ -203,12 +203,14 @@
         ]);
 
         const cur = seasons.find(s => s.season === season);
+        const qpa = cur?.min_pa ?? 300;
         document.getElementById('kpi-n').textContent = cur ? cur.n_batters : '—';
+        document.getElementById('kpi-n-sub').textContent = `≥${qpa} PA`;
         document.getElementById('kpi-half').textContent = fmt(cur?.mean_wrc_half, 1);
         document.getElementById('kpi-weighted').textContent = fmt(cur?.mean_wrc_weighted, 1);
         document.getElementById('kpi-std').textContent = fmt(cur?.std_delta, 2);
         document.getElementById('season-info').textContent =
-            `(${stadium.length} stadiums, qualified ≥300 PA)`;
+            `(${stadium.length} stadiums, qualified ≥${qpa} PA)`;
 
         renderStadiumChart(stadium);
         renderDistribution(dist);
