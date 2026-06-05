@@ -5,13 +5,15 @@ Fixed: API endpoint for Pitch Usage, encoding issues, and indentation
 """
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 import sqlite3
 from pathlib import Path
 from typing import Optional, List
 import datetime
 import traceback
 import sys
+import csv
+import io
 import requests
 import xml.etree.ElementTree as ET
 import urllib.parse
@@ -499,6 +501,401 @@ async def get_schedule(date: str = None):
         return result
     except Exception as e:
         return {"date": date, "count": 0, "games": [], "error": str(e)}
+
+
+# ===== KBO 팀 순위 (koreabaseball.com 공식 TeamRank.aspx 파싱) =====
+import re as _re
+import html as _html
+
+_STANDINGS_CACHE = {}
+_STANDINGS_TTL = 300  # seconds (순위는 자주 바뀌지 않음)
+
+# KBO 표기명 -> dashboard 엠블럼 코드(assets/logos/{code}.png)
+_KBO_TEAM_CODE = {
+    "LG": "LG", "KT": "KT", "두산": "OB", "삼성": "SS", "KIA": "HT",
+    "롯데": "LT", "SSG": "SK", "NC": "NC", "키움": "WO", "한화": "HH",
+}
+
+
+@app.get("/standings")
+async def get_standings():
+    """KBO 정규시즌 팀 순위 (koreabaseball.com 공식 TeamRank.aspx 스크래핑). 5분 캐시.
+    컬럼: 순위, 팀명, 경기, 승, 패, 무, 승률, 게임차, 최근10경기, 연속, 홈, 방문.
+    순위표만 파싱(summary="순위..."); 팀간승패표(summary="팀간승패표")는 제외."""
+    try:
+        cached = _STANDINGS_CACHE.get("rank")
+        if cached and (_time.time() - cached[0] < _STANDINGS_TTL):
+            return cached[1]
+
+        r = requests.get(
+            "https://www.koreabaseball.com/Record/TeamRank/TeamRank.aspx",
+            headers={"User-Agent": "Mozilla/5.0"}, timeout=8,
+        )
+        r.raise_for_status()
+        page = r.text
+
+        m = _re.search(r'<table[^>]*summary="순위[^"]*"[^>]*>(.*?)</table>', page, _re.S)
+        teams = []
+        if m:
+            tb = _re.search(r'<tbody>(.*?)</tbody>', m.group(1), _re.S)
+            body = tb.group(1) if tb else m.group(1)
+            for tr in _re.findall(r'<tr[^>]*>(.*?)</tr>', body, _re.S):
+                cells = [_html.unescape(_re.sub(r'<[^>]+>', '', c)).strip()
+                         for c in _re.findall(r'<td[^>]*>(.*?)</td>', tr, _re.S)]
+                if len(cells) >= 8 and cells[0].isdigit():
+                    name = cells[1]
+                    teams.append({
+                        "rank": int(cells[0]),
+                        "team": name,
+                        "code": _KBO_TEAM_CODE.get(name, ""),
+                        "games": cells[2],
+                        "wins": cells[3],
+                        "losses": cells[4],
+                        "draws": cells[5],
+                        "pct": cells[6],
+                        "gb": cells[7],
+                        "last10": cells[8] if len(cells) > 8 else "",
+                        "streak": cells[9] if len(cells) > 9 else "",
+                    })
+
+        result = {"count": len(teams), "teams": teams, "source": "koreabaseball.com"}
+        if teams:
+            _STANDINGS_CACHE["rank"] = (_time.time(), result)
+        return result
+    except Exception as e:
+        return {"count": 0, "teams": [], "error": str(e)}
+
+
+# ===== KBO 개인 순위 (타자/투수 Top5 — 대시보드 DB) =====
+_LEADERS_CACHE = {}
+_LEADERS_TTL = 600  # seconds
+
+# 연도별 Statiz 상수: (woba_scale, ebb, single_w, double_w, triple_w, hr_w)
+# 출처: research/data/statiz_yearly_constants.csv. wrc-comparison 페이지와 동일 산식.
+_WOBA_CONST = {
+    2011: (1.081, 0.407, 0.581, 0.972, 1.168, 1.364),
+    2012: (1.134, 0.395, 0.565, 0.947, 1.162, 1.377),
+    2013: (1.235, 0.314, 0.479, 0.821, 1.134, 1.442),
+    2014: (1.094, 0.334, 0.513, 0.853, 1.169, 1.430),
+    2015: (1.107, 0.375, 0.505, 0.808, 1.071, 1.419),
+    2016: (1.095, 0.354, 0.502, 0.859, 1.258, 1.424),
+    2017: (1.097, 0.353, 0.507, 0.869, 1.081, 1.398),
+    2018: (1.074, 0.370, 0.509, 0.831, 1.167, 1.440),
+    2019: (1.196, 0.357, 0.493, 0.802, 1.170, 1.433),
+    2020: (1.109, 0.378, 0.516, 0.879, 1.081, 1.431),
+    2021: (1.169, 0.362, 0.499, 0.867, 1.063, 1.460),
+    2022: (1.211, 0.361, 0.484, 0.804, 1.210, 1.441),
+    2023: (1.198, 0.355, 0.495, 0.865, 1.191, 1.408),
+    2024: (1.093, 0.389, 0.519, 0.852, 1.046, 1.418),
+    2025: (1.173, 0.371, 0.502, 0.801, 1.131, 1.406),
+    2026: (1.191, 0.364, 0.493, 0.802, 1.175, 1.411),
+}
+
+
+def _ip_to_outs(s):
+    """innings_pitched 문자열('68', '68 1/3', '1/3')을 아웃 수로 변환."""
+    whole = 0
+    frac = 0
+    for part in str(s or "").split():
+        if "/" in part:
+            try:
+                frac = int(part.split("/")[0])
+            except ValueError:
+                frac = 0
+        else:
+            try:
+                whole = int(part)
+            except ValueError:
+                whole = 0
+    return whole * 3 + frac
+
+
+def _team_park_factors(cur, ref_season):
+    """games 테이블에서 팀(홈구장) 파크팩터를 나무위키 기본공식으로 계산.
+    PF = (홈경기 양팀합산득점/홈경기수) / (원정경기 양팀합산득점/원정경기수). 1.0=중립."""
+    cur.execute(
+        "SELECT home_team_id AS h, away_team_id AS a, home_score AS hs, away_score AS asc_ "
+        "FROM games WHERE season=? AND home_score IS NOT NULL AND away_score IS NOT NULL",
+        (ref_season,),
+    )
+    hr = {}
+    hg = {}
+    rr = {}
+    rg = {}
+    for row in cur.fetchall():
+        d = dict(row)
+        runs = (d["hs"] or 0) + (d["asc_"] or 0)
+        h, a = d["h"], d["a"]
+        hr[h] = hr.get(h, 0) + runs
+        hg[h] = hg.get(h, 0) + 1
+        rr[a] = rr.get(a, 0) + runs
+        rg[a] = rg.get(a, 0) + 1
+    pf = {}
+    for t in hg:
+        if hg[t] and rg.get(t) and rr.get(t):
+            pf[t] = (hr[t] / hg[t]) / (rr[t] / rg[t])
+    return pf
+
+
+@app.get("/leaders")
+async def get_leaders(season: int = None):
+    """KBO 개인 순위 Top5. 타자: 타율/OPS/wRC+, 투수: ERA/이닝/탈삼진.
+    타율·OPS·ERA·wRC+는 규정타석/규정이닝(팀 최다경기 기준) 충족자만; 이닝·탈삼진은 누적. 10분 캐시."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        if season is None:
+            cur.execute("SELECT MAX(season) FROM kbo_official_batter_stats")
+            row = cur.fetchone()
+            season = row[0] if row and row[0] else 2026
+
+        ckey = str(season)
+        cached = _LEADERS_CACHE.get(ckey)
+        if cached and (_time.time() - cached[0] < _LEADERS_TTL):
+            conn.close()
+            return cached[1]
+
+        cur.execute("SELECT MAX(games) FROM kbo_official_batter_stats WHERE season=?", (season,))
+        row = cur.fetchone()
+        team_g = (row[0] if row and row[0] else 0)
+        qual_pa = round(3.1 * team_g)
+        qual_outs = team_g * 3  # 규정이닝 = 1.0 IP/경기
+
+        def _code(team):
+            return _KBO_TEAM_CODE.get(team or "", "")
+
+        def _batter_top(order_col):
+            cur.execute(
+                "SELECT p.player_name AS name, p.team_id AS team, "
+                "b.batting_average AS bavg, b.on_base_plus_slugging AS bops "
+                "FROM kbo_official_batter_stats b JOIN players p ON b.player_id=p.player_id "
+                "WHERE b.season=? AND b.plate_appearance >= ? "
+                "ORDER BY b." + order_col + " DESC LIMIT 5",
+                (season, qual_pa),
+            )
+            out = []
+            for r in cur.fetchall():
+                d = dict(r)
+                val = d["bavg"] if order_col == "batting_average" else d["bops"]
+                out.append({"name": d["name"], "team": d["team"], "code": _code(d["team"]),
+                            "value": ("%.3f" % float(val)) if val is not None else "-"})
+            return out
+
+        avg_top = _batter_top("batting_average")
+        ops_top = _batter_top("on_base_plus_slugging")
+
+        # 파크팩터 자체 계산 (해당 시즌 경기 없으면 직전 보유 시즌)
+        cur.execute("SELECT MAX(season) FROM games WHERE season <= ? AND home_score IS NOT NULL", (season,))
+        prow = cur.fetchone()
+        pf_season = prow[0] if prow and prow[0] else None
+        pf_map = _team_park_factors(cur, pf_season) if pf_season else {}
+
+        # wRC+ : wrc-comparison 산식 + 자체 파크팩터, 현재 데이터로 실시간 계산
+        wrc_top = []
+        wconst = _WOBA_CONST.get(season)
+        if wconst:
+            woba_scale, ebb, w1, w2, w3, whr = wconst
+            cur.execute(
+                "SELECT p.player_name AS name, p.team_id AS team, "
+                "b.single AS h, b.double AS d2, b.triple AS d3, b.home_run AS hr, "
+                "b.base_on_balls AS bb, b.intentional_base_on_balls AS ibb, b.hit_by_pitch AS hbp, "
+                "b.at_bat AS ab, b.sacrifice_fly AS sf, b.plate_appearance AS pa, b.run AS run "
+                "FROM kbo_official_batter_stats b JOIN players p ON b.player_id=p.player_id "
+                "WHERE b.season=?",
+                (season,),
+            )
+            brows = [dict(r) for r in cur.fetchall()]
+
+            def _wnum(r):
+                b1 = (r["h"] or 0) - (r["d2"] or 0) - (r["d3"] or 0) - (r["hr"] or 0)
+                return (ebb * ((r["bb"] or 0) - (r["ibb"] or 0)) + ebb * (r["hbp"] or 0)
+                        + w1 * b1 + w2 * (r["d2"] or 0) + w3 * (r["d3"] or 0) + whr * (r["hr"] or 0))
+
+            def _wden(r):
+                return (r["ab"] or 0) + (r["bb"] or 0) - (r["ibb"] or 0) + (r["sf"] or 0) + (r["hbp"] or 0)
+
+            tot_num = sum(_wnum(r) for r in brows)
+            tot_den = sum(_wden(r) for r in brows) or 1
+            lg_woba = tot_num / tot_den
+            tot_run = sum((r["run"] or 0) for r in brows)
+            tot_pa = sum((r["pa"] or 0) for r in brows) or 1
+            lg_rpa = tot_run / tot_pa
+
+            scored = []
+            for r in brows:
+                if (r["pa"] or 0) < qual_pa:
+                    continue
+                den = _wden(r)
+                if den <= 0:
+                    continue
+                woba = _wnum(r) / den
+                wraa_pa = (woba - lg_woba) / woba_scale
+                pf = pf_map.get(r["team"], 1.0)
+                wrc = (wraa_pa + lg_rpa + (lg_rpa - pf * lg_rpa)) / lg_rpa * 100.0
+                scored.append((wrc, r))
+            scored.sort(key=lambda x: -x[0])
+            wrc_top = [{"name": r["name"], "team": r["team"], "code": _code(r["team"]),
+                        "value": "%.1f" % wrc} for wrc, r in scored[:5]]
+
+        cur.execute(
+            "SELECT p.player_name AS name, p.team_id AS team, ps.earned_run_average AS era, "
+            "ps.innings_pitched AS ip, ps.strikeout AS k "
+            "FROM kbo_official_pitcher_stats ps JOIN players p ON ps.player_id=p.player_id "
+            "WHERE ps.season=?",
+            (season,),
+        )
+        pit = []
+        for r in cur.fetchall():
+            d = dict(r)
+            d["_outs"] = _ip_to_outs(d.get("ip"))
+            try:
+                d["_era"] = float(d["era"])
+            except (TypeError, ValueError):
+                d["_era"] = 999.0
+            try:
+                d["_k"] = int(d["k"])
+            except (TypeError, ValueError):
+                d["_k"] = 0
+            pit.append(d)
+
+        def _pit_entry(d, val):
+            return {"name": d["name"], "team": d["team"], "code": _code(d["team"]), "value": val}
+
+        era_top = [_pit_entry(d, "%.2f" % d["_era"])
+                   for d in sorted([x for x in pit if x["_outs"] >= qual_outs], key=lambda x: x["_era"])[:5]]
+        ip_top = [_pit_entry(d, str(d.get("ip") or "").strip())
+                  for d in sorted(pit, key=lambda x: -x["_outs"])[:5]]
+        k_top = [_pit_entry(d, str(d["_k"]))
+                 for d in sorted(pit, key=lambda x: -x["_k"])[:5]]
+
+        conn.close()
+        result = {
+            "season": season,
+            "qual_pa": qual_pa,
+            "qual_ip": team_g,
+            "wrc_pf_season": pf_season,
+            "batter": {"avg": avg_top, "ops": ops_top, "wrc": wrc_top},
+            "pitcher": {"era": era_top, "ip": ip_top, "k": k_top},
+        }
+        _LEADERS_CACHE[ckey] = (_time.time(), result)
+        return result
+    except Exception as e:
+        return {"season": season, "batter": {"avg": [], "ops": [], "wrc": []},
+                "pitcher": {"era": [], "ip": [], "k": []}, "error": str(e)}
+
+
+# ==========================================================================
+# DB Explorer - 범용 데이터 탐색 (SQLite를 직접 다루지 않고 웹에서 조회)
+# 테이블/컬럼 이름은 항상 실제 sqlite_master 목록으로 검증하여 SQL 주입을 차단
+# ==========================================================================
+
+def list_table_names(cur):
+    """실제 존재하는 테이블 이름 목록 (sqlite 내부 테이블 제외)"""
+    rows = cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' "
+        "AND name NOT LIKE 'sqlite_%' ORDER BY name"
+    ).fetchall()
+    return [r[0] for r in rows]
+
+
+@app.get("/db/tables")
+async def db_tables():
+    """모든 테이블 목록 + 행/컬럼 수"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    result = []
+    for name in list_table_names(cur):
+        try:
+            n = cur.execute(f'SELECT COUNT(*) FROM "{name}"').fetchone()[0]
+        except Exception:
+            n = None
+        cols = cur.execute(f'PRAGMA table_info("{name}")').fetchall()
+        result.append({"name": name, "rows": n, "columns": len(cols)})
+    conn.close()
+    return {"tables": result, "count": len(result)}
+
+
+@app.get("/db/table/{table_name}")
+async def db_table(table_name: str, limit: int = 50, offset: int = 0):
+    """단일 테이블의 스키마 + 페이지네이션된 데이터"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    if table_name not in list_table_names(cur):
+        conn.close()
+        raise HTTPException(status_code=404, detail="Table not found")
+
+    limit = max(1, min(int(limit), 500))   # 한 번에 최대 500행
+    offset = max(0, int(offset))
+
+    cols_info = cur.execute(f'PRAGMA table_info("{table_name}")').fetchall()
+    schema = [{
+        "name": c["name"],
+        "type": c["type"] or "",
+        "pk": bool(c["pk"]),
+        "notnull": bool(c["notnull"]),
+    } for c in cols_info]
+    columns = [c["name"] for c in cols_info]
+
+    total = cur.execute(f'SELECT COUNT(*) FROM "{table_name}"').fetchone()[0]
+    rows = cur.execute(
+        f'SELECT * FROM "{table_name}" LIMIT ? OFFSET ?', (limit, offset)
+    ).fetchall()
+    data = [dict(r) for r in rows]
+    conn.close()
+
+    return {
+        "table": table_name,
+        "schema": schema,
+        "columns": columns,
+        "rows": data,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@app.get("/db/table/{table_name}/csv")
+async def db_table_csv(table_name: str, limit: int = 0):
+    """테이블 전체(또는 limit행)를 CSV로 스트리밍 다운로드 (엑셀에서 열기 용)"""
+    # 테이블 검증 + 컬럼 목록 확보 (요청 스레드에서 먼저 처리)
+    conn = get_db_connection()
+    cur = conn.cursor()
+    valid = table_name in list_table_names(cur)
+    cols_info = cur.execute(f'PRAGMA table_info("{table_name}")').fetchall() if valid else []
+    conn.close()
+    if not valid:
+        raise HTTPException(status_code=404, detail="Table not found")
+
+    columns = [c["name"] for c in cols_info]
+    lim = int(limit)
+
+    def generate():
+        # 스트리밍 제너레이터는 스레드풀에서 순회되므로 전용 연결을 새로 연다.
+        # check_same_thread=False: next() 호출이 직렬화되어 동시 접근은 없음.
+        gen_conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        gen_conn.row_factory = sqlite3.Row
+        gcur = gen_conn.cursor()
+        query = f'SELECT * FROM "{table_name}"'
+        if lim > 0:
+            query += f' LIMIT {lim}'
+        gcur.execute(query)
+        try:
+            buf = io.StringIO()
+            writer = csv.writer(buf)
+            buf.write("﻿")  # UTF-8 BOM: 엑셀 한글 깨짐 방지
+            writer.writerow(columns)
+            yield buf.getvalue(); buf.seek(0); buf.truncate(0)
+            for r in gcur:  # 커서를 점진적으로 순회 (대용량도 메모리 안전)
+                writer.writerow([r[c] for c in columns])
+                yield buf.getvalue(); buf.seek(0); buf.truncate(0)
+        finally:
+            gen_conn.close()
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{table_name}.csv"'},
+    )
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>데이터 탐색 - C - Baseball Research Center</title>
-    <meta name="description" content="KBO 경기 데이터 탐색">
+    <meta name="description" content="KBO 데이터베이스 테이블·데이터 탐색">
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,9 +13,202 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
 
-    <!-- Styles -->
+    <!-- Favicon (다이아몬드) -->
+    <link rel="icon" href="../assets/favicon/diamond.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon/diamond.svg">
+    <link rel="apple-touch-icon" href="../assets/favicon/diamond-180.png">
+
+    <!-- Styles + 전역 테마 토글 (light 기본 / dark 토글, nav에 버튼 자동 주입) -->
     <link rel="stylesheet" href="../css/style.css">
     <script src="../js/theme-toggle.js"></script>
+
+    <style>
+        /* 데이터 탐색 전용 스타일 — 모든 색은 var() 토큰이라 light/dark 자동 대응 */
+
+        /* 테이블 목록 카드 */
+        .dbx-tables {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 1rem;
+        }
+
+        .dbx-table-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 1.1rem 1.2rem;
+            cursor: pointer;
+            transition: var(--transition);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .dbx-table-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--primary);
+            box-shadow: var(--shadow-md);
+        }
+
+        .dbx-table-card.active {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px var(--primary) inset;
+        }
+
+        .dbx-table-card .name {
+            font-weight: 700;
+            font-size: 1.05rem;
+            color: var(--text-primary);
+            word-break: break-all;
+        }
+
+        .dbx-table-card .meta {
+            margin-top: 0.6rem;
+            display: flex;
+            gap: 1rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .dbx-table-card .meta b {
+            color: var(--primary);
+        }
+
+        /* 툴바 */
+        .dbx-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.75rem 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .dbx-toolbar .spacer {
+            flex: 1;
+        }
+
+        .dbx-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 0.5rem 0.9rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .dbx-btn:hover {
+            background: var(--primary-dark);
+        }
+
+        .dbx-btn.ghost {
+            background: var(--bg-glass);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .dbx-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .dbx-btn .material-symbols-outlined {
+            font-size: 1.15rem;
+        }
+
+        .dbx-pageinfo {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        /* 데이터 미리보기: 가로 스크롤 + 헤더 고정 */
+        .dbx-data-wrap {
+            overflow: auto;
+            max-height: 65vh;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+        }
+
+        .dbx-data-table {
+            border-collapse: collapse;
+            width: max-content;
+            min-width: 100%;
+            font-size: 0.85rem;
+        }
+
+        .dbx-data-table th,
+        .dbx-data-table td {
+            border-bottom: 1px solid var(--border-color);
+            border-right: 1px solid var(--border-color);
+            padding: 0.5rem 0.7rem;
+            text-align: left;
+            white-space: nowrap;
+            max-width: 320px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .dbx-data-table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+
+        .dbx-data-table tbody tr:nth-child(even) {
+            background: var(--bg-glass);
+        }
+
+        .dbx-data-table tbody tr:hover {
+            background: rgba(59, 130, 246, 0.10);
+        }
+
+        .dbx-null {
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        /* 스키마 태그 */
+        .dbx-tag {
+            display: inline-block;
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 0.1rem 0.45rem;
+            border-radius: 999px;
+            margin-left: 0.35rem;
+        }
+
+        .dbx-tag.pk {
+            background: rgba(245, 158, 11, 0.18);
+            color: var(--accent);
+        }
+
+        .dbx-tag.nn {
+            background: rgba(59, 130, 246, 0.15);
+            color: var(--primary);
+        }
+
+        .dbx-type {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        .h1-icon {
+            vertical-align: -4px;
+            margin-right: 0.25rem;
+        }
+
+        #table-detail {
+            display: none;
+            margin-top: 1.5rem;
+        }
+    </style>
 </head>
 
 <body>
@@ -23,7 +216,7 @@
     <header class="header">
         <div class="header-content">
             <a href="../" class="logo">
-                <span class="material-symbols-outlined logo-icon">science</span>
+                <img src="../assets/favicon/diamond.svg" alt="" class="logo-icon" width="26" height="26">
                 <span>C - Baseball Research Center</span>
             </a>
             <nav class="nav">
@@ -38,56 +231,65 @@
 
     <!-- Main Content -->
     <main class="container">
-        <h1 class="fade-in"><span class="material-symbols-outlined">table_view</span> 데이터 탐색</h1>
-        <p class="text-secondary mb-3">2025 시즌 경기 데이터</p>
+        <h1 class="fade-in"><span class="material-symbols-outlined h1-icon">table_view</span>데이터 탐색</h1>
+        <p class="text-secondary mb-3">DB에 저장된 테이블과 데이터를 SQLite 없이 바로 확인합니다. 테이블을 클릭하면 컬럼 구조와
+            데이터를 볼 수 있고, CSV로 내려받아 엑셀에서 열 수 있습니다.</p>
 
-        <!-- Games List -->
+        <!-- 테이블 목록 -->
         <section>
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title">최근 경기 목록</h3>
-                    <div>
-                        <label for="games-limit" class="text-muted" style="margin-right: 0.5rem;">표시 개수:</label>
-                        <select id="games-limit" class="input" style="width: auto; display: inline-block;"
-                            onchange="loadGames()">
-                            <option value="20">20경기</option>
-                            <option value="50" selected>50경기</option>
-                            <option value="100">100경기</option>
-                        </select>
-                    </div>
+                    <h3 class="card-title">테이블 목록</h3>
+                    <span id="tables-summary" class="text-muted" style="font-size: 0.875rem;"></span>
                 </div>
                 <div class="card-body">
-                    <div id="games-table"></div>
+                    <div id="tables-list"></div>
                 </div>
             </div>
         </section>
 
-        <!-- Database Info -->
-        <section class="mt-3">
+        <!-- 선택한 테이블 상세 -->
+        <section id="table-detail">
+            <!-- 스키마 -->
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title"><span class="material-symbols-outlined">analytics</span> 데이터베이스 정보</h3>
+                    <h3 class="card-title" id="detail-title">테이블</h3>
+                    <span id="detail-summary" class="text-muted" style="font-size: 0.875rem;"></span>
                 </div>
                 <div class="card-body">
-                    <h4 class="mb-2">주요 테이블</h4>
-                    <div class="grid grid-2">
-                        <div>
-                            <p><strong>games</strong></p>
-                            <p class="text-muted" style="font-size: 0.875rem;">경기 기본 정보 (날짜, 팀, 점수, 구장)</p>
-                        </div>
-                        <div>
-                            <p><strong>play_by_play</strong></p>
-                            <p class="text-muted" style="font-size: 0.875rem;">플레이별 상세 기록 (73개 컬럼)</p>
-                        </div>
-                        <div>
-                            <p><strong>kbo_official_batter_stats</strong></p>
-                            <p class="text-muted" style="font-size: 0.875rem;">타자 공식 통계</p>
-                        </div>
-                        <div>
-                            <p><strong>kbo_official_pitcher_stats</strong></p>
-                            <p class="text-muted" style="font-size: 0.875rem;">투수 공식 통계</p>
-                        </div>
+                    <h4 class="mb-2">컬럼 구조</h4>
+                    <div id="schema-table"></div>
+                </div>
+            </div>
+
+            <!-- 데이터 -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h3 class="card-title">데이터</h3>
+                </div>
+                <div class="card-body">
+                    <div class="dbx-toolbar">
+                        <label class="text-muted" style="font-size: 0.85rem;">표시 개수:</label>
+                        <select id="page-size" class="input" style="width: auto; display: inline-block;"
+                            onchange="changePageSize()">
+                            <option value="25">25행</option>
+                            <option value="50" selected>50행</option>
+                            <option value="100">100행</option>
+                            <option value="200">200행</option>
+                        </select>
+                        <button class="dbx-btn ghost" id="btn-prev" onclick="prevPage()">
+                            <span class="material-symbols-outlined">chevron_left</span> 이전
+                        </button>
+                        <button class="dbx-btn ghost" id="btn-next" onclick="nextPage()">
+                            다음 <span class="material-symbols-outlined">chevron_right</span>
+                        </button>
+                        <span class="dbx-pageinfo" id="page-info"></span>
+                        <span class="spacer"></span>
+                        <button class="dbx-btn" id="btn-csv" onclick="downloadCsv()">
+                            <span class="material-symbols-outlined">download</span> 전체 CSV 다운로드
+                        </button>
                     </div>
+                    <div id="data-table"></div>
                 </div>
             </div>
         </section>
@@ -97,39 +299,138 @@
     <script src="../js/api.js"></script>
     <script src="../js/components.js"></script>
     <script>
-        // Load games
-        async function loadGames() {
-            const tableDiv = document.getElementById('games-table');
-            const limit = parseInt(document.getElementById('games-limit').value);
+        // 상태
+        const state = { table: null, limit: 50, offset: 0, total: 0 };
 
-            tableDiv.innerHTML = createLoadingSpinner();
+        function escapeHtml(v) {
+            return String(v)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
 
+        function renderCell(v) {
+            if (v === null || v === undefined) return '<span class="dbx-null">NULL</span>';
+            const s = String(v);
+            return `<span title="${escapeHtml(s)}">${escapeHtml(s)}</span>`;
+        }
+
+        // 테이블 목록
+        async function loadTableList() {
+            const el = document.getElementById('tables-list');
+            el.innerHTML = createLoadingSpinner();
             try {
-                const data = await API.getGames(2025, limit);
-
-                if (data.games.length === 0) {
-                    tableDiv.innerHTML = createEmptyState('경기 데이터가 없습니다.');
+                const data = await API.getDbTables();
+                if (!data.tables || data.tables.length === 0) {
+                    el.innerHTML = createEmptyState('테이블이 없습니다.');
                     return;
                 }
-
-                const headers = ['경기 ID', '날짜', '홈팀', '원정팀', '점수', '구장'];
-                const rows = data.games.map(game => [
-                    game.gameID,
-                    game.date,
-                    game.home_team,
-                    game.away_team,
-                    `${game.home_score} : ${game.away_score}`,
-                    game.stadium || '-'
-                ]);
-
-                tableDiv.innerHTML = createTable(headers, rows);
-            } catch (error) {
-                tableDiv.innerHTML = createErrorMessage('경기 데이터를 불러오는데 실패했습니다.');
+                document.getElementById('tables-summary').textContent = `총 ${data.tables.length}개 테이블`;
+                el.innerHTML = '<div class="dbx-tables">' + data.tables.map(t => `
+                    <div class="dbx-table-card" data-table="${escapeHtml(t.name)}" onclick="selectTable('${escapeHtml(t.name)}')">
+                        <div class="name">${escapeHtml(t.name)}</div>
+                        <div class="meta">
+                            <span>행 <b>${t.rows === null ? '-' : formatNumber(t.rows)}</b></span>
+                            <span>컬럼 <b>${t.columns}</b></span>
+                        </div>
+                    </div>
+                `).join('') + '</div>';
+            } catch (e) {
+                el.innerHTML = createErrorMessage('테이블 목록을 불러오지 못했습니다. (API 서버 확인)');
             }
         }
 
-        // Load games on page load
-        loadGames();
+        // 테이블 선택
+        function selectTable(name) {
+            state.table = name;
+            state.offset = 0;
+            document.querySelectorAll('.dbx-table-card').forEach(c => {
+                c.classList.toggle('active', c.getAttribute('data-table') === name);
+            });
+            document.getElementById('table-detail').style.display = 'block';
+            loadTableData();
+        }
+
+        // 데이터 로드
+        async function loadTableData() {
+            const dataEl = document.getElementById('data-table');
+            const schemaEl = document.getElementById('schema-table');
+            dataEl.innerHTML = createLoadingSpinner();
+            try {
+                const res = await API.getDbTable(state.table, state.limit, state.offset);
+                state.total = res.total;
+
+                document.getElementById('detail-title').textContent = res.table;
+                document.getElementById('detail-summary').textContent =
+                    `${formatNumber(res.total)}행 · ${res.schema.length}컬럼`;
+
+                // 스키마 표
+                const schemaHeaders = ['#', '컬럼명', '타입', '제약'];
+                const schemaRows = res.schema.map((c, i) => [
+                    i + 1,
+                    escapeHtml(c.name),
+                    `<span class="dbx-type">${escapeHtml(c.type || '-')}</span>`,
+                    ((c.pk ? '<span class="dbx-tag pk">PK</span>' : '') +
+                        (c.notnull ? '<span class="dbx-tag nn">NOT NULL</span>' : '')) || '-'
+                ]);
+                schemaEl.innerHTML = createTable(schemaHeaders, schemaRows);
+
+                // 데이터 표
+                if (res.rows.length === 0) {
+                    dataEl.innerHTML = createEmptyState('이 테이블에는 데이터가 없습니다.');
+                } else {
+                    const head = res.columns.map(c => `<th>${escapeHtml(c)}</th>`).join('');
+                    const body = res.rows.map(row =>
+                        '<tr>' + res.columns.map(c => `<td>${renderCell(row[c])}</td>`).join('') + '</tr>'
+                    ).join('');
+                    dataEl.innerHTML = `
+                        <div class="dbx-data-wrap">
+                            <table class="dbx-data-table">
+                                <thead><tr>${head}</tr></thead>
+                                <tbody>${body}</tbody>
+                            </table>
+                        </div>`;
+                }
+                updatePagination();
+            } catch (e) {
+                dataEl.innerHTML = createErrorMessage('데이터를 불러오지 못했습니다.');
+            }
+        }
+
+        // 페이지네이션
+        function updatePagination() {
+            const start = state.total === 0 ? 0 : state.offset + 1;
+            const end = Math.min(state.offset + state.limit, state.total);
+            document.getElementById('page-info').textContent =
+                `${formatNumber(start)} - ${formatNumber(end)} / ${formatNumber(state.total)}`;
+            document.getElementById('btn-prev').disabled = state.offset <= 0;
+            document.getElementById('btn-next').disabled = end >= state.total;
+        }
+
+        function prevPage() {
+            state.offset = Math.max(0, state.offset - state.limit);
+            loadTableData();
+        }
+
+        function nextPage() {
+            if (state.offset + state.limit < state.total) {
+                state.offset += state.limit;
+                loadTableData();
+            }
+        }
+
+        function changePageSize() {
+            state.limit = parseInt(document.getElementById('page-size').value);
+            state.offset = 0;
+            loadTableData();
+        }
+
+        function downloadCsv() {
+            if (!state.table) return;
+            window.location.href = API.dbCsvUrl(state.table);
+        }
+
+        // 초기화
+        loadTableList();
     </script>
 </body>
 

@@ -154,6 +154,61 @@ class API {
             throw error;
         }
     }
+
+    /**
+     * Get KBO team standings (koreabaseball.com 공식 TeamRank 스크래핑)
+     */
+    static async getStandings() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/standings`);
+            if (!response.ok) throw new Error('Failed to fetch standings');
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching standings:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get KBO individual leaders (타자: 타율/OPS/wRC+, 투수: ERA/이닝/탈삼진)
+     */
+    static async getLeaders(season) {
+        try {
+            const url = season ? `${API_BASE_URL}/leaders?season=${season}` : `${API_BASE_URL}/leaders`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Failed to fetch leaders');
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching leaders:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * DB Explorer: 전체 테이블 목록 (행/컬럼 수 포함)
+     */
+    static async getDbTables() {
+        const response = await fetch(`${API_BASE_URL}/db/tables`);
+        if (!response.ok) throw new Error('Failed to fetch tables');
+        return await response.json();
+    }
+
+    /**
+     * DB Explorer: 단일 테이블 스키마 + 페이지네이션 데이터
+     */
+    static async getDbTable(name, limit = 50, offset = 0) {
+        const url = `${API_BASE_URL}/db/table/${encodeURIComponent(name)}?limit=${limit}&offset=${offset}`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Failed to fetch table data');
+        return await response.json();
+    }
+
+    /**
+     * DB Explorer: 테이블 전체 CSV 다운로드 URL
+     */
+    static dbCsvUrl(name) {
+        return `${API_BASE_URL}/db/table/${encodeURIComponent(name)}/csv`;
+    }
 }
 
 // Export for use in other modules
