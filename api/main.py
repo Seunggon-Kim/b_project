@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 import sqlite3
+import json
 from pathlib import Path
 from typing import Optional, List
 import datetime
@@ -409,11 +410,28 @@ def list_table_names(cur):
     return [r[0] for r in rows]
 
 
+_COL_DICT = None
+
+def load_col_dict():
+    """데이터 사전(테이블/컬럼 설명·카테고리·업데이트 주기) 로드 (1회 캐시)"""
+    global _COL_DICT
+    if _COL_DICT is None:
+        try:
+            p = Path(__file__).parent.parent / 'database' / 'column_descriptions.json'
+            with open(p, encoding='utf-8') as f:
+                _COL_DICT = json.load(f)
+        except Exception:
+            _COL_DICT = {"categories": [], "tables": {}}
+    return _COL_DICT
+
+
 @app.get("/db/tables")
 async def db_tables():
-    """모든 테이블 목록 + 행/컬럼 수"""
+    """모든 테이블 목록 + 행/컬럼 수 + 분류/설명/업데이트 주기"""
     conn = get_db_connection()
     cur = conn.cursor()
+    meta = load_col_dict()
+    tmeta = meta.get("tables", {})
     result = []
     for name in list_table_names(cur):
         try:
@@ -421,9 +439,17 @@ async def db_tables():
         except Exception:
             n = None
         cols = cur.execute(f'PRAGMA table_info("{name}")').fetchall()
-        result.append({"name": name, "rows": n, "columns": len(cols)})
+        m = tmeta.get(name, {})
+        result.append({
+            "name": name,
+            "rows": n,
+            "columns": len(cols),
+            "category": m.get("category", ""),
+            "table_desc": m.get("table_desc", ""),
+            "update_freq": m.get("update_freq", ""),
+        })
     conn.close()
-    return {"tables": result, "count": len(result)}
+    return {"tables": result, "count": len(result), "categories": meta.get("categories", [])}
 
 
 @app.get("/db/table/{table_name}")
@@ -438,12 +464,16 @@ async def db_table(table_name: str, limit: int = 50, offset: int = 0):
     limit = max(1, min(int(limit), 500))   # 한 번에 최대 500행
     offset = max(0, int(offset))
 
+    tmeta = load_col_dict().get("tables", {}).get(table_name, {})
+    cdesc = tmeta.get("columns", {})
+
     cols_info = cur.execute(f'PRAGMA table_info("{table_name}")').fetchall()
     schema = [{
         "name": c["name"],
         "type": c["type"] or "",
         "pk": bool(c["pk"]),
         "notnull": bool(c["notnull"]),
+        "desc": cdesc.get(c["name"], ""),
     } for c in cols_info]
     columns = [c["name"] for c in cols_info]
 
@@ -462,6 +492,9 @@ async def db_table(table_name: str, limit: int = 50, offset: int = 0):
         "total": total,
         "limit": limit,
         "offset": offset,
+        "table_desc": tmeta.get("table_desc", ""),
+        "update_freq": tmeta.get("update_freq", ""),
+        "category": tmeta.get("category", ""),
     }
 
 
