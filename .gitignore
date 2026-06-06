@@ -225,3 +225,10 @@ logs/*.loggoogle-chrome-stable_current_amd64.deb
 *.crx
 chromedriver*
 google-chrome*
+*.bak
+*.bak.*
+log.txt
+res.json
+player_debug.txt
+pitcher_cols.txt
+*.bak.before_*
