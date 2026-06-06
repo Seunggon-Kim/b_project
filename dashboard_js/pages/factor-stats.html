@@ -25,9 +25,10 @@
         .info-box strong { color: #1e3a8a; }
         .info-box code { background: rgba(37,99,235,0.1); padding: 0 0.3rem; border-radius: 3px; }
 
-        /* 탭 */
-        .fs-tabs { display: flex; gap: 0.5rem; border-bottom: 2px solid var(--border-color); margin-bottom: 1.5rem; }
-        .fs-tab { background: none; border: none; padding: 0.7rem 1.2rem; font-size: 1rem; font-weight: 600;
+        /* 탭 — 가운데 정렬 */
+        .fs-tabs { display: flex; justify-content: center; gap: 0.5rem; border-bottom: 2px solid var(--border-color);
+                   margin-bottom: 1.25rem; }
+        .fs-tab { background: none; border: none; padding: 0.7rem 1.4rem; font-size: 1rem; font-weight: 600;
                   font-family: inherit; color: var(--text-secondary); cursor: pointer; border-bottom: 3px solid transparent;
                   margin-bottom: -2px; display: inline-flex; align-items: center; gap: 0.4rem; }
         .fs-tab:hover { color: var(--primary); }
@@ -35,23 +36,30 @@
         .fs-panel { display: none; }
         .fs-panel.active { display: block; }
 
-        /* 시즌 섹션 */
-        .season-block { margin-bottom: 2rem; }
-        .season-head { display: flex; align-items: baseline; gap: 0.6rem; margin: 0 0 0.6rem; flex-wrap: wrap; }
+        /* 연도 선택 — 가운데 */
+        .fs-controls { display: flex; justify-content: center; align-items: center; gap: 0.6rem; margin-bottom: 1.5rem; }
+        .fs-controls label { font-weight: 600; color: var(--text-secondary); }
+        .fs-controls select { padding: 0.45rem 0.9rem; border: 1px solid var(--border-color); border-radius: 8px;
+                              font-size: 1rem; font-family: inherit; background: var(--bg-secondary);
+                              color: var(--text-primary); cursor: pointer; }
+
+        /* 결과 — 가운데 정렬 */
+        .season-block { text-align: center; }
+        .season-head { display: flex; justify-content: center; align-items: baseline; gap: 0.6rem;
+                       margin: 0 0 0.8rem; flex-wrap: wrap; }
         .season-head h2 { margin: 0; font-size: 1.35rem; color: var(--text-primary); }
         .season-note { font-size: 0.82rem; color: var(--text-muted); }
         .badge-live { display: inline-block; padding: 0.1rem 0.5rem; background: #fde68a; color: #92400e;
                       border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
 
-        /* 테이블 공통 */
-        .fs-table-wrap { overflow-x: auto; border: 1px solid var(--border-color); border-radius: 8px; }
-        table.fs-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-        table.fs-table th, table.fs-table td { padding: 0.5rem 0.7rem; text-align: right; white-space: nowrap;
+        .fs-table-wrap { overflow-x: auto; border: 1px solid var(--border-color); border-radius: 8px;
+                         display: inline-block; max-width: 100%; vertical-align: top; }
+        table.fs-table { border-collapse: collapse; font-size: 0.9rem; }
+        table.fs-table th, table.fs-table td { padding: 0.5rem 0.9rem; text-align: center; white-space: nowrap;
                                                border-bottom: 1px solid var(--border-color); }
         table.fs-table thead th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 700;
-                                  text-align: center; position: sticky; top: 0; }
-        table.fs-table td.left, table.fs-table th.left { text-align: left; }
-        table.fs-table tbody tr:hover, table.fs-table tbody tr:hover { background: rgba(59,130,246,0.06); }
+                                  position: sticky; top: 0; }
+        table.fs-table tbody tr:hover { background: rgba(59,130,246,0.06); }
         .pf-strong-h { color: #b91c1c; font-weight: 700; }   /* 타자 친화 (>100) */
         .pf-mild-h   { color: #dc2626; }
         .pf-neutral  { color: var(--text-secondary); }
@@ -59,18 +67,19 @@
         .pf-strong-p { color: #1d4ed8; font-weight: 700; }   /* 투수 친화 (<100) */
 
         /* RE24 매트릭스 */
-        .re-matrix { border-collapse: collapse; font-size: 0.92rem; }
-        .re-matrix th, .re-matrix td { border: 1px solid var(--border-color); padding: 0.5rem 0.85rem; text-align: center; }
+        table.re-matrix { border-collapse: collapse; font-size: 0.92rem; margin: 0 auto; }
+        .re-matrix th, .re-matrix td { border: 1px solid var(--border-color); padding: 0.5rem 0.9rem; text-align: center; }
         .re-matrix thead th { background: var(--bg-tertiary); font-weight: 700; }
-        .re-matrix td.base { text-align: left; font-weight: 600; background: var(--bg-tertiary); white-space: nowrap; }
+        .re-matrix td.base { font-weight: 600; background: var(--bg-tertiary); white-space: nowrap; }
         .re-cell { font-variant-numeric: tabular-nums; font-weight: 600; color: #1f2937; }
         .re-n { font-size: 0.7rem; color: #9ca3af; display: block; font-weight: 400; }
-        .legend { display: flex; gap: 1rem; align-items: center; font-size: 0.8rem; color: var(--text-muted);
-                  margin-top: 0.5rem; flex-wrap: wrap; }
+
+        .legend { display: flex; justify-content: center; gap: 1rem; align-items: center; font-size: 0.8rem;
+                  color: var(--text-muted); margin-top: 0.75rem; flex-wrap: wrap; }
         .legend .sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: middle;
                       margin-right: 0.25rem; border: 1px solid rgba(0,0,0,0.1); }
-        .err { color: #dc2626; padding: 1rem; background: #fef2f2; border-radius: 6px; }
-        .muted { color: var(--text-muted); }
+        .err { color: #dc2626; padding: 1rem; background: #fef2f2; border-radius: 6px; text-align: center; }
+        .muted { color: var(--text-muted); text-align: center; }
     </style>
 </head>
 
@@ -100,6 +109,11 @@
         <div class="fs-tabs" id="fs-tabs">
             <button class="fs-tab active" data-panel="pf"><span class="material-symbols-outlined">stadium</span> 파크 팩터</button>
             <button class="fs-tab" data-panel="re24"><span class="material-symbols-outlined">grid_on</span> RE24 매트릭스</button>
+        </div>
+
+        <div class="fs-controls">
+            <label for="season-select">시즌</label>
+            <select id="season-select"></select>
         </div>
 
         <!-- 파크 팩터 -->
@@ -139,7 +153,9 @@
             return (await r.json()).rows;
         }
 
-        // ===== 탭 전환 =====
+        let PF_ROWS = [], RE_ROWS = [], RE_MIN = 0, RE_MAX = 1;
+
+        // ===== 탭 전환 (선택된 시즌 유지) =====
         document.getElementById('fs-tabs').addEventListener('click', (e) => {
             const btn = e.target.closest('.fs-tab');
             if (!btn) return;
@@ -147,6 +163,11 @@
             document.querySelectorAll('.fs-tab').forEach(b => b.classList.toggle('active', b === btn));
             document.querySelectorAll('.fs-panel').forEach(pan => pan.classList.toggle('active', pan.id === `panel-${p}`));
         });
+
+        // ===== 연도 선택 =====
+        document.getElementById('season-select').addEventListener('change', renderAll);
+        function curSeason() { return parseInt(document.getElementById('season-select').value, 10); }
+        function renderAll() { renderPF(curSeason()); renderRE24(curSeason()); }
 
         // ===== 파크 팩터 =====
         const PF_COLS = [
@@ -165,32 +186,28 @@
             const v = raw / 10;               // 1000-scale → 100-scale
             return `<td class="${pfClass(v)}">${v.toFixed(1)}</td>`;
         }
-        function renderPF(rows) {
+        function renderPF(season) {
             const el = document.getElementById('pf-content');
-            if (!rows.length) { el.innerHTML = '<p class="muted">데이터가 없습니다.</p>'; return; }
-            const seasons = [...new Set(rows.map(r => r.season))].sort((a, b) => b - a);  // 2026 먼저
-            el.innerHTML = seasons.map(season => {
-                const list = rows.filter(r => r.season === season).sort((a, b) => b.run_pf - a.run_pf);
-                const win = list[0] && list[0].window ? list[0].window : '';
-                const cap = list[0] && list[0].captured_at ? list[0].captured_at : '';
-                const head = `
-                    <div class="season-head">
-                        <h2>${season} 시즌</h2>
-                        ${season >= 2026 ? '<span class="badge-live">진행 중</span>' : ''}
-                        <span class="season-note">${list.length}개 구장 · 산출 구간 ${esc(win)}${cap ? ' · 갱신 ' + esc(cap.slice(0, 10)) : ''}</span>
-                    </div>`;
-                const body = list.map(r => `
-                    <tr>
-                        <td class="left">${esc(r.stadium)}</td>
-                        <td>${esc(r.games)}</td>
-                        ${PF_COLS.map(c => pfCell(r[c.k])).join('')}
-                    </tr>`).join('');
-                return `<div class="season-block">${head}
-                    <div class="fs-table-wrap"><table class="fs-table">
-                        <thead><tr><th class="left">구장</th><th>경기</th>${PF_COLS.map(c => `<th>${c.label}</th>`).join('')}</tr></thead>
-                        <tbody>${body}</tbody>
-                    </table></div></div>`;
-            }).join('');
+            const list = PF_ROWS.filter(r => r.season === season).sort((a, b) => b.run_pf - a.run_pf);
+            if (!list.length) { el.innerHTML = '<p class="muted">해당 시즌 데이터가 없습니다.</p>'; return; }
+            const win = list[0].window || '', cap = list[0].captured_at || '';
+            const head = `
+                <div class="season-head">
+                    <h2>${season} 시즌</h2>
+                    ${season >= 2026 ? '<span class="badge-live">진행 중</span>' : ''}
+                    <span class="season-note">${list.length}개 구장 · 산출 구간 ${esc(win)}${cap ? ' · 갱신 ' + esc(cap.slice(0, 10)) : ''}</span>
+                </div>`;
+            const body = list.map(r => `
+                <tr>
+                    <td>${esc(r.stadium)}</td>
+                    <td>${esc(r.games)}</td>
+                    ${PF_COLS.map(c => pfCell(r[c.k])).join('')}
+                </tr>`).join('');
+            el.innerHTML = `<div class="season-block">${head}
+                <div class="fs-table-wrap"><table class="fs-table">
+                    <thead><tr><th>구장</th><th>경기</th>${PF_COLS.map(c => `<th>${c.label}</th>`).join('')}</tr></thead>
+                    <tbody>${body}</tbody>
+                </table></div></div>`;
         }
 
         // ===== RE24 =====
@@ -201,46 +218,48 @@
         function heat(v, min, max) {
             if (v == null) return 'transparent';
             const t = Math.max(0, Math.min(1, (v - min) / (max - min || 1)));
-            // 흰색 → 주황 (높을수록 진함)
             const r = 255, g = Math.round(255 - t * 110), b = Math.round(255 - t * 200);
             return `rgb(${r},${g},${b})`;
         }
-        function renderRE24(rows) {
+        function renderRE24(season) {
             const el = document.getElementById('re24-content');
-            if (!rows.length) { el.innerHTML = '<p class="muted">데이터가 없습니다.</p>'; return; }
-            const seasons = [...new Set(rows.map(r => r.season))].filter(s => s !== 0).sort((a, b) => b - a); // 2026 먼저, 통합(0) 제외
-            const min = Math.min(...rows.map(r => r.re_value)), max = Math.max(...rows.map(r => r.re_value));
-            el.innerHTML = seasons.map(season => {
-                const cur = rows.filter(r => r.season === season);
-                const get = (base, outs) => cur.find(r => r.base_state === base && r.outs_before === outs);
-                const head = `
-                    <div class="season-head">
-                        <h2>${season} 시즌</h2>
-                        ${season >= 2026 ? '<span class="badge-live">진행 중</span>' : ''}
-                        <span class="season-note">베이스-아웃 상황별 잔여 이닝 득점기대값</span>
-                    </div>`;
-                const bodyRows = BASE_ORDER.map(b => {
-                    const cells = [0, 1, 2].map(o => {
-                        const c = get(b.code, o);
-                        if (!c) return '<td class="muted">—</td>';
-                        return `<td class="re-cell" style="background:${heat(c.re_value, min, max)}">
-                                    ${c.re_value.toFixed(3)}<span class="re-n">n=${c.n_obs.toLocaleString()}</span></td>`;
-                    }).join('');
-                    return `<tr><td class="base">${b.label}</td>${cells}</tr>`;
+            const cur = RE_ROWS.filter(r => r.season === season);
+            if (!cur.length) { el.innerHTML = '<p class="muted">해당 시즌 데이터가 없습니다.</p>'; return; }
+            const get = (base, outs) => cur.find(r => r.base_state === base && r.outs_before === outs);
+            const head = `
+                <div class="season-head">
+                    <h2>${season} 시즌</h2>
+                    ${season >= 2026 ? '<span class="badge-live">진행 중</span>' : ''}
+                    <span class="season-note">베이스-아웃 상황별 잔여 이닝 득점기대값</span>
+                </div>`;
+            const bodyRows = BASE_ORDER.map(b => {
+                const cells = [0, 1, 2].map(o => {
+                    const c = get(b.code, o);
+                    if (!c) return '<td class="muted">—</td>';
+                    return `<td class="re-cell" style="background:${heat(c.re_value, RE_MIN, RE_MAX)}">
+                                ${c.re_value.toFixed(3)}<span class="re-n">n=${c.n_obs.toLocaleString()}</span></td>`;
                 }).join('');
-                return `<div class="season-block">${head}
-                    <div class="fs-table-wrap"><table class="re-matrix">
-                        <thead><tr><th>주자 상황</th><th>0아웃</th><th>1아웃</th><th>2아웃</th></tr></thead>
-                        <tbody>${bodyRows}</tbody>
-                    </table></div></div>`;
+                return `<tr><td class="base">${b.label}</td>${cells}</tr>`;
             }).join('');
+            el.innerHTML = `<div class="season-block">${head}
+                <div class="fs-table-wrap"><table class="re-matrix">
+                    <thead><tr><th>주자 상황</th><th>0아웃</th><th>1아웃</th><th>2아웃</th></tr></thead>
+                    <tbody>${bodyRows}</tbody>
+                </table></div></div>`;
         }
 
         (async function init() {
             try {
                 const [pf, re24] = await Promise.all([dbTable('self_park_factor'), dbTable('re24_matrix_by_season')]);
-                renderPF(pf);
-                renderRE24(re24);
+                PF_ROWS = pf;
+                RE_ROWS = re24.filter(r => r.season !== 0);     // 통합(0) 제외
+                RE_MIN = Math.min(...RE_ROWS.map(r => r.re_value));
+                RE_MAX = Math.max(...RE_ROWS.map(r => r.re_value));
+                // 시즌 목록(내림차순) — 두 데이터 합집합, 2026 최상단(기본 선택)
+                const seasons = [...new Set([...PF_ROWS, ...RE_ROWS].map(r => r.season))].sort((a, b) => b - a);
+                const sel = document.getElementById('season-select');
+                sel.innerHTML = seasons.map((s, i) => `<option value="${s}"${i === 0 ? ' selected' : ''}>${s} 시즌</option>`).join('');
+                renderAll();
             } catch (err) {
                 console.error(err);
                 document.getElementById('pf-content').innerHTML = `<div class="err">데이터 로드 실패: ${esc(err.message)}</div>`;
