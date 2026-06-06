@@ -364,7 +364,12 @@
                 const emblem = t.code
                     ? `<img class="rank-emblem" src="assets/logos/${esc(t.code)}.png" alt="" loading="lazy" onerror="this.style.display='none'">`
                     : '';
-                return `<tr>
+                // KBO 가을야구 진출 구분: 1=한국시리즈, 2=플레이오프, 3=준플레이오프, 4·5=와일드카드
+                const seed = t.rank === 1 ? 'seed-ks'
+                    : t.rank === 2 ? 'seed-po'
+                    : t.rank === 3 ? 'seed-spo'
+                    : (t.rank === 4 || t.rank === 5) ? 'seed-wc' : '';
+                return `<tr class="${seed}">
                     <td class="rank-col"><span class="rank-badge rank-${t.rank}">${t.rank}</span></td>
                     <td class="team-col"><div class="team-cell">${emblem}<span>${esc(t.team)}</span></div></td>
                     <td>${esc(t.games)}</td>
@@ -376,7 +381,14 @@
                     <td class="${streakClass(t.streak)}">${esc(t.streak)}</td>
                 </tr>`;
             }).join('');
-            return `<table class="standings-table">${head}<tbody>${rows}</tbody></table>`;
+            // 가을야구 진출 범례 — 표 아래 박스 안 2×2
+            const legend = `<div class="standings-legend">
+                <span class="sl-item"><span class="sl-dot sl-ks"></span>한국시리즈 직행 (1위)</span>
+                <span class="sl-item"><span class="sl-dot sl-po"></span>플레이오프 직행 (2위)</span>
+                <span class="sl-item"><span class="sl-dot sl-spo"></span>준플레이오프 직행 (3위)</span>
+                <span class="sl-item"><span class="sl-dot sl-wc"></span>와일드카드 결정전 (4·5위)</span>
+            </div>`;
+            return `<table class="standings-table">${head}<tbody>${rows}</tbody></table>${legend}`;
         }
         async function loadStandings() {
             const wrap = document.getElementById('standings-wrap');
@@ -400,13 +412,17 @@
         let leadersTab = 'batter';
         // 카드 순서 = 좌열(1열) 3개 → 우열(2열) 3개. .leaders-grid가 column 방향으로 배치.
         const LEADER_DEFS = {
+            // column 방향 배치: 좌열 타율/장타율/wOBA, 우열 출루율/OPS/wRC+
+            // → 행으로 읽으면 [타율·출루율] [장타율·OPS] [wOBA·wRC+]
             batter: [
-                { key: 'avg', label: '타율' }, { key: 'obp', label: '출루율' }, { key: 'slg', label: '장타율' },
-                { key: 'ops', label: 'OPS' }, { key: 'woba', label: 'wOBA' }, { key: 'wrc', label: 'wRC+' },
+                { key: 'avg', label: '타율' }, { key: 'slg', label: '장타율' }, { key: 'woba', label: 'wOBA' },
+                { key: 'obp', label: '출루율' }, { key: 'ops', label: 'OPS' }, { key: 'wrc', label: 'wRC+' },
             ],
+            // column 방향 배치: 좌열 이닝/탈삼진/BB%, 우열 ERA/K%/K-BB%
+            // → 행으로 읽으면 [이닝·ERA] [탈삼진·K%] [BB%·K-BB%]
             pitcher: [
-                { key: 'g', label: '경기' }, { key: 'ip', label: '이닝' }, { key: 'k', label: '탈삼진' },
-                { key: 'era', label: 'ERA' }, { key: 'kpct', label: 'K%' }, { key: 'bbpct', label: 'BB%' },
+                { key: 'ip', label: '이닝' }, { key: 'k', label: '탈삼진' }, { key: 'bbpct', label: 'BB%' },
+                { key: 'era', label: 'ERA' }, { key: 'kpct', label: 'K%' }, { key: 'kbb', label: 'K-BB%' },
             ],
         };
         function leaderCard(def, list) {

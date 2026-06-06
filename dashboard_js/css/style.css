@@ -1773,12 +1773,16 @@ h2 .material-symbols-outlined,
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius);
+    /* 박스를 채워 본문 행이 남는 높이를 흡수 → 범례 아래 빈 공간 제거 (헤더는 자연 높이 유지) */
+    display: flex;
+    flex-direction: column;
 }
 
 .standings-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.9rem;
+    flex: 1 1 auto;
 }
 
 .standings-table th,
@@ -1792,6 +1796,8 @@ h2 .material-symbols-outlined,
     color: var(--text-muted);
     font-weight: 600;
     font-size: 0.8rem;
+    /* 개인 순위 카드 타이틀 밑줄과 동일한 높이로 맞춤 (leaders-wrap padding 1rem 보정) */
+    padding-top: 0.83rem;
     border-bottom: 1px solid var(--border-color);
 }
 
@@ -1843,12 +1849,42 @@ h2 .material-symbols-outlined,
     color: var(--text-secondary);
 }
 
-.standings-table .rank-badge.rank-1 { background: #fde68a; color: #92400e; }
-.standings-table .rank-badge.rank-2 { background: #e5e7eb; color: #374151; }
-.standings-table .rank-badge.rank-3 { background: #fed7aa; color: #9a3412; }
+/* KBO 가을야구(포스트시즌) 진출 구분 — 순위 행 좌측 색상 바 */
+.standings-table tbody tr.seed-ks  td:first-child { box-shadow: inset 4px 0 0 #f59e0b; }
+.standings-table tbody tr.seed-po  td:first-child { box-shadow: inset 4px 0 0 #3b82f6; }
+.standings-table tbody tr.seed-spo td:first-child { box-shadow: inset 4px 0 0 #22c55e; }
+.standings-table tbody tr.seed-wc  td:first-child { box-shadow: inset 4px 0 0 #a855f7; }
 
 .standings-table .streak-w { color: #059669; font-weight: 600; }
 .standings-table .streak-l { color: #dc2626; font-weight: 600; }
+
+/* 팀 순위 가을야구 진출 범례 (박스 안, 표 아래 1×4 한 줄) */
+.standings-legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.45rem 0.5rem;
+    padding: 0.8rem 0.85rem 0.9rem;
+    border-top: 1px solid var(--border-color);
+    font-size: 0.74rem;
+    color: var(--text-secondary);
+}
+.standings-legend .sl-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    white-space: nowrap;
+}
+.standings-legend .sl-dot {
+    flex: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+}
+.standings-legend .sl-dot.sl-ks  { background: #f59e0b; }
+.standings-legend .sl-dot.sl-po  { background: #3b82f6; }
+.standings-legend .sl-dot.sl-spo { background: #22c55e; }
+.standings-legend .sl-dot.sl-wc  { background: #a855f7; }
 
 /* ===================== 순위 2단 레이아웃 (팀 순위 + 개인 순위) ===================== */
 .rank-row {

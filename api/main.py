@@ -1294,9 +1294,9 @@ def _team_park_factors(cur, ref_season):
 
 @app.get("/leaders")
 async def get_leaders(season: int = None):
-    """KBO 개인 순위 Top5. 타자: 타율/출루율/장타율/OPS/wOBA/wRC+, 투수: 경기/이닝/탈삼진/ERA/K%/BB%.
-    타율·출루율·장타율·OPS·wOBA·wRC+·ERA·K%·BB%는 규정타석/규정이닝(팀 최다경기 기준) 충족자만;
-    경기·이닝·탈삼진은 누적. 10분 캐시.
+    """KBO 개인 순위 Top5. 타자: 타율/출루율/장타율/OPS/wOBA/wRC+, 투수: 이닝/탈삼진/ERA/K%/BB%/K-BB%.
+    타율·출루율·장타율·OPS·wOBA·wRC+·ERA·K%·BB%·K-BB%는 규정타석/규정이닝(팀 최다경기 기준) 충족자만;
+    이닝·탈삼진은 누적. 10분 캐시.
     wRC+는 wrc-comparison 페이지와 동일 산식(wOBA->wRAA->wRC+)을 현재 데이터로 실시간 계산.
     파크팩터는 games 테이블에서 자체 계산(나무위키 기본공식); 해당 시즌 경기 미적재 시 직전 보유 시즌 사용."""
     try:
@@ -1372,7 +1372,7 @@ async def get_leaders(season: int = None):
         # 투수 (정렬 기준이 달라 파이썬에서 산정)
         cur.execute(
             "SELECT p.player_name AS name, p.team_id AS team, ps.earned_run_average AS era, "
-            "ps.innings_pitched AS ip, ps.strikeout AS k, ps.games AS g, "
+            "ps.innings_pitched AS ip, ps.strikeout AS k, "
             "ps.strikeout_per_pa AS kpct, ps.base_on_balls_per_pa AS bbpct "
             "FROM kbo_official_pitcher_stats ps JOIN players p ON ps.player_id=p.player_id "
             "WHERE ps.season=?",
@@ -1391,10 +1391,6 @@ async def get_leaders(season: int = None):
             except (TypeError, ValueError):
                 d["_k"] = 0
             try:
-                d["_g"] = int(d["g"])
-            except (TypeError, ValueError):
-                d["_g"] = 0
-            try:
                 d["_kpct"] = float(d["kpct"])
             except (TypeError, ValueError):
                 d["_kpct"] = None
@@ -1407,10 +1403,8 @@ async def get_leaders(season: int = None):
         def _pit_entry(d, val):
             return {"name": d["name"], "team": d["team"], "code": _code(d["team"]), "value": val}
 
-        # 경기/이닝/탈삼진: 누적(규정 미적용). ERA/K%/BB%: 규정이닝 충족자.
+        # 이닝/탈삼진: 누적(규정 미적용). ERA/K%/BB%/K-BB%: 규정이닝 충족자.
         qual_pit = [x for x in pit if x["_outs"] >= qual_outs]
-        g_top = [_pit_entry(d, str(d["_g"]))
-                 for d in sorted(pit, key=lambda x: -x["_g"])[:5]]
         ip_top = [_pit_entry(d, str(d.get("ip") or "").strip())
                   for d in sorted(pit, key=lambda x: -x["_outs"])[:5]]
         k_top = [_pit_entry(d, str(d["_k"]))
@@ -1422,6 +1416,11 @@ async def get_leaders(season: int = None):
                     for d in sorted([x for x in qual_pit if x["_kpct"] is not None], key=lambda x: -x["_kpct"])[:5]]
         bbpct_top = [_pit_entry(d, "%.1f%%" % d["_bbpct"])
                      for d in sorted([x for x in qual_pit if x["_bbpct"] is not None], key=lambda x: x["_bbpct"])[:5]]
+        # K-BB% = K% - BB% (높을수록 상위), 규정이닝 충족자
+        def _kbb(x):
+            return None if (x["_kpct"] is None or x["_bbpct"] is None) else (x["_kpct"] - x["_bbpct"])
+        kbb_top = [_pit_entry(d, "%.1f%%" % _kbb(d))
+                   for d in sorted([x for x in qual_pit if _kbb(x) is not None], key=lambda x: -_kbb(x))[:5]]
 
         conn.close()
         result = {
@@ -1431,14 +1430,14 @@ async def get_leaders(season: int = None):
             "wrc_pf_season": season,
             "batter": {"avg": avg_top, "obp": obp_top, "slg": slg_top,
                        "ops": ops_top, "woba": woba_top, "wrc": wrc_top},
-            "pitcher": {"g": g_top, "ip": ip_top, "k": k_top,
-                        "era": era_top, "kpct": kpct_top, "bbpct": bbpct_top},
+            "pitcher": {"ip": ip_top, "k": k_top, "era": era_top,
+                        "kpct": kpct_top, "bbpct": bbpct_top, "kbb": kbb_top},
         }
         _LEADERS_CACHE[ckey] = (_time.time(), result)
         return result
     except Exception as e:
         return {"season": season,
                 "batter": {"avg": [], "obp": [], "slg": [], "ops": [], "woba": [], "wrc": []},
-                "pitcher": {"g": [], "ip": [], "k": [], "era": [], "kpct": [], "bbpct": []},
+                "pitcher": {"ip": [], "k": [], "era": [], "kpct": [], "bbpct": [], "kbb": []},
                 "error": str(e)}
 
