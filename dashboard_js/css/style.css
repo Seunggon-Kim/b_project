@@ -1759,9 +1759,9 @@ h2 .material-symbols-outlined,
     margin-bottom: 1rem;
 }
 
-/* 좌(1줄)·우(2줄) 출처 문구 높이를 통일 → 두 박스의 하단 라인 정렬 */
+/* 출처 문구: 박스 바로 아래 정렬 (빈 줄 없이) */
 .rank-row .schedule-note {
-    min-height: 2.4rem;
+    min-height: 0;
     margin-top: 0.75rem;
     display: flex;
     align-items: flex-end;
