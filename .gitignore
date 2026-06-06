@@ -232,3 +232,4 @@ res.json
 player_debug.txt
 pitcher_cols.txt
 *.bak.before_*
+*.bak_*
