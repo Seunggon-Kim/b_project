@@ -182,14 +182,17 @@ def parse_schedule(data, year):
 
         # 시리즈: 소프트뱅크(SO) 관여 = 교류전(10)
         series_id = 10 if ("SO" in (ac, hc)) else 0
-        # 상태
-        cancel = "취소" in (bc.get("relay", "") + stadium)
+        # 상태: 종료=relay에 REVIEW(리뷰) 링크. 진행 중 경기는 asmx가 0:0으로 표기하므로
+        # 스코어 유무로 final 판정하면 안 됨(라이브=빈 relay, 예정=PREVIEW 링크).
+        relay = bc.get("relay", "")
+        cancel = "취소" in (relay + stadium)
         if cancel:
             status = "canceled"
-        elif away_score is not None:
+        elif "section=REVIEW" in relay:
             status = "final"
         else:
-            status = "scheduled"
+            status = "scheduled"          # 라이브/예정
+            away_score = home_score = None  # asmx 0:0은 신뢰 불가 -> 무효
 
         games.append({
             "game_id": game_id, "game_date": cur_date, "game_time": time_,

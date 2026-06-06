@@ -250,7 +250,7 @@
         }
 
         function renderFuturesGame(g) {
-            const cls = g.cancel ? 'cancel' : (g.final ? 'final' : 'before');
+            const cls = g.cancel ? 'cancel' : (g.final ? 'final' : (g.live ? 'live' : 'before'));
             let center;
             if (g.cancel) {
                 center = `<div class="game-vs">취소</div>`;
@@ -264,12 +264,13 @@
             } else {
                 center = `<div class="game-vs">VS</div>`;
             }
-            const statusText = g.cancel ? '취소' : (g.final ? '종료' : '경기예정');
+            const statusText = g.statusInfo || (g.cancel ? '취소' : (g.final ? '종료' : (g.live ? '경기중' : '경기예정')));
+            const timeText = g.live ? (g.currentInning || '경기중') : (g.time || '');
             const exhibition = g.seriesId === 10;
             return `<div class="game-card ${cls}">
                 <div class="game-card-top">
                     <span class="stadium">${esc(g.stadium)}</span>
-                    <span class="game-time">${esc(g.time)}</span>
+                    <span class="game-time">${esc(timeText)}</span>
                 </div>
                 <div class="game-card-body">
                     ${futuresTeamBlock(g.away, 'away', g.winner)}
@@ -279,6 +280,7 @@
                     </div>
                     ${futuresTeamBlock(g.home, 'home', g.winner)}
                 </div>
+                ${pitcherRow(g)}
                 ${exhibition ? `<div class="game-card-foot"><span class="series-badge exhibition">교류전</span></div>` : ''}
             </div>`;
         }
@@ -293,7 +295,7 @@
             },
             futures: {
                 ep: 'schedule/futures',
-                note: '데이터 출처: KBO 공식 (퓨처스리그) · 60초 캐시',
+                note: '데이터 출처: KBO 공식 (퓨처스리그 실시간) · 30초 캐시',
                 empty: '이 날짜에 퓨처스 경기가 없습니다.',
                 render: renderFuturesGame,
             },

@@ -1008,17 +1008,55 @@ async def get_schedule(date: str = None):
         return {"date": date, "count": 0, "games": [], "error": str(e)}
 
 
-# ===== KBO 퓨처스리그 일정/결과 (futures_games DB 서빙) =====
-# 본 리그와 달리 Naver가 퓨처스를 제공하지 않아, data_collection/futures_schedule.py가
-# KBO 공식 GameList.aspx를 파싱해 적재한 futures_games 테이블을 읽어 서빙한다.
+# ===== KBO 퓨처스리그 일정/결과 (실시간 스코어보드 프록시) =====
+# Schedule.asmx(스케줄 리스트)는 진행 중 경기를 0:0으로만 표시(라이브 스코어 없음)하므로,
+# 1군(Naver)처럼 실시간 스코어보드 GetKboGameList(leId=2)를 프록시한다.
+# 라이브 스코어·현재 이닝·등판 투수·승/패/세이브까지 제공하며 과거 날짜·교류전도 동일 처리.
+# (data_collection/futures_schedule.py + futures_games 테이블은 분석용 웨어하우스로 별도 유지)
 _FUTURES_SCHED_CACHE = {}
-_FUTURES_SCHED_TTL = 60  # seconds
-_SERIES_NAME = {0: "퓨처스리그", 10: "교류전"}
+_FUTURES_SCHED_TTL = 30  # seconds (라이브 갱신)
+_FUTURES_STATE = {"1": "scheduled", "2": "live", "3": "final"}
+_FUTURES_SRID = "0,9,10"  # 0=정규, 10=교류전 (모두 포함)
+_FUTURES_SB_URL = "https://www.koreabaseball.com/ws/Main.asmx/GetKboGameList"
+
+
+def _futures_teams_map():
+    """code -> {display_name, division} (futures_teams 마스터)."""
+    conn = get_db_connection()
+    rows = conn.execute(
+        "SELECT code, display_name, division FROM futures_teams"
+    ).fetchall()
+    conn.close()
+    return {r["code"]: dict(r) for r in rows}
+
+
+def _futures_scoreboard(ymd):
+    """GetKboGameList(leId=2, date=YYYYMMDD) -> game 리스트 (BOM 처리)."""
+    r = requests.post(
+        _FUTURES_SB_URL,
+        data={"leId": "2", "srId": _FUTURES_SRID, "date": ymd},
+        headers={
+            "User-Agent": "Mozilla/5.0",
+            "Referer": "https://www.koreabaseball.com/Schedule/GameCenter/Main.aspx",
+            "X-Requested-With": "XMLHttpRequest",
+        },
+        timeout=8,
+    )
+    r.raise_for_status()
+    data = json.loads(r.content.decode("utf-8-sig", "replace"))
+    return data.get("game") or []
+
+
+def _futures_int(v):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
 
 
 @app.get("/schedule/futures")
 async def get_futures_schedule(date: str = None):
-    """KBO 퓨처스리그 일정/결과 (DB). date=YYYY-MM-DD (미지정 시 KST 오늘). 60초 캐시."""
+    """KBO 퓨처스리그 일정/결과 (실시간 스코어보드 프록시). date=YYYY-MM-DD. 30초 캐시."""
     try:
         if not date:
             kst = datetime.datetime.utcnow() + datetime.timedelta(hours=9)
@@ -1028,56 +1066,73 @@ async def get_futures_schedule(date: str = None):
         if cached and (_time.time() - cached[0] < _FUTURES_SCHED_TTL):
             return cached[1]
 
-        conn = get_db_connection()
-        rows = conn.execute("""
-            SELECT g.*,
-                   ta.display_name AS away_disp, ta.division AS away_div,
-                   th.display_name AS home_disp, th.division AS home_div
-            FROM futures_games g
-            LEFT JOIN futures_teams ta ON g.away_code = ta.code
-            LEFT JOIN futures_teams th ON g.home_code = th.code
-            WHERE g.game_date = ?
-            ORDER BY g.game_time, g.game_id
-        """, (date,)).fetchall()
-        conn.close()
+        raw_games = _futures_scoreboard(date.replace("-", ""))
+        teams = _futures_teams_map()
 
         games = []
-        for row in rows:
-            r = dict(row)
-            final = r["status"] == "final"
-            cancel = r["status"] == "canceled"
-            show = final  # 퓨처스는 실시간(live) 데이터 없음
+        for g in raw_games:
+            state = str(g.get("GAME_STATE_SC") or "")
+            cancel = str(g.get("CANCEL_SC_ID") or "0") not in ("0", "")
+            status = "canceled" if cancel else _FUTURES_STATE.get(state, "scheduled")
+            final = status == "final"
+            live = status == "live"
+            show = final or live
+
+            ac = g.get("AWAY_ID") or ""
+            hc = g.get("HOME_ID") or ""
+            at = teams.get(ac, {})
+            ht = teams.get(hc, {})
+            a_sc = _futures_int(g.get("T_SCORE_CN")) if show else None
+            h_sc = _futures_int(g.get("B_SCORE_CN")) if show else None
+
             winner = ""
-            if final and r["away_score"] is not None and r["home_score"] is not None:
-                if r["away_score"] > r["home_score"]:
-                    winner = "AWAY"
-                elif r["home_score"] > r["away_score"]:
-                    winner = "HOME"
+            if final and a_sc is not None and h_sc is not None:
+                winner = "AWAY" if a_sc > h_sc else "HOME" if h_sc > a_sc else ""
+
+            inning = ""
+            if live and g.get("GAME_INN_NO"):
+                inning = "%s회%s" % (g.get("GAME_INN_NO"), g.get("GAME_TB_SC_NM") or "")
+
+            sr = _futures_int(g.get("SR_ID"))
+            status_info = ("취소" if cancel else inning if live
+                           else "종료" if final else "경기예정")
+
             games.append({
-                "gameId": r["game_id"],
-                "time": r["game_time"] or "",
-                "stadium": r["stadium"] or "",
-                "seriesId": r["series_id"],
-                "series": _SERIES_NAME.get(r["series_id"], ""),
-                "status": r["status"],
+                "gameId": g.get("G_ID"),
+                "time": g.get("G_TM") or "",
+                "stadium": g.get("S_NM") or "",
+                "seriesId": sr if sr is not None else 0,
+                "series": "교류전" if sr == 10 else "퓨처스리그",
+                "status": status,
                 "final": final,
+                "live": live,
                 "cancel": cancel,
                 "showScore": show,
                 "winner": winner,
+                "currentInning": inning,
+                "statusInfo": status_info,
                 "away": {
-                    "code": r["away_code"],
-                    "name": r["away_disp"] or r["away_name"],
-                    "division": r["away_div"] or "",
-                    "score": r["away_score"] if show else None,
+                    "code": ac,
+                    "name": at.get("display_name") or g.get("AWAY_NM") or ac,
+                    "division": at.get("division") or "",
+                    "score": a_sc,
+                    "currentPitcher": (g.get("T_P_NM") or "") if live else "",
                 },
                 "home": {
-                    "code": r["home_code"],
-                    "name": r["home_disp"] or r["home_name"],
-                    "division": r["home_div"] or "",
-                    "score": r["home_score"] if show else None,
+                    "code": hc,
+                    "name": ht.get("display_name") or g.get("HOME_NM") or hc,
+                    "division": ht.get("division") or "",
+                    "score": h_sc,
+                    "currentPitcher": (g.get("B_P_NM") or "") if live else "",
+                },
+                "decisions": {
+                    "win": (g.get("W_PIT_P_NM") or "") if final else "",
+                    "lose": (g.get("L_PIT_P_NM") or "") if final else "",
+                    "save": (g.get("SV_PIT_P_NM") or "") if final else "",
                 },
             })
 
+        games.sort(key=lambda x: ((x.get("time") or ""), (x.get("gameId") or "")))
         result = {"date": date, "count": len(games), "games": games,
                   "source": "koreabaseball.com"}
         _FUTURES_SCHED_CACHE[date] = (_time.time(), result)
