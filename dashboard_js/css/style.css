@@ -1518,6 +1518,85 @@ h4 {
     text-align: center;
 }
 
+/* ===== 투수 정보 (예정=선발 / 진행=현재 마운드 / 종료=승·패·세이브) ===== */
+.game-pitchers {
+    padding: 0.45rem 0.85rem 0.55rem;
+    font-size: 0.78rem;
+    border-top: 1px dashed var(--border-color);
+}
+
+/* 예정·진행: 좌(원정) — 라벨 — 우(홈) 3분할로 위쪽 팀 배치와 정렬 */
+.game-pitchers.before,
+.game-pitchers.live {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.game-pitchers .pp {
+    color: var(--text-secondary);
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.game-pitchers .pp.away { text-align: right; }
+.game-pitchers .pp.home { text-align: left; }
+
+.game-pitchers .pp-label {
+    font-size: 0.66rem;
+    font-weight: 700;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.game-pitchers.before .pp-label {
+    background: rgba(59, 130, 246, 0.14);
+    color: #3b82f6;
+}
+
+.game-pitchers.live .pp-label {
+    background: rgba(239, 68, 68, 0.16);
+    color: #ef4444;
+}
+
+/* 종료: 승·패·세이브 칩 (가운데 정렬, 세이브는 있을 때만) */
+.game-pitchers.final {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem 0.7rem;
+}
+
+.pdec {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.pdec-tag {
+    font-size: 0.64rem;
+    font-weight: 700;
+    width: 1.05rem;
+    height: 1.05rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.pdec-tag.win  { background: #16a34a; }
+.pdec-tag.lose { background: #64748b; }
+.pdec-tag.save { background: #f59e0b; }
+
 .schedule-msg {
     grid-column: 1 / -1;
     padding: 2.5rem 1rem;

@@ -907,6 +907,8 @@ def _kbo_normalize_game(meta):
             "emblem": g.get(prefix + "TeamEmblemUrl", "") or "",
             "score": _score(g.get(prefix + "TeamScore")) if show_score else None,
             "starter": g.get(prefix + "StarterName", "") or "",
+            # 진행 중인 경기에서 현재 마운드에 등판 중인 투수 (예정·종료 시엔 빈 문자열)
+            "currentPitcher": (g.get(prefix + "CurrentPitcherName", "") or "") if live else "",
         }
 
     return {
@@ -925,7 +927,33 @@ def _kbo_normalize_game(meta):
         "winner": g.get("winner", "") or "",
         "home": _team("home"),
         "away": _team("away"),
+        # 종료 경기의 승/패/세이브 투수 (get_schedule에서 record 엔드포인트로 채움)
+        "decisions": {"win": "", "lose": "", "save": ""},
     }
+
+
+def _kbo_game_decisions(game_id):
+    """종료 경기의 승리/패전/세이브 투수.
+    record 엔드포인트 pitchingResult[].wls (W=승, L=패, S=세이브, H=홀드)에서 추출.
+    세이브 투수는 정의상 승리팀 소속이므로 별도 팀 판별 불필요."""
+    out = {"win": "", "lose": "", "save": ""}
+    try:
+        data = _kbo_fetch_json(
+            "https://api-gw.sports.naver.com/schedule/games/" + game_id + "/record"
+        )
+        pr = ((data or {}).get("result", {}).get("recordData", {}) or {}).get("pitchingResult", []) or []
+        for p in pr:
+            wls = (p.get("wls") or "").upper()
+            name = p.get("name") or ""
+            if wls == "W" and not out["win"]:
+                out["win"] = name
+            elif wls == "L" and not out["lose"]:
+                out["lose"] = name
+            elif wls == "S" and not out["save"]:
+                out["save"] = name
+    except Exception:
+        pass
+    return out
 
 
 @app.get("/schedule")
@@ -962,6 +990,15 @@ async def get_schedule(date: str = None):
                 ng = _kbo_normalize_game(m)
                 if ng:
                     games.append(ng)
+
+            # 종료 경기는 승/패/세이브 투수를 record 엔드포인트에서 병렬로 보강
+            finals = [ng for ng in games if ng.get("final") and ng.get("gameId")]
+            if finals:
+                with _futures.ThreadPoolExecutor(max_workers=8) as ex:
+                    decs = list(ex.map(lambda ng: _kbo_game_decisions(ng["gameId"]), finals))
+                for ng, d in zip(finals, decs):
+                    ng["decisions"] = d
+
             games.sort(key=lambda x: ((x.get("datetime") or ""), (x.get("gameId") or "")))
 
         result = {"date": date, "count": len(games), "games": games}
