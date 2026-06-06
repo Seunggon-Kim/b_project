@@ -325,7 +325,7 @@
                 LEADERS_DATA = await res.json();
                 const note = document.getElementById('leaders-note');
                 if (note && LEADERS_DATA.season) {
-                    note.textContent = `${LEADERS_DATA.season} 시즌 · 규정타석(${LEADERS_DATA.qual_pa})/규정이닝(${LEADERS_DATA.qual_ip}) 기준 · wRC+는 'wRC+ 강건성' 페이지와 동일(자체 파크팩터 3년·half-PF) · 이닝·탈삼진 누적`;
+                    note.textContent = `${LEADERS_DATA.season} 시즌 규정타석(${LEADERS_DATA.qual_pa})/규정이닝(${LEADERS_DATA.qual_ip}) 기준, wRC+는 자체 파크팩터 3년·half-PF로 산출`;
                 }
                 renderLeaders();
             } catch (e) {
