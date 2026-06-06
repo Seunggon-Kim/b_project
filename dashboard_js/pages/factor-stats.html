@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>요인 통계 - C - Baseball Research Center</title>
+    <meta name="description" content="KBO 파크 팩터 및 RE24 매트릭스">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
+
+    <!-- Favicon (다이아몬드) -->
+    <link rel="icon" href="../assets/favicon/diamond.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon/diamond.svg">
+    <link rel="apple-touch-icon" href="../assets/favicon/diamond-180.png">
+
+    <link rel="stylesheet" href="../css/style.css">
+    <script src="../js/theme-toggle.js"></script>
+    <style>
+        .info-box { background: #eff6ff; border-left: 4px solid #2563eb; padding: 0.75rem 1rem;
+                    border-radius: 4px; margin-bottom: 1.5rem; font-size: 0.88rem; color: #1e40af; }
+        .info-box strong { color: #1e3a8a; }
+        .info-box code { background: rgba(37,99,235,0.1); padding: 0 0.3rem; border-radius: 3px; }
+
+        /* 탭 */
+        .fs-tabs { display: flex; gap: 0.5rem; border-bottom: 2px solid var(--border-color); margin-bottom: 1.5rem; }
+        .fs-tab { background: none; border: none; padding: 0.7rem 1.2rem; font-size: 1rem; font-weight: 600;
+                  font-family: inherit; color: var(--text-secondary); cursor: pointer; border-bottom: 3px solid transparent;
+                  margin-bottom: -2px; display: inline-flex; align-items: center; gap: 0.4rem; }
+        .fs-tab:hover { color: var(--primary); }
+        .fs-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .fs-panel { display: none; }
+        .fs-panel.active { display: block; }
+
+        /* 시즌 섹션 */
+        .season-block { margin-bottom: 2rem; }
+        .season-head { display: flex; align-items: baseline; gap: 0.6rem; margin: 0 0 0.6rem; flex-wrap: wrap; }
+        .season-head h2 { margin: 0; font-size: 1.35rem; color: var(--text-primary); }
+        .season-note { font-size: 0.82rem; color: var(--text-muted); }
+        .badge-live { display: inline-block; padding: 0.1rem 0.5rem; background: #fde68a; color: #92400e;
+                      border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+
+        /* 테이블 공통 */
+        .fs-table-wrap { overflow-x: auto; border: 1px solid var(--border-color); border-radius: 8px; }
+        table.fs-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        table.fs-table th, table.fs-table td { padding: 0.5rem 0.7rem; text-align: right; white-space: nowrap;
+                                               border-bottom: 1px solid var(--border-color); }
+        table.fs-table thead th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 700;
+                                  text-align: center; position: sticky; top: 0; }
+        table.fs-table td.left, table.fs-table th.left { text-align: left; }
+        table.fs-table tbody tr:hover, table.fs-table tbody tr:hover { background: rgba(59,130,246,0.06); }
+        .pf-strong-h { color: #b91c1c; font-weight: 700; }   /* 타자 친화 (>100) */
+        .pf-mild-h   { color: #dc2626; }
+        .pf-neutral  { color: var(--text-secondary); }
+        .pf-mild-p   { color: #2563eb; }
+        .pf-strong-p { color: #1d4ed8; font-weight: 700; }   /* 투수 친화 (<100) */
+
+        /* RE24 매트릭스 */
+        .re-matrix { border-collapse: collapse; font-size: 0.92rem; }
+        .re-matrix th, .re-matrix td { border: 1px solid var(--border-color); padding: 0.5rem 0.85rem; text-align: center; }
+        .re-matrix thead th { background: var(--bg-tertiary); font-weight: 700; }
+        .re-matrix td.base { text-align: left; font-weight: 600; background: var(--bg-tertiary); white-space: nowrap; }
+        .re-cell { font-variant-numeric: tabular-nums; font-weight: 600; color: #1f2937; }
+        .re-n { font-size: 0.7rem; color: #9ca3af; display: block; font-weight: 400; }
+        .legend { display: flex; gap: 1rem; align-items: center; font-size: 0.8rem; color: var(--text-muted);
+                  margin-top: 0.5rem; flex-wrap: wrap; }
+        .legend .sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: middle;
+                      margin-right: 0.25rem; border: 1px solid rgba(0,0,0,0.1); }
+        .err { color: #dc2626; padding: 1rem; background: #fef2f2; border-radius: 6px; }
+        .muted { color: var(--text-muted); }
+    </style>
+</head>
+
+<body>
+    <header class="header">
+        <div class="header-content">
+            <a href="../" class="logo">
+                <img src="../assets/favicon/diamond.svg" alt="" class="logo-icon" width="26" height="26">
+                <span>C - Baseball Research Center</span>
+            </a>
+            <nav class="nav">
+                <a href="../" class="nav-link">홈</a>
+                <a href="team-stats.html" class="nav-link">팀 통계</a>
+                <a href="player-stats.html" class="nav-link">선수 통계</a>
+                <a href="player-analytics.html" class="nav-link">선수 분석</a>
+                <a href="wrc-comparison.html" class="nav-link">wRC+ 강건성</a>
+                <a href="factor-stats.html" class="nav-link active">요인 통계</a>
+                <a href="database-explorer.html" class="nav-link">데이터 탐색</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <h1 class="fade-in"><span class="material-symbols-outlined">tune</span> 요인 통계</h1>
+        <p class="text-secondary mb-3">구장 보정 요인(파크 팩터)과 베이스-아웃 득점기대값(RE24). Play-by-Play에서 자체 산출하며 매일 갱신됩니다.</p>
+
+        <div class="fs-tabs" id="fs-tabs">
+            <button class="fs-tab active" data-panel="pf"><span class="material-symbols-outlined">stadium</span> 파크 팩터</button>
+            <button class="fs-tab" data-panel="re24"><span class="material-symbols-outlined">grid_on</span> RE24 매트릭스</button>
+        </div>
+
+        <!-- 파크 팩터 -->
+        <section class="fs-panel active" id="panel-pf">
+            <div class="info-box">
+                <strong>파크 팩터</strong> — <code>100 = 리그 평균</code>. 100보다 크면 타자 친화, 작으면 투수 친화 구장입니다.
+                3년 트레일링 윈도우로 산출(개장 초기 구장은 1~2년)하며, 득점·안타 유형별로 제공합니다.
+                <strong>2026</strong>은 진행 중 시즌이라 표본이 누적되며 값이 안정화됩니다.
+            </div>
+            <div id="pf-content"><p class="muted">불러오는 중…</p></div>
+            <div class="legend">
+                <span><span class="sw" style="background:#b91c1c"></span>타자 친화 (&gt;100)</span>
+                <span><span class="sw" style="background:#1d4ed8"></span>투수 친화 (&lt;100)</span>
+                <span class="muted">값이 클수록 해당 구장에서 그 유형이 잘 나옴</span>
+            </div>
+        </section>
+
+        <!-- RE24 -->
+        <section class="fs-panel" id="panel-re24">
+            <div class="info-box">
+                <strong>RE24 (득점기대값 매트릭스)</strong> — 각 <strong>베이스-아웃 상황</strong>에서 그 이닝 종료까지
+                평균적으로 추가 득점하는 기댓값입니다. 무주자 0아웃에서 출발해 주자가 늘수록·아웃이 줄수록 커집니다.
+                run value(선형 가중치)의 기반이 되는 표입니다. 셀 아래 작은 숫자는 표본 수(n)입니다.
+            </div>
+            <div id="re24-content"><p class="muted">불러오는 중…</p></div>
+        </section>
+    </main>
+
+    <script>
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const API = isLocal ? 'http://localhost:8000' : '/api';
+
+        function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+        async function dbTable(name) {
+            const r = await fetch(`${API}/db/table/${name}?limit=500`);
+            if (!r.ok) throw new Error(`${name} → ${r.status}`);
+            return (await r.json()).rows;
+        }
+
+        // ===== 탭 전환 =====
+        document.getElementById('fs-tabs').addEventListener('click', (e) => {
+            const btn = e.target.closest('.fs-tab');
+            if (!btn) return;
+            const p = btn.dataset.panel;
+            document.querySelectorAll('.fs-tab').forEach(b => b.classList.toggle('active', b === btn));
+            document.querySelectorAll('.fs-panel').forEach(pan => pan.classList.toggle('active', pan.id === `panel-${p}`));
+        });
+
+        // ===== 파크 팩터 =====
+        const PF_COLS = [
+            { k: 'run_pf', label: '득점' }, { k: 'single_pf', label: '1루타' }, { k: 'double_pf', label: '2루타' },
+            { k: 'triple_pf', label: '3루타' }, { k: 'hr_pf', label: '홈런' }, { k: 'slg_pf', label: '장타' },
+        ];
+        function pfClass(v100) {
+            if (v100 >= 104) return 'pf-strong-h';
+            if (v100 >= 100.5) return 'pf-mild-h';
+            if (v100 <= 96) return 'pf-strong-p';
+            if (v100 <= 99.5) return 'pf-mild-p';
+            return 'pf-neutral';
+        }
+        function pfCell(raw) {
+            if (raw == null) return '<td class="muted">—</td>';
+            const v = raw / 10;               // 1000-scale → 100-scale
+            return `<td class="${pfClass(v)}">${v.toFixed(1)}</td>`;
+        }
+        function renderPF(rows) {
+            const el = document.getElementById('pf-content');
+            if (!rows.length) { el.innerHTML = '<p class="muted">데이터가 없습니다.</p>'; return; }
+            const seasons = [...new Set(rows.map(r => r.season))].sort((a, b) => b - a);  // 2026 먼저
+            el.innerHTML = seasons.map(season => {
+                const list = rows.filter(r => r.season === season).sort((a, b) => b.run_pf - a.run_pf);
+                const win = list[0] && list[0].window ? list[0].window : '';
+                const cap = list[0] && list[0].captured_at ? list[0].captured_at : '';
+                const head = `
+                    <div class="season-head">
+                        <h2>${season} 시즌</h2>
+                        ${season >= 2026 ? '<span class="badge-live">진행 중</span>' : ''}
+                        <span class="season-note">${list.length}개 구장 · 산출 구간 ${esc(win)}${cap ? ' · 갱신 ' + esc(cap.slice(0, 10)) : ''}</span>
+                    </div>`;
+                const body = list.map(r => `
+                    <tr>
+                        <td class="left">${esc(r.stadium)}</td>
+                        <td>${esc(r.games)}</td>
+                        ${PF_COLS.map(c => pfCell(r[c.k])).join('')}
+                    </tr>`).join('');
+                return `<div class="season-block">${head}
+                    <div class="fs-table-wrap"><table class="fs-table">
+                        <thead><tr><th class="left">구장</th><th>경기</th>${PF_COLS.map(c => `<th>${c.label}</th>`).join('')}</tr></thead>
+                        <tbody>${body}</tbody>
+                    </table></div></div>`;
+            }).join('');
+        }
+
+        // ===== RE24 =====
+        const BASE_ORDER = [
+            { code: 0, label: '무주자' }, { code: 100, label: '1루' }, { code: 10, label: '2루' }, { code: 1, label: '3루' },
+            { code: 110, label: '1·2루' }, { code: 101, label: '1·3루' }, { code: 11, label: '2·3루' }, { code: 111, label: '만루' },
+        ];
+        function heat(v, min, max) {
+            if (v == null) return 'transparent';
+            const t = Math.max(0, Math.min(1, (v - min) / (max - min || 1)));
+            // 흰색 → 주황 (높을수록 진함)
+            const r = 255, g = Math.round(255 - t * 110), b = Math.round(255 - t * 200);
+            return `rgb(${r},${g},${b})`;
+        }
+        function renderRE24(rows) {
+            const el = document.getElementById('re24-content');
+            if (!rows.length) { el.innerHTML = '<p class="muted">데이터가 없습니다.</p>'; return; }
+            const seasons = [...new Set(rows.map(r => r.season))].filter(s => s !== 0).sort((a, b) => b - a); // 2026 먼저, 통합(0) 제외
+            const min = Math.min(...rows.map(r => r.re_value)), max = Math.max(...rows.map(r => r.re_value));
+            el.innerHTML = seasons.map(season => {
+                const cur = rows.filter(r => r.season === season);
+                const get = (base, outs) => cur.find(r => r.base_state === base && r.outs_before === outs);
+                const head = `
+                    <div class="season-head">
+                        <h2>${season} 시즌</h2>
+                        ${season >= 2026 ? '<span class="badge-live">진행 중</span>' : ''}
+                        <span class="season-note">베이스-아웃 상황별 잔여 이닝 득점기대값</span>
+                    </div>`;
+                const bodyRows = BASE_ORDER.map(b => {
+                    const cells = [0, 1, 2].map(o => {
+                        const c = get(b.code, o);
+                        if (!c) return '<td class="muted">—</td>';
+                        return `<td class="re-cell" style="background:${heat(c.re_value, min, max)}">
+                                    ${c.re_value.toFixed(3)}<span class="re-n">n=${c.n_obs.toLocaleString()}</span></td>`;
+                    }).join('');
+                    return `<tr><td class="base">${b.label}</td>${cells}</tr>`;
+                }).join('');
+                return `<div class="season-block">${head}
+                    <div class="fs-table-wrap"><table class="re-matrix">
+                        <thead><tr><th>주자 상황</th><th>0아웃</th><th>1아웃</th><th>2아웃</th></tr></thead>
+                        <tbody>${bodyRows}</tbody>
+                    </table></div></div>`;
+            }).join('');
+        }
+
+        (async function init() {
+            try {
+                const [pf, re24] = await Promise.all([dbTable('self_park_factor'), dbTable('re24_matrix_by_season')]);
+                renderPF(pf);
+                renderRE24(re24);
+            } catch (err) {
+                console.error(err);
+                document.getElementById('pf-content').innerHTML = `<div class="err">데이터 로드 실패: ${esc(err.message)}</div>`;
+                document.getElementById('re24-content').innerHTML = `<div class="err">데이터 로드 실패: ${esc(err.message)}</div>`;
+            }
+        })();
+    </script>
+</body>
+
+</html>
