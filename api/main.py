@@ -1111,19 +1111,21 @@ async def get_futures_schedule(date: str = None):
                 "winner": winner,
                 "currentInning": inning,
                 "statusInfo": status_info,
+                # 라이브 현재 타석: KBO 퓨처스 피드는 양 팀 투수가 아니라
+                # '현재 투수(T_P)'+'현재 타자(B_P)'만 제공 -> 투수/타자로 정확히 라벨링.
+                "currentPitcher": (g.get("T_P_NM") or "") if live else "",
+                "currentBatter": (g.get("B_P_NM") or "") if live else "",
                 "away": {
                     "code": ac,
                     "name": at.get("display_name") or g.get("AWAY_NM") or ac,
                     "division": at.get("division") or "",
                     "score": a_sc,
-                    "currentPitcher": (g.get("T_P_NM") or "") if live else "",
                 },
                 "home": {
                     "code": hc,
                     "name": ht.get("display_name") or g.get("HOME_NM") or hc,
                     "division": ht.get("division") or "",
                     "score": h_sc,
-                    "currentPitcher": (g.get("B_P_NM") or "") if live else "",
                 },
                 "decisions": {
                     "win": (g.get("W_PIT_P_NM") or "") if final else "",

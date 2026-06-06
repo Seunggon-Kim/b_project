@@ -249,6 +249,29 @@
             </div>`;
         }
 
+        // 퓨처스 투수 행: 라이브는 '투수/타자'(KBO 퓨처스 피드는 양 팀 투수가 아니라
+        // 현재 투수 + 현재 타자만 제공), 종료는 승/패/세(KBO 확정 후 채워짐).
+        function futuresPitcherRow(g) {
+            if (g.cancel) return '';
+            if (g.final) {
+                const d = g.decisions || {};
+                const items = [];
+                if (d.win)  items.push(`<span class="pdec"><span class="pdec-tag win">승</span>${esc(d.win)}</span>`);
+                if (d.lose) items.push(`<span class="pdec"><span class="pdec-tag lose">패</span>${esc(d.lose)}</span>`);
+                if (d.save) items.push(`<span class="pdec"><span class="pdec-tag save">세</span>${esc(d.save)}</span>`);
+                if (!items.length) return '';
+                return `<div class="game-pitchers final">${items.join('')}</div>`;
+            }
+            if (g.live && (g.currentPitcher || g.currentBatter)) {
+                return `<div class="game-pitchers live">
+                    <span class="pp away">투수 ${esc(g.currentPitcher || '미정')}</span>
+                    <span class="pp-label">vs</span>
+                    <span class="pp home">타자 ${esc(g.currentBatter || '미정')}</span>
+                </div>`;
+            }
+            return '';
+        }
+
         function renderFuturesGame(g) {
             const cls = g.cancel ? 'cancel' : (g.final ? 'final' : (g.live ? 'live' : 'before'));
             let center;
@@ -280,7 +303,7 @@
                     </div>
                     ${futuresTeamBlock(g.home, 'home', g.winner)}
                 </div>
-                ${pitcherRow(g)}
+                ${futuresPitcherRow(g)}
                 ${exhibition ? `<div class="game-card-foot"><span class="series-badge exhibition">교류전</span></div>` : ''}
             </div>`;
         }
