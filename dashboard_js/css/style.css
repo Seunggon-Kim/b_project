@@ -1518,6 +1518,33 @@ h4 {
     text-align: center;
 }
 
+/* 일정 헤더 좌측 그룹(제목 + 1군/퓨처스 토글) */
+.schedule-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+/* 퓨처스 디비전 라벨(북부/남부) */
+.team-div {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-top: 0.1rem;
+}
+
+/* 교류전 배지 */
+.series-badge.exhibition {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.12rem 0.5rem;
+    border-radius: 999px;
+    background: rgba(246, 181, 0, 0.16);
+    color: #c8881a;
+}
+
 /* ===== 투수 정보 (예정=선발 / 진행=현재 마운드 / 종료=승·패·세이브) ===== */
 .game-pitchers {
     padding: 0.45rem 0.85rem 0.55rem;

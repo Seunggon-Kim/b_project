@@ -5,7 +5,7 @@ Fixed: API endpoint for Pitch Usage, encoding issues, and indentation
 """
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse, Response
 import sqlite3
 import json
 from pathlib import Path
@@ -1006,6 +1006,101 @@ async def get_schedule(date: str = None):
         return result
     except Exception as e:
         return {"date": date, "count": 0, "games": [], "error": str(e)}
+
+
+# ===== KBO 퓨처스리그 일정/결과 (futures_games DB 서빙) =====
+# 본 리그와 달리 Naver가 퓨처스를 제공하지 않아, data_collection/futures_schedule.py가
+# KBO 공식 GameList.aspx를 파싱해 적재한 futures_games 테이블을 읽어 서빙한다.
+_FUTURES_SCHED_CACHE = {}
+_FUTURES_SCHED_TTL = 60  # seconds
+_SERIES_NAME = {0: "퓨처스리그", 10: "교류전"}
+
+
+@app.get("/schedule/futures")
+async def get_futures_schedule(date: str = None):
+    """KBO 퓨처스리그 일정/결과 (DB). date=YYYY-MM-DD (미지정 시 KST 오늘). 60초 캐시."""
+    try:
+        if not date:
+            kst = datetime.datetime.utcnow() + datetime.timedelta(hours=9)
+            date = kst.strftime("%Y-%m-%d")
+
+        cached = _FUTURES_SCHED_CACHE.get(date)
+        if cached and (_time.time() - cached[0] < _FUTURES_SCHED_TTL):
+            return cached[1]
+
+        conn = get_db_connection()
+        rows = conn.execute("""
+            SELECT g.*,
+                   ta.display_name AS away_disp, ta.division AS away_div,
+                   th.display_name AS home_disp, th.division AS home_div
+            FROM futures_games g
+            LEFT JOIN futures_teams ta ON g.away_code = ta.code
+            LEFT JOIN futures_teams th ON g.home_code = th.code
+            WHERE g.game_date = ?
+            ORDER BY g.game_time, g.game_id
+        """, (date,)).fetchall()
+        conn.close()
+
+        games = []
+        for row in rows:
+            r = dict(row)
+            final = r["status"] == "final"
+            cancel = r["status"] == "canceled"
+            show = final  # 퓨처스는 실시간(live) 데이터 없음
+            winner = ""
+            if final and r["away_score"] is not None and r["home_score"] is not None:
+                if r["away_score"] > r["home_score"]:
+                    winner = "AWAY"
+                elif r["home_score"] > r["away_score"]:
+                    winner = "HOME"
+            games.append({
+                "gameId": r["game_id"],
+                "time": r["game_time"] or "",
+                "stadium": r["stadium"] or "",
+                "seriesId": r["series_id"],
+                "series": _SERIES_NAME.get(r["series_id"], ""),
+                "status": r["status"],
+                "final": final,
+                "cancel": cancel,
+                "showScore": show,
+                "winner": winner,
+                "away": {
+                    "code": r["away_code"],
+                    "name": r["away_disp"] or r["away_name"],
+                    "division": r["away_div"] or "",
+                    "score": r["away_score"] if show else None,
+                },
+                "home": {
+                    "code": r["home_code"],
+                    "name": r["home_disp"] or r["home_name"],
+                    "division": r["home_div"] or "",
+                    "score": r["home_score"] if show else None,
+                },
+            })
+
+        result = {"date": date, "count": len(games), "games": games,
+                  "source": "koreabaseball.com"}
+        _FUTURES_SCHED_CACHE[date] = (_time.time(), result)
+        return result
+    except Exception as e:
+        return {"date": date, "count": 0, "games": [], "error": str(e)}
+
+
+@app.get("/logo/{code}")
+async def get_logo(code: str):
+    """팀 로고 서빙 (team_logos BLOB). code=HH/WO/SM/UL/SO 등. png/svg 모두 지원."""
+    conn = get_db_connection()
+    row = conn.execute(
+        "SELECT mime, image FROM team_logos WHERE code = ?", (code.upper(),)
+    ).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="logo not found")
+    return Response(
+        content=bytes(row["image"]),
+        media_type=row["mime"],
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 # ===== KBO 팀 순위 (koreabaseball.com 공식 TeamRank.aspx 파싱) =====

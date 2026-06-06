@@ -48,7 +48,13 @@
         <!-- Schedule / Results -->
         <section class="schedule-section">
             <div class="schedule-bar">
-                <h2 class="schedule-title"><span class="material-symbols-outlined">sports_baseball</span> KBO 경기</h2>
+                <div class="schedule-bar-left">
+                    <h2 class="schedule-title"><span class="material-symbols-outlined">sports_baseball</span> KBO 경기</h2>
+                    <div class="leaders-tabs" id="sched-toggle">
+                        <button type="button" class="leaders-tab active" data-mode="main">1군</button>
+                        <button type="button" class="leaders-tab" data-mode="futures">퓨처스</button>
+                    </div>
+                </div>
                 <div class="date-nav">
                     <button id="date-prev" class="date-nav-btn" aria-label="이전 날짜"><span class="material-symbols-outlined">chevron_left</span></button>
                     <span id="date-label" class="date-label">—</span>
@@ -57,7 +63,7 @@
                 </div>
             </div>
             <div id="games-grid" class="games-grid"></div>
-            <p class="schedule-note">데이터 출처: Naver 스포츠 (KBO 정규시즌) · 30초 캐시</p>
+            <p class="schedule-note" id="schedule-note">데이터 출처: Naver 스포츠 (KBO 정규시즌) · 30초 캐시</p>
         </section>
 
         <!-- 팀 순위 + 개인 순위 (2단) -->
@@ -229,8 +235,73 @@
             </div>`;
         }
 
+        // ===== 퓨처스리그 렌더링 =====
+        // 본 리그와 달리 실시간(라이브)·선발투수·방송 정보가 없고, 로고는 로고 DB(/logo/{code})에서 서빙.
+        function futuresTeamBlock(t, side, winner) {
+            const win = winner && winner.toUpperCase() === side.toUpperCase();
+            const code = esc(t.code || '');
+            const emblem = `<img class="team-emblem" src="${API_BASE_URL}/logo/${code}" data-code="${code}" alt="" loading="lazy" onerror="emblemError(this)">`;
+            const div = t.division ? `<span class="team-div">${esc(t.division)}</span>` : '';
+            return `<div class="team ${side}${win ? ' win' : ''}">
+                ${emblem}
+                <span class="team-name">${esc(t.name || t.code)}</span>
+                ${div}
+            </div>`;
+        }
+
+        function renderFuturesGame(g) {
+            const cls = g.cancel ? 'cancel' : (g.final ? 'final' : 'before');
+            let center;
+            if (g.cancel) {
+                center = `<div class="game-vs">취소</div>`;
+            } else if (g.showScore) {
+                const aw = g.winner === 'AWAY', hw = g.winner === 'HOME';
+                center = `<div class="game-score">
+                    <span class="score${aw ? ' win' : ''}">${g.away.score ?? '-'}</span>
+                    <span class="score-sep">:</span>
+                    <span class="score${hw ? ' win' : ''}">${g.home.score ?? '-'}</span>
+                </div>`;
+            } else {
+                center = `<div class="game-vs">VS</div>`;
+            }
+            const statusText = g.cancel ? '취소' : (g.final ? '종료' : '경기예정');
+            const exhibition = g.seriesId === 10;
+            return `<div class="game-card ${cls}">
+                <div class="game-card-top">
+                    <span class="stadium">${esc(g.stadium)}</span>
+                    <span class="game-time">${esc(g.time)}</span>
+                </div>
+                <div class="game-card-body">
+                    ${futuresTeamBlock(g.away, 'away', g.winner)}
+                    <div class="game-center">
+                        ${center}
+                        <span class="status-badge ${cls}">${esc(statusText)}</span>
+                    </div>
+                    ${futuresTeamBlock(g.home, 'home', g.winner)}
+                </div>
+                ${exhibition ? `<div class="game-card-foot"><span class="series-badge exhibition">교류전</span></div>` : ''}
+            </div>`;
+        }
+
+        // 일정 모드(1군/퓨처스)별 엔드포인트·출처문구·빈메시지·렌더러
+        const SCHED_META = {
+            main: {
+                ep: 'schedule',
+                note: '데이터 출처: Naver 스포츠 (KBO 정규시즌) · 30초 캐시',
+                empty: '이 날짜에 KBO 경기가 없습니다.',
+                render: renderGame,
+            },
+            futures: {
+                ep: 'schedule/futures',
+                note: '데이터 출처: KBO 공식 (퓨처스리그) · 60초 캐시',
+                empty: '이 날짜에 퓨처스 경기가 없습니다.',
+                render: renderFuturesGame,
+            },
+        };
+        let scheduleMode = 'main';
+
         async function fetchSchedule(d) {
-            const res = await fetch(`${API_BASE_URL}/schedule?date=${fmtAPI(d)}`);
+            const res = await fetch(`${API_BASE_URL}/${SCHED_META[scheduleMode].ep}?date=${fmtAPI(d)}`);
             return await res.json();
         }
 
@@ -254,16 +325,30 @@
             }
             curDate = d;
             document.getElementById('date-label').textContent = fmtLabel(curDate);
+            const meta = SCHED_META[scheduleMode];
             if (!data || !data.games || data.games.length === 0) {
-                grid.innerHTML = '<div class="schedule-msg">이 날짜에 KBO 경기가 없습니다.</div>';
+                grid.innerHTML = `<div class="schedule-msg">${meta.empty}</div>`;
                 return;
             }
-            grid.innerHTML = data.games.map(renderGame).join('');
+            grid.innerHTML = data.games.map(meta.render).join('');
         }
 
         document.getElementById('date-prev').addEventListener('click', () => { curDate.setDate(curDate.getDate() - 1); loadSchedule(0); });
         document.getElementById('date-next').addEventListener('click', () => { curDate.setDate(curDate.getDate() + 1); loadSchedule(0); });
         document.getElementById('date-today').addEventListener('click', () => { curDate = kstNow(); loadSchedule(7); });
+
+        // 1군/퓨처스 토글: 모드 전환 시 출처문구 갱신 + 오늘 기준 재로드(경기일까지 자동 전진)
+        document.getElementById('schedule-note').textContent = SCHED_META[scheduleMode].note;
+        document.getElementById('sched-toggle').addEventListener('click', (e) => {
+            const btn = e.target.closest('.leaders-tab');
+            if (!btn || btn.dataset.mode === scheduleMode) return;
+            scheduleMode = btn.dataset.mode;
+            document.querySelectorAll('#sched-toggle .leaders-tab').forEach(b => b.classList.toggle('active', b === btn));
+            document.getElementById('schedule-note').textContent = SCHED_META[scheduleMode].note;
+            curDate = kstNow();
+            loadSchedule(7);
+        });
+
         loadSchedule(7);  // 첫 로드: 오늘 경기 없으면 다음 경기일로 자동 이동 (최대 7일)
 
         // ===== 팀 순위 (KBO 공식) =====
