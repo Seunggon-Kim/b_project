@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>아티클 - Baseball Estudiar</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
+
+    <!-- Favicon (다이아몬드) -->
+    <link rel="icon" href="../assets/favicon/diamond.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon/diamond.svg">
+    <link rel="apple-touch-icon" href="../assets/favicon/diamond-180.png">
+    <link rel="stylesheet" href="../css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .kpi-card { background: #fff; border-radius: 8px; padding: 1rem 1.25rem; border: 1px solid #e5e7eb; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+        .kpi-label { font-size: 0.85rem; color: #6b7280; margin-bottom: 0.4rem; }
+        .kpi-value { font-size: 1.7rem; font-weight: 700; color: #111827; }
+        .kpi-sub { font-size: 0.78rem; color: #9ca3af; margin-top: 0.25rem; }
+        .delta-pos { color: #059669; }
+        .delta-neg { color: #dc2626; }
+        .table-wrap { overflow-x: auto; }
+        table.wrc-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        table.wrc-table th, table.wrc-table td { padding: 0.5rem 0.6rem; text-align: right; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
+        table.wrc-table th { background: #f9fafb; color: #374151; font-weight: 600; text-align: center; cursor: pointer; user-select: none; }
+        table.wrc-table th:hover { background: #f3f4f6; }
+        table.wrc-table td.left, table.wrc-table th.left { text-align: left; }
+        table.wrc-table td.bold { font-weight: 700; color: #1e3a8a; }
+        .controls { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+        select.season-select { padding: 0.4rem 0.7rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.95rem; background: #fff; }
+        .chart-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; }
+        .chart-card h3 { margin: 0 0 0.4rem 0; font-size: 1.05rem; color: #111827; }
+        .chart-card .subtitle { font-size: 0.83rem; color: #6b7280; margin-bottom: 0.85rem; }
+        .chart-wrap { position: relative; height: 380px; }
+        .badge-temp { display: inline-block; padding: 0.1rem 0.4rem; background: #fde68a; color: #92400e;
+                     border-radius: 4px; font-size: 0.7rem; margin-left: 0.25rem; }
+
+        .hidden { display: none !important; }
+
+        /* ===== 아티클 뷰 (가운데 정렬) ===== */
+        #view-list, #view-article { max-width: 860px; margin: 0 auto; }
+
+        /* 글 목록 */
+        .list-title { display: flex; align-items: center; gap: 0.5rem; }
+        .list-sub { color: var(--text-secondary); margin: 0.3rem 0 1.6rem; font-size: 0.95rem; }
+        .article-list { display: flex; flex-direction: column; gap: 1rem; }
+        .article-card { display: flex; gap: 1rem; align-items: flex-start; text-decoration: none;
+                        background: var(--bg-secondary); border: 1px solid var(--border-color);
+                        border-radius: 12px; padding: 1.1rem 1.25rem; cursor: pointer;
+                        transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease; }
+        .article-card:hover { border-color: var(--primary); box-shadow: var(--shadow-md); transform: translateY(-1px); }
+        .article-card .ac-icon { flex: none; width: 44px; height: 44px; border-radius: 10px;
+                        display: flex; align-items: center; justify-content: center;
+                        background: var(--bg-tertiary); color: var(--primary-dark); }
+        .article-card .ac-title { font-size: 1.12rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.3rem; }
+        .article-card .ac-desc { font-size: 0.9rem; color: var(--text-secondary); line-height: 1.6; }
+        .article-card .ac-meta { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.55rem; }
+
+        /* 단일 아티클 */
+        .back-link { display: inline-flex; align-items: center; gap: 0.25rem; text-decoration: none;
+                        color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem; cursor: pointer; }
+        .back-link:hover { color: var(--primary); }
+        .atabs { display: flex; gap: 0.3rem; border-bottom: 1px solid var(--border-color); margin-bottom: 1.6rem; }
+        .atab { appearance: none; background: none; border: none; cursor: pointer; font: inherit;
+                        padding: 0.6rem 1rem; font-size: 0.96rem; color: var(--text-muted);
+                        border-bottom: 2px solid transparent; margin-bottom: -1px;
+                        transition: color 0.15s ease, border-color 0.15s ease; }
+        .atab:hover { color: var(--text-primary); }
+        .atab.active { color: var(--primary-dark); border-bottom-color: var(--primary-dark); font-weight: 600; }
+
+        /* 본문 */
+        .article { line-height: 1.78; color: var(--text-primary); }
+        .article h1 { display: flex; align-items: center; gap: 0.5rem; }
+        .article h2 { font-size: 1.3rem; margin: 2rem 0 0.7rem; color: var(--text-primary);
+                      border-bottom: 1px solid var(--border-color); padding-bottom: 0.35rem; }
+        .article p { margin: 0.75rem 0; font-size: 0.98rem; }
+        .article ul { margin: 0.8rem 0; padding-left: 1.3rem; }
+        .article li { margin: 0.4rem 0; font-size: 0.98rem; }
+        .article .formula { background: var(--bg-tertiary); border: 1px solid var(--border-color);
+                      border-left: 3px solid var(--primary-dark); border-radius: 6px;
+                      padding: 0.7rem 1rem; margin: 0.9rem 0; font-size: 0.96rem;
+                      overflow-x: auto; color: var(--text-primary); }
+        .interactive-intro { color: var(--text-secondary); font-size: 0.92rem; margin-bottom: 1.5rem; }
+    </style>
+    <script src="../js/theme-toggle.js"></script>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <a href="../" class="logo">
+                <img src="../assets/favicon/diamond.svg" alt="" class="logo-icon" width="26" height="26">
+                <span>Baseball Estudiar</span>
+            </a>
+            <nav class="nav">
+                <a href="../" class="nav-link">홈</a>
+                <a href="team-stats.html" class="nav-link">팀 통계</a>
+                <a href="player-stats.html" class="nav-link">선수 통계</a>
+                <a href="player-analytics.html" class="nav-link">선수 분석</a>
+                <a href="article.html" class="nav-link active">아티클</a>
+                <a href="factor-stats.html" class="nav-link">요인 통계</a>
+                <a href="database-explorer.html" class="nav-link">데이터 탐색</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- ===== 글 목록 ===== -->
+        <section id="view-list" class="fade-in">
+            <h1 class="list-title"><span class="material-symbols-outlined">article</span> 아티클</h1>
+            <p class="list-sub">데이터와 방법론을 글로 풀어낸 분석 노트입니다. 제목을 누르면 글이 열립니다.</p>
+            <div class="article-list">
+                <a class="article-card" href="#wrc-plus">
+                    <div class="ac-icon"><span class="material-symbols-outlined">analytics</span></div>
+                    <div class="ac-body">
+                        <div class="ac-title">wRC+ 직접 계산하기: 산출 과정과 강건성</div>
+                        <div class="ac-desc">KBO play-by-play 원천 데이터로 wRC+를 처음부터 계산하는 네 단계(RE24 가중치 → wOBA → wRAA → 파크팩터 보정)와, 파크팩터를 어떻게 적용하든 평가가 흔들리지 않는지 확인하는 강건성 검증을 정리했습니다.</div>
+                        <div class="ac-meta">방법론 · 강건성 · 파크팩터</div>
+                    </div>
+                </a>
+            </div>
+        </section>
+
+        <!-- ===== 단일 아티클 ===== -->
+        <section id="view-article" class="hidden">
+            <a class="back-link" href="#"><span class="material-symbols-outlined">arrow_back</span> 글 목록</a>
+            <div class="atabs">
+                <button class="atab active" type="button" data-tab="text">글</button>
+                <button class="atab" type="button" data-tab="check">확인하기</button>
+            </div>
+
+            <!-- 탭: 글 -->
+            <div id="tab-text" class="atab-panel">
+                <article class="article fade-in">
+                    <h1><span class="material-symbols-outlined">article</span> wRC+ 직접 계산하기: 산출 과정과 강건성</h1>
+
+                    <h2>왜 직접 계산하는가</h2>
+                    <p>wRC+(weighted Runs Created plus)는 타자의 모든 공격 행위를 득점 가치로 환산한 뒤, 구장 효과와 리그 평균으로 보정해 100을 리그 평균으로 맞춘 종합 타격 지표입니다. 타율이나 OPS와 달리 볼넷부터 홈런까지 사건마다 가치가 다르다는 점, 그리고 같은 타격도 구장에 따라 다르게 기록된다는 점을 동시에 반영합니다.</p>
+                    <p>이 대시보드의 wRC+는 Statiz 같은 외부 수치를 그대로 가져다 쓰지 않고, KBO play-by-play(타석 단위) 원천 데이터에서 처음부터 다시 계산합니다. 가중치와 파크팩터, 계산식을 직접 통제하고 검증할 수 있어야, 이 수치를 어디까지 믿어도 되는지까지 말할 수 있기 때문입니다.</p>
+
+                    <h2>산출 과정: 네 단계</h2>
+                    <p><strong>1단계. 사건별 득점 가치(RE24 기반 선형 가중치).</strong> 먼저 play-by-play에서 베이스와 아웃 24가지 상태별 평균 기대 득점(RE24)을 구합니다. 그다음 각 타석의 기대 득점 변화(타석 종료 후 같은 반이닝 다음 타석의 시작 상태 기대 득점, 이닝이 끝나면 0)에 그 타석에서 실제로 난 득점을 더해, 단타·2루타·3루타·홈런·볼넷·사구 등 사건마다 평균적으로 몇 점의 가치를 갖는지(선형 가중치)를 추정합니다. 2015~2025시즌(부분 시즌인 2026은 제외)을 통합해 표본을 키워 가중치를 안정화했습니다. 이 RE24 산출물은 같은 방법론으로 별도 검증되는 결과물이며, 아래 wOBA 계산은 동일한 RE24식 선형 가중치 사상에서 미리 산출해 둔 시즌별 가중치 표(고의4구를 제외한 uBB 기준 등)를 읽어 적용합니다.</p>
+                    <p><strong>2단계. wOBA.</strong> 이 가중치로 타자별 wOBA를 계산합니다.</p>
+                    <div class="formula">wOBA = (wBB·BB + wHBP·HBP + w1B·1B + w2B·2B + w3B·3B + wHR·HR) / (AB + BB + SF + HBP)</div>
+                    <p>볼넷 카운트(BB)에는 고의4구를 합산하고(Statiz 컨벤션), 가중치 wBB 자체는 고의4구를 제외한 일반 볼넷(uBB)의 득점 가치를 씁니다. 단타(1B)는 안타에서 2루타·3루타·홈런을 뺀 값으로 잡습니다. 분모(AB+BB+SF+HBP)는 출루율(OBP)의 분모와 같은 구조입니다.</p>
+                    <p><strong>3단계. wRAA.</strong> wOBA를 리그 평균과 비교해 리그 대비 추가 득점으로 환산합니다.</p>
+                    <div class="formula">wRAA = (wOBA − 리그wOBA) / wOBA_scale × PA</div>
+                    <p>여기서 wOBA_scale은 wOBA를 출루율(OBP)과 같은 눈금으로 맞추기 위한 시즌별 스케일 상수이며, 이 값으로 나누면 wOBA 차이가 다시 득점 단위로 환산됩니다.</p>
+                    <p><strong>4단계. 파크팩터 보정과 wRC+.</strong> 파크팩터(PF)는 FanGraphs 운영식 PF = 1000 × 10H / (9R + H)로, 같은 팀의 홈경기와 원정경기 득점을 비교해 구합니다(중립값 1000 기준 척도). 표본 흔들림을 줄이려 3년 이동평균(rolling 3-year)을 쓰고, 성분별로 중립값 1000 쪽으로 일정 비율 회귀(스무딩)시킵니다. 다만 wRC+에 실제 쓰이는 득점 파크팩터(run PF)는 스무딩 계수가 1.0이라 사실상 회귀 없이 원시값을 그대로 쓰고, 단타·2루타·3루타·홈런·장타 성분에만 0.40~0.72의 축소가 적용됩니다. 최종 식은 다음과 같습니다.</p>
+                    <div class="formula">wRC+ = K + (2 − PF/1000) × 100,&nbsp;&nbsp;K = (wRAA / PA / L) × 100</div>
+                    <p>L은 wRAA(타석당)를 wRC+ 눈금으로 환산하는 시즌별 스케일 상수입니다(리그 득점 수준에 해당하며, 본 파이프라인에서는 기존 산출치에서 역산해 원 산식의 눈금을 그대로 재현합니다). (2 − PF/1000) 항은 각 타자의 기록을 중립 구장 기준으로 환산하는 장치입니다. 타자 친화 구장(PF&gt;1000)의 같은 성적은 100보다 낮게, 투수 친화 구장(PF&lt;1000)의 같은 성적은 100보다 높게 환산됩니다. 100=리그 평균이라는 기준점 자체는 (2 − PF/1000) 항이 아니라, wRAA를 리그 평균 wOBA 대비로 정의하고 L(리그 득점 수준)로 스케일을 맞춘 데서 나옵니다. 그 결과 중립 구장(PF=1000)에 선 리그 평균 타자(wRAA≈0 → K≈0)가 정확히 100이 됩니다.</p>
+
+                    <h2>강건성: 이 수치를 어디까지 믿어도 되는가</h2>
+                    <p>같은 wRC+라도 원정경기의 구장 효과를 어떻게 다루느냐에 따라 값이 달라질 수 있습니다. 같은 선수라도 평가 척도의 선택이 결론을 좌우한다면 그 지표는 신뢰하기 어렵습니다. 강건성 검증은 그 선택이 선수 평가를 실제로 바꾸는지 확인하는 작업입니다. 세 가지 시나리오를 함께 계산합니다.</p>
+                    <ul>
+                        <li><strong>home PF</strong>(홈 PF): 홈구장 PF를 그대로 적용. 원정 보정을 하지 않은 참고용 기준값</li>
+                        <li><strong>half PF</strong>(하프 PF): (홈 PF + 1000) ÷ 2. 원정경기는 리그 평균 구장이라 가정하는 Statiz·블로그 표준 방식이자 대시보드의 배포 기준값</li>
+                        <li><strong>weighted PF</strong>(가중 PF): 실제 출전한 구장별 타석 분포로 가중평균. 임시구장이나 잦은 이동을 정확히 반영</li>
+                    </ul>
+                    <p>대부분의 타자는 세 값이 거의 일치하므로, wRC+ 수준 평가는 파크팩터 처리 방식에 둔감합니다. 강건성 KPI는 배포 기준값인 half와 출전 분포 기반 weighted 두 방식의 차이(weighted − half)의 표준편차로 이 흔들림을 한눈에 정량화합니다(home PF는 원정 보정이 없어 정량화 대상에서 제외). 부호 있는 차이의 표준편차이므로, 방법론을 바꿔도 평가가 위든 아래든 크게 흔들리지 않음을 한 숫자로 보여 줍니다.</p>
+                    <p>차이가 큰 선수는 대개 특수 사례입니다. 2025년 NC의 임시 홈구장처럼 홈구장 가정 자체가 깨지거나, 시즌 중 트레이드로 홈이 바뀐 경우가 그렇습니다. 이런 케이스에서는 실제 출전 분포를 반영하는 weighted PF가 더 정확하며, "확인하기" 탭의 "가중평균 PF vs Half-PF 차이 큰 batter" 표(절댓값 |weighted − half| 기준 정렬)가 바로 이들을 골라냅니다.</p>
+                    <p>요약하면, 산출 과정은 원천 데이터에서 RE24 기반 가중치 → wOBA → wRAA → 파크팩터 보정으로 이어지는 투명한 파이프라인이고, 강건성 검증은 그 결과가 방법론 선택에 흔들리지 않는다는 점(그리고 흔들리는 예외가 어디인지)을 함께 보여 줍니다. 실제 수치는 "확인하기" 탭에서 시즌별로 살펴볼 수 있습니다.</p>
+                </article>
+            </div>
+
+            <!-- 탭: 확인하기 -->
+            <div id="tab-check" class="atab-panel hidden">
+                <p class="interactive-intro">위 강건성 검증을 실제 데이터로 살펴보는 패널입니다. 시즌을 선택하면 구장별 평균 wRC+, 세 가지 PF 시나리오의 분포, 리더보드, 그리고 두 방식의 차이가 큰 선수를 확인할 수 있습니다.</p>
+
+                <div class="controls">
+                    <label for="season-select" style="font-weight:600; color:#374151;">시즌:</label>
+                    <select id="season-select" class="season-select"></select>
+                    <span id="season-info" style="color:#6b7280; font-size:0.9rem;"></span>
+                </div>
+
+                <!-- KPI cards -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Qualified batters</div>
+                        <div class="kpi-value" id="kpi-n">—</div>
+                        <div class="kpi-sub" id="kpi-n-sub">≥300 PA</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">평균 wRC+ (Half-PF, default)</div>
+                        <div class="kpi-value" id="kpi-half">—</div>
+                        <div class="kpi-sub">Statiz 호환</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">평균 wRC+ (Weighted PF)</div>
+                        <div class="kpi-value" id="kpi-weighted">—</div>
+                        <div class="kpi-sub">출전 분포 반영</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">두 방식 차이 (std)</div>
+                        <div class="kpi-value" id="kpi-std">—</div>
+                        <div class="kpi-sub">(Weighted − Half) std</div>
+                    </div>
+                </div>
+
+                <!-- Stadium chart -->
+                <div class="chart-card">
+                    <h3>Home Stadium별 평균 wRC+ (Half-PF default)</h3>
+                    <div class="subtitle">선수가 본인 홈구장의 PF 환경에서 평균적으로 어떤 wRC+를 기록하는지</div>
+                    <div class="chart-wrap"><canvas id="chart-stadium"></canvas></div>
+                </div>
+
+                <!-- 분포 histogram -->
+                <div class="chart-card">
+                    <h3>wRC+ 분포 (5점 bin)</h3>
+                    <div class="subtitle">3 PF 시나리오 비교 (Half-PF가 분포를 더 타이트하게 정규화)</div>
+                    <div class="chart-wrap" style="height: 320px;"><canvas id="chart-distribution"></canvas></div>
+                </div>
+
+                <!-- Leaderboard -->
+                <div class="chart-card">
+                    <h3>wRC+ Leaderboard (Top 25, Half-PF 정렬)</h3>
+                    <div class="subtitle">컬럼 클릭 시 정렬 변경. wRC+ home/half/weighted 3종 + wOBA</div>
+                    <div class="table-wrap">
+                        <table class="wrc-table" id="leaderboard-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th class="left">선수</th>
+                                    <th>팀</th>
+                                    <th>PA</th>
+                                    <th class="left">홈구장</th>
+                                    <th>wOBA</th>
+                                    <th>wRC+ home</th>
+                                    <th>wRC+ <strong>half</strong></th>
+                                    <th>wRC+ weighted</th>
+                                    <th>Δ (w−h)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-leaderboard"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Top method delta — special cases -->
+                <div class="chart-card">
+                    <h3>가중평균 PF vs Half-PF 차이 큰 batter (Top 10)</h3>
+                    <div class="subtitle">차이가 큰 케이스 = 임시구장·트레이드 등 두 방식이 다르게 평가하는 사례</div>
+                    <div class="table-wrap">
+                        <table class="wrc-table">
+                            <thead>
+                                <tr>
+                                    <th class="left">선수</th>
+                                    <th>팀</th>
+                                    <th>PA</th>
+                                    <th class="left">홈구장</th>
+                                    <th>home PF</th>
+                                    <th>weighted PF</th>
+                                    <th>wRC+ half</th>
+                                    <th>wRC+ weighted</th>
+                                    <th>Δ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-changes"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const API = isLocal ? 'http://localhost:8000' : '/api';
+    let stadiumChart = null, distChart = null;
+    const ARTICLE_IDS = ['wrc-plus'];
+    let interactiveInited = false;
+
+    async function fetchJSON(path) {
+        const r = await fetch(`${API}${path}`);
+        if (!r.ok) throw new Error(`${path} → ${r.status}`);
+        return r.json();
+    }
+    function fmt(v, digits = 1) { return (v === null || v === undefined) ? '—' : Number(v).toFixed(digits); }
+    function deltaClass(v) { if (v > 0.5) return 'delta-pos'; if (v < -0.5) return 'delta-neg'; return ''; }
+
+    async function init() {
+        const seasons = await fetchJSON('/wrc/seasons');
+        const sel = document.getElementById('season-select');
+        seasons.sort((a, b) => b.season - a.season).forEach(s => {
+            const o = document.createElement('option');
+            o.value = s.season;
+            o.textContent = `${s.season} (n=${s.n_batters})`;
+            sel.appendChild(o);
+        });
+        sel.addEventListener('change', () => render(parseInt(sel.value, 10)));
+        render(parseInt(sel.value, 10));
+    }
+
+    async function render(season) {
+        const [seasons, stadium, leaderboard, changesUp, changesDown, dist] = await Promise.all([
+            fetchJSON('/wrc/seasons'),
+            fetchJSON(`/wrc/by-stadium?season=${season}`),
+            fetchJSON(`/wrc/leaderboard?season=${season}&sort=half&n=25`),
+            fetchJSON(`/wrc/top-changes?season=${season}&direction=up&n=5`),
+            fetchJSON(`/wrc/top-changes?season=${season}&direction=down&n=5`),
+            fetchJSON(`/wrc/distribution?season=${season}&min_pa=300`),
+        ]);
+
+        const cur = seasons.find(s => s.season === season);
+        const qpa = cur?.min_pa ?? 300;
+        document.getElementById('kpi-n').textContent = cur ? cur.n_batters : '—';
+        document.getElementById('kpi-n-sub').textContent = `≥${qpa} PA`;
+        document.getElementById('kpi-half').textContent = fmt(cur?.mean_wrc_half, 1);
+        document.getElementById('kpi-weighted').textContent = fmt(cur?.mean_wrc_weighted, 1);
+        document.getElementById('kpi-std').textContent = fmt(cur?.std_delta, 2);
+        document.getElementById('season-info').textContent =
+            `(${stadium.length} stadiums, qualified ≥${qpa} PA)`;
+
+        renderStadiumChart(stadium);
+        renderDistribution(dist);
+        renderLeaderboard(leaderboard);
+        // 변화 큰 케이스: up 5 + down 5 합쳐서 |Δ| 큰 순
+        const merged = [...changesUp, ...changesDown]
+            .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+        renderChanges(merged);
+    }
+
+    function renderStadiumChart(rows) {
+        const labels = rows.map(r => `${r.home_stadium}${r.primary_team ? ' (' + r.primary_team + ')' : ''}`);
+        const halfVals = rows.map(r => r.mean_half);
+
+        if (stadiumChart) stadiumChart.destroy();
+        const ctx = document.getElementById('chart-stadium').getContext('2d');
+        stadiumChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'wRC+ (Half-PF)',
+                    data: halfVals,
+                    backgroundColor: halfVals.map(v => v >= 100 ? '#2563eb' : '#dc2626'),
+                    borderRadius: 4,
+                }],
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            afterLabel: (ctx) => {
+                                const r = rows[ctx.dataIndex];
+                                return [
+                                    `n=${r.n}`,
+                                    `home PF: ${r.home_pf}`,
+                                    `weighted PF: ${r.weighted_pf}`,
+                                    `wRC+ home: ${r.mean_home}  half: ${r.mean_half}  weighted: ${r.mean_weighted}`,
+                                ];
+                            },
+                        },
+                    },
+                    annotation: {},
+                },
+                scales: {
+                    x: { title: { display: true, text: 'wRC+' }, grid: { color: '#f3f4f6' } },
+                    y: { grid: { display: false } },
+                },
+            },
+        });
+    }
+
+    function renderLeaderboard(rows) {
+        const tbody = document.getElementById('tbody-leaderboard');
+        tbody.innerHTML = '';
+        rows.forEach((r, i) => {
+            const tr = document.createElement('tr');
+            const cls = deltaClass(r.delta_methods);
+            tr.innerHTML = `
+                <td>${i + 1}</td>
+                <td class="left" style="font-weight:600;">${r.player_name || '—'}</td>
+                <td>${r.player_team || '—'}</td>
+                <td>${r.PA}</td>
+                <td class="left">${r.home_stadium || '—'}</td>
+                <td>${fmt(r.wOBA, 3)}</td>
+                <td>${fmt(r.wRC_home, 1)}</td>
+                <td class="bold">${fmt(r.wRC_half, 1)}</td>
+                <td>${fmt(r.wRC_weighted, 1)}</td>
+                <td class="${cls}">${(r.delta_methods > 0 ? '+' : '') + fmt(r.delta_methods, 2)}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function renderDistribution(dist) {
+        if (distChart) distChart.destroy();
+        const allBins = new Set();
+        ['home','half','weighted'].forEach(k => dist.histogram[k].forEach(b => allBins.add(b.bin)));
+        const bins = [...allBins].sort((a,b) => a - b);
+        const dataFor = (k) => {
+            const m = Object.fromEntries(dist.histogram[k].map(b => [b.bin, b.count]));
+            return bins.map(b => m[b] || 0);
+        };
+        distChart = new Chart(document.getElementById('chart-distribution').getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: bins.map(b => b),
+                datasets: [
+                    { label: 'home', data: dataFor('home'), borderColor: '#9ca3af', tension: 0.2 },
+                    { label: 'half', data: dataFor('half'), borderColor: '#2563eb', tension: 0.2, borderWidth: 3 },
+                    { label: 'weighted', data: dataFor('weighted'), borderColor: '#059669', tension: 0.2 },
+                ],
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom' },
+                    tooltip: {
+                        callbacks: {
+                            title: (ctx) => `wRC+ ${ctx[0].label} ~ ${parseInt(ctx[0].label)+5}`,
+                        },
+                    },
+                },
+                scales: {
+                    x: { title: { display: true, text: 'wRC+ bin' } },
+                    y: { title: { display: true, text: '선수 수' }, beginAtZero: true },
+                },
+            },
+        });
+    }
+
+    function renderChanges(rows) {
+        const tbody = document.getElementById('tbody-changes');
+        tbody.innerHTML = '';
+        rows.slice(0, 10).forEach(r => {
+            const tr = document.createElement('tr');
+            const cls = deltaClass(r.delta);
+            tr.innerHTML = `
+                <td class="left">${r.player_name || '—'}</td>
+                <td>${r.player_team || '—'}</td>
+                <td>${r.PA}</td>
+                <td class="left">${r.home_stadium || '—'}</td>
+                <td>${r.home_pf}</td>
+                <td>${r.weighted_pf}</td>
+                <td>${fmt(r.wRC_half, 1)}</td>
+                <td>${fmt(r.wRC_weighted, 1)}</td>
+                <td class="${cls}"><strong>${(r.delta > 0 ? '+' : '') + fmt(r.delta, 2)}</strong></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // ===== 뷰 / 탭 전환 =====
+    function showList() {
+        document.getElementById('view-list').classList.remove('hidden');
+        document.getElementById('view-article').classList.add('hidden');
+        window.scrollTo(0, 0);
+    }
+    function openArticle(id) {
+        document.getElementById('view-list').classList.add('hidden');
+        document.getElementById('view-article').classList.remove('hidden');
+        switchTab('text');
+        window.scrollTo(0, 0);
+    }
+    function switchTab(tab) {
+        document.querySelectorAll('.atab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+        document.getElementById('tab-text').classList.toggle('hidden', tab !== 'text');
+        document.getElementById('tab-check').classList.toggle('hidden', tab !== 'check');
+        if (tab === 'check' && !interactiveInited) {
+            interactiveInited = true;
+            init().catch(err => {
+                console.error(err);
+                document.getElementById('tab-check').insertAdjacentHTML('afterbegin',
+                    `<div style="color:#dc2626; padding:1rem; background:#fef2f2; border-radius:6px; margin-bottom:1rem;">데이터 로드 실패: ${err.message}</div>`);
+            });
+        }
+    }
+
+    document.querySelectorAll('.atab').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+
+    function route() {
+        const h = decodeURIComponent(location.hash.replace(/^#/, ''));
+        if (ARTICLE_IDS.includes(h)) openArticle(h);
+        else showList();
+    }
+    window.addEventListener('hashchange', route);
+    route();
+    </script>
+</body>
+</html>
