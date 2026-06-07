@@ -233,3 +233,6 @@ player_debug.txt
 pitcher_cols.txt
 *.bak.before_*
 *.bak_*
+
+# cron 작업 마지막 실행 시각(자동 생성, 매번 갱신) - 데이터 탐색 페이지가 fetch
+dashboard_js/cron_status.json

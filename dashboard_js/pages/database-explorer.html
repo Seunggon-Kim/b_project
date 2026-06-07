@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>데이터 탐색 - C - Baseball Research Center</title>
+    <title>데이터 탐색 - Baseball Estudiar</title>
     <meta name="description" content="KBO 데이터베이스 테이블·데이터 탐색">
 
     <!-- Google Fonts -->
@@ -315,10 +315,20 @@
             color: var(--text-secondary);
         }
 
-        .dbx-cron-expr {
+        .dbx-cron-upd {
             white-space: nowrap;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .dbx-cron-upd.pending {
             color: var(--text-muted);
-            font-size: 0.82rem;
+            font-style: italic;
+        }
+
+        /* Cron 카드와 테이블 목록 사이 간격 */
+        .dbx-cron-section {
+            margin-bottom: 2rem;
         }
     </style>
 </head>
@@ -329,7 +339,7 @@
         <div class="header-content">
             <a href="../" class="logo">
                 <img src="../assets/favicon/diamond.svg" alt="" class="logo-icon" width="26" height="26">
-                <span>C - Baseball Research Center</span>
+                <span>Baseball Estudiar</span>
             </a>
             <nav class="nav">
                 <a href="../" class="nav-link">홈</a>
@@ -349,7 +359,7 @@
             데이터를 볼 수 있고, CSV로 내려받아 엑셀에서 열 수 있습니다.</p>
 
         <!-- 자동 수집 스케줄 (Cron) -->
-        <section>
+        <section class="dbx-cron-section">
             <div class="card">
                 <div class="card-header">
                     <h3 class="card-title">
@@ -369,7 +379,7 @@
                                     <th>모듈 (실행 스크립트)</th>
                                     <th>설명</th>
                                     <th>실행 시각 (KST)</th>
-                                    <th>크론식 (UTC)</th>
+                                    <th>마지막 업데이트 시간</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -383,8 +393,8 @@
                                     </td>
                                     <td class="dbx-cron-desc">KBO 공식 타자·투수 통계를 Selenium으로 크롤링해 DB에 UPSERT 저장하고,
                                         완료되면 수집 결과 요약을 이메일로 발송합니다.</td>
-                                    <td class="dbx-cron-kst">매일 02:00</td>
-                                    <td class="dbx-cron-expr">0 17 * * *</td>
+                                    <td class="dbx-cron-kst" title="크론식(UTC): 0 17 * * *">매일 02:00</td>
+                                    <td class="dbx-cron-upd pending" data-job="official_stats">-</td>
                                 </tr>
                                 <tr>
                                     <td class="dbx-cron-mods">daily_kbo_pbp.sh
@@ -392,22 +402,22 @@
                                     </td>
                                     <td class="dbx-cron-desc">어제 경기의 PBP(투구·타석 단위) 데이터를 크롤링해 play_by_play 테이블에 적재합니다.
                                         같은 날짜는 멱등 재적재됩니다.</td>
-                                    <td class="dbx-cron-kst">매일 03:30</td>
-                                    <td class="dbx-cron-expr">30 18 * * *</td>
+                                    <td class="dbx-cron-kst" title="크론식(UTC): 30 18 * * *">매일 03:30</td>
+                                    <td class="dbx-cron-upd pending" data-job="pbp">-</td>
                                 </tr>
                                 <tr>
                                     <td class="dbx-cron-mods">daily_player_detector.py</td>
                                     <td class="dbx-cron-desc">어제 PBP·공식 통계와 players 테이블을 대조해 이적·등번호 변경이 의심되는 선수를
                                         재크롤링하고, 선수 이력(player_history)을 SCD Type 2로 갱신합니다.</td>
-                                    <td class="dbx-cron-kst">매일 04:00</td>
-                                    <td class="dbx-cron-expr">0 19 * * *</td>
+                                    <td class="dbx-cron-kst" title="크론식(UTC): 0 19 * * *">매일 04:00</td>
+                                    <td class="dbx-cron-upd pending" data-job="player_detector">-</td>
                                 </tr>
                                 <tr>
                                     <td class="dbx-cron-mods">daily_cleanup_orphan_stats.py</td>
                                     <td class="dbx-cron-desc">PBP 기록이 0건인데 공식 통계에만 남아 있는 시범경기·오분류 row를 정리합니다.
                                         (PBP·변경 감지 작업 이후 실행)</td>
-                                    <td class="dbx-cron-kst">매일 04:30</td>
-                                    <td class="dbx-cron-expr">30 19 * * *</td>
+                                    <td class="dbx-cron-kst" title="크론식(UTC): 30 19 * * *">매일 04:30</td>
+                                    <td class="dbx-cron-upd pending" data-job="cleanup">-</td>
                                 </tr>
                                 <tr>
                                     <td class="dbx-cron-mods">park_factors/run_pipeline.sh
@@ -415,22 +425,22 @@
                                     </td>
                                     <td class="dbx-cron-desc">누적 PBP·통계로 자체 파크팩터, wOBA/wRC+, RE24·득점가치 지표를 재계산해
                                         갱신합니다.</td>
-                                    <td class="dbx-cron-kst">매일 05:00</td>
-                                    <td class="dbx-cron-expr">0 20 * * *</td>
+                                    <td class="dbx-cron-kst" title="크론식(UTC): 0 20 * * *">매일 05:00</td>
+                                    <td class="dbx-cron-upd pending" data-job="park_factors">-</td>
                                 </tr>
                                 <tr>
                                     <td class="dbx-cron-mods">futures_schedule.py</td>
                                     <td class="dbx-cron-desc">KBO 퓨처스리그(2군) 경기 일정·결과를 공식 Schedule.asmx에서 수집해
                                         futures_games 테이블을 갱신합니다.</td>
-                                    <td class="dbx-cron-kst">매일 12:00~23:30<br>(30분 간격)</td>
-                                    <td class="dbx-cron-expr">*/30 3-14 * * *</td>
+                                    <td class="dbx-cron-kst" title="크론식(UTC): */30 3-14 * * *">매일 12:00~23:30<br>(30분 간격)</td>
+                                    <td class="dbx-cron-upd pending" data-job="futures">-</td>
                                 </tr>
                                 <tr>
                                     <td class="dbx-cron-mods">player_info_scraper.py</td>
                                     <td class="dbx-cron-desc">기존 player_id 기준으로 선수 상세 프로필을 전체 재수집합니다.
                                         (월 1회 전체 보정)</td>
-                                    <td class="dbx-cron-kst">매월 1일 13:00</td>
-                                    <td class="dbx-cron-expr">0 4 1 * *</td>
+                                    <td class="dbx-cron-kst" title="크론식(UTC): 0 4 1 * *">매월 1일 13:00</td>
+                                    <td class="dbx-cron-upd pending" data-job="player_info">-</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -662,8 +672,31 @@
             window.location.href = API.dbCsvUrl(state.table);
         }
 
+        // 자동 수집 스케줄: 작업별 '마지막 업데이트 시간' 채우기
+        // (cron_status.json은 서버 cron이 */15분마다 갱신하는 정적 파일)
+        async function loadCronStatus() {
+            try {
+                const res = await fetch('../cron_status.json', { cache: 'no-store' });
+                if (!res.ok) return;
+                const data = await res.json();
+                const jobs = (data && data.jobs) || {};
+                document.querySelectorAll('.dbx-cron-upd[data-job]').forEach(td => {
+                    const v = jobs[td.getAttribute('data-job')];
+                    if (v) {
+                        td.textContent = v;
+                        td.classList.remove('pending');
+                    } else {
+                        td.textContent = '기록 없음';
+                    }
+                });
+            } catch (e) {
+                // 파일이 아직 없거나 파싱 실패 시 기본값(-) 유지
+            }
+        }
+
         // 초기화
         loadTableList();
+        loadCronStatus();
     </script>
 </body>
 
