@@ -29,14 +29,14 @@
         <div class="header-content">
             <a href="./" class="logo">
                 <img src="assets/favicon/diamond.svg" alt="" class="logo-icon" width="26" height="26">
-                <span>C - Baseball Research Center</span>
+                <span>Baseball Estudiar</span>
             </a>
             <nav class="nav">
                 <a href="./" class="nav-link">홈</a>
                 <a href="pages/team-stats.html" class="nav-link">팀 통계</a>
                 <a href="pages/player-stats.html" class="nav-link">선수 통계</a>
                 <a href="pages/player-analytics.html" class="nav-link">선수 분석</a>
-                <a href="pages/wrc-comparison.html" class="nav-link">wRC+ 강건성</a>
+                <a href="pages/article.html" class="nav-link">아티클</a>
                 <a href="pages/factor-stats.html" class="nav-link">요인 통계</a>
                 <a href="pages/database-explorer.html" class="nav-link">데이터 탐색</a>
             </nav>
@@ -106,9 +106,9 @@
                     <span class="material-symbols-outlined ql-icon">person_search</span><span class="ql-title">선수 분석</span>
                     <span class="ql-desc">프로필·구종·시즌추이</span>
                 </a>
-                <a href="pages/wrc-comparison.html" class="quicklink-card">
-                    <span class="material-symbols-outlined ql-icon">analytics</span><span class="ql-title">wRC+ 강건성</span>
-                    <span class="ql-desc">파크팩터 시나리오</span>
+                <a href="pages/article.html" class="quicklink-card">
+                    <span class="material-symbols-outlined ql-icon">article</span><span class="ql-title">아티클</span>
+                    <span class="ql-desc">wRC+ 산출·강건성</span>
                 </a>
                 <a href="pages/factor-stats.html" class="quicklink-card">
                     <span class="material-symbols-outlined ql-icon">tune</span><span class="ql-title">요인 통계</span>
@@ -121,13 +121,6 @@
             </div>
         </section>
 
-        <!-- Data Overview (compact) -->
-        <section id="stats-overview" class="mb-3">
-            <h2 class="mb-2"><span class="material-symbols-outlined">database</span> 데이터 현황</h2>
-            <div id="stats-grid" class="grid grid-4">
-                <!-- Stats loaded here -->
-            </div>
-        </section>
     </main>
 
     <!-- Footer -->
@@ -496,23 +489,6 @@
         });
         loadLeaders();
 
-        // ===== 데이터 현황 (기존 통계 카운트) =====
-        async function loadDashboardStats() {
-            const statsGrid = document.getElementById('stats-grid');
-            statsGrid.innerHTML = createLoadingSpinner();
-            try {
-                const data = await API.getDashboardStats();
-                statsGrid.innerHTML = `
-                    ${createStatCard('경기 수', formatNumber(data.games), data.seasons ? `${data.seasons} 시즌` : '', '<span class="material-symbols-outlined">calendar_month</span>')}
-                    ${createStatCard('플레이 수', formatNumber(data.plays), '투구·타석 기록', '<span class="material-symbols-outlined">sports_baseball</span>')}
-                    ${createStatCard('타자', `${formatNumber(data.batters)}명`, 'KBO 공식 기록', '<span class="material-symbols-outlined">sports_cricket</span>')}
-                    ${createStatCard('투수', `${formatNumber(data.pitchers)}명`, 'KBO 공식 기록', '<span class="material-symbols-outlined">sports_baseball</span>')}
-                `;
-            } catch (error) {
-                statsGrid.innerHTML = createErrorMessage('데이터를 불러오는데 실패했습니다. API 서버가 실행 중인지 확인해주세요.');
-            }
-        }
-        loadDashboardStats();
     </script>
 </body>
 

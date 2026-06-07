@@ -355,8 +355,16 @@
     <!-- Main Content -->
     <main class="container">
         <h1 class="fade-in"><span class="material-symbols-outlined h1-icon">table_view</span>데이터 탐색</h1>
-        <p class="text-secondary mb-3">DB에 저장된 테이블과 데이터를 SQLite 없이 바로 확인합니다. 테이블을 클릭하면 컬럼 구조와
-            데이터를 볼 수 있고, CSV로 내려받아 엑셀에서 열 수 있습니다.</p>
+        <p class="text-secondary mb-3">KBO 데이터의 수집 현황과 자동 수집 스케줄을 한눈에 확인하고, DB 테이블과
+            데이터를 SQLite 없이 바로 탐색합니다. 테이블을 클릭하면 컬럼 구조와 데이터를 보고 CSV로 내려받을 수 있습니다.</p>
+
+        <!-- 데이터 현황 -->
+        <section id="stats-overview" class="mb-3">
+            <h2 class="mb-2"><span class="material-symbols-outlined">database</span> 데이터 현황</h2>
+            <div id="stats-grid" class="grid grid-4">
+                <!-- Stats loaded here -->
+            </div>
+        </section>
 
         <!-- 자동 수집 스케줄 (Cron) -->
         <section class="dbx-cron-section">
@@ -694,9 +702,27 @@
             }
         }
 
+        // 데이터 현황 (DB 통계 카운트) - 메인에서 이동
+        async function loadDashboardStats() {
+            const statsGrid = document.getElementById('stats-grid');
+            statsGrid.innerHTML = createLoadingSpinner();
+            try {
+                const data = await API.getDashboardStats();
+                statsGrid.innerHTML = `
+                    ${createStatCard('경기 수', formatNumber(data.games), data.seasons ? `${data.seasons} 시즌` : '', '<span class="material-symbols-outlined">calendar_month</span>')}
+                    ${createStatCard('플레이 수', formatNumber(data.plays), '투구·타석 기록', '<span class="material-symbols-outlined">sports_baseball</span>')}
+                    ${createStatCard('타자', `${formatNumber(data.batters)}명`, 'KBO 공식 기록', '<span class="material-symbols-outlined">sports_cricket</span>')}
+                    ${createStatCard('투수', `${formatNumber(data.pitchers)}명`, 'KBO 공식 기록', '<span class="material-symbols-outlined">sports_baseball</span>')}
+                `;
+            } catch (error) {
+                statsGrid.innerHTML = createErrorMessage('데이터를 불러오는데 실패했습니다. API 서버가 실행 중인지 확인해주세요.');
+            }
+        }
+
         // 초기화
         loadTableList();
         loadCronStatus();
+        loadDashboardStats();
     </script>
 </body>
 
