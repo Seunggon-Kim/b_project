@@ -330,6 +330,131 @@
         .dbx-cron-section {
             margin-bottom: 2rem;
         }
+
+        /* 페이지 탭 (가운데 정렬) — article.html의 .atabs 패턴과 동일 */
+        .atabs {
+            display: flex;
+            justify-content: center;
+            gap: 0.3rem;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 1.6rem;
+        }
+
+        .atab {
+            appearance: none;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font: inherit;
+            padding: 0.6rem 1rem;
+            font-size: 0.96rem;
+            color: var(--text-muted);
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+            transition: color 0.15s ease, border-color 0.15s ease;
+        }
+
+        .atab:hover {
+            color: var(--text-primary);
+        }
+
+        .atab.active {
+            color: var(--primary-dark);
+            border-bottom-color: var(--primary-dark);
+            font-weight: 600;
+        }
+
+        /* 사이트맵 트리 — 색은 var() 토큰이라 light/dark 자동 대응 */
+        .sm-tree {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .sm-node {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.6rem;
+            padding: 0.5rem 0;
+        }
+
+        .sm-icon {
+            font-size: 1.25rem;
+            color: var(--primary);
+            margin-top: 0.1rem;
+        }
+
+        .sm-body {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .sm-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 0.5rem;
+        }
+
+        .sm-link {
+            font-weight: 600;
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        .sm-link:hover {
+            color: var(--primary);
+            text-decoration: underline;
+        }
+
+        .sm-root > .sm-body > .sm-row > .sm-link {
+            font-size: 1.05rem;
+            font-weight: 700;
+        }
+
+        .sm-path {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            word-break: break-all;
+        }
+
+        .sm-here {
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: var(--primary);
+            background: rgba(59, 130, 246, 0.12);
+            border-radius: 999px;
+            padding: 0.1rem 0.5rem;
+            white-space: nowrap;
+        }
+
+        .sm-desc {
+            margin-top: 0.15rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .sm-children {
+            list-style: none;
+            margin: 0.5rem 0 0;
+            padding: 0 0 0 1.5rem;
+            border-left: 2px solid var(--border-color);
+        }
+
+        .sm-children > .sm-node {
+            position: relative;
+        }
+
+        .sm-children > .sm-node::before {
+            content: '';
+            position: absolute;
+            left: -1.5rem;
+            top: 1.15rem;
+            width: 1rem;
+            height: 2px;
+            background: var(--border-color);
+        }
     </style>
 </head>
 
@@ -343,18 +468,26 @@
             </a>
             <nav class="nav">
                 <a href="../" class="nav-link">홈</a>
-                <a href="team-stats.html" class="nav-link">팀 통계</a>
-                <a href="player-stats.html" class="nav-link">선수 통계</a>
-                <a href="player-analytics.html" class="nav-link">선수 분석</a>
-                <a href="article.html" class="nav-link">아티클</a>
-                <a href="factor-stats.html" class="nav-link">요인 통계</a>
-                <a href="database-explorer.html" class="nav-link active">데이터 탐색</a>
+                <a href="team-stats" class="nav-link">팀 통계</a>
+                <a href="player-stats" class="nav-link">선수 통계</a>
+                <a href="player-analytics" class="nav-link">선수 분석</a>
+                <a href="article" class="nav-link">아티클</a>
+                <a href="factor-stats" class="nav-link">요인 통계</a>
+                <a href="database-explorer" class="nav-link active">데이터 탐색</a>
             </nav>
         </div>
     </header>
 
     <!-- Main Content -->
     <main class="container">
+        <!-- 페이지 탭: 데이터 탐색 / 사이트맵 (가운데 정렬) -->
+        <div class="atabs">
+            <button class="atab active" type="button" data-tab="explorer">데이터 탐색</button>
+            <button class="atab" type="button" data-tab="sitemap">사이트맵</button>
+        </div>
+
+        <!-- ===== 탭: 데이터 탐색 ===== -->
+        <div id="tab-explorer" class="atab-panel">
         <h1 class="fade-in"><span class="material-symbols-outlined h1-icon">table_view</span>데이터 탐색</h1>
         <p class="text-secondary mb-3">KBO 데이터의 수집 현황과 자동 수집 스케줄을 한눈에 확인하고, DB 테이블과
             데이터를 SQLite 없이 바로 탐색합니다. 테이블을 클릭하면 컬럼 구조와 데이터를 보고 CSV로 내려받을 수 있습니다.</p>
@@ -518,6 +651,26 @@
                 </div>
             </div>
         </section>
+        </div>
+
+        <!-- ===== 탭: 사이트맵 ===== -->
+        <div id="tab-sitemap" class="atab-panel hidden">
+        <h1 class="fade-in"><span class="material-symbols-outlined h1-icon">account_tree</span>사이트맵</h1>
+        <p class="text-secondary mb-3">사이트 전체 페이지 구조입니다. 상단 네비게이션 메뉴를 기준으로 자동 생성되므로,
+            새 페이지가 메뉴에 추가되면 이 사이트맵에도 자동으로 반영됩니다.</p>
+
+        <section>
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">페이지 구조</h3>
+                    <span id="sitemap-summary" class="text-muted" style="font-size: 0.875rem;"></span>
+                </div>
+                <div class="card-body">
+                    <ul class="sm-tree" id="sitemap-tree"></ul>
+                </div>
+            </div>
+        </section>
+        </div>
     </main>
 
     <!-- Scripts -->
@@ -720,10 +873,78 @@
             }
         }
 
+        // ── 페이지 탭: 데이터 탐색 / 사이트맵 ──
+        function switchTab(tab) {
+            document.querySelectorAll('.atab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+            document.getElementById('tab-explorer').classList.toggle('hidden', tab !== 'explorer');
+            document.getElementById('tab-sitemap').classList.toggle('hidden', tab !== 'sitemap');
+            if (history.replaceState) {
+                history.replaceState(null, '',
+                    tab === 'sitemap' ? '#sitemap' : window.location.pathname + window.location.search);
+            }
+        }
+        document.querySelectorAll('.atab').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+
+        // ── 사이트맵: 상단 nav 메뉴(SSOT)를 읽어 자동 생성 ──
+        // 새 페이지가 nav에 추가되면 별도 수정 없이 사이트맵에도 반영됩니다.
+        // SITEMAP_META는 보조 정보(아이콘·설명)일 뿐이며, 등록되지 않은 새 페이지도 링크는 항상 표시됩니다.
+        const SITEMAP_META = {
+            '홈': { icon: 'home', desc: 'KBO 경기 일정·결과와 데이터 요약을 담은 메인 페이지' },
+            '팀 통계': { icon: 'groups', desc: 'KBO 팀별 순위와 시즌 성적' },
+            '선수 통계': { icon: 'person', desc: 'KBO 선수별 타격·투구 성적' },
+            '선수 분석': { icon: 'query_stats', desc: 'KBO 선수 검색과 상세 분석' },
+            '아티클': { icon: 'article', desc: '데이터와 방법론을 글로 풀어낸 분석 노트' },
+            '요인 통계': { icon: 'stadium', desc: 'KBO 파크 팩터와 RE24 매트릭스' },
+            '데이터 탐색': { icon: 'table_view', desc: 'DB 테이블·데이터 탐색과 자동 수집 스케줄 현황' }
+        };
+
+        function buildSitemap() {
+            const treeEl = document.getElementById('sitemap-tree');
+            const links = Array.from(document.querySelectorAll('header .nav .nav-link'));
+            if (!links.length) return;
+
+            const toNode = (a) => {
+                const label = a.textContent.trim();
+                const href = a.getAttribute('href');
+                const meta = SITEMAP_META[label] || {};
+                let path = href;
+                try { path = new URL(href, window.location.href).pathname; } catch (e) { /* href 그대로 표시 */ }
+                return { label, href, path, icon: meta.icon || 'description', desc: meta.desc || '' };
+            };
+            const nodes = links.map(toNode);
+            const home = nodes.find(n => n.label === '홈') || nodes[0];
+            const children = nodes.filter(n => n !== home);
+
+            const renderNode = (n, extraClass) => {
+                const here = n.path === window.location.pathname
+                    ? '<span class="sm-here">현재 페이지</span>' : '';
+                return `
+                    <li class="sm-node${extraClass ? ' ' + extraClass : ''}">
+                        <span class="material-symbols-outlined sm-icon">${escapeHtml(n.icon)}</span>
+                        <div class="sm-body">
+                            <div class="sm-row">
+                                <a class="sm-link" href="${escapeHtml(n.href)}">${escapeHtml(n.label)}</a>
+                                <span class="sm-path">${escapeHtml(n.path)}</span>
+                                ${here}
+                            </div>
+                            ${n.desc ? `<div class="sm-desc">${escapeHtml(n.desc)}</div>` : ''}
+                            ${extraClass === 'sm-root' && children.length
+                                ? `<ul class="sm-children">${children.map(c => renderNode(c, '')).join('')}</ul>` : ''}
+                        </div>
+                    </li>`;
+            };
+
+            treeEl.innerHTML = renderNode(home, 'sm-root');
+            const summaryEl = document.getElementById('sitemap-summary');
+            if (summaryEl) summaryEl.textContent = `총 ${nodes.length}개 페이지 · 깊이 2단계 (네비게이션 메뉴 기준)`;
+        }
+
         // 초기화
         loadTableList();
         loadCronStatus();
         loadDashboardStats();
+        buildSitemap();
+        if (window.location.hash === '#sitemap') switchTab('sitemap');
     </script>
 </body>
 
