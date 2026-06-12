@@ -4,13 +4,15 @@
   - player_info_scraper.py(월 1회)는 공식 스탯에 등장한 선수만 수집 → 영입 직후 선수 누락
   - daily_player_detector.py는 players에 이미 있는 선수의 팀 변경만 감지 → 신규 INSERT 없음
 
-소스 4종:
+소스 5종:
   1) 현 시즌 kbo_official_*_stats  — players 미등록 player_id (id·팀 확정)
   2) 현 시즌 play_by_play          — players 미등록 batter/pitcher id
-  3) RegisterAll.aspx (등록 현황)  — 팀별 1군 등록 (이름·등번호) → 신규/변경 의심
+  3) Search.aspx 팀 필터 (소속선수) — 구단별 전체 소속(육성 포함) 명단, playerId 직접 제공
+     → 1군 등록도 출장도 없는 선수까지 id 기반으로 포착 (동명이인 모호성 없음)
   4) GetTradeList ws (이동 현황)   — 트레이드·등번호 변경·FA·추가 등록 이벤트
      원본은 player_moves_raw 테이블에 멱등 적재(감사 추적), 신규 행만 트리거로 사용
      (일시 오류로 처리 실패한 행은 raw에서 지워 다음 실행에서 재트리거)
+  5) RegisterAll.aspx (등록 현황)  — 팀별 1군 등록 (이름·등번호) → 신규/변경 의심
 
 반영 정책:
   - 신규 선수: 프로필 수집(requests, 정적 HTML) → players UPSERT + player_history 시드 행
@@ -56,6 +58,14 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 PROFILE_PREFIX = "cphContents_cphContents_cphContents_playerProfile_"
 
 KBO_TEAMS = {"LG", "KT", "SSG", "NC", "두산", "KIA", "롯데", "삼성", "한화", "키움"}
+
+# 선수 검색(Search.aspx) ddlTeam 코드 → players.team_id 표기
+TEAM_CODES = {"LG": "LG", "KT": "KT", "SS": "삼성", "HH": "한화", "HT": "KIA",
+              "OB": "두산", "NC": "NC", "SK": "SSG", "LT": "롯데", "WO": "키움"}
+
+# Search.aspx WebForms 컨트롤 공통 prefix
+_WF_PREFIX = "ctl00$ctl00$ctl00$cphContents$cphContents$cphContents$"
+_PAGER_ID_PREFIX = "cphContents_cphContents_cphContents_ucPager_btnNo"
 
 # 소속·등번호·이름이 실제로 바뀌는 이벤트만 SCD 트리거로 쓴다
 # (부상자 명단·말소류는 등록 상태 변화일 뿐 소속 변화가 아님 — raw 적재만)
@@ -271,6 +281,84 @@ def strip_player_text(text):
     return re.sub(r"\([^)]*\)\s*$", "", text).strip()
 
 
+def _hidden_fields(soup):
+    """ASP.NET WebForms hidden 필드(__VIEWSTATE 등) 수집 — postback마다 갱신해야 한다."""
+    return {inp.get("name"): inp.get("value") or ""
+            for inp in soup.find_all("input", type="hidden") if inp.get("name")}
+
+
+def _parse_roster_rows(soup):
+    """선수 검색 결과 표(tEx) 파싱 → [{player_id, name, back_number, team, position}]."""
+    table = soup.find("table", class_="tEx")
+    rows = []
+    if table is None:
+        return rows
+    for tr in table.find_all("tr"):
+        tds = tr.find_all("td")
+        if len(tds) < 4:
+            continue
+        a = tds[1].find("a")
+        m = re.search(r"playerId=(\d+)", a.get("href", "")) if a else None
+        if not m:
+            continue
+        rows.append({
+            "player_id": m.group(1),
+            "name": a.get_text(strip=True),
+            "back_number": _norm_back(tds[0].get_text(strip=True)),
+            "team": tds[2].get_text(strip=True),
+            "position": tds[3].get_text(strip=True),
+        })
+    return rows
+
+
+def fetch_team_roster(session, code):
+    """선수 검색을 팀 필터로 postback해 구단 소속선수 전체(육성 포함)를 수집.
+
+    WebForms 페이지라 매 요청 hidden 필드를 이어받아야 하며,
+    페이지네이션은 ucPager$btnNoN postback으로 순회한다.
+    """
+    r = _get(session, f"{BASE}/Player/Search.aspx")
+    if r is None:
+        return []
+    fields = _hidden_fields(_soup(r.text))
+    fields.update({
+        "__EVENTTARGET": _WF_PREFIX + "ddlTeam",
+        "__EVENTARGUMENT": "",
+        _WF_PREFIX + "ddlTeam": code,
+        _WF_PREFIX + "txtSearchPlayerName": "",
+    })
+
+    out, page = [], 1
+    while page <= 15:
+        resp = None
+        for attempt in (1, 2):
+            try:
+                resp = session.post(f"{BASE}/Player/Search.aspx", data=fields,
+                                    headers={"Referer": f"{BASE}/Player/Search.aspx"},
+                                    timeout=15)
+                if resp.status_code == 200:
+                    break
+            except requests.RequestException as e:
+                logger.warning(f"로스터 POST 재시도({attempt}) {code} p{page}: {e}")
+            time.sleep(1)
+        if resp is None or resp.status_code != 200:
+            break
+        soup = _soup(resp.text)
+        out.extend(_parse_roster_rows(soup))
+        page += 1
+        if soup.find("a", id=f"{_PAGER_ID_PREFIX}{page}") is None:
+            break
+        fields = _hidden_fields(soup)
+        fields.update({
+            "__EVENTTARGET": _WF_PREFIX + f"ucPager$btnNo{page}",
+            "__EVENTARGUMENT": "",
+            _WF_PREFIX + "ddlTeam": code,
+            _WF_PREFIX + "txtSearchPlayerName": "",
+        })
+        time.sleep(0.3)
+    return out
+
+
 # ──────────────────────────── DB ─────────────────────────────
 
 def ensure_tables(con):
@@ -471,7 +559,7 @@ def sync_missing_from_stats(con, session):
         insert_new_player(con, info, team, "registry_stats")
         n += 1
         time.sleep(0.5)
-    logger.info(f"[1/4] 스탯 기준 미등록: 대상 {len(targets)} / 등록 {n}")
+    logger.info(f"[1/5] 스탯 기준 미등록: 대상 {len(targets)} / 등록 {n}")
 
     null_rows = con.execute("""
         SELECT p.player_id, s.player_team
@@ -516,8 +604,57 @@ def sync_missing_from_pbp(con, session):
         insert_new_player(con, info, team, "registry_pbp")
         n += 1
         time.sleep(0.5)
-    logger.info(f"[2/4] PBP 기준 미등록: 대상 {len(rows)} / 등록 {n}")
+    logger.info(f"[2/5] PBP 기준 미등록: 대상 {len(rows)} / 등록 {n}")
     return n
+
+
+def sync_team_rosters(con, session):
+    """구단별 전체 소속선수 명단(육성 포함)과 players를 id 기준으로 대조.
+
+    1군 등록도 출장도 없는 선수(육성·신인 등)를 포착하는 유일한 소스이며,
+    playerId가 직접 제공되므로 이름 매칭의 동명이인 모호성이 없다.
+    """
+    cur = con.cursor()
+    stats = {"new": 0, "changed": 0, "same": 0, "fail": 0}
+    total = 0
+    for code, label in TEAM_CODES.items():
+        roster = fetch_team_roster(session, code)
+        if not roster:
+            logger.warning(f"  소속선수 명단 수집 실패/0건: {label}({code})")
+            continue
+        seen = set()
+        for p in roster:
+            pid = p["player_id"]
+            if pid in seen:
+                continue
+            seen.add(pid)
+            row = cur.execute("SELECT team_id FROM players WHERE player_id=?",
+                              (pid,)).fetchone()
+            if row is None:
+                info = scrape_player_profile(session, pid)
+                if info is None:
+                    logger.warning(f"  로스터 신규 {pid} {p['name']}: 프로필 수집 실패")
+                    stats["fail"] += 1
+                    continue
+                if info.get("back_number") is None:
+                    info["back_number"] = p["back_number"]
+                insert_new_player(con, info, label, "registry_roster")
+                stats["new"] += 1
+                time.sleep(0.5)
+            elif row[0] != label:
+                info = scrape_player_profile(session, pid)
+                if info is None:
+                    stats["fail"] += 1
+                    continue
+                if apply_player_change(con, pid, info, label, "registry_roster"):
+                    stats["changed"] += 1
+                time.sleep(0.5)
+            else:
+                stats["same"] += 1
+        total += len(seen)
+        time.sleep(0.5)
+    logger.info(f"[3/5] 소속선수 명단: 전체 {total}명 / 반영 {stats}")
+    return stats
 
 
 def resolve_and_apply(con, session, name, team, src, event_date=None, back_number=None):
@@ -633,7 +770,7 @@ def sync_trade_events(con, session, full=False):
         if r == "fail":
             unstore_move(con, e)  # 일시 오류는 다음 실행에서 재트리거
         time.sleep(0.3)
-    logger.info(f"[3/4] 이동 이벤트: 수집 {len(events)} / 신규 {len(new_events)} / 반영 {stats}")
+    logger.info(f"[4/5] 이동 이벤트: 수집 {len(events)} / 신규 {len(new_events)} / 반영 {stats}")
     return stats
 
 
@@ -641,7 +778,7 @@ def sync_register_all(con, session):
     """1군 등록 현황과 players를 대조해 신규·팀/등번호 변경을 반영."""
     entries = fetch_register_all(session)
     if not entries:
-        logger.warning("[4/4] 등록 현황: 수집 실패 또는 0건")
+        logger.warning("[5/5] 등록 현황: 수집 실패 또는 0건")
         return {}
     cur = con.cursor()
     stats = {"changed": 0, "new": 0, "same": 0, "skip": 0, "fail": 0, "ok": 0}
@@ -655,7 +792,7 @@ def sync_register_all(con, session):
         r = resolve_and_apply(con, session, name, team, "register_all", back_number=back_no)
         stats[r] += 1
         time.sleep(0.3)
-    logger.info(f"[4/4] 등록 현황: 항목 {len(entries)} / 반영 {stats}")
+    logger.info(f"[5/5] 등록 현황: 항목 {len(entries)} / 반영 {stats}")
     return stats
 
 
@@ -673,6 +810,7 @@ def main():
         session = make_session()
         for step in (lambda: sync_missing_from_stats(con, session),
                      lambda: sync_missing_from_pbp(con, session),
+                     lambda: sync_team_rosters(con, session),
                      lambda: sync_trade_events(con, session, full=args.full),
                      lambda: sync_register_all(con, session)):
             try:
