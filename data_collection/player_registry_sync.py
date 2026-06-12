@@ -30,7 +30,7 @@ import logging
 import re
 import sqlite3
 import time
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import requests
@@ -498,6 +498,7 @@ def sync_missing_from_pbp(con, session):
             SELECT batter_ID AS id FROM play_by_play WHERE substr(gameID,1,4)=?
             UNION SELECT pitcher_ID FROM play_by_play WHERE substr(gameID,1,4)=?)
         WHERE id IS NOT NULL AND id <> ''
+          AND CAST(id AS INTEGER) > 0  -- PBP 센티널 값(-1 등) 제외
           AND CAST(id AS TEXT) NOT IN (SELECT player_id FROM players)
     """, (season, season)).fetchall()
     n = 0
@@ -567,12 +568,16 @@ def resolve_and_apply(con, session, name, team, src, event_date=None, back_numbe
 
     if not matches:
         # 검색은 성공했지만 해당 팀 후보 없음(검색 인덱스 지연 등) —
-        # 현역 팀 내 전 소속 단일 매칭이면 이적으로 처리
+        # 현역 팀 내 전 소속 단일 매칭이면 이적으로 처리.
+        # 단 최근 이벤트에만 허용: 오래된 이벤트(백필)는 검색이 이미 더 새로운 진실을
+        # 반영하므로, fallback이 낡은 팀을 되살리는 오적용이 된다.
+        fresh = event_date is None or \
+            event_date >= (date.today() - timedelta(days=7)).isoformat()
         ph = ",".join("?" * len(KBO_TEAMS))
         others = cur.execute(
             f"SELECT player_id FROM players WHERE player_name=? AND team_id IN ({ph})",
             (name, *KBO_TEAMS)).fetchall()
-        if len(others) == 1:
+        if fresh and len(others) == 1:
             pid = others[0][0]
             info = scrape_player_profile(session, pid)
             if info is None:
