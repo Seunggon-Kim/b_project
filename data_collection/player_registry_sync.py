@@ -210,29 +210,36 @@ def fetch_register_all(session):
     if r is None:
         return []
     soup = _soup(r.text)
-    table = soup.find("table", class_="tData")
-    body = table.find("tbody") if table else None
-    if body is None:
+    # 팀마다 별도 table.tData가 있다 (단일 테이블 아님 — find()는 LG만 잡힌다)
+    tables = soup.find_all("table", class_="tData")
+    if not tables:
         logger.warning("RegisterAll: 표를 찾지 못함 (페이지 구조 변경?)")
         return []
 
     pos_groups = (None, None, "투수", "포수", "내야수", "외야수")
     out = []
-    for tr in body.find_all("tr"):
-        th = tr.find("th")
-        if th is None:
+    for table in tables:
+        body = table.find("tbody")
+        if body is None:
             continue
-        team = th.get_text(" ", strip=True).split()[0]
-        if team not in KBO_TEAMS:
-            logger.warning(f"RegisterAll: 알 수 없는 팀 표기 '{team}' — 건너뜀")
-            continue
-        for idx, td in enumerate(tr.find_all("td")):
-            if idx >= len(pos_groups) or pos_groups[idx] is None:
+        for tr in body.find_all("tr"):
+            th = tr.find("th")
+            if th is None:
                 continue
-            for li in td.find_all("li"):
-                m = re.match(r"^(.+?)\((\d+)\)$", li.get_text(strip=True))
-                if m:
-                    out.append((team, pos_groups[idx], m.group(1).strip(), int(m.group(2))))
+            team = th.get_text(" ", strip=True).split()[0]
+            if team not in KBO_TEAMS:
+                continue  # 로스터 외 표(범례 등)
+            for idx, td in enumerate(tr.find_all("td")):
+                if idx >= len(pos_groups) or pos_groups[idx] is None:
+                    continue
+                for li in td.find_all("li"):
+                    m = re.match(r"^(.+?)\((\d+)\)$", li.get_text(strip=True))
+                    if m:
+                        out.append((team, pos_groups[idx], m.group(1).strip(), int(m.group(2))))
+    teams_seen = {t for t, *_ in out}
+    if len(teams_seen) < len(KBO_TEAMS):
+        logger.warning(f"RegisterAll: {len(KBO_TEAMS)}팀 중 {len(teams_seen)}팀만 파싱됨 "
+                       f"(누락: {sorted(KBO_TEAMS - teams_seen)})")
     return out
 
 
