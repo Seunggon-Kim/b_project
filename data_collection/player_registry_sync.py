@@ -628,7 +628,7 @@ def sync_team_rosters(con, session):
             if pid in seen:
                 continue
             seen.add(pid)
-            row = cur.execute("SELECT team_id FROM players WHERE player_id=?",
+            row = cur.execute("SELECT team_id, back_number FROM players WHERE player_id=?",
                               (pid,)).fetchone()
             if row is None:
                 info = scrape_player_profile(session, pid)
@@ -649,6 +649,14 @@ def sync_team_rosters(con, session):
                 if apply_player_change(con, pid, info, label, "registry_roster"):
                     stats["changed"] += 1
                 time.sleep(0.5)
+            elif p["back_number"] is not None and row[1] != p["back_number"]:
+                # 같은 팀, 등번호만 변경 — 명단이 id 기반이라 스크레이프 없이 확정 반영
+                # (동명이인이라도 id로 구분되므로 이름 매칭 경로의 모호성이 없다)
+                info = {"player_id": pid, "player_name": p["name"],
+                        "back_number": p["back_number"], "position": None,
+                        "throw": None, "bat": None, "height": None, "weight": None}
+                if apply_player_change(con, pid, info, None, "registry_roster_backno"):
+                    stats["changed"] += 1
             else:
                 stats["same"] += 1
         total += len(seen)

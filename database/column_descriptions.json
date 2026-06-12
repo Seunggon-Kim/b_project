@@ -37,6 +37,7 @@
         "teams",
         "players",
         "player_history",
+        "player_moves_raw",
         "stadium_dim",
         "stadium_alias",
         "stadium_team_history",
@@ -284,7 +285,7 @@
     "players": {
       "category": "선수·팀·구장 마스터",
       "table_desc": "KBO 선수 기본 신상·신체·계약·드래프트 정보 마스터 테이블",
-      "update_freq": "매일 자동 (KST 04:00 신규 감지) + 매월 1일 전체 갱신 (KST 13:00)",
+      "update_freq": "매일 자동 (KST 05:40 레지스트리 동기화: 신규 영입·이적·등번호 / KST 04:00 변경 감지) + 매월 1일 전체 갱신 (KST 13:00)",
       "columns": {
         "player_id": "선수 고유 ID(PK), KBO 선수 식별 코드(문자열, 예: 50030)",
         "player_name": "선수 이름(한글)",
@@ -309,7 +310,7 @@
     "player_history": {
       "category": "선수·팀·구장 마스터",
       "table_desc": "선수 속성(소속팀·등번호·포지션·신체 등) 변경 이력을 시점별로 보관하는 SCD Type 2 이력 테이블",
-      "update_freq": "매일 자동 (KST 04:00, 선수 이력 변동 시)",
+      "update_freq": "매일 자동 (KST 04:00 변경 감지 / KST 05:40 레지스트리 동기화, 선수 이력 변동 시)",
       "columns": {
         "hist_id": "이력 레코드 고유 식별자(PK, 정수)",
         "player_id": "선수 식별자(player 테이블 참조 키, 문자열 코드 예: 50030)",
@@ -323,7 +324,20 @@
         "height": "신장(cm, 정수)",
         "weight": "체중(kg, 정수)",
         "detected_at": "이력 변경 감지·적재 시각(TIMESTAMP)",
-        "detection_src": "이력 생성 출처(init=초기 적재 등)"
+        "detection_src": "이력 생성 출처(init=초기 적재, registry_stats·registry_pbp·registry_roster=레지스트리 동기화, trade:항목명=이동 공시, register_all=1군 등록 현황, KBO_team=공식 스탯 팀 변경 감지)"
+      }
+    },
+    "player_moves_raw": {
+      "category": "선수·팀·구장 마스터",
+      "table_desc": "KBO 공식 '선수 이동 현황' 공시(트레이드·등번호 변경·FA·추가 등록·부상자 명단 등) 원본을 멱등 적재한 감사 추적 테이블 — 레지스트리 동기화가 변경 트리거로 사용",
+      "update_freq": "매일 자동 (KST 05:40, player_registry_sync)",
+      "columns": {
+        "move_date": "공시 일자(YYYY-MM-DD 문자열, PK 일부)",
+        "section": "공시 항목(트레이드, 등번호 변경, FA 계약, 소속선수 추가 등록, 부상자 명단 등)",
+        "team": "공시 구단(KT·키움·LG 등 약칭)",
+        "player_text": "선수 표기 원문(예: 정은원(내야수))",
+        "note": "비고(상대 구단·기간 등 부가 정보, 없으면 빈 문자열)",
+        "fetched_at": "수집 시각(TIMESTAMP)"
       }
     },
     "play_by_play": {
