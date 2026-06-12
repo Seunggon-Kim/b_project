@@ -282,15 +282,20 @@ def scrape_player_info(driver, player_id):
 
 
 def get_existing_player_ids():
-    """DB에서 기존 player_id 목록 가져오기 (2025 시즌만)"""
+    """DB에서 최신 시즌 통계에 등장한 player_id 목록 가져오기 (시즌 자동 감지)"""
     conn = sqlite3.connect(DB_PATH)
-    
-    # 2025 시즌 타자 통계에서 player_id 가져오기
-    query_batter = "SELECT DISTINCT player_id FROM kbo_official_batter_stats WHERE season = 2025"
+
+    # 최신 시즌 자동 감지 (하드코딩 시 새 시즌 신규 선수가 영구 누락됨)
+    season_df = pd.read_sql_query(
+        "SELECT MAX(s) AS s FROM ("
+        "SELECT MAX(season) AS s FROM kbo_official_batter_stats "
+        "UNION ALL SELECT MAX(season) FROM kbo_official_pitcher_stats)", conn)
+    season = int(season_df['s'][0])
+
+    query_batter = f"SELECT DISTINCT player_id FROM kbo_official_batter_stats WHERE season = {season}"
     df_batter = pd.read_sql_query(query_batter, conn)
-    
-    # 2025 시즌 투수 통계에서 player_id 가져오기
-    query_pitcher = "SELECT DISTINCT player_id FROM kbo_official_pitcher_stats WHERE season = 2025"
+
+    query_pitcher = f"SELECT DISTINCT player_id FROM kbo_official_pitcher_stats WHERE season = {season}"
     df_pitcher = pd.read_sql_query(query_pitcher, conn)
     
     conn.close()
@@ -311,12 +316,29 @@ def save_to_db(player_data_list):
     
     for player in player_data_list:
         try:
+            # UPSERT: REPLACE는 행을 삭제 후 재삽입해 team_id·created_at이 NULL로 날아가므로 금지
             cur.execute("""
-                INSERT OR REPLACE INTO players (
+                INSERT INTO players (
                     player_id, player_name, back_number, position, throw, bat,
                     birthday, height, weight, career, draft_year, draft_order,
                     signing_bonus, salary, image_url, updated_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(player_id) DO UPDATE SET
+                    player_name = excluded.player_name,
+                    back_number = excluded.back_number,
+                    position = excluded.position,
+                    throw = excluded.throw,
+                    bat = excluded.bat,
+                    birthday = excluded.birthday,
+                    height = excluded.height,
+                    weight = excluded.weight,
+                    career = excluded.career,
+                    draft_year = excluded.draft_year,
+                    draft_order = excluded.draft_order,
+                    signing_bonus = excluded.signing_bonus,
+                    salary = excluded.salary,
+                    image_url = excluded.image_url,
+                    updated_at = CURRENT_TIMESTAMP
             """, (
                 player.get('player_id'),
                 player.get('player_name'),

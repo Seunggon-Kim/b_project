@@ -33,6 +33,7 @@ SIGNALS = {
     "park_factors":    ["/tmp/park_factors_pipeline.log"],
     "futures":         ["/tmp/futures_update.log"],
     "player_info":     ["/tmp/monthly_player_full.log"],
+    "registry_sync":   ["/tmp/player_registry_sync.log"],
 }
 
 
