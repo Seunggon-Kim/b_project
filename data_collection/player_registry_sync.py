@@ -84,6 +84,15 @@ def _norm_back(v):
     return int(s) if s.isdigit() else None
 
 
+def _soup(html):
+    """KBO 페이지는 IE 조건부 주석 때문에 표준 html.parser가 문서 대부분을 버린다
+    (태그 36개만 파싱되는 침묵 실패) — lxml을 우선 사용한다."""
+    try:
+        return BeautifulSoup(html, "lxml")
+    except Exception:
+        return BeautifulSoup(html, "html.parser")
+
+
 # ──────────────────────────── HTTP ────────────────────────────
 
 def _get(session, url, **kw):
@@ -134,7 +143,7 @@ def scrape_player_profile(session, player_id):
         r = _get(session, f"{BASE}/Record/Player/{kind}/Basic.aspx?playerId={player_id}")
         if r is None:
             continue
-        soup = BeautifulSoup(r.text, "html.parser")
+        soup = _soup(r.text)
 
         def lbl(name):
             el = soup.find(id=PROFILE_PREFIX + name)
@@ -200,7 +209,7 @@ def fetch_register_all(session):
     r = _get(session, f"{BASE}/Player/RegisterAll.aspx")
     if r is None:
         return []
-    soup = BeautifulSoup(r.text, "html.parser")
+    soup = _soup(r.text)
     table = soup.find("table", class_="tData")
     body = table.find("tbody") if table else None
     if body is None:
