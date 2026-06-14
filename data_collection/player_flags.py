@@ -82,6 +82,12 @@ def classify_player(player_id, career, season=2026):
     if pid in KOREAN_OVERRIDES:
         return ("대한민국", 0, "국내")
 
+    # 1.5) career 가 국가명으로 시작해도 '초'(초등학교)가 있으면 어린 시절 해외 수학 후
+    #      국내에서 육성된 한국 선수다 (예: 유민상 '미국 윌리캐넌초-잠신중-서울고-연세대').
+    #      KBO 외국인 선수 career 는 초등학교를 표기하지 않으므로 '초' 는 국내 선수 신호.
+    if nat and "초" in (career or ""):
+        return ("대한민국", 0, "국내")
+
     # 2) 현 시즌 아시아쿼터 보유자 (외국인의 하위 분류)
     if pid in quota:
         return (nat or quota[pid].get("nationality"), 1, "아시아쿼터")
