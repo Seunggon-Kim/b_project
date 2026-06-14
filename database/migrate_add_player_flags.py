@@ -45,7 +45,7 @@ def ensure_columns(con):
 
 
 def main(db_path=DEFAULT_DB):
-    con = sqlite3.connect(db_path)
+    con = sqlite3.connect(db_path, timeout=60)  # cron 겹침 시 lock 회피
     try:
         added = ensure_columns(con)
         print(f"[migrate] DB: {db_path}")

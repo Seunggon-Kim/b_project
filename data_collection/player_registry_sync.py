@@ -876,19 +876,21 @@ def refresh_is_active(con, session=None, dry_run=False):
                             [(pid,) for pid in rostered])
         # 비현역 표시: 성공한 팀 소속인데 로스터에 없는 선수만 0으로
         #   (실패한 팀은 제외해 일시 장애가 대량 방출로 오반영되지 않게 한다)
+        #   rostered 를 SQL IN-list 로 인라인하면 구버전 sqlite 변수 한도(999)를 넘을 수
+        #   있어, 후보를 파이썬에서 걸러 executemany 로 처리한다(team IN-list 10개는 안전).
         ph_teams = ",".join("?" * len(teams_scraped))
-        params = list(teams_scraped)
-        if rostered:
-            ph_ids = ",".join("?" * len(rostered))
-            con.execute(
-                f"UPDATE players SET is_active=0 "
-                f"WHERE team_id IN ({ph_teams}) AND player_id NOT IN ({ph_ids})",
-                params + list(rostered))
-        else:
-            con.execute(
-                f"UPDATE players SET is_active=0 WHERE team_id IN ({ph_teams})", params)
+        cand = [r[0] for r in con.execute(
+            f"SELECT player_id FROM players WHERE team_id IN ({ph_teams})",
+            list(teams_scraped))]
+        inactive = [(pid,) for pid in cand if pid not in rostered]
+        if inactive:
+            con.executemany("UPDATE players SET is_active=0 WHERE player_id=?", inactive)
         con.commit()
 
+    # 부분 실패(일부 팀만 수집)면 실패 팀 선수의 is_active 가 갱신되지 않으므로 경고
+    if len(teams_scraped) < len(TEAM_CODES):
+        logger.warning(f"[active] 로스터 부분 실패 {len(teams_scraped)}/{len(TEAM_CODES)} 팀 — "
+                       f"실패 팀 선수 is_active 미갱신(NULL/기존값 유지). 다음 실행에서 복구됨")
     logger.info(f"[active] 현역 {len(rostered)}명 / 스크레이프 성공 팀 {len(teams_scraped)} "
                 f"/ dry_run={dry_run}")
     return len(rostered)

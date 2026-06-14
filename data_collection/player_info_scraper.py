@@ -17,10 +17,8 @@ from webdriver_manager.chrome import ChromeDriverManager
 import pandas as pd
 import sqlite3
 
-# 분류 플래그(국적/외국인/아시아쿼터) 도출은 단일 진실 소스 모듈을 재사용한다.
+# 분류 플래그(국적/외국인/아시아쿼터) 도출 — 단일 진실 소스 모듈 재사용
 import player_flags as pf
-
-# 분류 시즌 (아시아쿼터 보유자 시드 기준 — backfill_player_flags 와 동일)
 CLASSIFY_SEASON = 2026
 
 # 로깅 설정
@@ -334,7 +332,6 @@ def save_to_db(player_data_list):
     
     for player in player_data_list:
         try:
-            # 기본 UPSERT (플래그 컬럼 미포함) — 마이그레이션 전에도 안전하게 동작
             # UPSERT: REPLACE는 행을 삭제 후 재삽입해 team_id·created_at이 NULL로 날아가므로 금지
             cur.execute("""
                 INSERT INTO players (
@@ -373,7 +370,7 @@ def save_to_db(player_data_list):
                 player.get('draft_order'),
                 player.get('signing_bonus'),
                 player.get('salary'),
-                player.get('image_url'),
+                player.get('image_url')
             ))
             # 분류 플래그는 컬럼이 마이그레이션된 뒤에만 기록 (career·시드 기반 결정적 도출)
             if _flag_cols_exist(cur):

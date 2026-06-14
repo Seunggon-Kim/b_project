@@ -60,7 +60,10 @@ def _set_is_active(con, dry):
         import player_registry_sync as prs
         if hasattr(prs, "refresh_is_active"):
             n = prs.refresh_is_active(con, dry_run=dry)
-            return ("roster_scrape", n)
+            # n==0 은 로스터 스크레이프 전면 실패(0팀)이므로 성공으로 보지 않고 프록시 폴백
+            if n and n > 0:
+                return ("roster_scrape", n)
+            print("[backfill] refresh_is_active 0명 반환 → 로스터 스크레이프 전면 실패로 간주, DB 프록시 폴백")
     except Exception as e:  # noqa: BLE001
         print(f"[backfill] refresh_is_active 사용 불가 → DB 프록시 폴백 ({e})")
     # 2순위: DB 프록시
@@ -74,7 +77,8 @@ def _set_is_active(con, dry):
 
 
 def main(db_path=DEFAULT_DB, dry=False):
-    con = sqlite3.connect(db_path)
+    # timeout: 05:40 cron 등과 겹쳐도 'database is locked' 로 즉시 죽지 않게 여유
+    con = sqlite3.connect(db_path, timeout=60)
     try:
         added = ensure_columns(con)
         print(f"[backfill] DB: {db_path} | 컬럼 추가: {added or '이미 적용'} | dry_run={dry}")
