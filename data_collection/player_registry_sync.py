@@ -885,6 +885,14 @@ def refresh_is_active(con, session=None, dry_run=False):
         inactive = [(pid,) for pid in cand if pid not in rostered]
         if inactive:
             con.executemany("UPDATE players SET is_active=0 WHERE player_id=?", inactive)
+        # KBO 이탈(해체구단·현 10구단 외·소속없음) 선수 중 미정(NULL)은 비현역 0으로 확정
+        # ("KBO를 떠나면 비현역" — 전 구단 스크레이프 성공 시에만 수행)
+        cur_teams = list(TEAM_CODES.values())
+        ph_cur = ",".join("?" * len(cur_teams))
+        con.execute(
+            f"UPDATE players SET is_active=0 "
+            f"WHERE is_active IS NULL AND (team_id IS NULL OR team_id NOT IN ({ph_cur}))",
+            cur_teams)
         con.commit()
 
     # 부분 실패(일부 팀만 수집)면 실패 팀 선수의 is_active 가 갱신되지 않으므로 경고
