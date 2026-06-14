@@ -17,6 +17,12 @@ from webdriver_manager.chrome import ChromeDriverManager
 import pandas as pd
 import sqlite3
 
+# 분류 플래그(국적/외국인/아시아쿼터) 도출은 단일 진실 소스 모듈을 재사용한다.
+import player_flags as pf
+
+# 분류 시즌 (아시아쿼터 보유자 시드 기준 — backfill_player_flags 와 동일)
+CLASSIFY_SEASON = 2026
+
 # 로깅 설정
 PROJECT_ROOT = Path(__file__).parent.parent
 LOG_DIR = PROJECT_ROOT / 'logs'
@@ -316,13 +322,18 @@ def save_to_db(player_data_list):
     
     for player in player_data_list:
         try:
+            # nationality/player_type/is_foreign 은 career·시드에서 결정적으로 도출 → 직접 덮어씀
+            # (is_active 는 로스터 기준이므로 여기서 건드리지 않음)
+            nat, isf, ptype = pf.classify_player(
+                player.get('player_id'), player.get('career'), CLASSIFY_SEASON)
             # UPSERT: REPLACE는 행을 삭제 후 재삽입해 team_id·created_at이 NULL로 날아가므로 금지
             cur.execute("""
                 INSERT INTO players (
                     player_id, player_name, back_number, position, throw, bat,
                     birthday, height, weight, career, draft_year, draft_order,
-                    signing_bonus, salary, image_url, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    signing_bonus, salary, image_url,
+                    nationality, player_type, is_foreign, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(player_id) DO UPDATE SET
                     player_name = excluded.player_name,
                     back_number = excluded.back_number,
@@ -338,6 +349,9 @@ def save_to_db(player_data_list):
                     signing_bonus = excluded.signing_bonus,
                     salary = excluded.salary,
                     image_url = excluded.image_url,
+                    nationality = excluded.nationality,
+                    player_type = excluded.player_type,
+                    is_foreign = excluded.is_foreign,
                     updated_at = CURRENT_TIMESTAMP
             """, (
                 player.get('player_id'),
@@ -354,7 +368,10 @@ def save_to_db(player_data_list):
                 player.get('draft_order'),
                 player.get('signing_bonus'),
                 player.get('salary'),
-                player.get('image_url')
+                player.get('image_url'),
+                nat,
+                ptype,
+                isf
             ))
         except Exception as e:
             logger.error(f"DB 저장 오류 ({player.get('player_id')}): {e}")

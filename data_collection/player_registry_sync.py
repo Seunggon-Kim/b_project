@@ -49,6 +49,12 @@ from player_info_scraper import (
     parse_position,
 )
 
+# 분류 플래그(국적/외국인/아시아쿼터) 도출은 단일 진실 소스 모듈을 재사용한다.
+import player_flags as pf
+
+# 분류 시즌 (아시아쿼터 보유자 시드 기준 — backfill_player_flags 와 동일)
+CLASSIFY_SEASON = 2026
+
 PROJECT_ROOT = Path(__file__).parent.parent
 DB_PATH = PROJECT_ROOT / "database" / "kbo_stats.db"
 
@@ -400,12 +406,20 @@ def unstore_move(con, e):
 
 
 def upsert_player(con, info, team_id):
-    """players UPSERT. None 필드는 기존 값을 보존한다(미상으로 덮지 않음)."""
+    """players UPSERT. None 필드는 기존 값을 보존한다(미상으로 덮지 않음).
+
+    nationality/player_type/is_foreign 은 career·시드에서 결정적으로 도출되므로
+    COALESCE 없이 직접 덮어쓴다(career 가 바뀌면 분류도 따라가야 함).
+    is_active(현역)는 로스터 기준이므로 여기서 건드리지 않는다.
+    """
+    nat, isf, ptype = pf.classify_player(info["player_id"], info.get("career"),
+                                         CLASSIFY_SEASON)
     con.execute("""
         INSERT INTO players (player_id, player_name, team_id, back_number, position, throw, bat,
                              birthday, height, weight, career, draft_year, draft_order,
-                             signing_bonus, salary, image_url, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                             signing_bonus, salary, image_url,
+                             nationality, player_type, is_foreign, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(player_id) DO UPDATE SET
             player_name = excluded.player_name,
             team_id = COALESCE(excluded.team_id, players.team_id),
@@ -422,11 +436,15 @@ def upsert_player(con, info, team_id):
             signing_bonus = COALESCE(excluded.signing_bonus, players.signing_bonus),
             salary = COALESCE(excluded.salary, players.salary),
             image_url = COALESCE(excluded.image_url, players.image_url),
+            nationality = excluded.nationality,
+            player_type = excluded.player_type,
+            is_foreign = excluded.is_foreign,
             updated_at = CURRENT_TIMESTAMP
     """, (info["player_id"], info["player_name"], team_id, info["back_number"],
           info["position"], info["throw"], info["bat"], info["birthday"],
           info["height"], info["weight"], info["career"], info["draft_year"],
-          info["draft_order"], info["signing_bonus"], info["salary"], info["image_url"]))
+          info["draft_order"], info["signing_bonus"], info["salary"], info["image_url"],
+          nat, ptype, isf))
 
 
 def seed_history(con, info, team_id, src, valid_from=None):
@@ -804,6 +822,56 @@ def sync_register_all(con, session):
     return stats
 
 
+def refresh_is_active(con, session=None, dry_run=False):
+    """현 로스터 기준으로 players.is_active 를 갱신한다 (career 무관, 현역 산출).
+
+    sync_team_rosters 와 동일한 로스터 수집 경로(fetch_team_roster)를 재사용해
+    10개 구단 소속선수 명단을 긁는다.
+      - 로스터에 잡힌 player_id → is_active=1
+      - 스크레이프에 성공한 팀(team_id 기준)에 속하지만 로스터에 없는 선수 → is_active=0
+      - 스크레이프 실패 팀의 선수는 건드리지 않는다(0으로 오방출 방지)
+    dry_run 이면 UPDATE 없이 현역 수만 집계한다. 반환: 현역(=1 대상) 수.
+    """
+    if session is None:
+        session = make_session()
+
+    rostered = set()          # 현재 로스터에 잡힌 전체 player_id
+    teams_scraped = set()     # 스크레이프에 성공한 team_id(label)
+    for code, label in TEAM_CODES.items():
+        roster = fetch_team_roster(session, code)
+        if not roster:
+            logger.warning(f"  is_active: 로스터 수집 실패/0건 — {label}({code})")
+            continue
+        teams_scraped.add(label)
+        for p in roster:
+            rostered.add(p["player_id"])
+        time.sleep(0.5)
+
+    if not dry_run and teams_scraped:
+        # 현역 표시: 로스터에 잡힌 선수
+        if rostered:
+            con.executemany("UPDATE players SET is_active=1 WHERE player_id=?",
+                            [(pid,) for pid in rostered])
+        # 비현역 표시: 성공한 팀 소속인데 로스터에 없는 선수만 0으로
+        #   (실패한 팀은 제외해 일시 장애가 대량 방출로 오반영되지 않게 한다)
+        ph_teams = ",".join("?" * len(teams_scraped))
+        params = list(teams_scraped)
+        if rostered:
+            ph_ids = ",".join("?" * len(rostered))
+            con.execute(
+                f"UPDATE players SET is_active=0 "
+                f"WHERE team_id IN ({ph_teams}) AND player_id NOT IN ({ph_ids})",
+                params + list(rostered))
+        else:
+            con.execute(
+                f"UPDATE players SET is_active=0 WHERE team_id IN ({ph_teams})", params)
+        con.commit()
+
+    logger.info(f"[active] 현역 {len(rostered)}명 / 스크레이프 성공 팀 {len(teams_scraped)} "
+                f"/ dry_run={dry_run}")
+    return len(rostered)
+
+
 def main():
     ap = argparse.ArgumentParser(description="선수 정보 레지스트리 동기화")
     ap.add_argument("--full", action="store_true",
@@ -825,6 +893,11 @@ def main():
                 step()
             except Exception:
                 logger.exception("단계 실패 — 다음 단계 계속")
+        # 로스터 동기화 뒤 현역 플래그 갱신 (실패해도 전체 동기화는 중단하지 않음)
+        try:
+            refresh_is_active(con, session)
+        except Exception:
+            logger.exception("is_active 갱신 실패 — 무시하고 종료")
     finally:
         con.close()
     logger.info("=== player_registry_sync 완료 ===")

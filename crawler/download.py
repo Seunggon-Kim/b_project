@@ -7,6 +7,10 @@ from bs4 import BeautifulSoup
 
 from game_parse import game_status
 
+# 경기 fetch 사이 대기(초). 대량 백필 시 Naver rate-limit 완화용.
+# 일별 단일 경기 경로에서는 사실상 영향 없음.
+FETCH_SLEEP_SEC = 0.4
+
 regular_start = {
     '3333': '0101', # semi-playoff
     '4444': '0101', # wildcard
@@ -187,7 +191,7 @@ def get_game_data(game_id):
         try:
             js = json.loads(relay_json)
             relay_response.close()
-        except JSONDecodeError:
+        except json.JSONDecodeError:
             relay_response.close()
             return [None, None, 'got no valid data\n']
 
@@ -225,7 +229,7 @@ def get_game_data(game_id):
             try:
                 js = json.loads(relay_json)
                 relay_response.close()
-            except JSONDecodeError:
+            except json.JSONDecodeError:
                 relay_inn_response.close()
                 return [None, None, 'got no valid data\n']
 
@@ -323,7 +327,7 @@ def get_game_data(game_id):
                         oldjs = oldjs[1:]
                     try:
                         cont = json.loads(oldjs)
-                    except JSONDecodeError:
+                    except json.JSONDecodeError:
                         return [None, None, f'JSONDecodeError - gameID {game_id}\n']
                     break
 
@@ -919,6 +923,7 @@ def download_pbp_files(start_date, end_date, playoff=False,
     skipped = 0
     broken = 0
     done = 0
+    failed = 0  # fetch/parse 중 예외로 건너뛴 경기 수 (대량 백필 중 단일 경기 실패가 배치 전체를 중단시키지 않도록)
     start_time = time.time()
     get_data_time = 0
     gid = None
@@ -969,63 +974,77 @@ def download_pbp_files(start_date, end_date, playoff=False,
 
             ptime = time.time()
             source_path = save_path / str(gid_year) / 'source'
-            if (source_path / f'{gid_for_save}_pitching.csv').exists() &\
-                (source_path / f'{gid_for_save}_batting.csv').exists() &\
-                (source_path / f'{gid_for_save}_relay.csv').exists():
-                game_data_dfs = []
-                try:
-                    game_data_dfs.append(pd.read_csv(str(source_path / f'{gid_for_save}_pitching.csv'), encoding='cp949'))
-                except:
-                    game_data_dfs.append(pd.read_csv(str(source_path / f'{gid_for_save}_pitching.csv'), encoding='utf-8'))
-                try:
-                    game_data_dfs.append(pd.read_csv(str(source_path / f'{gid_for_save}_batting.csv'), encoding='cp949'))
-                except:
-                    game_data_dfs.append(pd.read_csv(str(source_path / f'{gid_for_save}_batting.csv'), encoding='utf-8'))
-                try:
-                    game_data_dfs.append(pd.read_csv(str(source_path / f'{gid_for_save}_relay.csv'), encoding='cp949'))
-                except:
-                    game_data_dfs.append(pd.read_csv(str(source_path / f'{gid_for_save}_relay.csv'), encoding='utf-8'))
-            else:
-                game_data_dfs = get_game_data_renewed(gid)
-
-            if game_data_dfs[0] is None:
-                logfile.write(game_data_dfs[-1])
-                if debug_mode == True:
-                    print(game_data_dfs[-1])
-                exit(1)
-
-            if save_source == True:
-                if not source_path.is_dir():
+            # 단일 경기 fetch/parse 실패가 배치 전체를 죽이지 않도록 try로 감싸 로그 후 continue.
+            # (이미 다운로드된 파일 SKIP은 위에서 처리되어 이 블록을 타지 않음 → resumable 유지)
+            try:
+                if (source_path / f'{gid_for_save}_pitching.csv').exists() &\
+                    (source_path / f'{gid_for_save}_batting.csv').exists() &\
+                    (source_path / f'{gid_for_save}_relay.csv').exists():
+                    game_data_dfs = []
                     try:
-                        source_path.mkdir()
-                    except FileExistsError:
-                        source_path = save_path / str(gid_year)
-                        logfile.write(f'NOTE: {gid_year}/source exists but not a directory.')
-                        logfile.write(f'source files will be saved in {gid_year} instead.')
+                        game_data_dfs.append(pd.read_csv(str(source_path / f'{gid_for_save}_pitching.csv'), encoding='cp949'))
+                    except:
+                        game_data_dfs.append(pd.read_csv(str(source_path / f'{gid_for_save}_pitching.csv'), encoding='utf-8'))
+                    try:
+                        game_data_dfs.append(pd.read_csv(str(source_path / f'{gid_for_save}_batting.csv'), encoding='cp949'))
+                    except:
+                        game_data_dfs.append(pd.read_csv(str(source_path / f'{gid_for_save}_batting.csv'), encoding='utf-8'))
+                    try:
+                        game_data_dfs.append(pd.read_csv(str(source_path / f'{gid_for_save}_relay.csv'), encoding='cp949'))
+                    except:
+                        game_data_dfs.append(pd.read_csv(str(source_path / f'{gid_for_save}_relay.csv'), encoding='utf-8'))
+                else:
+                    game_data_dfs = get_game_data_renewed(gid)
+                    # Naver rate-limit 완화용 폴라이트 throttle (네트워크 fetch 직후에만)
+                    time.sleep(FETCH_SLEEP_SEC)
 
-                enc = 'cp949'
-                if not (source_path / f'{gid_for_save}_pitching.csv').exists():
-                    game_data_dfs[0].to_csv(str(source_path / f'{gid_for_save}_pitching.csv'),
-                                            index=False, encoding=enc, errors='replace')
-                if not (source_path / f'{gid_for_save}_batting.csv').exists():
-                    game_data_dfs[1].to_csv(str(source_path / f'{gid_for_save}_batting.csv'),
-                                            index=False, encoding=enc, errors='replace')
-                if not (source_path / f'{gid_for_save}_relay.csv').exists():
-                    game_data_dfs[2].to_csv(str(source_path / f'{gid_for_save}_relay.csv'),
-                                            index=False, encoding=enc, errors='replace')
+                # 데이터 없음(None): 과거/취소 경기 등. exit(1) 대신 skip+log+카운트 후 다음 경기로.
+                if game_data_dfs[0] is None:
+                    logfile.write(f'SKIP(no data) gameID {gid} : {game_data_dfs[-1]}')
+                    if debug_mode == True:
+                        print(f'SKIP(no data) gameID {gid} : {game_data_dfs[-1]}')
+                    broken += 1
+                    continue
 
-            get_data_time += time.time() - ptime
-            if game_data_dfs is not None:
-                gs = game_status()
-                gs.load(gid, game_data_dfs[0], game_data_dfs[1], game_data_dfs[2], log_file=logfile)
-                parse = gs.parse_game(debug_mode)
-                gs.save_game(save_path / str(gid_year))
-                if parse == True:
-                    done += 1
+                if save_source == True:
+                    if not source_path.is_dir():
+                        try:
+                            source_path.mkdir()
+                        except FileExistsError:
+                            source_path = save_path / str(gid_year)
+                            logfile.write(f'NOTE: {gid_year}/source exists but not a directory.')
+                            logfile.write(f'source files will be saved in {gid_year} instead.')
+
+                    enc = 'cp949'
+                    if not (source_path / f'{gid_for_save}_pitching.csv').exists():
+                        game_data_dfs[0].to_csv(str(source_path / f'{gid_for_save}_pitching.csv'),
+                                                index=False, encoding=enc, errors='replace')
+                    if not (source_path / f'{gid_for_save}_batting.csv').exists():
+                        game_data_dfs[1].to_csv(str(source_path / f'{gid_for_save}_batting.csv'),
+                                                index=False, encoding=enc, errors='replace')
+                    if not (source_path / f'{gid_for_save}_relay.csv').exists():
+                        game_data_dfs[2].to_csv(str(source_path / f'{gid_for_save}_relay.csv'),
+                                                index=False, encoding=enc, errors='replace')
+
+                get_data_time += time.time() - ptime
+                if game_data_dfs is not None:
+                    gs = game_status()
+                    gs.load(gid, game_data_dfs[0], game_data_dfs[1], game_data_dfs[2], log_file=logfile)
+                    parse = gs.parse_game(debug_mode)
+                    gs.save_game(save_path / str(gid_year))
+                    if parse == True:
+                        done += 1
+                    else:
+                        broken += 1
                 else:
                     broken += 1
-            else:
-                broken += 1
+                    continue
+            except Exception as e:
+                # 단일 경기 실패 로그 후 다음 경기로 진행(배치 중단 방지)
+                failed += 1
+                logfile.write(f'FAILED gameID {gid} : {repr(e)}\n')
+                if debug_mode == True:
+                    print(f'FAILED gameID {gid} : {repr(e)}')
                 continue
 
         end_time = time.time()
@@ -1036,12 +1055,17 @@ def download_pbp_files(start_date, end_date, playoff=False,
         logfile.write(f'Successfully downloaded games : {done}\n')
         logfile.write(f'Skipped games(already exists) : {skipped}\n')
         logfile.write(f'Broken games(bad data) : {broken}\n')
+        logfile.write(f'Failed games(exception, skipped) : {failed}\n')
         logfile.write('====================================\n')
         if debug_mode == True:
             logfile.write(f'Elapsed {get_game_id_time:.2f} sec in get_game_ids\n')
             logfile.write(f'Elapsed {(get_data_time):.2f} sec in get_game_data\n')
             logfile.write(f'Elapsed {(parse_time):.2f} sec in parse_game\n')
         logfile.write(f'Total {(parse_time+get_game_id_time+get_data_time):.2f} sec elapsed with {len(game_ids)} games\n')
+
+        # 콘솔 요약(대량 백필 모니터링용): 성공/스킵/불량/예외 카운트
+        print(f'[download_pbp_files] done={done} skipped={skipped} '
+              f'broken={broken} failed={failed} total={len(game_ids)}')
 
         if logfile.closed == False:
             logfile.close()
