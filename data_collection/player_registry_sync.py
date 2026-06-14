@@ -405,21 +405,35 @@ def unstore_move(con, e):
     con.commit()
 
 
+_FLAG_COLS_CACHE = None
+
+
+def _flag_cols_exist(con):
+    """players 에 분류 플래그 컬럼(nationality/player_type/is_foreign)이 있는지 (캐시)."""
+    global _FLAG_COLS_CACHE
+    if _FLAG_COLS_CACHE is None:
+        cols = {r[1] for r in con.execute("PRAGMA table_info(players)")}
+        _FLAG_COLS_CACHE = {"nationality", "player_type", "is_foreign"} <= cols
+    return _FLAG_COLS_CACHE
+
+
+def _is_active_col_exists(con):
+    return "is_active" in {r[1] for r in con.execute("PRAGMA table_info(players)")}
+
+
 def upsert_player(con, info, team_id):
     """players UPSERT. None 필드는 기존 값을 보존한다(미상으로 덮지 않음).
 
-    nationality/player_type/is_foreign 은 career·시드에서 결정적으로 도출되므로
-    COALESCE 없이 직접 덮어쓴다(career 가 바뀌면 분류도 따라가야 함).
-    is_active(현역)는 로스터 기준이므로 여기서 건드리지 않는다.
+    분류 플래그(nationality/player_type/is_foreign)는 마이그레이션으로 컬럼이
+    생성된 뒤에만 별도 UPDATE 로 기록한다. 컬럼이 없으면 기본 UPSERT 만 수행하므로
+    브랜치를 먼저 배포해도 cron 이 깨지지 않고, 검토 전 backfill 전까지 DB 에
+    플래그가 자동 반영되지 않는다. is_active(현역)는 refresh_is_active 에서만 다룬다.
     """
-    nat, isf, ptype = pf.classify_player(info["player_id"], info.get("career"),
-                                         CLASSIFY_SEASON)
     con.execute("""
         INSERT INTO players (player_id, player_name, team_id, back_number, position, throw, bat,
                              birthday, height, weight, career, draft_year, draft_order,
-                             signing_bonus, salary, image_url,
-                             nationality, player_type, is_foreign, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                             signing_bonus, salary, image_url, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(player_id) DO UPDATE SET
             player_name = excluded.player_name,
             team_id = COALESCE(excluded.team_id, players.team_id),
@@ -436,15 +450,19 @@ def upsert_player(con, info, team_id):
             signing_bonus = COALESCE(excluded.signing_bonus, players.signing_bonus),
             salary = COALESCE(excluded.salary, players.salary),
             image_url = COALESCE(excluded.image_url, players.image_url),
-            nationality = excluded.nationality,
-            player_type = excluded.player_type,
-            is_foreign = excluded.is_foreign,
             updated_at = CURRENT_TIMESTAMP
     """, (info["player_id"], info["player_name"], team_id, info["back_number"],
           info["position"], info["throw"], info["bat"], info["birthday"],
           info["height"], info["weight"], info["career"], info["draft_year"],
-          info["draft_order"], info["signing_bonus"], info["salary"], info["image_url"],
-          nat, ptype, isf))
+          info["draft_order"], info["signing_bonus"], info["salary"], info["image_url"]))
+
+    # 분류 플래그는 컬럼이 마이그레이션된 뒤에만 기록 (career·시드에서 결정적 도출 → 직접 덮어씀)
+    if _flag_cols_exist(con):
+        nat, isf, ptype = pf.classify_player(info["player_id"], info.get("career"),
+                                             CLASSIFY_SEASON)
+        con.execute(
+            "UPDATE players SET nationality=?, player_type=?, is_foreign=? WHERE player_id=?",
+            (nat, ptype, isf, info["player_id"]))
 
 
 def seed_history(con, info, team_id, src, valid_from=None):
@@ -832,6 +850,10 @@ def refresh_is_active(con, session=None, dry_run=False):
       - 스크레이프 실패 팀의 선수는 건드리지 않는다(0으로 오방출 방지)
     dry_run 이면 UPDATE 없이 현역 수만 집계한다. 반환: 현역(=1 대상) 수.
     """
+    # is_active 컬럼 미생성(마이그레이션 전) 시 스크레이프조차 하지 않고 no-op
+    if not _is_active_col_exists(con):
+        logger.info("[active] is_active 컬럼 없음 — 마이그레이션 전이므로 건너뜀")
+        return 0
     if session is None:
         session = make_session()
 

@@ -311,6 +311,18 @@ def get_existing_player_ids():
     return sorted(list(all_ids))
 
 
+_FLAG_COLS_CACHE = None
+
+
+def _flag_cols_exist(cur):
+    """players 에 분류 플래그 컬럼이 있는지 (캐시). 마이그레이션 전이면 False."""
+    global _FLAG_COLS_CACHE
+    if _FLAG_COLS_CACHE is None:
+        cols = {r[1] for r in cur.execute("PRAGMA table_info(players)")}
+        _FLAG_COLS_CACHE = {"nationality", "player_type", "is_foreign"} <= cols
+    return _FLAG_COLS_CACHE
+
+
 def save_to_db(player_data_list):
     """선수 정보를 DB에 저장 (UPSERT)"""
     if not player_data_list:
@@ -322,18 +334,14 @@ def save_to_db(player_data_list):
     
     for player in player_data_list:
         try:
-            # nationality/player_type/is_foreign 은 career·시드에서 결정적으로 도출 → 직접 덮어씀
-            # (is_active 는 로스터 기준이므로 여기서 건드리지 않음)
-            nat, isf, ptype = pf.classify_player(
-                player.get('player_id'), player.get('career'), CLASSIFY_SEASON)
+            # 기본 UPSERT (플래그 컬럼 미포함) — 마이그레이션 전에도 안전하게 동작
             # UPSERT: REPLACE는 행을 삭제 후 재삽입해 team_id·created_at이 NULL로 날아가므로 금지
             cur.execute("""
                 INSERT INTO players (
                     player_id, player_name, back_number, position, throw, bat,
                     birthday, height, weight, career, draft_year, draft_order,
-                    signing_bonus, salary, image_url,
-                    nationality, player_type, is_foreign, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    signing_bonus, salary, image_url, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(player_id) DO UPDATE SET
                     player_name = excluded.player_name,
                     back_number = excluded.back_number,
@@ -349,9 +357,6 @@ def save_to_db(player_data_list):
                     signing_bonus = excluded.signing_bonus,
                     salary = excluded.salary,
                     image_url = excluded.image_url,
-                    nationality = excluded.nationality,
-                    player_type = excluded.player_type,
-                    is_foreign = excluded.is_foreign,
                     updated_at = CURRENT_TIMESTAMP
             """, (
                 player.get('player_id'),
@@ -369,10 +374,14 @@ def save_to_db(player_data_list):
                 player.get('signing_bonus'),
                 player.get('salary'),
                 player.get('image_url'),
-                nat,
-                ptype,
-                isf
             ))
+            # 분류 플래그는 컬럼이 마이그레이션된 뒤에만 기록 (career·시드 기반 결정적 도출)
+            if _flag_cols_exist(cur):
+                nat, isf, ptype = pf.classify_player(
+                    player.get('player_id'), player.get('career'), CLASSIFY_SEASON)
+                cur.execute(
+                    "UPDATE players SET nationality=?, player_type=?, is_foreign=? WHERE player_id=?",
+                    (nat, ptype, isf, player.get('player_id')))
         except Exception as e:
             logger.error(f"DB 저장 오류 ({player.get('player_id')}): {e}")
     
