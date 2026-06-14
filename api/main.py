@@ -1097,6 +1097,17 @@ async def get_futures_schedule(date: str = None):
             status_info = ("취소" if cancel else inning if live
                            else "종료" if final else "경기예정")
 
+            # 라이브 현재 타석. KBO 스코어보드의 T_P/B_P는 '투수/타자' 고정이 아니라
+            # 공격측 기준 선수(원정=T_P, 홈=B_P)이고, 이닝 초/말(GAME_TB_SC)에 따라
+            # 타자·투수가 뒤바뀐다(초=원정 공격, 말=홈 공격).
+            #   초(T): 타자=T_P(원정), 투수=B_P(홈 수비)
+            #   말(B): 타자=B_P(홈),   투수=T_P(원정 수비)
+            tb = str(g.get("GAME_TB_SC") or "")
+            t_p = (g.get("T_P_NM") or "").strip()
+            b_p = (g.get("B_P_NM") or "").strip()
+            cur_batter = (t_p if tb == "T" else b_p) if live else ""
+            cur_pitcher = (b_p if tb == "T" else t_p) if live else ""
+
             games.append({
                 "gameId": g.get("G_ID"),
                 "time": g.get("G_TM") or "",
@@ -1111,10 +1122,8 @@ async def get_futures_schedule(date: str = None):
                 "winner": winner,
                 "currentInning": inning,
                 "statusInfo": status_info,
-                # 라이브 현재 타석: KBO 퓨처스 피드는 양 팀 투수가 아니라
-                # '현재 투수(T_P)'+'현재 타자(B_P)'만 제공 -> 투수/타자로 정확히 라벨링.
-                "currentPitcher": (g.get("T_P_NM") or "") if live else "",
-                "currentBatter": (g.get("B_P_NM") or "") if live else "",
+                "currentPitcher": cur_pitcher,
+                "currentBatter": cur_batter,
                 "away": {
                     "code": ac,
                     "name": at.get("display_name") or g.get("AWAY_NM") or ac,
