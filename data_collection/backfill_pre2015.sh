@@ -45,15 +45,24 @@ mkdir -p "$LOG_DIR"
 
 echo "===== pre-2015 PBP 백필 시작 $(date) ====="
 
-# 과거 → 최신 (2008 부터 순차). 중간 중단 시 연도 단위로 이어서 재실행 가능.
-for YEAR in 2008 2009 2010 2011 2012 2013 2014; do
+# 과거 → 최신. 중간 중단 시 연도 단위로 이어서 재실행 가능.
+# (2008 은 1차 실행에서 적재 완료 — games 504, PBP ~152k. 재실행 시 2008 추가하면 됨)
+for YEAR in 2009 2010 2011 2012 2013 2014; do
   LOG="$LOG_DIR/backfill_pre2015_${YEAR}.log"
   echo "" | tee -a "$LOG"
   echo "########## ${YEAR} 시즌 PBP 시작 $(date) ##########" | tee -a "$LOG"
 
-  # 1) 크롤링: 정규시즌(-j join) + 포스트시즌(-p). 이미 받은 경기는 크롤러가 SKIP.
+  # 디스크 가드: 여유 600MB 미만이면 중단(풀디스크로 DB 쓰기 중 죽는 사고 방지)
+  FREE_MB=$(df -m / | awk 'NR==2{print $4}')
+  if [ "${FREE_MB:-0}" -lt 600 ]; then
+    echo "⚠️ 디스크 여유 ${FREE_MB}MB < 600MB — 백필 중단(공간 확보 후 재실행)" | tee -a "$LOG"
+    exit 1
+  fi
+
+  # 1) 크롤링: 정규시즌 + 포스트시즌(-p). 이미 받은 경기는 크롤러가 SKIP.
+  #    -j(연도 merged CSV)는 로더가 게임별 CSV만 읽으므로 불필요 → 디스크 절약 위해 제거.
   echo "--- ${YEAR} PBP 크롤링 ---" | tee -a "$LOG"
-  venv/bin/python crawler/pbp.py -f "${YEAR}0101" -t "${YEAR}1231" -j -p -d crawler/save/ 2>&1 \
+  venv/bin/python crawler/pbp.py -f "${YEAR}0101" -t "${YEAR}1231" -p -d crawler/save/ 2>&1 \
     | tee -a "$LOG" || echo "⚠️ ${YEAR} 크롤링 일부 실패(개별 경기 skip 로그 확인)" | tee -a "$LOG"
 
   # 2) 그 해 게임별 CSV → DB idempotent 적재 (daily_kbo_pbp.sh 와 동일 패턴)
@@ -274,7 +283,9 @@ PY
     echo "--- 신규 선수 master 보강 skip (SCRAPE_MISSING 미설정, 기본 OFF) ---" | tee -a "$LOG"
   fi
 
-  echo "########## ${YEAR} 시즌 PBP 완료 $(date) ##########" | tee -a "$LOG"
+  # 디스크 절약: 적재 끝난 해의 CSV 제거 (DB에 들어갔으므로 불필요, 누적/풀디스크 방지)
+  rm -rf "crawler/save/${YEAR}" "crawler/save/${YEAR}.csv"
+  echo "########## ${YEAR} 시즌 PBP 완료 (CSV 정리됨) $(date) ##########" | tee -a "$LOG"
   # Naver rate-limit 완화를 위한 연도 사이 휴지(크롤러 throttle 보완)
   sleep 60
 done
