@@ -40,6 +40,12 @@ batter_result = [
     ['낫아웃 다른주자 수비 실책', '낫아웃 출루', '낫아웃 다른 주자 수비 실책'],
     ['낫아웃 다른주자 수비', '낫아웃 출루', '낫아웃 다른 주자 포스 아웃'],
     ['낫아웃 출루', '낫아웃 다른 주자 수비', '낫아웃 다른 주자 수비'],
+    # 2008/2009 등 과거 시즌은 평범한 낫아웃(드롭 써드 스트라이크) 텍스트가
+    # 공백 없는 '낫아웃'(예: '포수 스트라이크 낫아웃')으로 들어온다. 모던 시즌의
+    # '낫 아웃'(공백)은 위 인덱스(13)에서 이미 매칭되므로 무회귀. 더 구체적인
+    # '낫아웃 X' 변형들이 위에 먼저 와서 우선 매칭되므로, 여기서는 순수 낫아웃만
+    # 삼진으로 처리한다.
+    ['낫아웃', '삼진', '낫아웃 삼진'],
     ['희생플라이 땅볼', '희생플라이', '희생플라이'],
     ['땅볼로 출루', '포스 아웃', '땅볼 아웃'],
     ['땅볼 아웃', '포스 아웃', '땅볼 아웃'],
@@ -93,9 +99,11 @@ def parse_batter_as_runner(text):
 
     before_base = 0
     after_base = None
+    # '몸에 맞'으로 prefix 매칭: 모던('몸에 맞는 볼')과 2008 등 과거('몸에 맞은 볼')
+    # 표기를 모두 포함. '몸에 맞는'을 포함하던 텍스트는 모두 '몸에 맞'도 포함하므로 무회귀.
     if any([s in text for s in ['안타', '1루타', '4구', '볼넷', '출루',
                                 '낫아웃 포일', '낫아웃 폭투', '낫아웃 다른주자',
-                                '몸에 맞는', '실책', '타격방해', '야수선택']]):
+                                '몸에 맞', '실책', '타격방해', '야수선택']]):
         after_base = 1
     elif '2루타' in text:
         after_base = 2
@@ -206,6 +214,12 @@ class game_status:
         self.inn = 0
         self.top_bot = 1 # 0 : 초, 1 : 말
         self.cur_order = 1
+
+        # relay의 homeOrAway 컬럼이 실제로 초/말을 교대로 표시하는지 여부.
+        # 일부 과거 시즌(2008 등)은 모든 row에 동일한 값(예: 항상 1)이 들어 있어
+        # 이닝 교체 신호로 쓸 수 없다. load()에서 판정한다.
+        # 기본 True(=신뢰): 정상 시즌(2010+) 동작을 그대로 유지.
+        self.homeOrAway_reliable = True
 
         # status by pitch, etc.
         self.pitch_number = 0
@@ -342,6 +356,17 @@ class game_status:
         rdf = pd.concat([rdf[rdf.type != 0],
                          rdf[rdf.type == 0].drop_duplicates(['type', 'text'])]).sort_index()
         self.relay_array = rdf.loc[rdf[['textOrder', 'seqno']].drop_duplicates().index][rdf_cols].sort_values(['textOrder', 'seqno']).values
+
+        # homeOrAway 컬럼이 초/말을 실제로 교대 표기하는지 판정.
+        # 2008 등 과거 시즌은 전 row가 동일 값(상수)이라 이닝 교체 신호로 쓸 수 없음.
+        # 단일 값만 존재하면(또는 비어있으면) 신뢰 불가 → type-0 회초/말 헤더에만 의존.
+        # 2010+ 정상 시즌은 두 값(0,1)이 모두 등장하므로 reliable=True로 기존 동작 유지.
+        try:
+            homeoraway_vals = set(int(r[-1]) for r in self.relay_array
+                                  if r[-1] is not None and str(r[-1]) != 'nan')
+            self.homeOrAway_reliable = (len(homeoraway_vals) > 1)
+        except (ValueError, TypeError):
+            self.homeOrAway_reliable = False
 
 
     def convert_row_to_save_format(self,
@@ -1013,7 +1038,15 @@ class game_status:
                     # 버그: 이닝 텍스트 row가 통째로 누락 (20250311HHSK02025)
                     # relay csv에 homeOrAway 컬럼을 추가 (0 초, 1 말)
                     # self의 top_bot 값과 비교해서 다르면 이닝 교체로 간주한다
-                    if homeOrAway != self.top_bot:
+                    #
+                    # 단, 2008 등 과거 시즌은 homeOrAway가 전 row 상수(예: 항상 1)라
+                    # 이닝 교체 신호로 쓸 수 없다. 이때 이 블록을 타면 정상적인 type-0
+                    # 회초/말 헤더가 이미 top_bot을 바꿔둔 상태에서 거짓으로 이닝 교체를
+                    # 감지하거나 '이닝 텍스트 row 누락' assert에 걸린다.
+                    # → homeOrAway가 신뢰 불가일 땐 이 감지를 건너뛰고, 이닝 교체는
+                    #   전적으로 type-0(회초/말) 헤더에만 의존한다(2008/2009은 헤더 정상).
+                    #   homeOrAway가 정상 교대인 시즌(2010+)은 reliable=True라 기존과 동일.
+                    if self.homeOrAway_reliable and (homeOrAway != self.top_bot):
                         if (len(self.print_rows) > 0) & (self.outs < 3):
                             if debug_mode is True:
                                 self.log_text.append('이닝 텍스트 row 누락 의심')
