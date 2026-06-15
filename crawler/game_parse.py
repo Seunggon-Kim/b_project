@@ -951,7 +951,11 @@ class game_status:
                 cur_to = row[0]
                 self.cur_text = row[2]
                 cur_type = row[3]
-                homeOrAway = int(row[-1])
+                # homeOrAway 가 None/NaN(외부 merge 고아행·열화 시즌)일 수 있으므로 가드.
+                # 무조건 int() 하면 한 행 예외로 경기 전체가 broken 처리됨. 미상이면 현재
+                # 반/말(top_bot)로 폴백 — 이 값은 1049행에서 homeOrAway_reliable 일 때만 쓰임.
+                _hoa = row[-1]
+                homeOrAway = int(_hoa) if _hoa is not None and str(_hoa) != "nan" else self.top_bot
 
                 ##############################
                 ###### type에 따라 파싱 ######

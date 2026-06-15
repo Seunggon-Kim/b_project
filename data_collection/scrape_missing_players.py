@@ -80,6 +80,10 @@ def main():
     con = sqlite3.connect(DB, timeout=120)
     session = prs.make_session()
     ok = miss = err = 0
+    consec_miss = 0
+    # 연속 '프로필없음'이 급증하면 KBO rate-limit/IP 차단을 404로 오집계하는 것 — 조용한
+    # 대량 누락을 막기 위해 중단(재실행은 idempotent: 이미 등록된 선수는 자동 제외하고 이어받음).
+    MISS_SPIKE = 40
     for i, pid in enumerate(missing, 1):
         try:
             info = prs.scrape_player_profile(session, pid)
@@ -87,11 +91,18 @@ def main():
                 prs.upsert_player(con, info, None)   # team_id 미상(은퇴 다수) → None
                 con.commit()
                 ok += 1
+                consec_miss = 0
             else:
-                miss += 1   # KBO 프로필 없음(아주 오래된 선수 등)
+                miss += 1   # KBO 프로필 없음(아주 오래된 선수) 또는 차단(구분 불가 → 스파이크로 탐지)
+                consec_miss += 1
         except Exception as e:  # noqa: BLE001
             err += 1
+            consec_miss = 0
             logger.error(f"  {pid}: {e}")
+        if consec_miss >= MISS_SPIKE:
+            logger.error(f"  ⚠️ 연속 프로필없음 {consec_miss}건 — KBO rate-limit/차단 의심으로 중단. "
+                         f"진행 {i}/{len(missing)} (ok={ok} miss={miss}). 잠시 후 재실행하면 이어받습니다.")
+            break
         if i % 50 == 0:
             logger.info(f"  [{i}/{len(missing)}] ok={ok} profile_miss={miss} err={err}")
         time.sleep(0.3)
