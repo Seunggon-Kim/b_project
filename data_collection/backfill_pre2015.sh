@@ -114,7 +114,13 @@ FRANCHISE_TO_TEAM_ID = {
     "KT": "KT",
 }
 
-con = sqlite3.connect(DB)
+# 경량 적재(t3.micro EBS IOPS 한계 회피): WAL + synchronous=NORMAL 으로 커밋당 fsync 를
+# 없애고(checkpoint 에서만 동기화) 디스크 IOPS 폭증을 막는다. + 큰 캐시 + 메모리 temp.
+con = sqlite3.connect(DB, timeout=300)
+con.execute("PRAGMA journal_mode=WAL")
+con.execute("PRAGMA synchronous=NORMAL")
+con.execute("PRAGMA cache_size=-40000")
+con.execute("PRAGMA temp_store=MEMORY")
 cur = con.cursor()
 known_team_ids = {r[0] for r in cur.execute("SELECT team_id FROM teams")}
 
@@ -140,39 +146,35 @@ if not game_csvs:
     con.close()
     raise SystemExit(0)
 
-# 이번 백필에 등장하는 game_date 들을 먼저 일괄 삭제(idempotent).
-# game_date 는 YYYYMMDD 문자열(game_id[:8]). daily 로더와 동일하게 정수로 매칭.
+# 날짜는 파일명(gameID[:8])에서 추출 — CSV 를 미리 전부 읽지 않아 메모리/IO 절약(idempotent).
 dates = set()
-frames = {}
 for f in game_csvs:
     try:
-        df = pd.read_csv(f, encoding="cp949")
-    except Exception:
-        df = pd.read_csv(f, encoding="utf-8")
-    frames[f] = df
-    if "game_date" in df.columns and len(df) > 0:
-        for d in df["game_date"].dropna().unique():
-            try:
-                dates.add(int(str(d)[:8]))
-            except (ValueError, TypeError):
-                pass
-
-deleted = 0
+        dates.add(int(f.stem[:8]))
+    except ValueError:
+        pass
 for d in dates:
     cur.execute("DELETE FROM play_by_play WHERE game_date=?", (d,))
-    deleted += cur.rowcount
-print(f"  {year}: 기존 행 삭제 {deleted} (game_date {len(dates)}개)")
+print(f"  {year}: 기존 행 삭제 대상 game_date {len(dates)}개")
 
 playoff_cut = PLAYOFF_START.get(str(year))
 total = 0
 loaded = 0
 games_upserted = 0
 unresolved = []  # owner 검토용: 매핑 실패 alias 목록
-for f, df in frames.items():
+for f in game_csvs:   # 스트리밍: CSV 를 한 번에 하나씩 읽고 버려 메모리 사용을 억제
+    try:
+        df = pd.read_csv(f, encoding="cp949")
+    except Exception:
+        try:
+            df = pd.read_csv(f, encoding="utf-8")
+        except Exception as e:
+            print(f"    read fail {f.name}: {e}")
+            continue
     if len(df) == 0:
         continue
 
-    # 2-1) play_by_play append (기존 로직 그대로, idempotent: 위에서 DELETE 완료)
+    # 2-1) play_by_play append (idempotent: 위에서 해당 game_date DELETE 완료)
     df.to_sql("play_by_play", con, if_exists="append", index=False)
     total += len(df)
     loaded += 1
@@ -236,8 +238,10 @@ for f, df in frames.items():
         ),
     )
     games_upserted += 1
+    del df   # 메모리 즉시 회수
 
 con.commit()
+con.execute("PRAGMA wal_checkpoint(TRUNCATE)")  # WAL→본DB 반영 후 WAL 비움(디스크 정리)
 
 if unresolved:
     print(f"  ⚠️ {year}: teams 미등록 alias {len(unresolved)}건 — owner 검토 필요:")
@@ -257,6 +261,7 @@ print(
     f"  {year}: {loaded}개 경기, PBP {total}행 적재 / games {games_upserted}건 upsert. "
     f"DB 내 {year} 시즌 PBP 행: {pbp_rows}, games: {games_rows}"
 )
+con.close()
 con.close()
 PY
 
