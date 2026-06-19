@@ -49,6 +49,12 @@ from player_info_scraper import (
     parse_position,
 )
 
+# 분류 플래그(국적/외국인/아시아쿼터) 도출은 단일 진실 소스 모듈을 재사용한다.
+import player_flags as pf
+
+# 분류 시즌 (아시아쿼터 보유자 시드 기준 — backfill_player_flags 와 동일)
+CLASSIFY_SEASON = 2026
+
 PROJECT_ROOT = Path(__file__).parent.parent
 DB_PATH = PROJECT_ROOT / "database" / "kbo_stats.db"
 
@@ -315,7 +321,8 @@ def fetch_team_roster(session, code):
     """선수 검색을 팀 필터로 postback해 구단 소속선수 전체(육성 포함)를 수집.
 
     WebForms 페이지라 매 요청 hidden 필드를 이어받아야 하며,
-    페이지네이션은 ucPager$btnNoN postback으로 순회한다.
+    페이지네이션은 블록당 번호버튼(btnNo1~5) + 다음 블록(btnNext) postback으로 순회한다.
+    (페이지당 20행·블록당 5버튼이라 btnNext 없이는 100명에서 잘린다)
     """
     r = _get(session, f"{BASE}/Player/Search.aspx")
     if r is None:
@@ -328,8 +335,12 @@ def fetch_team_roster(session, code):
         _WF_PREFIX + "txtSearchPlayerName": "",
     })
 
-    out, page = [], 1
-    while page <= 15:
+    # 페이저 컨트롤 id 베이스: '...ucPager_' (btnNo·btnNext 공통 접두)
+    pager_base = _PAGER_ID_PREFIX[:-len("btnNo")]
+
+    out, seen = [], set()
+    page, stalls = 1, 0
+    while page <= 60:  # 안전 상한(팀당 100+명: 20행×다수 페이지 대응)
         resp = None
         for attempt in (1, 2):
             try:
@@ -344,17 +355,43 @@ def fetch_team_roster(session, code):
         if resp is None or resp.status_code != 200:
             break
         soup = _soup(resp.text)
-        out.extend(_parse_roster_rows(soup))
-        page += 1
-        if soup.find("a", id=f"{_PAGER_ID_PREFIX}{page}") is None:
+
+        # 중복 제거하며 누적(블록 이동이 같은 페이지를 되돌려줘도 안전)
+        new = 0
+        for row in _parse_roster_rows(soup):
+            if row["player_id"] not in seen:
+                seen.add(row["player_id"])
+                out.append(row)
+                new += 1
+        # 진척 없음(중복 페이지/막다른 길)이 2회 연속이면 종료
+        stalls = stalls + 1 if new == 0 else 0
+        if stalls >= 2:
             break
+
+        # 다음 페이지 컨트롤:
+        #  1) 현재 블록의 번호 버튼 중 '다음 페이지 번호' 텍스트를 가진 것.
+        #     KBO ucPager는 블록당 btnNo1~5 이고, 블록을 넘기면 같은 id가 다음 번호를
+        #     표시하므로 id가 아니라 '표시 텍스트'로 매칭한다(기존 버그: id==page 가정).
+        #  2) 없으면 다음 블록 버튼(btnNext) — 6페이지 이상으로 넘기는 컨트롤.
+        next_page = page + 1
+        next_target = None
+        for a in soup.find_all("a", id=re.compile(r"ucPager_btnNo\d+$")):
+            if a.get_text(strip=True) == str(next_page):
+                next_target = _WF_PREFIX + "ucPager$" + a["id"][len(pager_base):]
+                break
+        if next_target is None and soup.find("a", id=f"{pager_base}btnNext") is not None:
+            next_target = _WF_PREFIX + "ucPager$btnNext"
+        if next_target is None:
+            break  # 마지막 페이지
+
         fields = _hidden_fields(soup)
         fields.update({
-            "__EVENTTARGET": _WF_PREFIX + f"ucPager$btnNo{page}",
+            "__EVENTTARGET": next_target,
             "__EVENTARGUMENT": "",
             _WF_PREFIX + "ddlTeam": code,
             _WF_PREFIX + "txtSearchPlayerName": "",
         })
+        page = next_page
         time.sleep(0.3)
     return out
 
@@ -399,8 +436,30 @@ def unstore_move(con, e):
     con.commit()
 
 
+_FLAG_COLS_CACHE = None
+
+
+def _flag_cols_exist(con):
+    """players 에 분류 플래그 컬럼(nationality/player_type/is_foreign)이 있는지 (캐시)."""
+    global _FLAG_COLS_CACHE
+    if _FLAG_COLS_CACHE is None:
+        cols = {r[1] for r in con.execute("PRAGMA table_info(players)")}
+        _FLAG_COLS_CACHE = {"nationality", "player_type", "is_foreign"} <= cols
+    return _FLAG_COLS_CACHE
+
+
+def _is_active_col_exists(con):
+    return "is_active" in {r[1] for r in con.execute("PRAGMA table_info(players)")}
+
+
 def upsert_player(con, info, team_id):
-    """players UPSERT. None 필드는 기존 값을 보존한다(미상으로 덮지 않음)."""
+    """players UPSERT. None 필드는 기존 값을 보존한다(미상으로 덮지 않음).
+
+    분류 플래그(nationality/player_type/is_foreign)는 마이그레이션으로 컬럼이
+    생성된 뒤에만 별도 UPDATE 로 기록한다. 컬럼이 없으면 기본 UPSERT 만 수행하므로
+    브랜치를 먼저 배포해도 cron 이 깨지지 않고, 검토 전 backfill 전까지 DB 에
+    플래그가 자동 반영되지 않는다. is_active(현역)는 refresh_is_active 에서만 다룬다.
+    """
     con.execute("""
         INSERT INTO players (player_id, player_name, team_id, back_number, position, throw, bat,
                              birthday, height, weight, career, draft_year, draft_order,
@@ -427,6 +486,14 @@ def upsert_player(con, info, team_id):
           info["position"], info["throw"], info["bat"], info["birthday"],
           info["height"], info["weight"], info["career"], info["draft_year"],
           info["draft_order"], info["signing_bonus"], info["salary"], info["image_url"]))
+
+    # 분류 플래그는 컬럼이 마이그레이션된 뒤에만 기록 (career·시드에서 결정적 도출 → 직접 덮어씀)
+    if _flag_cols_exist(con):
+        nat, isf, ptype = pf.classify_player(info["player_id"], info.get("career"),
+                                             CLASSIFY_SEASON)
+        con.execute(
+            "UPDATE players SET nationality=?, player_type=?, is_foreign=? WHERE player_id=?",
+            (nat, ptype, isf, info["player_id"]))
 
 
 def seed_history(con, info, team_id, src, valid_from=None):
@@ -804,6 +871,70 @@ def sync_register_all(con, session):
     return stats
 
 
+def refresh_is_active(con, session=None, dry_run=False):
+    """현 로스터 기준으로 players.is_active 를 갱신한다 (career 무관, 현역 산출).
+
+    sync_team_rosters 와 동일한 로스터 수집 경로(fetch_team_roster)를 재사용해
+    10개 구단 소속선수 명단을 긁는다.
+      - 로스터에 잡힌 player_id → is_active=1
+      - 스크레이프에 성공한 팀(team_id 기준)에 속하지만 로스터에 없는 선수 → is_active=0
+      - 스크레이프 실패 팀의 선수는 건드리지 않는다(0으로 오방출 방지)
+    dry_run 이면 UPDATE 없이 현역 수만 집계한다. 반환: 현역(=1 대상) 수.
+    """
+    # is_active 컬럼 미생성(마이그레이션 전) 시 스크레이프조차 하지 않고 no-op
+    if not _is_active_col_exists(con):
+        logger.info("[active] is_active 컬럼 없음 — 마이그레이션 전이므로 건너뜀")
+        return 0
+    if session is None:
+        session = make_session()
+
+    rostered = set()          # 현재 로스터에 잡힌 전체 player_id
+    teams_scraped = set()     # 스크레이프에 성공한 team_id(label)
+    for code, label in TEAM_CODES.items():
+        roster = fetch_team_roster(session, code)
+        if not roster:
+            logger.warning(f"  is_active: 로스터 수집 실패/0건 — {label}({code})")
+            continue
+        teams_scraped.add(label)
+        for p in roster:
+            rostered.add(p["player_id"])
+        time.sleep(0.5)
+
+    if not dry_run and teams_scraped:
+        # 현역 표시: 로스터에 잡힌 선수
+        if rostered:
+            con.executemany("UPDATE players SET is_active=1 WHERE player_id=?",
+                            [(pid,) for pid in rostered])
+        # 비현역 표시: 성공한 팀 소속인데 로스터에 없는 선수만 0으로
+        #   (실패한 팀은 제외해 일시 장애가 대량 방출로 오반영되지 않게 한다)
+        #   rostered 를 SQL IN-list 로 인라인하면 구버전 sqlite 변수 한도(999)를 넘을 수
+        #   있어, 후보를 파이썬에서 걸러 executemany 로 처리한다(team IN-list 10개는 안전).
+        ph_teams = ",".join("?" * len(teams_scraped))
+        cand = [r[0] for r in con.execute(
+            f"SELECT player_id FROM players WHERE team_id IN ({ph_teams})",
+            list(teams_scraped))]
+        inactive = [(pid,) for pid in cand if pid not in rostered]
+        if inactive:
+            con.executemany("UPDATE players SET is_active=0 WHERE player_id=?", inactive)
+        # KBO 이탈(해체구단·현 10구단 외·소속없음) 선수 중 미정(NULL)은 비현역 0으로 확정
+        # ("KBO를 떠나면 비현역" — 전 구단 스크레이프 성공 시에만 수행)
+        cur_teams = list(TEAM_CODES.values())
+        ph_cur = ",".join("?" * len(cur_teams))
+        con.execute(
+            f"UPDATE players SET is_active=0 "
+            f"WHERE is_active IS NULL AND (team_id IS NULL OR team_id NOT IN ({ph_cur}))",
+            cur_teams)
+        con.commit()
+
+    # 부분 실패(일부 팀만 수집)면 실패 팀 선수의 is_active 가 갱신되지 않으므로 경고
+    if len(teams_scraped) < len(TEAM_CODES):
+        logger.warning(f"[active] 로스터 부분 실패 {len(teams_scraped)}/{len(TEAM_CODES)} 팀 — "
+                       f"실패 팀 선수 is_active 미갱신(NULL/기존값 유지). 다음 실행에서 복구됨")
+    logger.info(f"[active] 현역 {len(rostered)}명 / 스크레이프 성공 팀 {len(teams_scraped)} "
+                f"/ dry_run={dry_run}")
+    return len(rostered)
+
+
 def main():
     ap = argparse.ArgumentParser(description="선수 정보 레지스트리 동기화")
     ap.add_argument("--full", action="store_true",
@@ -825,6 +956,11 @@ def main():
                 step()
             except Exception:
                 logger.exception("단계 실패 — 다음 단계 계속")
+        # 로스터 동기화 뒤 현역 플래그 갱신 (실패해도 전체 동기화는 중단하지 않음)
+        try:
+            refresh_is_active(con, session)
+        except Exception:
+            logger.exception("is_active 갱신 실패 — 무시하고 종료")
     finally:
         con.close()
     logger.info("=== player_registry_sync 완료 ===")
