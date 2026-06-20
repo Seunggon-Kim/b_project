@@ -117,6 +117,14 @@
         function fmtLabel(d) { return d.getFullYear() + '.' + pad2(d.getMonth() + 1) + '.' + pad2(d.getDate()) + ' (' + DOW[d.getDay()] + ')'; }
         function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
+        // 선수 이름을 선수 분석(player-analytics) 딥링크로 감쌈. id 없으면 링크 없이 일반 텍스트.
+        function playerLink(name, id, cls) {
+            const text = esc(name);
+            if (id === null || id === undefined || id === '') return text;
+            const klass = cls ? `player-link ${cls}` : 'player-link';
+            return `<a class="${klass}" href="pages/player-analytics?id=${encodeURIComponent(id)}">${text}</a>`;
+        }
+
         // 로컬 공식 KBO 엠블럼 로드 실패 시 -> Naver 엠블럼 -> 팀코드 텍스트 순으로 폴백
         function emblemError(img) {
             const fb = img.getAttribute('data-fallback');
@@ -145,20 +153,22 @@
             if (g.final) {
                 const d = g.decisions || {};
                 const items = [];
-                if (d.win)  items.push(`<span class="pdec"><span class="pdec-tag win">승</span>${esc(d.win)}</span>`);
-                if (d.lose) items.push(`<span class="pdec"><span class="pdec-tag lose">패</span>${esc(d.lose)}</span>`);
-                if (d.save) items.push(`<span class="pdec"><span class="pdec-tag save">세</span>${esc(d.save)}</span>`);
+                if (d.win)  items.push(`<span class="pdec"><span class="pdec-tag win">승</span>${playerLink(d.win, d.winId)}</span>`);
+                if (d.lose) items.push(`<span class="pdec"><span class="pdec-tag lose">패</span>${playerLink(d.lose, d.loseId)}</span>`);
+                if (d.save) items.push(`<span class="pdec"><span class="pdec-tag save">세</span>${playerLink(d.save, d.saveId)}</span>`);
                 if (!items.length) return '';
                 return `<div class="game-pitchers final">${items.join('')}</div>`;
             }
             const live = g.live;
             const aw = live ? g.away.currentPitcher : g.away.starter;
             const hm = live ? g.home.currentPitcher : g.home.starter;
+            const awId = live ? g.away.currentPitcherId : g.away.starterId;
+            const hmId = live ? g.home.currentPitcherId : g.home.starterId;
             if (!aw && !hm) return '';
             return `<div class="game-pitchers ${live ? 'live' : 'before'}">
-                <span class="pp away">${esc(aw || '미정')}</span>
+                <span class="pp away">${aw ? playerLink(aw, awId) : '미정'}</span>
                 <span class="pp-label">${live ? '현재' : '선발'}</span>
-                <span class="pp home">${esc(hm || '미정')}</span>
+                <span class="pp home">${hm ? playerLink(hm, hmId) : '미정'}</span>
             </div>`;
         }
 
@@ -415,10 +425,14 @@
                 const emblem = e.code
                     ? `<img class="lr-emblem" src="assets/logos/${esc(e.code)}.png" alt="" loading="lazy" onerror="this.style.display='none'">`
                     : '';
+                const hasId = e.player_id !== null && e.player_id !== undefined && e.player_id !== '';
+                const nameHtml = hasId
+                    ? `<a class="lr-name player-link" href="pages/player-analytics?id=${encodeURIComponent(e.player_id)}">${esc(e.name)}</a>`
+                    : `<span class="lr-name">${esc(e.name)}</span>`;
                 return `<li class="lr-row">
                     <span class="lr-rank">${i + 1}</span>
                     ${emblem}
-                    <span class="lr-name">${esc(e.name)}</span>
+                    ${nameHtml}
                     <span class="lr-val">${esc(e.value)}</span>
                 </li>`;
             }).join('');

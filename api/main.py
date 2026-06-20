@@ -1001,6 +1001,7 @@ async def get_schedule(date: str = None):
 
             games.sort(key=lambda x: ((x.get("datetime") or ""), (x.get("gameId") or "")))
 
+        _attach_pitcher_ids(games)  # 투수 이름 -> player_id 부착(캐시 저장 전)
         result = {"date": date, "count": len(games), "games": games}
         _SCHEDULE_CACHE[date] = (_time.time(), result)
         return result
@@ -1182,6 +1183,75 @@ _KBO_TEAM_CODE = {
     "롯데": "LT", "SSG": "SK", "NC": "NC", "키움": "WO", "한화": "HH",
 }
 
+# 엠블럼 코드 -> KBO 표기명(players.team_id) 역매핑.
+# schedule 투수 이름(네이버 표기)을 players.player_id로 매칭할 때 팀을 좁히는 데 사용.
+_KBO_CODE_TO_TEAM = {v: k for k, v in _KBO_TEAM_CODE.items()}
+
+
+_players_cols_cache = None
+
+
+def _players_has_col(cur, col):
+    """players 테이블에 컬럼이 있는지(스키마 캐시). is_active 등 신규 컬럼이 없는
+    구버전 DB 스냅샷에서도 안전하게 동작하기 위함."""
+    global _players_cols_cache
+    if _players_cols_cache is None:
+        _players_cols_cache = {r[1] for r in cur.execute("PRAGMA table_info(players)")}
+    return col in _players_cols_cache
+
+
+def _resolve_pitcher_id(cur, name, code):
+    """경기 카드 투수 이름 + 팀 엠블럼 코드 -> players.player_id.
+    is_active 컬럼이 있으면 현역만 후보로 둠(은퇴/동명 중복 선수로의 오링크 방지).
+    단일 매칭이면 그 id, 동명이인이면 투수(position='투수')로 1명만 좁혀질 때만 반환.
+    미매칭·모호 시 None(프론트는 일반 텍스트, 딥링크 없음)."""
+    if not name or not code:
+        return None
+    team_id = _KBO_CODE_TO_TEAM.get(code)
+    if not team_id:
+        return None
+    has_active = _players_has_col(cur, "is_active")
+    sel = ("SELECT player_id, position, is_active FROM players "
+           if has_active else "SELECT player_id, position FROM players ")
+    cur.execute(sel + "WHERE player_name=? AND team_id=?", (name, team_id))
+    rows = cur.fetchall()
+    if has_active:
+        rows = [r for r in rows if r["is_active"] == 1]  # 현역만 링크
+    if not rows:
+        return None
+    if len(rows) == 1:
+        return rows[0]["player_id"]
+    pitchers = [r for r in rows if (r["position"] or "") == "투수"]
+    return pitchers[0]["player_id"] if len(pitchers) == 1 else None
+
+
+def _attach_pitcher_ids(games):
+    """schedule 응답의 각 경기 투수 이름에 player_id를 부착(매칭된 것만, 캐시 저장 전에 호출).
+    팀 판별: 선발/현재투수=원정·홈 각 팀, 승=승리팀·패=패전팀·세=승리팀."""
+    if not games:
+        return
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        for g in games:
+            home = g.get("home") or {}
+            away = g.get("away") or {}
+            hcode, acode = home.get("code"), away.get("code")
+            away["starterId"] = _resolve_pitcher_id(cur, away.get("starter"), acode)
+            home["starterId"] = _resolve_pitcher_id(cur, home.get("starter"), hcode)
+            away["currentPitcherId"] = _resolve_pitcher_id(cur, away.get("currentPitcher"), acode)
+            home["currentPitcherId"] = _resolve_pitcher_id(cur, home.get("currentPitcher"), hcode)
+            winner = (g.get("winner") or "").upper()
+            win_code = hcode if winner == "HOME" else (acode if winner == "AWAY" else None)
+            lose_code = acode if winner == "HOME" else (hcode if winner == "AWAY" else None)
+            d = g.get("decisions") or {}
+            d["winId"] = _resolve_pitcher_id(cur, d.get("win"), win_code)
+            d["loseId"] = _resolve_pitcher_id(cur, d.get("lose"), lose_code)
+            d["saveId"] = _resolve_pitcher_id(cur, d.get("save"), win_code)
+            g["decisions"] = d
+    finally:
+        conn.close()
+
 
 @app.get("/standings")
 async def get_standings():
@@ -1337,7 +1407,7 @@ async def get_leaders(season: int = None):
         # (order_col은 아래 호출부의 내부 화이트리스트 컬럼만 사용)
         def _batter_top(order_col):
             cur.execute(
-                "SELECT p.player_name AS name, p.team_id AS team, b." + order_col + " AS val "
+                "SELECT p.player_id AS player_id, p.player_name AS name, p.team_id AS team, b." + order_col + " AS val "
                 "FROM kbo_official_batter_stats b JOIN players p ON b.player_id=p.player_id "
                 "WHERE b.season=? AND b.plate_appearance >= ? "
                 "ORDER BY b." + order_col + " DESC LIMIT 5",
@@ -1347,7 +1417,7 @@ async def get_leaders(season: int = None):
             for r in cur.fetchall():
                 d = dict(r)
                 val = d["val"]
-                out.append({"name": d["name"], "team": d["team"], "code": _code(d["team"]),
+                out.append({"player_id": d.get("player_id"), "name": d["name"], "team": d["team"], "code": _code(d["team"]),
                             "value": ("%.3f" % float(val)) if val is not None else "-"})
             return out
 
@@ -1358,31 +1428,31 @@ async def get_leaders(season: int = None):
 
         # wRC+ : wrc_plus_comparison(자체 파크팩터 3년 산식, half-PF)에서 직접 Top5 — 'wRC+ 강건성' 페이지와 동일 출처
         cur.execute(
-            "SELECT p.player_name AS name, p.team_id AS team, ROUND(w.wRC_half, 1) AS wrc "
+            "SELECT p.player_id AS player_id, p.player_name AS name, p.team_id AS team, ROUND(w.wRC_half, 1) AS wrc "
             "FROM wrc_plus_comparison w JOIN players p ON p.player_id = CAST(w.batter_ID AS TEXT) "
             "WHERE w.season=? AND w.PA >= ? "
             "ORDER BY w.wRC_half DESC LIMIT 5",
             (season, qual_pa),
         )
-        wrc_top = [{"name": d["name"], "team": d["team"], "code": _code(d["team"]),
+        wrc_top = [{"player_id": d.get("player_id"), "name": d["name"], "team": d["team"], "code": _code(d["team"]),
                     "value": ("%.1f" % d["wrc"]) if d["wrc"] is not None else "-"}
                    for d in (dict(r) for r in cur.fetchall())]
 
         # wOBA : 동일 wrc_plus_comparison 출처, 규정타석 충족자 Top5
         cur.execute(
-            "SELECT p.player_name AS name, p.team_id AS team, ROUND(w.wOBA, 3) AS woba "
+            "SELECT p.player_id AS player_id, p.player_name AS name, p.team_id AS team, ROUND(w.wOBA, 3) AS woba "
             "FROM wrc_plus_comparison w JOIN players p ON p.player_id = CAST(w.batter_ID AS TEXT) "
             "WHERE w.season=? AND w.PA >= ? "
             "ORDER BY w.wOBA DESC LIMIT 5",
             (season, qual_pa),
         )
-        woba_top = [{"name": d["name"], "team": d["team"], "code": _code(d["team"]),
+        woba_top = [{"player_id": d.get("player_id"), "name": d["name"], "team": d["team"], "code": _code(d["team"]),
                      "value": ("%.3f" % d["woba"]) if d["woba"] is not None else "-"}
                     for d in (dict(r) for r in cur.fetchall())]
 
         # 투수 (정렬 기준이 달라 파이썬에서 산정)
         cur.execute(
-            "SELECT p.player_name AS name, p.team_id AS team, ps.earned_run_average AS era, "
+            "SELECT p.player_id AS player_id, p.player_name AS name, p.team_id AS team, ps.earned_run_average AS era, "
             "ps.innings_pitched AS ip, ps.strikeout AS k, "
             "ps.strikeout_per_pa AS kpct, ps.base_on_balls_per_pa AS bbpct "
             "FROM kbo_official_pitcher_stats ps JOIN players p ON ps.player_id=p.player_id "
@@ -1412,7 +1482,7 @@ async def get_leaders(season: int = None):
             pit.append(d)
 
         def _pit_entry(d, val):
-            return {"name": d["name"], "team": d["team"], "code": _code(d["team"]), "value": val}
+            return {"player_id": d.get("player_id"), "name": d["name"], "team": d["team"], "code": _code(d["team"]), "value": val}
 
         # 이닝/탈삼진: 누적(규정 미적용). ERA/K%/BB%/K-BB%: 규정이닝 충족자.
         qual_pit = [x for x in pit if x["_outs"] >= qual_outs]
