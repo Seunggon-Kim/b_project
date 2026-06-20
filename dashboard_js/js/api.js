@@ -104,6 +104,20 @@ class API {
     }
 
     /**
+     * Get available seasons (시즌 통계가 존재하는 시즌 목록)
+     */
+    static async getSeasons() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/stats/seasons`);
+            if (!response.ok) throw new Error('Failed to fetch seasons');
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching seasons:', error);
+            return { seasons: [] };
+        }
+    }
+
+    /**
      * Get batter statistics
      * Added min_pa support
      */

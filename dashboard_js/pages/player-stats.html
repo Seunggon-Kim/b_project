@@ -230,7 +230,7 @@
 
         <!-- Tabs -->
         <div class="mb-3">
-            <div style="display: flex; gap: 1rem; border-bottom: 2px solid var(--border-color);">
+            <div style="display: flex; justify-content: center; gap: 1rem; border-bottom: 2px solid var(--border-color);">
                 <button id="tab-batters" class="btn btn-secondary" onclick="switchTab('batters')"
                     style="border-radius: 0; border-bottom: 3px solid var(--primary);">
                     <span class="material-symbols-outlined">sports_cricket</span> 타자 통계
@@ -247,6 +247,13 @@
             <div class="card-body">
                 <div class="filter-controls filter-row">
                     <!-- Common Filters -->
+                    <div class="filter-group">
+                        <label for="season-select" class="text-muted">시즌:</label>
+                        <select id="season-select" class="input" style="width: auto;" onchange="refreshStats()">
+                            <!-- 시즌 목록이 동적으로 주입됩니다 -->
+                        </select>
+                    </div>
+
                     <div class="filter-group">
                         <label for="display-limit" class="text-muted">표시 개수:</label>
                         <select id="display-limit" class="input" style="width: auto;" onchange="refreshStats()">
@@ -331,7 +338,7 @@
     </main>
 
     <!-- Scripts -->
-    <script src="../js/api.js?v=1.1"></script>
+    <script src="../js/api.js?v=1.2"></script>
     <script src="../js/components.js?v=1.1"></script>
     <script>
         let currentTab = 'batters';
@@ -444,13 +451,42 @@
         let batterSort = { key: 'batting_average', direction: 'desc' };
         let pitcherSort = { key: 'earned_run_average', direction: 'asc' };
 
+        // 사용 가능한 시즌 목록 (시즌 API 호출 실패 시 폴백)
+        const FALLBACK_SEASONS = [2026, 2025, 2024, 2023];
+
         async function init() {
             populatePAOptions();
             populateIPOptions();
+            await loadSeasons(); // 시즌 드롭다운을 현재 데이터 기준으로 채움
             await loadTeams(); // 팀 목록이 로드될 때까지 대기
             renderColumnSelector();
             // 초기 탭 상태에 맞춰 필터 표시 및 데이터 로드
             switchTab('batters');
+        }
+
+        async function loadSeasons() {
+            const select = document.getElementById('season-select');
+            let seasons = [];
+            try {
+                const data = await API.getSeasons();
+                seasons = (data.seasons || []).filter(s => s !== null && s !== undefined);
+            } catch (error) {
+                console.error('Error loading seasons:', error);
+            }
+            if (seasons.length === 0) {
+                console.warn('시즌 목록을 불러오지 못해 폴백 목록을 사용합니다.');
+                seasons = [...FALLBACK_SEASONS];
+            }
+            // 최신 시즌이 위로 오도록 내림차순 정렬
+            seasons.sort((a, b) => b - a);
+            select.innerHTML = seasons.map(s => `<option value="${s}">${s} 시즌</option>`).join('');
+            // 기본값은 가장 최신 시즌
+            select.value = seasons[0];
+        }
+
+        function getSelectedSeason() {
+            const select = document.getElementById('season-select');
+            return parseInt(select.value, 10) || FALLBACK_SEASONS[0];
         }
 
         async function loadTeams() {
@@ -648,7 +684,7 @@
             tableDiv.innerHTML = createLoadingSpinner();
 
             try {
-                const data = await API.getBatterStats(2025, limit, minPa, teamIds);
+                const data = await API.getBatterStats(getSelectedSeason(), limit, minPa, teamIds);
                 currentBatterData = data.batters || [];
                 renderData();
             } catch (error) {
@@ -683,7 +719,7 @@
             tableDiv.innerHTML = createLoadingSpinner();
 
             try {
-                const data = await API.getPitcherStats(2025, limit, minIp, teamIds);
+                const data = await API.getPitcherStats(getSelectedSeason(), limit, minIp, teamIds);
                 currentPitcherData = data.pitchers || [];
                 renderData();
             } catch (error) {

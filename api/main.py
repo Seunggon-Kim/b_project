@@ -324,6 +324,24 @@ async def get_pitch_usage(player_id: str, season: int = 2026):
     except Exception as e:
         return {"error": str(e), "traceback": traceback.format_exc()}
 
+@app.get("/stats/seasons")
+async def get_stats_seasons():
+    """타자/투수 시즌 통계가 존재하는 시즌 목록을 내림차순으로 반환합니다."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT DISTINCT season FROM (
+            SELECT season FROM kbo_official_batter_stats
+            UNION
+            SELECT season FROM kbo_official_pitcher_stats
+        )
+        WHERE season IS NOT NULL
+        ORDER BY season DESC
+    """)
+    seasons = [row[0] for row in cur.fetchall()]
+    conn.close()
+    return {"seasons": seasons}
+
 @app.get("/stats/batters")
 async def get_batter_stats(season: int = 2025, limit: int = 100, min_pa: int = 0, team_ids: str = None):
     conn = get_db_connection()
