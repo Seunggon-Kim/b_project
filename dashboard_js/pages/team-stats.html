@@ -35,10 +35,10 @@
         .fs-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
         /* 시즌·기간 통합 컨트롤 바 */
         .ctrl-bar { display: flex; align-items: center; gap: 0.85rem 2rem; flex-wrap: wrap; padding: 1rem 1.25rem; }
-        .ctrl-group { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+        .ctrl-group { display: flex; align-items: center; gap: 0.6rem; flex-wrap: nowrap; flex-shrink: 0; }
         .ctrl-group label { white-space: nowrap; flex-shrink: 0; margin: 0; }
         .ctrl-divider { align-self: stretch; width: 1px; min-height: 1.8rem; background: var(--border-color); }
-        @media (max-width: 640px) { .ctrl-divider { display: none; } }
+        @media (max-width: 640px) { .ctrl-divider { display: none; } .ctrl-group { flex-wrap: wrap; } }
         /* 정렬 가능한 표 헤더 */
         .table th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
         .table th.sortable:hover { color: #3b82f6; }
