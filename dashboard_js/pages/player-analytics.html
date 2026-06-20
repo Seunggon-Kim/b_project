@@ -347,7 +347,7 @@
                                     onclick="loadPlayerInfo('${player.player_id}')"
                                     style="text-align: left; justify-content: flex-start;"
                                 >
-                                    ${player.player_name} (${player.team_id}) - No.${(player.back_number !== null && player.back_number !== undefined) ? player.back_number : '?'} ${player.position}
+                                    ${player.player_name}${(player.is_active && player.team_id) ? ' (' + player.team_id + ')' : ''}${player.is_active ? (' - No.' + ((player.back_number !== null && player.back_number !== undefined) ? player.back_number : '?') + (player.position ? ' ' + player.position : '')) : (player.position ? ' - ' + player.position : '')}
                                 </button>
                             `).join('')}
                         </div>
@@ -384,7 +384,10 @@
                 currentPlayer = player;
 
                 // Header Banner Bar
-                const imageUrl = player.image_url || 'https://via.placeholder.com/150x187?text=No+Image';
+                const PHOTO_PLACEHOLDER = '../assets/player_no_image.png';  // KBO 공식 no-Image
+                const cdnImg = player.image_url || '';
+                const localImg = `../assets/player_photos/${player.player_id}.jpg`;  // 로컬 미러(CDN 404 폴백)
+                const imageUrl = cdnImg || localImg;  // CDN 우선, 없으면 로컬
                 const backNum = (player.back_number !== null && player.back_number !== undefined) ? player.back_number : '?';
 
                 // 정확한 나이 계산 (YYYYMMDD 형식 대응)
@@ -407,15 +410,15 @@
 
                 headerBar.innerHTML = `
                     <div class="header-bar-photo">
-                        <img src="${imageUrl}" alt="${player.player_name}" 
-                             onerror="this.src='https://via.placeholder.com/150x187?text=No+Image'">
+                        <img src="${imageUrl}" alt="${player.player_name}" data-local="${localImg}"
+                             onerror="var l=this.getAttribute('data-local'); if(l && this.src.indexOf('player_photos')===-1){this.src=l;} else {this.onerror=null; this.src='${PHOTO_PLACEHOLDER}';}">
                     </div>
                     <div class="header-bar-main">
                         <div class="header-bar-name">
-                            <span class="header-bar-number">No.${backNum}</span>
+                            ${player.is_active ? '<span class="header-bar-number">No.' + backNum + '</span>' : ''}
                             ${player.player_name}
                         </div>
-                        <div class="header-bar-team">${player.team_name || player.team_id || '-'}</div>
+                        <div class="header-bar-team">${(player.is_active && (player.team_name || player.team_id)) ? (player.team_name || player.team_id) : '-'}</div>
                     </div>
                     <div class="header-bar-info-group">
                         <div class="header-bar-details">
@@ -475,8 +478,15 @@
                 // Stats Table
                 const isPitcher = player.position === '투수';
 
-                // Prepare recent 3 seasons data (2023, 2024, 2025)
-                const targetSeasons = [2023, 2024, 2025];
+                // 최근 3시즌: 현역이면 올해 기준, 비현역이면 마지막 활동 시즌 기준
+                const _seasonsInData = [
+                    ...(player.pitcher_seasons || []),
+                    ...(player.batter_seasons || [])
+                ].map(s => s.season).filter(y => typeof y === 'number');
+                const _lastPlayed = _seasonsInData.length
+                    ? Math.max(..._seasonsInData) : new Date().getFullYear();
+                const _anchor = player.is_active ? new Date().getFullYear() : _lastPlayed;
+                const targetSeasons = [_anchor - 2, _anchor - 1, _anchor];
 
                 if (isPitcher) {
                     // Pitcher stats - transposed table
@@ -723,7 +733,8 @@
                 // Scroll to stats
                 section.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 // Apply Team Theme Colors (For both Batters and Pitchers)
-                applyTeamTheme(player.team_name || player.team_id);
+                // 비현역(현 소속팀 없음)은 잔존 team_id가 있어도 팀색을 입히지 않고 중립색(기본)
+                applyTeamTheme(player.is_active ? (player.team_name || player.team_id) : null);
 
             } catch (error) {
                 console.error("Critical error in loadPlayerInfo:", error);

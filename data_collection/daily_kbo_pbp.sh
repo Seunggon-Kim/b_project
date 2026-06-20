@@ -40,6 +40,12 @@ print(f"  deleted existing rows: {cur.rowcount}")
 total = 0
 for f in new_csvs:
     df = pd.read_csv(f, encoding="cp949")
+    # 선수 ID 정규화: 컬럼에 NaN 1개라도 있으면 pandas가 float64로 읽어 '75847.0'이 적재됨
+    # → players(정수문자열)와 조인 끊김. 정수 문자열로 통일(결측은 None).
+    for _idc in ("batter_ID", "pitcher_ID"):
+        if _idc in df.columns:
+            _s = pd.to_numeric(df[_idc], errors="coerce")
+            df[_idc] = _s.map(lambda v: str(int(v)) if pd.notna(v) else None)
     df.to_sql("play_by_play", con, if_exists="append", index=False)
     total += len(df)
 con.commit()

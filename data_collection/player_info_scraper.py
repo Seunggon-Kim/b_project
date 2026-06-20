@@ -17,6 +17,10 @@ from webdriver_manager.chrome import ChromeDriverManager
 import pandas as pd
 import sqlite3
 
+# 분류 플래그(국적/외국인/아시아쿼터) 도출 — 단일 진실 소스 모듈 재사용
+import player_flags as pf
+CLASSIFY_SEASON = 2026
+
 # 로깅 설정
 PROJECT_ROOT = Path(__file__).parent.parent
 LOG_DIR = PROJECT_ROOT / 'logs'
@@ -305,6 +309,18 @@ def get_existing_player_ids():
     return sorted(list(all_ids))
 
 
+_FLAG_COLS_CACHE = None
+
+
+def _flag_cols_exist(cur):
+    """players 에 분류 플래그 컬럼이 있는지 (캐시). 마이그레이션 전이면 False."""
+    global _FLAG_COLS_CACHE
+    if _FLAG_COLS_CACHE is None:
+        cols = {r[1] for r in cur.execute("PRAGMA table_info(players)")}
+        _FLAG_COLS_CACHE = {"nationality", "player_type", "is_foreign"} <= cols
+    return _FLAG_COLS_CACHE
+
+
 def save_to_db(player_data_list):
     """선수 정보를 DB에 저장 (UPSERT)"""
     if not player_data_list:
@@ -356,6 +372,13 @@ def save_to_db(player_data_list):
                 player.get('salary'),
                 player.get('image_url')
             ))
+            # 분류 플래그는 컬럼이 마이그레이션된 뒤에만 기록 (career·시드 기반 결정적 도출)
+            if _flag_cols_exist(cur):
+                nat, isf, ptype = pf.classify_player(
+                    player.get('player_id'), player.get('career'), CLASSIFY_SEASON)
+                cur.execute(
+                    "UPDATE players SET nationality=?, player_type=?, is_foreign=? WHERE player_id=?",
+                    (nat, ptype, isf, player.get('player_id')))
         except Exception as e:
             logger.error(f"DB 저장 오류 ({player.get('player_id')}): {e}")
     

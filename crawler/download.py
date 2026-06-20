@@ -7,6 +7,10 @@ from bs4 import BeautifulSoup
 
 from game_parse import game_status
 
+# 경기 fetch 사이 대기(초). 대량 백필 시 Naver rate-limit 완화용.
+# 일별 단일 경기 경로에서는 사실상 영향 없음.
+FETCH_SLEEP_SEC = 0.4
+
 regular_start = {
     '3333': '0101', # semi-playoff
     '4444': '0101', # wildcard
@@ -187,7 +191,7 @@ def get_game_data(game_id):
         try:
             js = json.loads(relay_json)
             relay_response.close()
-        except JSONDecodeError:
+        except json.JSONDecodeError:
             relay_response.close()
             return [None, None, 'got no valid data\n']
 
@@ -225,7 +229,7 @@ def get_game_data(game_id):
             try:
                 js = json.loads(relay_json)
                 relay_response.close()
-            except JSONDecodeError:
+            except json.JSONDecodeError:
                 relay_inn_response.close()
                 return [None, None, 'got no valid data\n']
 
@@ -323,7 +327,7 @@ def get_game_data(game_id):
                         oldjs = oldjs[1:]
                     try:
                         cont = json.loads(oldjs)
-                    except JSONDecodeError:
+                    except json.JSONDecodeError:
                         return [None, None, f'JSONDecodeError - gameID {game_id}\n']
                     break
 
@@ -517,6 +521,15 @@ def get_game_data_renewed(game_id):
         awayTeamCode = game_meta_data.get('awayTeamCode')
         awayTeamName = game_meta_data.get('awayTeamName')
 
+        # 취소 경기 가드: statusCode가 RESULT여도 statusInfo가 '경기취소'면
+        # relay PBP(textRelayData)가 전무하다(과거 시즌 우천취소 등). 이 경우
+        # 이후 relay 루프에서 NoneType.get AttributeError로 게임이 예외(failed)
+        # 처리되므로, 데이터 없음(None)으로 우아하게 강등해 배치가 계속되게 한다.
+        # 정상 경기(RESULT/ENDED, 진행 이닝 존재)는 이 분기를 타지 않아 무회귀.
+        status_info = game_meta_data.get('statusInfo')
+        if status_info is not None and ('취소' in status_info or '노게임' in status_info):
+            return [None, None, f'game cancelled/no-game ({status_info})\n']
+
         box_score_req = requests.get(f'{nav_api_header}{game_id}/record')
         if box_score_req.status_code > 200:
             box_score_req.close()
@@ -542,6 +555,17 @@ def get_game_data_renewed(game_id):
                 max_inning = int(game_meta_data.get('statusInfo').split('회')[0])
             else:
                 max_inning = int(box_score_data.get('currentInning'))
+        # 일부 과거 시즌(2008/2011)은 game_meta_data.currentInning이 '1회초'로 잘못
+        # 들어와 max_inning이 1로 과소 산출됨 → 실제 진행 이닝 수를 담은 record
+        # 엔드포인트(box_score_data.currentInning)를 fallback으로 두고 더 큰 값을 채택.
+        # 2010+ 정상 시즌은 meta가 이미 실제 이닝과 같고 record 값이 이를 초과하지
+        # 않으므로 결과가 동일(무회귀).
+        record_current_inning = box_score_data.get('currentInning')
+        if (record_current_inning is not None) & (record_current_inning != ''):
+            try:
+                max_inning = max(max_inning, int(record_current_inning))
+            except (ValueError, TypeError):
+                pass
         away_batting_order = box_score_data.get('battersBoxscore').get('away')
         home_batting_order = box_score_data.get('battersBoxscore').get('home')
         away_pitcher_boxscore = box_score_data.get('pitchersBoxscore').get('away')
@@ -554,12 +578,24 @@ def get_game_data_renewed(game_id):
         game_data_set['pitchTextList'] = []
         game_data_set['pitchTrackDataList'] = []
 
+        # 일부 과거 시즌(2011 등)은 Naver awayLineup/homeLineup.pitcher와
+        # pitchersBoxscore가 모두 비어 있어 투수 라인업을 만들 수 없다(IndexError).
+        # 이때를 대비해 relay PBP의 currentGameState.pitcher(수비측 투수 pcode)를
+        # 등장 순서대로, 그리고 투수 교체 텍스트(투수 A : 투수 B (으)로 교체)에서
+        # 이름 체인을 수비측(a/h)별로 수집해 둔다. 정상 시즌에선 사용되지 않으므로
+        # 무회귀(아래 4-pre 블록은 pitcher 라인업이 비어 있을 때만 동작).
+        #   homeOrAway=='0'(초, 어웨이 공격) → 수비측 = home('h')
+        #   homeOrAway=='1'(말, 홈 공격)     → 수비측 = away('a')
+        recon_pcode_order = {'a': [], 'h': []}
+        recon_sub_names = {'a': [], 'h': []}
+
         text_keys = ['seqno', 'text', 'type', 'stuff',
                      'ptsPitchId', 'speed', 'playerChange']
         pitch_keys = ['crossPlateX', 'topSz',
                       'pitchId', 'vy0', 'vz0', 'vx0',
                       'z0', 'ax', 'x0', 'ay', 'az',
                       'bottomSz']
+        last_pbp_data = None  # 루프 후 라인업 추출용(마지막 유효 relay inning)
         for inning in range(1, max_inning+1):
             pbp_req = requests.get(f'{nav_api_header}{game_id}/relay?inning={inning}')
             if pbp_req.status_code > 200:
@@ -574,6 +610,17 @@ def get_game_data_renewed(game_id):
             pbp_req.close()
 
             pbp_data = pbp_req_result.get('result').get('textRelayData')
+
+            # 일부 (취소/중단) 경기는 textRelayData가 None이라 .get에서 예외.
+            # 첫 이닝부터 None이면 데이터 없음으로 강등(None 반환), 이후 이닝에서
+            # 비면 거기서 수집 종료(이미 받은 이닝까지로 진행). 정상 경기는 None이
+            # 아니므로 무회귀. 루프 종료 후 라인업 추출에 쓰도록 마지막 유효 pbp_data 보존.
+            if pbp_data is None:
+                if inning == 1:
+                    return [None, None, 'no relay data (textRelayData is None)\n']
+                else:
+                    break
+            last_pbp_data = pbp_data
 
             for textSetList in pbp_data.get('textRelays')[::-1]:
                 textRow = {}
@@ -600,6 +647,26 @@ def get_game_data_renewed(game_id):
                     textRow['stadium'] = stadium
                     textRow['homeOrAway'] = homeOrAway
                     game_data_set['pitchTextList'].append(textRow)
+
+                    # 투수 라인업 복구용 수집(정상 시즌엔 미사용). 수비측 기준.
+                    def_side = 'h' if str(homeOrAway) == '0' else 'a'
+                    cgs = pitchTextData.get('currentGameState')
+                    if cgs is not None:
+                        pc = cgs.get('pitcher')
+                        if pc is not None and str(pc) != '':
+                            pc = str(pc)
+                            if pc not in recon_pcode_order[def_side]:
+                                recon_pcode_order[def_side].append(pc)
+                    p_txt = pitchTextData.get('text') or ''
+                    if pitchTextData.get('type') == 2 and ('투수' in p_txt) and ('교체' in p_txt):
+                        try:
+                            before_nm = p_txt.split(':')[0].replace('투수', '').strip()
+                            after_nm = p_txt.split(':')[1].split('(')[0].replace('투수', '').strip()
+                            if not recon_sub_names[def_side]:
+                                recon_sub_names[def_side].append(before_nm)
+                            recon_sub_names[def_side].append(after_nm)
+                        except (IndexError, AttributeError):
+                            pass
 
                 pitchTrackerSet = textSetList.get('ptsOptions')
                 for pitchTrackData in pitchTrackerSet:
@@ -630,8 +697,10 @@ def get_game_data_renewed(game_id):
         ########################################
         # 라인업에 대한 기초 정보가 담겨 있음
         # 경기 끝나고나서 최종 정보 -> 포지션은 마지막 상황
-        game_data_set['awayLineup'] = pbp_data.get('awayLineup')
-        game_data_set['homeLineup'] = pbp_data.get('homeLineup')
+        if last_pbp_data is None:
+            return [None, None, 'no relay data (no innings parsed)\n']
+        game_data_set['awayLineup'] = last_pbp_data.get('awayLineup')
+        game_data_set['homeLineup'] = last_pbp_data.get('homeLineup')
 
         game_data_set['stadium'] = stadium
 
@@ -693,6 +762,43 @@ def get_game_data_renewed(game_id):
         home_pitchers = home_lineup_meta_data.get('pitcher')
         home_lineup_df = pd.DataFrame(home_batters, columns=hit_columns).sort_values(['batOrder', 'seqno'])
         home_pitcher_df = pd.DataFrame(home_pitchers, columns=pit_columns).sort_values('seqno')
+
+        ##########################################################
+        # 3-pre. 투수 라인업이 비어 있을 때 relay에서 복구       #
+        ##########################################################
+        # 2011 등 과거 시즌: Naver 라인업 메타와 pitchersBoxscore가 모두 비어
+        # away/home_pitcher_df가 0행 → 이후 load()에서 IndexError로 게임 전체 실패.
+        # relay에서 모은 수비측 투수 pcode 순서 + 교체 텍스트 이름 체인으로 복구한다.
+        # 이름은 (1) 교체 텍스트 위치정렬, (2) pitchingResult(승/패/세/홀드 투수),
+        # (3) pcode 문자열 순으로 fallback. 선발 투수가 첫 항목이 되어 load()의
+        # 시작 투수로 쓰인다. 교체 투수 이름은 파싱 중 교체 텍스트로 덮어쓰므로,
+        # df의 pcode '순서'가 정확하면 출력 품질이 유지된다.
+        # 정상 시즌은 pitcher_df가 비어 있지 않아 이 블록을 건너뛴다(무회귀).
+        if (len(away_pitcher_df) == 0) or (len(home_pitcher_df) == 0):
+            pitching_result = box_score_data.get('pitchingResult') or []
+            pcode2name = {}
+            for pr in pitching_result:
+                if pr.get('pCode') is not None:
+                    pcode2name[str(pr.get('pCode'))] = pr.get('name')
+
+            def _build_recon_pitcher_df(side):
+                pcs = recon_pcode_order.get(side, [])
+                nms = recon_sub_names.get(side, [])
+                rows = []
+                for i, pc in enumerate(pcs):
+                    nm = nms[i] if i < len(nms) else None
+                    if not nm:
+                        nm = pcode2name.get(pc)
+                    if not nm:
+                        nm = pc
+                    rows.append({'name': nm, 'pcode': pc,
+                                 'hitType': None, 'seqno': i + 1})
+                return pd.DataFrame(rows, columns=pit_columns)
+
+            if len(away_pitcher_df) == 0:
+                away_pitcher_df = _build_recon_pitcher_df('a').sort_values('seqno')
+            if len(home_pitcher_df) == 0:
+                home_pitcher_df = _build_recon_pitcher_df('h').sort_values('seqno')
 
         away_lineup_df = away_lineup_df.assign(pcode = pd.to_numeric(away_lineup_df.pcode))
         away_pitcher_df = away_pitcher_df.assign(pcode = pd.to_numeric(away_pitcher_df.pcode))
@@ -808,7 +914,14 @@ def get_game_data_renewed(game_id):
                     'gameId': game_id[:-4]
                 }
                 req = requests.post(get_boxscore_api, data=params)
-                req_js = req.json()
+                # KBO 공식 GetBoxScoreScroll fallback은 현재 전역적으로 죽어 있어
+                # JSON 대신 HTML(text/html)을 돌려준다. req.json()이 JSONDecodeError를
+                # 던지면 게임 전체가 실패하므로, 파싱 실패 시 빈 dict로 강등(graceful degrade)한다.
+                # (Naver pitchersBoxscore가 비어 있는 경기: 2011 등)
+                try:
+                    req_js = req.json()
+                except (ValueError, requests.exceptions.JSONDecodeError):
+                    req_js = {}
                 req.close()
 
                 if req_js.get('msg') == '성공':
@@ -857,6 +970,29 @@ def get_game_data_renewed(game_id):
                                                      level='1군',
                                                      level_eng='KBO')
                     pitching_df = pitching_df.rename(index=int, columns={'평자': '평균자책점'})
+                else:
+                    # boxscore fallback이 비어 있거나(=죽은 endpoint) 실패한 경우.
+                    # Naver PBP/relay/batting은 정상이므로 게임을 살리고, 보조적인
+                    # 투수 박스스코어 파생 컬럼만 비워(NaN) 둔다.
+                    # 첫 번째 분기(boxscore 존재, line 802~806)와 동일한 컬럼 셋을 유지해
+                    # 다운스트림 parse/save가 변경 없이 동작하도록 한다.
+                    # ('4사구'는 식별자가 아니라 kwargs로 못 넘기므로 dict unpacking 사용)
+                    boxscore_derived_cols = ['등판', '결과', '승', '패', '세', '이닝',
+                                             '타자', '투구수', '타수', '피안타', '홈런',
+                                             '4사구', '삼진', '실점', '자책', '평균자책점',
+                                             '볼넷', '사구']
+                    pitching_df = pitching_df.assign(**{c: np.nan for c in boxscore_derived_cols})
+                    pitching_df = pitching_df.assign(game_date = datetime.date(int(game_id[:4]),
+                                                                               int(game_id[4:6]),
+                                                                               int(game_id[6:8])),
+                                                     game_id = game_id[:-4],
+                                                     level='1군',
+                                                     level_eng='KBO')
+                    pitching_df_columns = ['name', 'pcode', 'hitType', 'seqno', 'homeaway', 'team_name',
+                                           '등판', '결과', '승', '패', '세', '이닝', '타자', '투구수',
+                                           '타수', '피안타', '홈런', '4사구', '삼진', '실점', '자책',
+                                           '평균자책점', '볼넷', '사구', 'game_date', 'game_id', 'level', 'level_eng']
+                    pitching_df = pitching_df[pitching_df_columns]
     batting_df = batting_df.rename(index=int,
                                    columns = {'ab': '타수',
                                               'run': '득점',
@@ -919,6 +1055,7 @@ def download_pbp_files(start_date, end_date, playoff=False,
     skipped = 0
     broken = 0
     done = 0
+    failed = 0  # fetch/parse 중 예외로 건너뛴 경기 수 (대량 백필 중 단일 경기 실패가 배치 전체를 중단시키지 않도록)
     start_time = time.time()
     get_data_time = 0
     gid = None
@@ -969,63 +1106,77 @@ def download_pbp_files(start_date, end_date, playoff=False,
 
             ptime = time.time()
             source_path = save_path / str(gid_year) / 'source'
-            if (source_path / f'{gid_for_save}_pitching.csv').exists() &\
-                (source_path / f'{gid_for_save}_batting.csv').exists() &\
-                (source_path / f'{gid_for_save}_relay.csv').exists():
-                game_data_dfs = []
-                try:
-                    game_data_dfs.append(pd.read_csv(str(source_path / f'{gid_for_save}_pitching.csv'), encoding='cp949'))
-                except:
-                    game_data_dfs.append(pd.read_csv(str(source_path / f'{gid_for_save}_pitching.csv'), encoding='utf-8'))
-                try:
-                    game_data_dfs.append(pd.read_csv(str(source_path / f'{gid_for_save}_batting.csv'), encoding='cp949'))
-                except:
-                    game_data_dfs.append(pd.read_csv(str(source_path / f'{gid_for_save}_batting.csv'), encoding='utf-8'))
-                try:
-                    game_data_dfs.append(pd.read_csv(str(source_path / f'{gid_for_save}_relay.csv'), encoding='cp949'))
-                except:
-                    game_data_dfs.append(pd.read_csv(str(source_path / f'{gid_for_save}_relay.csv'), encoding='utf-8'))
-            else:
-                game_data_dfs = get_game_data_renewed(gid)
-
-            if game_data_dfs[0] is None:
-                logfile.write(game_data_dfs[-1])
-                if debug_mode == True:
-                    print(game_data_dfs[-1])
-                exit(1)
-
-            if save_source == True:
-                if not source_path.is_dir():
+            # 단일 경기 fetch/parse 실패가 배치 전체를 죽이지 않도록 try로 감싸 로그 후 continue.
+            # (이미 다운로드된 파일 SKIP은 위에서 처리되어 이 블록을 타지 않음 → resumable 유지)
+            try:
+                if (source_path / f'{gid_for_save}_pitching.csv').exists() &\
+                    (source_path / f'{gid_for_save}_batting.csv').exists() &\
+                    (source_path / f'{gid_for_save}_relay.csv').exists():
+                    game_data_dfs = []
                     try:
-                        source_path.mkdir()
-                    except FileExistsError:
-                        source_path = save_path / str(gid_year)
-                        logfile.write(f'NOTE: {gid_year}/source exists but not a directory.')
-                        logfile.write(f'source files will be saved in {gid_year} instead.')
+                        game_data_dfs.append(pd.read_csv(str(source_path / f'{gid_for_save}_pitching.csv'), encoding='cp949'))
+                    except:
+                        game_data_dfs.append(pd.read_csv(str(source_path / f'{gid_for_save}_pitching.csv'), encoding='utf-8'))
+                    try:
+                        game_data_dfs.append(pd.read_csv(str(source_path / f'{gid_for_save}_batting.csv'), encoding='cp949'))
+                    except:
+                        game_data_dfs.append(pd.read_csv(str(source_path / f'{gid_for_save}_batting.csv'), encoding='utf-8'))
+                    try:
+                        game_data_dfs.append(pd.read_csv(str(source_path / f'{gid_for_save}_relay.csv'), encoding='cp949'))
+                    except:
+                        game_data_dfs.append(pd.read_csv(str(source_path / f'{gid_for_save}_relay.csv'), encoding='utf-8'))
+                else:
+                    game_data_dfs = get_game_data_renewed(gid)
+                    # Naver rate-limit 완화용 폴라이트 throttle (네트워크 fetch 직후에만)
+                    time.sleep(FETCH_SLEEP_SEC)
 
-                enc = 'cp949'
-                if not (source_path / f'{gid_for_save}_pitching.csv').exists():
-                    game_data_dfs[0].to_csv(str(source_path / f'{gid_for_save}_pitching.csv'),
-                                            index=False, encoding=enc, errors='replace')
-                if not (source_path / f'{gid_for_save}_batting.csv').exists():
-                    game_data_dfs[1].to_csv(str(source_path / f'{gid_for_save}_batting.csv'),
-                                            index=False, encoding=enc, errors='replace')
-                if not (source_path / f'{gid_for_save}_relay.csv').exists():
-                    game_data_dfs[2].to_csv(str(source_path / f'{gid_for_save}_relay.csv'),
-                                            index=False, encoding=enc, errors='replace')
+                # 데이터 없음(None): 과거/취소 경기 등. exit(1) 대신 skip+log+카운트 후 다음 경기로.
+                if game_data_dfs[0] is None:
+                    logfile.write(f'SKIP(no data) gameID {gid} : {game_data_dfs[-1]}')
+                    if debug_mode == True:
+                        print(f'SKIP(no data) gameID {gid} : {game_data_dfs[-1]}')
+                    broken += 1
+                    continue
 
-            get_data_time += time.time() - ptime
-            if game_data_dfs is not None:
-                gs = game_status()
-                gs.load(gid, game_data_dfs[0], game_data_dfs[1], game_data_dfs[2], log_file=logfile)
-                parse = gs.parse_game(debug_mode)
-                gs.save_game(save_path / str(gid_year))
-                if parse == True:
-                    done += 1
+                if save_source == True:
+                    if not source_path.is_dir():
+                        try:
+                            source_path.mkdir()
+                        except FileExistsError:
+                            source_path = save_path / str(gid_year)
+                            logfile.write(f'NOTE: {gid_year}/source exists but not a directory.')
+                            logfile.write(f'source files will be saved in {gid_year} instead.')
+
+                    enc = 'cp949'
+                    if not (source_path / f'{gid_for_save}_pitching.csv').exists():
+                        game_data_dfs[0].to_csv(str(source_path / f'{gid_for_save}_pitching.csv'),
+                                                index=False, encoding=enc, errors='replace')
+                    if not (source_path / f'{gid_for_save}_batting.csv').exists():
+                        game_data_dfs[1].to_csv(str(source_path / f'{gid_for_save}_batting.csv'),
+                                                index=False, encoding=enc, errors='replace')
+                    if not (source_path / f'{gid_for_save}_relay.csv').exists():
+                        game_data_dfs[2].to_csv(str(source_path / f'{gid_for_save}_relay.csv'),
+                                                index=False, encoding=enc, errors='replace')
+
+                get_data_time += time.time() - ptime
+                if game_data_dfs is not None:
+                    gs = game_status()
+                    gs.load(gid, game_data_dfs[0], game_data_dfs[1], game_data_dfs[2], log_file=logfile)
+                    parse = gs.parse_game(debug_mode)
+                    gs.save_game(save_path / str(gid_year))
+                    if parse == True:
+                        done += 1
+                    else:
+                        broken += 1
                 else:
                     broken += 1
-            else:
-                broken += 1
+                    continue
+            except Exception as e:
+                # 단일 경기 실패 로그 후 다음 경기로 진행(배치 중단 방지)
+                failed += 1
+                logfile.write(f'FAILED gameID {gid} : {repr(e)}\n')
+                if debug_mode == True:
+                    print(f'FAILED gameID {gid} : {repr(e)}')
                 continue
 
         end_time = time.time()
@@ -1036,12 +1187,17 @@ def download_pbp_files(start_date, end_date, playoff=False,
         logfile.write(f'Successfully downloaded games : {done}\n')
         logfile.write(f'Skipped games(already exists) : {skipped}\n')
         logfile.write(f'Broken games(bad data) : {broken}\n')
+        logfile.write(f'Failed games(exception, skipped) : {failed}\n')
         logfile.write('====================================\n')
         if debug_mode == True:
             logfile.write(f'Elapsed {get_game_id_time:.2f} sec in get_game_ids\n')
             logfile.write(f'Elapsed {(get_data_time):.2f} sec in get_game_data\n')
             logfile.write(f'Elapsed {(parse_time):.2f} sec in parse_game\n')
         logfile.write(f'Total {(parse_time+get_game_id_time+get_data_time):.2f} sec elapsed with {len(game_ids)} games\n')
+
+        # 콘솔 요약(대량 백필 모니터링용): 성공/스킵/불량/예외 카운트
+        print(f'[download_pbp_files] done={done} skipped={skipped} '
+              f'broken={broken} failed={failed} total={len(game_ids)}')
 
         if logfile.closed == False:
             logfile.close()
