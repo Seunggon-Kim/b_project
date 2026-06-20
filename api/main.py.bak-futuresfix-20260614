@@ -127,7 +127,7 @@ async def get_player_info(player_id: str):
     db_pid = player['player_id']
     
     # Batter Seasons
-    cur.execute("SELECT *, single as hits, on_base_plus_slugging as ops FROM kbo_official_batter_stats WHERE player_id = ? ORDER BY season DESC", (db_pid,))
+    cur.execute("SELECT *, (single + double + triple + home_run) as hits, on_base_plus_slugging as ops FROM kbo_official_batter_stats WHERE player_id = ? ORDER BY season DESC", (db_pid,))
     player['batter_seasons'] = [dict(r) for r in cur.fetchall()]
     
     # Pitcher Seasons
@@ -377,159 +377,6 @@ async def get_pitcher_stats(season: int = 2025, limit: int = 100, min_ip: int = 
     data = [dict(row) for row in cur.fetchall()]
     conn.close()
     return {"pitchers": data, "season": season, "min_ip": min_ip, "team_ids": team_ids}
-
-# --- 기간별(PBP) 팀 성적 (date-range team stats from play-by-play) ---
-# pa_result 분류는 build_re24_run_values.py의 검증된 MAP을 기준으로 함.
-_TR_H1 = {'안타', '내야안타', '번트 안타'}
-_TR_D2 = {'2루타'}
-_TR_D3 = {'3루타'}
-_TR_HR = {'홈런'}
-_TR_HIT = _TR_H1 | _TR_D2 | _TR_D3 | _TR_HR
-_TR_WALK = {'볼넷', '자동 고의4구', '고의4구', '고의 4구', '자동 고의 4구'}
-_TR_HBP = {'몸에 맞는 볼', '몸에 맞는 공'}
-_TR_SOK = {'삼진', '낫아웃 출루'}            # 투수 탈삼진 크레딧 (낫아웃 출루는 out 아님)
-_TR_OUTP = {'필드 아웃', '포스 아웃', '병살타', '삼중살', '타구맞음 아웃'}
-_TR_ROE = {'실책'}
-_TR_FC = {'야수 선택'}
-_TR_SACB = {'희생번트', '희생번트 야수선택'}
-_TR_SACF = {'희생플라이'}
-_TR_AB = _TR_HIT | {'삼진', '낫아웃 출루'} | _TR_OUTP | _TR_ROE | _TR_FC
-
-
-def _tr_norm_date(s):
-    s = str(s).strip().replace('-', '').replace('/', '')
-    return int(s) if s.isdigit() and len(s) == 8 else None
-
-
-@app.get("/stats/team_range")
-async def team_range(start: str, end: str):
-    """날짜 범위(YYYY-MM-DD 또는 YYYYMMDD)의 팀 타격/투구를 PBP에서 집계.
-    투구는 자책 구분이 어려워 ERA 대신 RA/9(실점 기준)를 제공. '가용 PBP 기준' 캐비엇."""
-    s = _tr_norm_date(start)
-    e = _tr_norm_date(end)
-    if not s or not e:
-        raise HTTPException(status_code=400, detail="start/end must be YYYY-MM-DD or YYYYMMDD")
-    if s > e:
-        s, e = e, s
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    def blank():
-        return {"team": None, "G": 0, "PA": 0, "AB": 0, "H": 0, "2B": 0, "3B": 0, "HR": 0,
-                "BB": 0, "HBP": 0, "SF": 0, "SH": 0, "SO": 0, "R": 0,
-                "outs": 0, "Hd": 0, "BBd": 0, "SOd": 0, "HRd": 0, "ABf": 0, "Rd": 0}
-    T = {}
-
-    def g(t):
-        if t not in T:
-            d = blank()
-            d["team"] = t
-            T[t] = d
-        return T[t]
-
-    # 경기 수(팀별 G) + 날짜 경계
-    cur.execute("SELECT game_id, home_team_id, away_team_id, game_date FROM games "
-                "WHERE game_date>=? AND game_date<=? AND game_type='정규시즌'", (s, e))
-    games = cur.fetchall()
-    dmin = dmax = None
-    for row in games:
-        home, away, gd = row[1], row[2], row[3]
-        g(home)["G"] += 1
-        g(away)["G"] += 1
-        dmin = gd if dmin is None or gd < dmin else dmin
-        dmax = gd if dmax is None or gd > dmax else dmax
-
-    # PA 행: 카운팅 스탯
-    cur.execute("SELECT p.inning_topbot, p.pa_result, gm.home_team_id, gm.away_team_id "
-                "FROM play_by_play p JOIN games gm ON gm.game_id = p.gameID "
-                "WHERE gm.game_date>=? AND gm.game_date<=? AND gm.game_type='정규시즌' "
-                "AND p.pa_result IS NOT NULL AND p.pa_result<>''", (s, e))
-    for row in cur.fetchall():
-        tb, res, home, away = row[0], row[1], row[2], row[3]
-        bat = away if tb == '초' else home
-        pit = home if tb == '초' else away
-        b = g(bat)
-        pp = g(pit)
-        b["PA"] += 1
-        if res in _TR_AB:
-            b["AB"] += 1
-            pp["ABf"] += 1
-        if res in _TR_HIT:
-            b["H"] += 1
-            pp["Hd"] += 1
-            if res in _TR_D2:
-                b["2B"] += 1
-            elif res in _TR_D3:
-                b["3B"] += 1
-            elif res in _TR_HR:
-                b["HR"] += 1
-                pp["HRd"] += 1
-        if res in _TR_WALK:
-            b["BB"] += 1
-            pp["BBd"] += 1
-        if res in _TR_HBP:
-            b["HBP"] += 1
-        if res in _TR_SACF:
-            b["SF"] += 1
-        if res in _TR_SACB:
-            b["SH"] += 1
-        if res in _TR_SOK:
-            b["SO"] += 1
-            pp["SOd"] += 1
-
-    # 전체 행: outs_on_play + runs_scored + 삼진 out (삼진 out은 outs_on_play에 없음)
-    cur.execute("SELECT p.inning_topbot, gm.home_team_id, gm.away_team_id, "
-                "SUM(p.outs_on_play), SUM(p.runs_scored), "
-                "SUM(CASE WHEN p.pa_result='삼진' THEN 1 ELSE 0 END) "
-                "FROM play_by_play p JOIN games gm ON gm.game_id = p.gameID "
-                "WHERE gm.game_date>=? AND gm.game_date<=? AND gm.game_type='정규시즌' "
-                "GROUP BY p.inning_topbot, gm.home_team_id, gm.away_team_id", (s, e))
-    for row in cur.fetchall():
-        tb, home, away, oop, runs, ko = row[0], row[1], row[2], row[3], row[4], row[5]
-        bat = away if tb == '초' else home
-        pit = home if tb == '초' else away
-        g(bat)["R"] += (runs or 0)
-        pp = g(pit)
-        pp["outs"] += (oop or 0) + (ko or 0)
-        pp["Rd"] += (runs or 0)
-    conn.close()
-
-    def rnd(x, n):
-        return round(x, n) if x is not None else None
-
-    batting = []
-    pitching = []
-    for t, d in T.items():
-        AB = d["AB"]
-        H = d["H"]
-        TB = H + d["2B"] + 2 * d["3B"] + 3 * d["HR"]
-        obpden = AB + d["BB"] + d["HBP"] + d["SF"]
-        avg = H / AB if AB else 0
-        obp = (H + d["BB"] + d["HBP"]) / obpden if obpden else 0
-        slg = TB / AB if AB else 0
-        batting.append({"team": t, "G": d["G"], "PA": d["PA"], "AB": AB, "R": d["R"], "H": H,
-                        "2B": d["2B"], "3B": d["3B"], "HR": d["HR"], "BB": d["BB"], "HBP": d["HBP"],
-                        "SO": d["SO"], "SH": d["SH"], "SF": d["SF"], "TB": TB,
-                        "AVG": rnd(avg, 3), "OBP": rnd(obp, 3), "SLG": rnd(slg, 3), "OPS": rnd(obp + slg, 3)})
-        outs = d["outs"]
-        ip = outs / 3
-        whip = (d["Hd"] + d["BBd"]) * 3 / outs if outs else 0
-        ra9 = d["Rd"] * 27 / outs if outs else 0
-        k9 = d["SOd"] * 27 / outs if outs else 0
-        bb9 = d["BBd"] * 27 / outs if outs else 0
-        avga = d["Hd"] / d["ABf"] if d["ABf"] else 0
-        ip_text = ("%d %d/3" % (outs // 3, outs % 3)) if outs % 3 else ("%d" % (outs // 3))
-        pitching.append({"team": t, "G": d["G"], "IP_outs": outs, "IP": rnd(ip, 1), "IP_text": ip_text,
-                         "H": d["Hd"], "R": d["Rd"], "BB": d["BBd"], "SO": d["SOd"], "HR": d["HRd"],
-                         "AB_against": d["ABf"], "WHIP": rnd(whip, 3), "RA9": rnd(ra9, 2),
-                         "K9": rnd(k9, 2), "BB9": rnd(bb9, 2), "AVG_against": rnd(avga, 3)})
-    batting.sort(key=lambda x: (x["OPS"] is None, -(x["OPS"] or 0)))
-    pitching.sort(key=lambda x: (x["IP_outs"] == 0, x["RA9"] if x["RA9"] is not None else 9e9))
-    return {"start": start, "end": end, "date_min": dmin, "date_max": dmax, "games": len(games),
-            "batting": batting, "pitching": pitching,
-            "note": "가용 PBP 이벤트 기준 집계입니다. KBO 공식 누적과 정의 차이로 미세한 차이가 있을 수 있습니다. "
-                    "투구는 자책점 구분이 어려워 ERA 대신 RA/9(실점 기준)를 제공합니다."}
-
 
 @app.get("/games")
 async def get_games(season: int = 2025, limit: int = 50):
@@ -1250,17 +1097,6 @@ async def get_futures_schedule(date: str = None):
             status_info = ("취소" if cancel else inning if live
                            else "종료" if final else "경기예정")
 
-            # 라이브 현재 타석. KBO 스코어보드의 T_P/B_P는 '투수/타자' 고정이 아니라
-            # 공격측 기준 선수(원정=T_P, 홈=B_P)이고, 이닝 초/말(GAME_TB_SC)에 따라
-            # 타자·투수가 뒤바뀐다(초=원정 공격, 말=홈 공격).
-            #   초(T): 타자=T_P(원정), 투수=B_P(홈 수비)
-            #   말(B): 타자=B_P(홈),   투수=T_P(원정 수비)
-            tb = str(g.get("GAME_TB_SC") or "")
-            t_p = (g.get("T_P_NM") or "").strip()
-            b_p = (g.get("B_P_NM") or "").strip()
-            cur_batter = (t_p if tb == "T" else b_p) if live else ""
-            cur_pitcher = (b_p if tb == "T" else t_p) if live else ""
-
             games.append({
                 "gameId": g.get("G_ID"),
                 "time": g.get("G_TM") or "",
@@ -1275,8 +1111,10 @@ async def get_futures_schedule(date: str = None):
                 "winner": winner,
                 "currentInning": inning,
                 "statusInfo": status_info,
-                "currentPitcher": cur_pitcher,
-                "currentBatter": cur_batter,
+                # 라이브 현재 타석: KBO 퓨처스 피드는 양 팀 투수가 아니라
+                # '현재 투수(T_P)'+'현재 타자(B_P)'만 제공 -> 투수/타자로 정확히 라벨링.
+                "currentPitcher": (g.get("T_P_NM") or "") if live else "",
+                "currentBatter": (g.get("B_P_NM") or "") if live else "",
                 "away": {
                     "code": ac,
                     "name": at.get("display_name") or g.get("AWAY_NM") or ac,

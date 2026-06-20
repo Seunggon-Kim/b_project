@@ -66,39 +66,33 @@
     <!-- Main Content -->
     <main class="container">
         <h1 class="fade-in"><span class="material-symbols-outlined">leaderboard</span> 팀 통계</h1>
-        <p class="text-secondary mb-3">KBO 팀별 기록입니다. 타격·투구는 탭으로 전환하고, 시즌 누적과 기간별을 한 화면에서 함께 봅니다. 표 머리글을 클릭하면 정렬됩니다.</p>
+        <p class="text-secondary mb-3">KBO 팀별 기록입니다. 타격·투구와 시즌 누적·기간별을 탭으로 선택해 봅니다. 표 머리글을 클릭하면 정렬됩니다.</p>
 
         <!-- 타격/투구 탭 -->
         <div class="fs-tabs" id="stat-tabs">
             <button type="button" id="tab-batting" class="fs-tab active">타격</button>
             <button type="button" id="tab-pitching" class="fs-tab">투구</button>
         </div>
-
-        <!-- 시즌·기간 컨트롤 (나란히) -->
-        <div class="card mb-3">
-            <div class="card-body" style="display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap;">
-                <span style="display:flex;align-items:center;gap:0.6rem;">
-                    <label for="season-select"><strong>시즌</strong></label>
-                    <select id="season-select" class="input" style="max-width:120px;">
-                        <option value="">불러오는 중…</option>
-                    </select>
-                    <span class="text-muted" id="season-note" style="font-size:0.85rem;"></span>
-                </span>
-                <span style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
-                    <label for="range-start"><strong>기간</strong></label>
-                    <input type="date" id="range-start" class="input" style="max-width:160px;">
-                    <span class="text-muted">~</span>
-                    <input type="date" id="range-end" class="input" style="max-width:160px;">
-                    <button type="button" id="range-go" class="tabbtn active">조회</button>
-                    <span class="text-muted" id="range-note" style="font-size:0.85rem;"></span>
-                </span>
-            </div>
+        <!-- 시즌 누적/기간별 탭 -->
+        <div class="fs-tabs" id="view-tabs">
+            <button type="button" class="fs-tab active" data-view="season">시즌 누적</button>
+            <button type="button" class="fs-tab" data-view="range">기간별</button>
         </div>
 
         <!-- ===== 섹션 A: 시즌 누적 ===== -->
         <section id="season-section">
-            <h2 class="section-head"><span class="material-symbols-outlined">calendar_view_month</span> 시즌 누적</h2>
             <p class="text-secondary mb-2" style="font-size:0.9rem;">선수 기록을 팀별로 합산한 시즌 누적 성적입니다.</p>
+
+            <!-- Season selector -->
+            <div class="card mb-3" id="season-panel">
+                <div class="card-body" style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+                    <label for="season-select"><strong>시즌</strong></label>
+                    <select id="season-select" class="input" style="max-width:140px;">
+                        <option value="">불러오는 중…</option>
+                    </select>
+                    <span class="text-muted" id="season-note" style="font-size:0.85rem;"></span>
+                </div>
+            </div>
 
             <div class="card stat-batting">
                 <div class="card-header">
@@ -130,9 +124,20 @@
         </section>
 
         <!-- ===== 섹션 B: 기간별 ===== -->
-        <section id="range-section" class="mt-4">
-            <h2 class="section-head"><span class="material-symbols-outlined">date_range</span> 기간별</h2>
+        <section id="range-section">
             <p class="text-secondary mb-2" style="font-size:0.9rem;">선택한 기간의 경기(PBP) 이벤트를 집계한 성적입니다.</p>
+
+            <!-- Date range selector -->
+            <div class="card mb-3" id="range-panel">
+                <div class="card-body" style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
+                    <label for="range-start"><strong>기간</strong></label>
+                    <input type="date" id="range-start" class="input" style="max-width:170px;">
+                    <span class="text-muted">~</span>
+                    <input type="date" id="range-end" class="input" style="max-width:170px;">
+                    <button type="button" id="range-go" class="tabbtn active">조회</button>
+                    <span class="text-muted" id="range-note" style="font-size:0.85rem;"></span>
+                </div>
+            </div>
 
             <div class="card stat-batting">
                 <div class="card-header">
@@ -409,6 +414,14 @@
             document.getElementById('tab-pitching').classList.toggle('active', !showBat);
         }
 
+        // ===== 시즌 누적/기간별 탭 =====
+        function showView(which) {
+            const view = which === 'range' ? 'range' : 'season';
+            document.getElementById('season-section').style.display = view === 'season' ? '' : 'none';
+            document.getElementById('range-section').style.display = view === 'range' ? '' : 'none';
+            document.querySelectorAll('#view-tabs .fs-tab').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+        }
+
         // ===== 시즌 드롭다운: 보유 데이터 기준 동적 생성 =====
         // /dashboard/stats 의 시즌 범위로 상·하한을 잡아 클라이언트 시계·하드코딩 의존을 제거하고,
         // 그 범위에서 각 연도를 프로브해 공식 기록이 있는 시즌만 채택, 세션 캐시로 재진입 시 재프로브 생략.
@@ -465,6 +478,11 @@
         document.getElementById('range-go').addEventListener('click', () => loadTeamRange(document.getElementById('range-start').value, document.getElementById('range-end').value));
         document.getElementById('tab-batting').addEventListener('click', () => showStat('batting'));
         document.getElementById('tab-pitching').addEventListener('click', () => showStat('pitching'));
+        document.getElementById('view-tabs').addEventListener('click', (e) => {
+            const btn = e.target.closest('.fs-tab'); if (!btn) return;
+            showView(btn.dataset.view);
+        });
+        showView('season');
 
         // 초기 로드: 시즌 누적과 기간별을 모두 채우고(탭은 타격 기본), 시즌은 동적 생성
         (async function init() {

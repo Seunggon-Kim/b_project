@@ -1,0 +1,14 @@
+{
+  "generated_at": "2026-06-21 00:00",
+  "timezone": "KST",
+  "jobs": {
+    "official_stats": "2026-06-20 02:16",
+    "pbp": "2026-06-20 03:31",
+    "player_detector": "2026-06-20 04:10",
+    "cleanup": "2026-06-20 04:42",
+    "park_factors": "2026-06-20 05:19",
+    "futures": "2026-06-20 23:30",
+    "player_info": null,
+    "registry_sync": "2026-06-20 05:42"
+  }
+}

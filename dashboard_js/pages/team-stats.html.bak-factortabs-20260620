@@ -28,11 +28,8 @@
         .section-head .material-symbols-outlined { font-size: 1.4rem; }
         /* 4개 표가 동시에 스피너→표로 교체될 때 레이아웃 점프를 줄이기 위한 최소 높이 */
         #team-batting-season, #team-pitching-season, #team-batting-range, #team-pitching-range { min-height: 320px; }
-        /* factor-stats(.fs-tab)와 동일한 밑줄형 탭 */
-        .fs-tabs { display: flex; justify-content: center; gap: 0.5rem; border-bottom: 2px solid var(--border-color); margin-bottom: 1.25rem; flex-wrap: wrap; }
-        .fs-tab { background: none; border: none; padding: 0.7rem 1.4rem; font-size: 1rem; font-weight: 600; font-family: inherit; color: var(--text-secondary); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; display: inline-flex; align-items: center; gap: 0.4rem; }
-        .fs-tab:hover { color: var(--primary); }
-        .fs-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        /* 전역 타격/투구 탭 */
+        .stat-tabs { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0 0 1rem; position: sticky; top: 0; z-index: 5; background: var(--bg, transparent); padding: 0.4rem 0; }
         /* 정렬 가능한 표 헤더 */
         .table th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
         .table th.sortable:hover { color: #3b82f6; }
@@ -66,39 +63,29 @@
     <!-- Main Content -->
     <main class="container">
         <h1 class="fade-in"><span class="material-symbols-outlined">leaderboard</span> 팀 통계</h1>
-        <p class="text-secondary mb-3">KBO 팀별 기록입니다. 타격·투구는 탭으로 전환하고, 시즌 누적과 기간별을 한 화면에서 함께 봅니다. 표 머리글을 클릭하면 정렬됩니다.</p>
+        <p class="text-secondary mb-3">KBO 팀별 타격·투구 기록입니다. 상단 탭에서 타격/투구를 전환하며, 시즌 누적과 기간별 성적을 함께 봅니다. 표 머리글을 클릭하면 정렬됩니다.</p>
 
-        <!-- 타격/투구 탭 -->
-        <div class="fs-tabs" id="stat-tabs">
-            <button type="button" id="tab-batting" class="fs-tab active">타격</button>
-            <button type="button" id="tab-pitching" class="fs-tab">투구</button>
-        </div>
-
-        <!-- 시즌·기간 컨트롤 (나란히) -->
-        <div class="card mb-3">
-            <div class="card-body" style="display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap;">
-                <span style="display:flex;align-items:center;gap:0.6rem;">
-                    <label for="season-select"><strong>시즌</strong></label>
-                    <select id="season-select" class="input" style="max-width:120px;">
-                        <option value="">불러오는 중…</option>
-                    </select>
-                    <span class="text-muted" id="season-note" style="font-size:0.85rem;"></span>
-                </span>
-                <span style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
-                    <label for="range-start"><strong>기간</strong></label>
-                    <input type="date" id="range-start" class="input" style="max-width:160px;">
-                    <span class="text-muted">~</span>
-                    <input type="date" id="range-end" class="input" style="max-width:160px;">
-                    <button type="button" id="range-go" class="tabbtn active">조회</button>
-                    <span class="text-muted" id="range-note" style="font-size:0.85rem;"></span>
-                </span>
-            </div>
+        <!-- 전역 타격/투구 탭 -->
+        <div class="stat-tabs">
+            <button type="button" id="tab-batting" class="tabbtn active">팀 타격</button>
+            <button type="button" id="tab-pitching" class="tabbtn">팀 투구</button>
         </div>
 
         <!-- ===== 섹션 A: 시즌 누적 ===== -->
         <section id="season-section">
             <h2 class="section-head"><span class="material-symbols-outlined">calendar_view_month</span> 시즌 누적</h2>
             <p class="text-secondary mb-2" style="font-size:0.9rem;">선수 기록을 팀별로 합산한 시즌 누적 성적입니다.</p>
+
+            <!-- Season selector -->
+            <div class="card mb-3" id="season-panel">
+                <div class="card-body" style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+                    <label for="season-select"><strong>시즌</strong></label>
+                    <select id="season-select" class="input" style="max-width:140px;">
+                        <option value="">불러오는 중…</option>
+                    </select>
+                    <span class="text-muted" id="season-note" style="font-size:0.85rem;"></span>
+                </div>
+            </div>
 
             <div class="card stat-batting">
                 <div class="card-header">
@@ -133,6 +120,18 @@
         <section id="range-section" class="mt-4">
             <h2 class="section-head"><span class="material-symbols-outlined">date_range</span> 기간별</h2>
             <p class="text-secondary mb-2" style="font-size:0.9rem;">선택한 기간의 경기(PBP) 이벤트를 집계한 성적입니다.</p>
+
+            <!-- Date range selector -->
+            <div class="card mb-3" id="range-panel">
+                <div class="card-body" style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
+                    <label for="range-start"><strong>기간</strong></label>
+                    <input type="date" id="range-start" class="input" style="max-width:170px;">
+                    <span class="text-muted">~</span>
+                    <input type="date" id="range-end" class="input" style="max-width:170px;">
+                    <button type="button" id="range-go" class="tabbtn active">조회</button>
+                    <span class="text-muted" id="range-note" style="font-size:0.85rem;"></span>
+                </div>
+            </div>
 
             <div class="card stat-batting">
                 <div class="card-header">

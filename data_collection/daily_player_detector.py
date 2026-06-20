@@ -13,7 +13,6 @@ Step 2: 매일 player 변경 감지 + selenium 재크롤 + SCD Type 2 history �
 """
 import sys
 sys.path.insert(0, "/home/ubuntu/b_project/data_collection")
-sys.path.insert(0, "/tmp")  # scrape_missing_players fallback
 import sqlite3
 import time
 import logging
@@ -46,11 +45,19 @@ def detect_suspects(con):
     # (PBP만으론 batter team 정확 추론 불가능 — 대주자 등 케이스)
 
     # Source 2: KBO official stats team 변경 (가장 신뢰)
+    # 현 시즌만 비교한다 — 과거 시즌 row까지 보면 시즌 사이에 이적한 선수가
+    # 옛 팀으로 매일 되돌아가는 진동(A↔B)이 생긴다.
+    cur.execute("""
+        SELECT MAX(s) FROM (
+            SELECT MAX(season) AS s FROM kbo_official_batter_stats
+            UNION ALL SELECT MAX(season) FROM kbo_official_pitcher_stats)
+    """)
+    season = cur.fetchone()[0]
     cur.execute("""
         SELECT k.player_id, k.player_team AS new_team, p.team_id AS old_team
         FROM kbo_official_batter_stats k
         JOIN players p ON p.player_id = k.player_id
-        WHERE k.season >= 2025
+        WHERE k.season = ?
           AND k.player_team IS NOT NULL
           AND p.team_id IS NOT NULL
           AND k.player_team <> p.team_id
@@ -58,11 +65,11 @@ def detect_suspects(con):
         SELECT k.player_id, k.player_team AS new_team, p.team_id AS old_team
         FROM kbo_official_pitcher_stats k
         JOIN players p ON p.player_id = k.player_id
-        WHERE k.season >= 2025
+        WHERE k.season = ?
           AND k.player_team IS NOT NULL
           AND p.team_id IS NOT NULL
           AND k.player_team <> p.team_id
-    """)
+    """, (season, season))
     for pid, new_t, old_t in cur.fetchall():
         suspects[pid] = ("KBO_team", new_t, old_t)
 
@@ -184,17 +191,19 @@ def main():
         con.close()
         return
 
-    # selenium 재크롤 (의심 player만)
-    from scrape_missing_players import make_driver, scrape_player
+    # 의심 player만 재수집 (requests 기반 — selenium·/tmp 사본 의존 제거)
+    from player_registry_sync import make_session, scrape_player_profile
 
-    driver = make_driver()
+    session = make_session()
     n_changed = 0
     for pid, (src, new, old) in suspects.items():
         try:
-            new_data = scrape_player(driver, pid)
+            new_data = scrape_player_profile(session, pid)
             if not new_data or not new_data.get("player_name"):
                 logger.warning(f"  {pid} scrape fail")
                 continue
+            # 프로필 페이지에는 팀 표기가 없으므로, 공식 스탯 신호일 때만 새 팀을 반영
+            new_data["team_id"] = new if src == "KBO_team" else old
             # 비교: 현재 players와 다른 필드 있나
             cur.execute("SELECT team_id, back_number, position, throw, bat, height, weight FROM players WHERE player_id=?", (pid,))
             old_row = cur.fetchone()
@@ -205,6 +214,10 @@ def main():
                     logger.info(f"  {pid} {new_data['player_name']}: no actual change despite suspect")
                     continue
                 logger.info(f"  {pid} {new_data['player_name']}: changed fields = {changed_fields}")
+                # 프로필에서 못 읽은 필드(None)는 기존 값을 유지 — NULL 덮어쓰기 방지
+                for f, ov in zip(fields, old_row):
+                    if new_data.get(f) is None:
+                        new_data[f] = ov
 
             upsert_history(con, pid, new_data, src)
             con.commit()
@@ -213,7 +226,6 @@ def main():
             logger.error(f"  {pid} error: {e}")
         time.sleep(0.5)
 
-    driver.quit()
     con.close()
     logger.info(f"done: changes confirmed = {n_changed}")
 

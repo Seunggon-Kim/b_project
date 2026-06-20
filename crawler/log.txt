@@ -176,3 +176,20 @@ ValueError: invalid literal for int() with base 10: 'KWO0'
 gid_year = int(gid[-4:])
 File "/home/ubuntu/b_project/crawler/download.py", line 952, in download_pbp_files
 Traceback (most recent call last):
+
+====================================
+Current Time : 2026-06-14T15:00:34.918344
+====================================
+FAILED gameID 20110501HHSS0 : JSONDecodeError('Expecting value: line 1 column 1 (char 0)')
+FAILED gameID 20110501LTHT0 : JSONDecodeError('Expecting value: line 1 column 1 (char 0)')
+FAILED gameID 20110501OBSK0 : JSONDecodeError('Expecting value: line 1 column 1 (char 0)')
+FAILED gameID 20110501WOLG0 : JSONDecodeError('Expecting value: line 1 column 1 (char 0)')
+====================================
+Start date : 20110501
+End date : 20110501
+Successfully downloaded games : 0
+Skipped games(already exists) : 0
+Broken games(bad data) : 0
+Failed games(exception, skipped) : 4
+====================================
+Total 1.98 sec elapsed with 4 games

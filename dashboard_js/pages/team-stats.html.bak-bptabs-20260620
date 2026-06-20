@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>팀 통계 - Bstats</title>
+    <meta name="description" content="KBO 팀별 타격·투구 기록 (시즌 누적·기간별)">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
+
+    <!-- Favicon (다이아몬드) -->
+    <link rel="icon" href="../assets/favicon/diamond.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon/diamond.svg">
+    <link rel="apple-touch-icon" href="../assets/favicon/diamond-180.png">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        .tabbtn { background: transparent; color: inherit; border: 1px solid #94a3b8; border-radius: 8px; padding: 0.4rem 0.9rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; }
+        .tabbtn.active { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+        .tabbtn:hover { border-color: #3b82f6; }
+        .section-head { display: flex; align-items: center; gap: 0.4rem; font-size: 1.25rem; font-weight: 700; margin: 0 0 0.25rem; }
+        .section-head .material-symbols-outlined { font-size: 1.4rem; }
+        /* 4개 표가 동시에 스피너→표로 교체될 때 레이아웃 점프를 줄이기 위한 최소 높이 */
+        #team-batting-season, #team-pitching-season, #team-batting-range, #team-pitching-range { min-height: 320px; }
+    </style>
+    <script src="../js/theme-toggle.js"></script>
+    <script src="../js/nav.js"></script>
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <a href="../" class="logo">
+                <img src="../assets/favicon/diamond.svg" alt="" class="logo-icon" width="26" height="26">
+                <span>Bstats</span>
+            </a>
+            <nav class="nav">
+                <a href="../" class="nav-link">홈</a>
+                <a href="team-stats" class="nav-link active">팀 통계</a>
+                <a href="player-stats" class="nav-link">선수 통계</a>
+                <a href="player-analytics" class="nav-link">선수 분석</a>
+                <a href="article" class="nav-link">아티클</a>
+                <a href="factor-stats" class="nav-link">요인 통계</a>
+                <a href="database-explorer" class="nav-link">데이터 탐색</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container">
+        <h1 class="fade-in"><span class="material-symbols-outlined">leaderboard</span> 팀 통계</h1>
+        <p class="text-secondary mb-3">KBO 팀별 타격·투구 기록입니다. 시즌 누적과 기간별 성적을 한 화면에서 함께 표시합니다.</p>
+
+        <!-- ===== 섹션 A: 시즌 누적 ===== -->
+        <section id="season-section">
+            <h2 class="section-head"><span class="material-symbols-outlined">calendar_view_month</span> 시즌 누적</h2>
+            <p class="text-secondary mb-2" style="font-size:0.9rem;">선수 기록을 팀별로 합산한 시즌 누적 성적입니다.</p>
+
+            <!-- Season selector -->
+            <div class="card mb-3" id="season-panel">
+                <div class="card-body" style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+                    <label for="season-select"><strong>시즌</strong></label>
+                    <select id="season-select" class="input" style="max-width:140px;">
+                        <option value="2026">2026</option>
+                        <option value="2025">2025</option>
+                        <option value="2024">2024</option>
+                        <option value="2023">2023</option>
+                        <option value="2022">2022</option>
+                    </select>
+                    <span class="text-muted" id="season-note" style="font-size:0.85rem;"></span>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title" id="bat-season-title">팀 타격 (시즌 누적)</h3>
+                </div>
+                <div class="card-body">
+                    <div id="team-batting-season"></div>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h3 class="card-title" id="pit-season-title">팀 투구 (시즌 누적)</h3>
+                </div>
+                <div class="card-body">
+                    <div id="team-pitching-season"></div>
+                </div>
+            </div>
+
+            <div class="card mt-3"
+                style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);">
+                <div class="card-body">
+                    <p class="text-muted" style="font-size:0.85rem;margin:0;" id="caveat-note-season">
+                        출처: KBO 공식 선수 기록을 팀별로 합산해 계산합니다. AVG·OBP·SLG·OPS·ERA·WHIP는 성분에서 재산출합니다.
+                        현재 진행 중인 시즌은 최신 일일 갱신 기준이라 KBO 실시간과 1~2경기 차이가 날 수 있습니다.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== 섹션 B: 기간별 ===== -->
+        <section id="range-section" class="mt-4">
+            <h2 class="section-head"><span class="material-symbols-outlined">date_range</span> 기간별</h2>
+            <p class="text-secondary mb-2" style="font-size:0.9rem;">선택한 기간의 경기(PBP) 이벤트를 집계한 성적입니다.</p>
+
+            <!-- Date range selector -->
+            <div class="card mb-3" id="range-panel">
+                <div class="card-body" style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
+                    <label for="range-start"><strong>기간</strong></label>
+                    <input type="date" id="range-start" class="input" style="max-width:170px;">
+                    <span class="text-muted">~</span>
+                    <input type="date" id="range-end" class="input" style="max-width:170px;">
+                    <button type="button" id="range-go" class="tabbtn active">조회</button>
+                    <span class="text-muted" id="range-note" style="font-size:0.85rem;"></span>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">팀 타격 (기간별)</h3>
+                </div>
+                <div class="card-body">
+                    <div id="team-batting-range"></div>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h3 class="card-title">팀 투구 (기간별)</h3>
+                </div>
+                <div class="card-body">
+                    <div id="team-pitching-range"></div>
+                </div>
+            </div>
+
+            <div class="card mt-3"
+                style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);">
+                <div class="card-body">
+                    <p class="text-muted" style="font-size:0.85rem;margin:0;" id="caveat-note-range">
+                        선택한 기간 내 종료 경기의 PBP 이벤트를 집계합니다. 시즌 누적과 산출 방식이 달라 수치가 다를 수 있습니다.
+                    </p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="../js/api.js"></script>
+    <script src="../js/components.js"></script>
+    <script>
+        const TEAM_CODE = { 'KT': 'KT', 'LG': 'LG', 'NC': 'NC', '두산': 'OB', '롯데': 'LT', '삼성': 'SS', '키움': 'WO', '한화': 'HH', 'KIA': 'HT', 'SSG': 'SK' };
+        const num = v => (v === null || v === undefined || v === '') ? 0 : (+v || 0);
+
+        function emblem(team) {
+            const c = TEAM_CODE[team];
+            const img = c ? `<img src="../assets/logos/${c}.png" alt="" style="height:20px;width:20px;object-fit:contain;vertical-align:middle;margin-right:6px;">` : '';
+            return img + team;
+        }
+        function avg3(x) { return (x || 0).toFixed(3).replace(/^0\./, '.'); }
+
+        // '81 1/3' -> 244 outs
+        function ipOuts(s) {
+            s = String(s == null ? '' : s).trim();
+            const m = s.match(/^(\d+)(?:\s+([12])\/3)?$/);
+            return m ? (+m[1]) * 3 + (m[2] ? +m[2] : 0) : 0;
+        }
+        function ipFmt(outs) { const w = Math.floor(outs / 3), r = outs % 3; return r ? `${w} ${r}/3` : `${w}`; }
+
+        function aggBatting(rows) {
+            const m = {};
+            for (const r of rows) {
+                const t = r.player_team; if (!t) continue;
+                const a = m[t] || (m[t] = { team: t, pa: 0, ab: 0, r: 0, h: 0, d2: 0, d3: 0, hr: 0, tb: 0, rbi: 0, bb: 0, so: 0, hbp: 0, sf: 0 });
+                a.pa += num(r.plate_appearance); a.ab += num(r.at_bat); a.r += num(r.run);
+                a.h += num(r.single); a.d2 += num(r.double); a.d3 += num(r.triple); a.hr += num(r.home_run);
+                a.tb += num(r.total_bases); a.rbi += num(r.run_batted_in); a.bb += num(r.base_on_balls);
+                a.so += num(r.strikeout); a.hbp += num(r.hit_by_pitch); a.sf += num(r.sacrifice_fly);
+            }
+            return Object.values(m).map(a => {
+                a.avg = a.ab ? a.h / a.ab : 0;
+                const obpDen = a.ab + a.bb + a.hbp + a.sf;
+                a.obp = obpDen ? (a.h + a.bb + a.hbp) / obpDen : 0;
+                a.slg = a.ab ? a.tb / a.ab : 0;
+                a.ops = a.obp + a.slg;
+                return a;
+            }).sort((x, y) => y.avg - x.avg);
+        }
+        function aggPitching(rows) {
+            const m = {};
+            for (const r of rows) {
+                const t = r.player_team; if (!t) continue;
+                const a = m[t] || (m[t] = { team: t, outs: 0, h: 0, r: 0, er: 0, bb: 0, so: 0, hr: 0, w: 0, l: 0, sv: 0, hld: 0 });
+                a.outs += ipOuts(r.innings_pitched); a.h += num(r.hits); a.r += num(r.run); a.er += num(r.earned_run);
+                a.bb += num(r.base_on_balls); a.so += num(r.strikeout); a.hr += num(r.home_run);
+                a.w += num(r.wins); a.l += num(r.losses); a.sv += num(r.save); a.hld += num(r.hold);
+            }
+            return Object.values(m).map(a => {
+                a.era = a.outs ? a.er * 27 / a.outs : 0;
+                a.whip = a.outs ? (a.h + a.bb) * 3 / a.outs : 0;
+                a.k9 = a.outs ? a.so * 27 / a.outs : 0;
+                return a;
+            }).sort((x, y) => x.era - y.era);
+        }
+
+        // ===== 시즌 누적(선수 기록 합산) 팀 성적 =====
+        async function loadTeamStats(season) {
+            const batDiv = document.getElementById('team-batting-season');
+            const pitDiv = document.getElementById('team-pitching-season');
+            batDiv.innerHTML = createLoadingSpinner();
+            pitDiv.innerHTML = createLoadingSpinner();
+            document.getElementById('season-note').textContent = `${season} 시즌`;
+            document.getElementById('bat-season-title').textContent = `팀 타격 (${season} 시즌 누적)`;
+            document.getElementById('pit-season-title').textContent = `팀 투구 (${season} 시즌 누적)`;
+            try {
+                const [bd, pd] = await Promise.all([
+                    API.getBatterStats(season, 2000, 0, ''),
+                    API.getPitcherStats(season, 2000, 0, '')
+                ]);
+                const batters = (bd && bd.batters) || [];
+                const pitchers = (pd && pd.pitchers) || [];
+
+                if (!batters.length) {
+                    batDiv.innerHTML = createEmptyState('해당 시즌 타격 기록이 없습니다.');
+                } else {
+                    const bat = aggBatting(batters);
+                    const bh = ['순위', '팀', 'AVG', 'PA', 'AB', 'R', 'H', '2B', '3B', 'HR', 'TB', 'RBI', 'BB', 'SO', 'OBP', 'SLG', 'OPS'];
+                    const br = bat.map((a, i) => [i + 1, emblem(a.team), avg3(a.avg), a.pa, a.ab, a.r, a.h, a.d2, a.d3, a.hr, a.tb, a.rbi, a.bb, a.so, avg3(a.obp), avg3(a.slg), avg3(a.ops)]);
+                    batDiv.innerHTML = createTable(bh, br);
+                }
+
+                if (!pitchers.length) {
+                    pitDiv.innerHTML = createEmptyState('해당 시즌 투구 기록이 없습니다.');
+                } else {
+                    const pit = aggPitching(pitchers);
+                    const ph = ['순위', '팀', 'ERA', 'W', 'L', 'SV', 'HLD', 'IP', 'H', 'R', 'ER', 'BB', 'SO', 'HR', 'WHIP', 'K/9'];
+                    const pr = pit.map((a, i) => [i + 1, emblem(a.team), a.era.toFixed(2), a.w, a.l, a.sv, a.hld, ipFmt(a.outs), a.h, a.r, a.er, a.bb, a.so, a.hr, a.whip.toFixed(2), a.k9.toFixed(2)]);
+                    pitDiv.innerHTML = createTable(ph, pr);
+                }
+            } catch (e) {
+                batDiv.innerHTML = createErrorMessage('팀 기록을 불러오는데 실패했습니다.');
+                pitDiv.innerHTML = '';
+            }
+        }
+
+        // ===== 기간별(PBP) 팀 성적 =====
+        function fmtDate(dt) { const z = n => String(n).padStart(2, '0'); return dt.getFullYear() + '-' + z(dt.getMonth() + 1) + '-' + z(dt.getDate()); }
+        function fmtYmd(n) { const s = String(n == null ? '' : n); return s.length === 8 ? s.slice(0, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6, 8) : s; }
+
+        function renderRange(d) {
+            const batDiv = document.getElementById('team-batting-range');
+            const pitDiv = document.getElementById('team-pitching-range');
+            const b = (d && d.batting) || [], p = (d && d.pitching) || [];
+            if (!b.length) {
+                batDiv.innerHTML = createEmptyState('해당 기간 타격 기록이 없습니다.');
+            } else {
+                const bh = ['순위', '팀', 'G', 'AVG', 'PA', 'AB', 'R', 'H', '2B', '3B', 'HR', 'TB', 'BB', 'SO', 'OBP', 'SLG', 'OPS'];
+                const br = b.map((a, i) => [i + 1, emblem(a.team), a.G, avg3(a.AVG), a.PA, a.AB, a.R, a.H, a['2B'], a['3B'], a.HR, a.TB, a.BB, a.SO, avg3(a.OBP), avg3(a.SLG), avg3(a.OPS)]);
+                batDiv.innerHTML = createTable(bh, br);
+            }
+            if (!p.length) {
+                pitDiv.innerHTML = createEmptyState('해당 기간 투구 기록이 없습니다.');
+            } else {
+                const ph = ['순위', '팀', 'G', 'IP', 'H', 'R', 'BB', 'SO', 'HR', 'WHIP', 'RA/9', 'K/9', '피AVG'];
+                const pr = p.map((a, i) => [i + 1, emblem(a.team), a.G, a.IP_text, a.H, a.R, a.BB, a.SO, a.HR, (a.WHIP || 0).toFixed(2), (a.RA9 || 0).toFixed(2), (a.K9 || 0).toFixed(2), avg3(a.AVG_against)]);
+                pitDiv.innerHTML = createTable(ph, pr);
+            }
+        }
+
+        async function loadTeamRange(start, end) {
+            const batDiv = document.getElementById('team-batting-range');
+            const pitDiv = document.getElementById('team-pitching-range');
+            if (!start || !end) { batDiv.innerHTML = createEmptyState('기간을 선택해 주세요.'); pitDiv.innerHTML = ''; return; }
+            batDiv.innerHTML = createLoadingSpinner();
+            pitDiv.innerHTML = createLoadingSpinner();
+            try {
+                const res = await fetch(`${API_BASE_URL}/stats/team_range?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
+                if (!res.ok) throw new Error('http ' + res.status);
+                const d = await res.json();
+                renderRange(d);
+                const rn = document.getElementById('range-note');
+                if (rn) rn.textContent = d.games ? `반영: ${fmtYmd(d.date_min)} ~ ${fmtYmd(d.date_max)}, ${d.games}경기` : '해당 기간 경기 없음';
+                const cn = document.getElementById('caveat-note-range');
+                if (cn && d.note) cn.textContent = d.note;
+            } catch (e) {
+                batDiv.innerHTML = createErrorMessage('기간별 기록을 불러오는데 실패했습니다.');
+                pitDiv.innerHTML = '';
+            }
+        }
+
+        // 기간 기본값: 최근 14일
+        (function () {
+            const end = new Date();
+            const start = new Date(end.getTime() - 13 * 86400000);
+            document.getElementById('range-start').value = fmtDate(start);
+            document.getElementById('range-end').value = fmtDate(end);
+        })();
+
+        // 이벤트 바인딩
+        const sel = document.getElementById('season-select');
+        sel.addEventListener('change', () => loadTeamStats(sel.value));
+        document.getElementById('range-go').addEventListener('click', () => loadTeamRange(document.getElementById('range-start').value, document.getElementById('range-end').value));
+
+        // 초기 로드: 시즌 누적과 기간별을 모두 표시
+        loadTeamStats(sel.value);
+        loadTeamRange(document.getElementById('range-start').value, document.getElementById('range-end').value);
+    </script>
+</body>
+
+</html>

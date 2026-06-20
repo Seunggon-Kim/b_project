@@ -4,16 +4,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>팀 통계 - KBO Analytics</title>
+    <title>팀 통계 - Baseball Estudiar</title>
     <meta name="description" content="KBO 팀별 순위 및 성적">
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
+
+    <!-- Favicon (다이아몬드) -->
+    <link rel="icon" href="../assets/favicon/diamond.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon/diamond.svg">
+    <link rel="apple-touch-icon" href="../assets/favicon/diamond-180.png">
 
     <!-- Styles -->
     <link rel="stylesheet" href="../css/style.css">
+    <script src="../js/theme-toggle.js"></script>
 </head>
 
 <body>
@@ -21,23 +28,24 @@
     <header class="header">
         <div class="header-content">
             <a href="../" class="logo">
-                <span class="logo-icon">⚾</span>
-                <span>KBO Analytics</span>
+                <img src="../assets/favicon/diamond.svg" alt="" class="logo-icon" width="26" height="26">
+                <span>Baseball Estudiar</span>
             </a>
             <nav class="nav">
-                <a href="http://43.200.4.183/" class="nav-link">홈</a>
-                <a href="team-stats.html" class="nav-link active">팀 통계</a>
-                <a href="player-stats.html" class="nav-link">선수 통계</a>
-                <a href="player-analytics.html" class="nav-link">선수 분석</a>
-                <a href="database-explorer.html" class="nav-link">데이터 탐색</a>
+                <a href="../" class="nav-link">홈</a>
+                <a href="team-stats" class="nav-link active">팀 통계</a>
+                <a href="player-stats" class="nav-link">선수 통계</a>
+                <a href="player-analytics" class="nav-link">선수 분석</a>
+                <a href="article" class="nav-link">아티클</a>
+                <a href="factor-stats" class="nav-link">요인 통계</a>
+                <a href="database-explorer" class="nav-link">데이터 탐색</a>
             </nav>
-
         </div>
     </header>
 
     <!-- Main Content -->
     <main class="container">
-        <h1 class="fade-in">📈 팀 통계</h1>
+        <h1 class="fade-in"><span class="material-symbols-outlined">leaderboard</span> 팀 통계</h1>
         <p class="text-secondary mb-3">2025 시즌 팀별 순위 및 성적</p>
 
         <!-- Teams List -->
@@ -57,7 +65,7 @@
             <div class="card"
                 style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);">
                 <div class="card-body">
-                    <h4>📊 팀 통계 정보</h4>
+                    <h4><span class="material-symbols-outlined">analytics</span> 팀 통계 정보</h4>
                     <p>현재 KBO 리그에 등록된 팀 목록입니다. 상세한 팀별 순위 및 성적은 추후 업데이트될 예정입니다.</p>
                     <p class="mt-2"><strong>포함 예정 데이터:</strong></p>
                     <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">

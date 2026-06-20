@@ -1,0 +1,12 @@
+2026-06-15 08:28:45 ===== auto-chain 시작: 백필 종료 대기 =====
+2026-06-15 09:07:17 백필 프로세스 종료 감지. 성공 게이트 검사 시작(quick_check 포함, 수분 소요 가능).
+2026-06-15 09:24:49 게이트 결과:
+indexes: ['idx_pbp_game', 'idx_pbp_batter', 'idx_pbp_pitcher'] (ok)
+years: {2010: 166176, 2011: 164553, 2012: 162640, 2013: 183641, 2014: 188159} (ok)
+integrity: ok
+GATE=PASS
+2026-06-15 09:24:49 게이트 PASS -> Phase C 시작
+2026-06-15 09:36:23 Phase C 종료 rc=0 (상세: logs/phase_c.log)
+2026-06-15 09:36:23 최종 검증 standalone 실행 -> logs/verify_full.log
+2026-06-15 09:44:04 검증 rc=0 (결과: logs/verify_full.log)
+2026-06-15 09:44:04 ===== auto-chain 완료 =====

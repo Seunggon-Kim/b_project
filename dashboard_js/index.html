@@ -21,6 +21,7 @@
     <!-- Styles -->
     <link rel="stylesheet" href="css/style.css">
     <script src="js/theme-toggle.js"></script>
+    <script src="js/nav.js"></script>
 </head>
 
 <body>
@@ -29,16 +30,16 @@
         <div class="header-content">
             <a href="./" class="logo">
                 <img src="assets/favicon/diamond.svg" alt="" class="logo-icon" width="26" height="26">
-                <span>C - Baseball Research Center</span>
+                <span>Bstats</span>
             </a>
             <nav class="nav">
-                <a href="./" class="nav-link">홈</a>
-                <a href="pages/team-stats.html" class="nav-link">팀 통계</a>
-                <a href="pages/player-stats.html" class="nav-link">선수 통계</a>
-                <a href="pages/player-analytics.html" class="nav-link">선수 분석</a>
-                <a href="pages/wrc-comparison.html" class="nav-link">wRC+ 강건성</a>
-                <a href="pages/factor-stats.html" class="nav-link">요인 통계</a>
-                <a href="pages/database-explorer.html" class="nav-link">데이터 탐색</a>
+                <a href="./" class="nav-link active">홈</a>
+                <a href="pages/team-stats" class="nav-link">팀 통계</a>
+                <a href="pages/player-stats" class="nav-link">선수 통계</a>
+                <a href="pages/player-analytics" class="nav-link">선수 분석</a>
+                <a href="pages/article" class="nav-link">아티클</a>
+                <a href="pages/factor-stats" class="nav-link">요인 통계</a>
+                <a href="pages/database-explorer" class="nav-link">데이터 탐색</a>
             </nav>
         </div>
     </header>
@@ -90,51 +91,12 @@
             </div>
         </section>
 
-        <!-- Quick Links -->
-        <section class="mb-3">
-            <h2 class="mb-2"><span class="material-symbols-outlined">search</span> 분석 둘러보기</h2>
-            <div class="quicklink-grid">
-                <a href="pages/team-stats.html" class="quicklink-card">
-                    <span class="material-symbols-outlined ql-icon">leaderboard</span><span class="ql-title">팀 통계</span>
-                    <span class="ql-desc">순위·승률·득실점</span>
-                </a>
-                <a href="pages/player-stats.html" class="quicklink-card">
-                    <span class="material-symbols-outlined ql-icon">sports_cricket</span><span class="ql-title">선수 통계</span>
-                    <span class="ql-desc">타자·투수 기록</span>
-                </a>
-                <a href="pages/player-analytics.html" class="quicklink-card">
-                    <span class="material-symbols-outlined ql-icon">person_search</span><span class="ql-title">선수 분석</span>
-                    <span class="ql-desc">프로필·구종·시즌추이</span>
-                </a>
-                <a href="pages/wrc-comparison.html" class="quicklink-card">
-                    <span class="material-symbols-outlined ql-icon">analytics</span><span class="ql-title">wRC+ 강건성</span>
-                    <span class="ql-desc">파크팩터 시나리오</span>
-                </a>
-                <a href="pages/factor-stats.html" class="quicklink-card">
-                    <span class="material-symbols-outlined ql-icon">tune</span><span class="ql-title">요인 통계</span>
-                    <span class="ql-desc">파크팩터·RE24</span>
-                </a>
-                <a href="pages/database-explorer.html" class="quicklink-card">
-                    <span class="material-symbols-outlined ql-icon">table_view</span><span class="ql-title">데이터 탐색</span>
-                    <span class="ql-desc">Play-by-Play DB</span>
-                </a>
-            </div>
-        </section>
-
-        <!-- Data Overview (compact) -->
-        <section id="stats-overview" class="mb-3">
-            <h2 class="mb-2"><span class="material-symbols-outlined">database</span> 데이터 현황</h2>
-            <div id="stats-grid" class="grid grid-4">
-                <!-- Stats loaded here -->
-            </div>
-        </section>
     </main>
 
     <!-- Footer -->
     <footer
-        style="text-align: center; padding: 2rem; color: var(--text-muted); border-top: 1px solid var(--border-color); margin-top: 4rem;">
-        <p>KBO 야구 데이터 대시보드 v3.1 | 데이터 출처: Naver 스포츠, KBO 공식 홈페이지</p>
-        <p style="font-size: 0.875rem; margin-top: 0.5rem;">경기 일정·결과 실시간 연동 | JavaScript Premium Edition</p>
+        style="text-align: center; padding: 2rem; color: var(--text-muted); border-top: 1px solid var(--border-color); margin-top: 0;">
+        <p>KBO 야구 데이터 대시보드 | 데이터 출처: Naver 스포츠, KBO 공식 홈페이지</p>
     </footer>
 
     <!-- Scripts -->
@@ -249,6 +211,29 @@
             </div>`;
         }
 
+        // 퓨처스 투수 행: 라이브는 '투수/타자'(KBO 퓨처스 피드는 양 팀 투수가 아니라
+        // 현재 투수 + 현재 타자만 제공), 종료는 승/패/세(KBO 확정 후 채워짐).
+        function futuresPitcherRow(g) {
+            if (g.cancel) return '';
+            if (g.final) {
+                const d = g.decisions || {};
+                const items = [];
+                if (d.win)  items.push(`<span class="pdec"><span class="pdec-tag win">승</span>${esc(d.win)}</span>`);
+                if (d.lose) items.push(`<span class="pdec"><span class="pdec-tag lose">패</span>${esc(d.lose)}</span>`);
+                if (d.save) items.push(`<span class="pdec"><span class="pdec-tag save">세</span>${esc(d.save)}</span>`);
+                if (!items.length) return '';
+                return `<div class="game-pitchers final">${items.join('')}</div>`;
+            }
+            if (g.live && (g.currentPitcher || g.currentBatter)) {
+                return `<div class="game-pitchers live">
+                    <span class="pp away">투수 ${esc(g.currentPitcher || '미정')}</span>
+                    <span class="pp-label">vs</span>
+                    <span class="pp home">타자 ${esc(g.currentBatter || '미정')}</span>
+                </div>`;
+            }
+            return '';
+        }
+
         function renderFuturesGame(g) {
             const cls = g.cancel ? 'cancel' : (g.final ? 'final' : (g.live ? 'live' : 'before'));
             let center;
@@ -280,7 +265,7 @@
                     </div>
                     ${futuresTeamBlock(g.home, 'home', g.winner)}
                 </div>
-                ${pitcherRow(g)}
+                ${futuresPitcherRow(g)}
                 ${exhibition ? `<div class="game-card-foot"><span class="series-badge exhibition">교류전</span></div>` : ''}
             </div>`;
         }
@@ -473,23 +458,6 @@
         });
         loadLeaders();
 
-        // ===== 데이터 현황 (기존 통계 카운트) =====
-        async function loadDashboardStats() {
-            const statsGrid = document.getElementById('stats-grid');
-            statsGrid.innerHTML = createLoadingSpinner();
-            try {
-                const data = await API.getDashboardStats();
-                statsGrid.innerHTML = `
-                    ${createStatCard('경기 수', formatNumber(data.games), data.seasons ? `${data.seasons} 시즌` : '', '<span class="material-symbols-outlined">calendar_month</span>')}
-                    ${createStatCard('플레이 수', formatNumber(data.plays), '투구·타석 기록', '<span class="material-symbols-outlined">sports_baseball</span>')}
-                    ${createStatCard('타자', `${formatNumber(data.batters)}명`, 'KBO 공식 기록', '<span class="material-symbols-outlined">sports_cricket</span>')}
-                    ${createStatCard('투수', `${formatNumber(data.pitchers)}명`, 'KBO 공식 기록', '<span class="material-symbols-outlined">sports_baseball</span>')}
-                `;
-            } catch (error) {
-                statsGrid.innerHTML = createErrorMessage('데이터를 불러오는데 실패했습니다. API 서버가 실행 중인지 확인해주세요.');
-            }
-        }
-        loadDashboardStats();
     </script>
 </body>
 

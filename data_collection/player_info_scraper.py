@@ -17,6 +17,10 @@ from webdriver_manager.chrome import ChromeDriverManager
 import pandas as pd
 import sqlite3
 
+# 분류 플래그(국적/외국인/아시아쿼터) 도출 — 단일 진실 소스 모듈 재사용
+import player_flags as pf
+CLASSIFY_SEASON = 2026
+
 # 로깅 설정
 PROJECT_ROOT = Path(__file__).parent.parent
 LOG_DIR = PROJECT_ROOT / 'logs'
@@ -282,15 +286,20 @@ def scrape_player_info(driver, player_id):
 
 
 def get_existing_player_ids():
-    """DB에서 기존 player_id 목록 가져오기 (2025 시즌만)"""
+    """DB에서 최신 시즌 통계에 등장한 player_id 목록 가져오기 (시즌 자동 감지)"""
     conn = sqlite3.connect(DB_PATH)
-    
-    # 2025 시즌 타자 통계에서 player_id 가져오기
-    query_batter = "SELECT DISTINCT player_id FROM kbo_official_batter_stats WHERE season = 2025"
+
+    # 최신 시즌 자동 감지 (하드코딩 시 새 시즌 신규 선수가 영구 누락됨)
+    season_df = pd.read_sql_query(
+        "SELECT MAX(s) AS s FROM ("
+        "SELECT MAX(season) AS s FROM kbo_official_batter_stats "
+        "UNION ALL SELECT MAX(season) FROM kbo_official_pitcher_stats)", conn)
+    season = int(season_df['s'][0])
+
+    query_batter = f"SELECT DISTINCT player_id FROM kbo_official_batter_stats WHERE season = {season}"
     df_batter = pd.read_sql_query(query_batter, conn)
-    
-    # 2025 시즌 투수 통계에서 player_id 가져오기
-    query_pitcher = "SELECT DISTINCT player_id FROM kbo_official_pitcher_stats WHERE season = 2025"
+
+    query_pitcher = f"SELECT DISTINCT player_id FROM kbo_official_pitcher_stats WHERE season = {season}"
     df_pitcher = pd.read_sql_query(query_pitcher, conn)
     
     conn.close()
@@ -298,6 +307,18 @@ def get_existing_player_ids():
     # 중복 제거하여 합치기
     all_ids = set(df_batter['player_id'].tolist() + df_pitcher['player_id'].tolist())
     return sorted(list(all_ids))
+
+
+_FLAG_COLS_CACHE = None
+
+
+def _flag_cols_exist(cur):
+    """players 에 분류 플래그 컬럼이 있는지 (캐시). 마이그레이션 전이면 False."""
+    global _FLAG_COLS_CACHE
+    if _FLAG_COLS_CACHE is None:
+        cols = {r[1] for r in cur.execute("PRAGMA table_info(players)")}
+        _FLAG_COLS_CACHE = {"nationality", "player_type", "is_foreign"} <= cols
+    return _FLAG_COLS_CACHE
 
 
 def save_to_db(player_data_list):
@@ -311,12 +332,29 @@ def save_to_db(player_data_list):
     
     for player in player_data_list:
         try:
+            # UPSERT: REPLACE는 행을 삭제 후 재삽입해 team_id·created_at이 NULL로 날아가므로 금지
             cur.execute("""
-                INSERT OR REPLACE INTO players (
+                INSERT INTO players (
                     player_id, player_name, back_number, position, throw, bat,
                     birthday, height, weight, career, draft_year, draft_order,
                     signing_bonus, salary, image_url, updated_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(player_id) DO UPDATE SET
+                    player_name = excluded.player_name,
+                    back_number = excluded.back_number,
+                    position = excluded.position,
+                    throw = excluded.throw,
+                    bat = excluded.bat,
+                    birthday = excluded.birthday,
+                    height = excluded.height,
+                    weight = excluded.weight,
+                    career = excluded.career,
+                    draft_year = excluded.draft_year,
+                    draft_order = excluded.draft_order,
+                    signing_bonus = excluded.signing_bonus,
+                    salary = excluded.salary,
+                    image_url = excluded.image_url,
+                    updated_at = CURRENT_TIMESTAMP
             """, (
                 player.get('player_id'),
                 player.get('player_name'),
@@ -334,6 +372,13 @@ def save_to_db(player_data_list):
                 player.get('salary'),
                 player.get('image_url')
             ))
+            # 분류 플래그는 컬럼이 마이그레이션된 뒤에만 기록 (career·시드 기반 결정적 도출)
+            if _flag_cols_exist(cur):
+                nat, isf, ptype = pf.classify_player(
+                    player.get('player_id'), player.get('career'), CLASSIFY_SEASON)
+                cur.execute(
+                    "UPDATE players SET nationality=?, player_type=?, is_foreign=? WHERE player_id=?",
+                    (nat, ptype, isf, player.get('player_id')))
         except Exception as e:
             logger.error(f"DB 저장 오류 ({player.get('player_id')}): {e}")
     
