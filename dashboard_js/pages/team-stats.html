@@ -56,7 +56,15 @@
     <!-- Main Content -->
     <main class="container">
         <h1 class="fade-in"><span class="material-symbols-outlined">leaderboard</span> 팀 통계</h1>
-        <p class="text-secondary mb-3">KBO 팀별 타격·투구 기록입니다. 시즌 누적과 기간별 성적을 한 화면에서 함께 표시합니다.</p>
+        <p class="text-secondary mb-3">KBO 팀별 기록입니다. 타격·투구는 탭으로 전환하며, 각 탭에서 시즌 누적과 기간별 성적을 함께 표시합니다.</p>
+
+        <!-- 타격/투구 탭 -->
+        <div class="card mb-3">
+            <div class="card-body" style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;padding:0.6rem 0.9rem;">
+                <button type="button" id="stat-bat" class="tabbtn active">타격</button>
+                <button type="button" id="stat-pit" class="tabbtn">투구</button>
+            </div>
+        </div>
 
         <!-- ===== 섹션 A: 시즌 누적 ===== -->
         <section id="season-section">
@@ -78,7 +86,7 @@
                 </div>
             </div>
 
-            <div class="card">
+            <div class="card" id="card-bat-season">
                 <div class="card-header">
                     <h3 class="card-title" id="bat-season-title">팀 타격 (시즌 누적)</h3>
                 </div>
@@ -87,7 +95,7 @@
                 </div>
             </div>
 
-            <div class="card mt-3">
+            <div class="card mt-3" id="card-pit-season">
                 <div class="card-header">
                     <h3 class="card-title" id="pit-season-title">팀 투구 (시즌 누적)</h3>
                 </div>
@@ -124,7 +132,7 @@
                 </div>
             </div>
 
-            <div class="card">
+            <div class="card" id="card-bat-range">
                 <div class="card-header">
                     <h3 class="card-title">팀 타격 (기간별)</h3>
                 </div>
@@ -133,7 +141,7 @@
                 </div>
             </div>
 
-            <div class="card mt-3">
+            <div class="card mt-3" id="card-pit-range">
                 <div class="card-header">
                     <h3 class="card-title">팀 투구 (기간별)</h3>
                 </div>
@@ -307,6 +315,20 @@
         const sel = document.getElementById('season-select');
         sel.addEventListener('change', () => loadTeamStats(sel.value));
         document.getElementById('range-go').addEventListener('click', () => loadTeamRange(document.getElementById('range-start').value, document.getElementById('range-end').value));
+
+        // 타격/투구 탭: 데이터는 4개 표 모두 로드해 두고 표시만 전환합니다(전환 시 재요청 없음)
+        function setStatTab(which) {
+            const isBat = which === 'bat';
+            document.getElementById('card-bat-season').style.display = isBat ? '' : 'none';
+            document.getElementById('card-bat-range').style.display = isBat ? '' : 'none';
+            document.getElementById('card-pit-season').style.display = isBat ? 'none' : '';
+            document.getElementById('card-pit-range').style.display = isBat ? 'none' : '';
+            document.getElementById('stat-bat').classList.toggle('active', isBat);
+            document.getElementById('stat-pit').classList.toggle('active', !isBat);
+        }
+        document.getElementById('stat-bat').addEventListener('click', () => setStatTab('bat'));
+        document.getElementById('stat-pit').addEventListener('click', () => setStatTab('pit'));
+        setStatTab('bat');
 
         // 초기 로드: 시즌 누적과 기간별을 모두 표시
         loadTeamStats(sel.value);
