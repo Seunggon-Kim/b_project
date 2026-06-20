@@ -1,5 +1,5 @@
 /**
- * Baseball Estudiar 다크/라이트 모드 토글
+ * Bstats 다크/라이트 모드 토글
  * 모든 페이지의 기본 설정. localStorage('kbo-theme-v2')로 보존.
  *
  * 사용:
