@@ -193,6 +193,109 @@
         let currentPitchPerspective = 'catcher';
         let lastArsenalData = [];
 
+        // 두벌식 영문 오타(예: "gnfkeh")를 한글("후라도")로 복원합니다.
+        // 한/영 변환을 깜빡하고 영문으로 입력해도 선수 이름이 검색되도록 합니다.
+        function qwertyToHangul(src) {
+            const CHO = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+            const JUNG = ['ㅏ','ㅐ','ㅑ','ㅒ','ㅓ','ㅔ','ㅕ','ㅖ','ㅗ','ㅘ','ㅙ','ㅚ','ㅛ','ㅜ','ㅝ','ㅞ','ㅟ','ㅠ','ㅡ','ㅢ','ㅣ'];
+            const JONG = ['','ㄱ','ㄲ','ㄳ','ㄴ','ㄵ','ㄶ','ㄷ','ㄹ','ㄺ','ㄻ','ㄼ','ㄽ','ㄾ','ㄿ','ㅀ','ㅁ','ㅂ','ㅄ','ㅅ','ㅆ','ㅇ','ㅈ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+            const MAP = {
+                q:'ㅂ', w:'ㅈ', e:'ㄷ', r:'ㄱ', t:'ㅅ', y:'ㅛ', u:'ㅕ', i:'ㅑ', o:'ㅐ', p:'ㅔ',
+                a:'ㅁ', s:'ㄴ', d:'ㅇ', f:'ㄹ', g:'ㅎ', h:'ㅗ', j:'ㅓ', k:'ㅏ', l:'ㅣ',
+                z:'ㅋ', x:'ㅌ', c:'ㅊ', v:'ㅍ', b:'ㅠ', n:'ㅜ', m:'ㅡ',
+                Q:'ㅃ', W:'ㅉ', E:'ㄸ', R:'ㄲ', T:'ㅆ', O:'ㅒ', P:'ㅖ',
+                Y:'ㅛ', U:'ㅕ', I:'ㅑ', A:'ㅁ', S:'ㄴ', D:'ㅇ', F:'ㄹ', G:'ㅎ', H:'ㅗ',
+                J:'ㅓ', K:'ㅏ', L:'ㅣ', Z:'ㅋ', X:'ㅌ', C:'ㅊ', V:'ㅍ', B:'ㅠ', N:'ㅜ', M:'ㅡ'
+            };
+            const JUNG_COMBINE = {
+                'ㅗ': {'ㅏ':'ㅘ','ㅐ':'ㅙ','ㅣ':'ㅚ'},
+                'ㅜ': {'ㅓ':'ㅝ','ㅔ':'ㅞ','ㅣ':'ㅟ'},
+                'ㅡ': {'ㅣ':'ㅢ'}
+            };
+            const JONG_COMBINE = {
+                'ㄱ': {'ㅅ':'ㄳ'},
+                'ㄴ': {'ㅈ':'ㄵ','ㅎ':'ㄶ'},
+                'ㄹ': {'ㄱ':'ㄺ','ㅁ':'ㄻ','ㅂ':'ㄼ','ㅅ':'ㄽ','ㅌ':'ㄾ','ㅍ':'ㄿ','ㅎ':'ㅀ'},
+                'ㅂ': {'ㅅ':'ㅄ'}
+            };
+            const JONG_SPLIT = {
+                'ㄳ':['ㄱ','ㅅ'],'ㄵ':['ㄴ','ㅈ'],'ㄶ':['ㄴ','ㅎ'],'ㄺ':['ㄹ','ㄱ'],'ㄻ':['ㄹ','ㅁ'],
+                'ㄼ':['ㄹ','ㅂ'],'ㄽ':['ㄹ','ㅅ'],'ㄾ':['ㄹ','ㅌ'],'ㄿ':['ㄹ','ㅍ'],'ㅀ':['ㄹ','ㅎ'],'ㅄ':['ㅂ','ㅅ']
+            };
+            const CHO_IDX = {}; CHO.forEach((c, i) => CHO_IDX[c] = i);
+            const JUNG_IDX = {}; JUNG.forEach((c, i) => JUNG_IDX[c] = i);
+            const JONG_IDX = {}; JONG.forEach((c, i) => { if (c) JONG_IDX[c] = i; });
+            const isJung = (j) => j in JUNG_IDX;
+            const isJongable = (j) => j in JONG_IDX;
+
+            let out = '';
+            let cho = null, jung = null, jong = null;
+
+            function compose() {
+                if (cho !== null && jung !== null) {
+                    const code = 0xAC00 + (CHO_IDX[cho] * 21 + JUNG_IDX[jung]) * 28 + (jong ? JONG_IDX[jong] : 0);
+                    return String.fromCharCode(code);
+                }
+                let s = '';
+                if (cho !== null) s += cho;
+                if (jung !== null) s += jung;
+                if (jong !== null) s += jong;
+                return s;
+            }
+            function flush() {
+                if (cho !== null || jung !== null || jong !== null) out += compose();
+                cho = jung = jong = null;
+            }
+
+            for (const ch of src) {
+                const jamo = MAP[ch];
+                if (!jamo) { flush(); out += ch; continue; }
+                if (isJung(jamo)) {
+                    if (jung === null) {
+                        jung = jamo;
+                    } else if (jong === null && JUNG_COMBINE[jung] && JUNG_COMBINE[jung][jamo]) {
+                        jung = JUNG_COMBINE[jung][jamo];
+                    } else if (jong !== null) {
+                        let moved;
+                        if (JONG_SPLIT[jong]) { const sp = JONG_SPLIT[jong]; jong = sp[0]; moved = sp[1]; }
+                        else { moved = jong; jong = null; }
+                        out += compose();
+                        cho = moved; jung = jamo; jong = null;
+                    } else {
+                        flush(); jung = jamo;
+                    }
+                } else {
+                    if (jung === null) {
+                        if (cho === null) cho = jamo;
+                        else { flush(); cho = jamo; }
+                    } else if (cho === null) {
+                        flush(); cho = jamo;
+                    } else if (jong === null) {
+                        if (isJongable(jamo)) jong = jamo;
+                        else { flush(); cho = jamo; }
+                    } else if (JONG_COMBINE[jong] && JONG_COMBINE[jong][jamo]) {
+                        jong = JONG_COMBINE[jong][jamo];
+                    } else {
+                        flush(); cho = jamo;
+                    }
+                }
+            }
+            flush();
+            return out;
+        }
+
+        // 검색에 사용할 후보 질의 목록을 만듭니다.
+        // 원본 질의에 더해, 영문이 섞여 있으면 한글 변환 후보를 추가합니다.
+        function buildSearchQueries(raw) {
+            const q = (raw || '').trim();
+            const list = [q];
+            if (/[A-Za-z]/.test(q)) {
+                const ko = qwertyToHangul(q);
+                if (ko && ko !== q && !list.includes(ko)) list.push(ko);
+            }
+            return list;
+        }
+
         // Search input handler
         document.getElementById('player-search').addEventListener('input', (e) => {
             const query = e.target.value.trim();
@@ -213,18 +316,32 @@
             resultsDiv.innerHTML = createLoadingSpinner();
 
             try {
-                const data = await API.searchPlayers(query);
+                // 원본 + 영타→한글 변환 후보를 함께 조회해 병합합니다(player_id 기준 중복 제거).
+                const queries = buildSearchQueries(query);
+                const responses = await Promise.all(
+                    queries.map(q => API.searchPlayers(q).catch(() => ({ players: [] })))
+                );
+                const seen = new Set();
+                const players = [];
+                responses.forEach(data => {
+                    ((data && data.players) ? data.players : []).forEach(player => {
+                        if (!seen.has(player.player_id)) {
+                            seen.add(player.player_id);
+                            players.push(player);
+                        }
+                    });
+                });
 
-                if (data.players.length === 0) {
+                if (players.length === 0) {
                     resultsDiv.innerHTML = `<p class="text-muted mt-2">검색 결과가 없습니다.</p>`;
                     return;
                 }
 
                 const resultsHTML = `
                     <div style="margin-top: 1rem;">
-                        <p class="text-muted mb-1">${data.players.length}명의 선수가 검색되었습니다</p>
+                        <p class="text-muted mb-1">${players.length}명의 선수가 검색되었습니다</p>
                         <div class="grid grid-2" style="gap: 0.5rem;">
-                            ${data.players.map(player => `
+                            ${players.map(player => `
                                 <button 
                                     class="btn btn-secondary" 
                                     onclick="loadPlayerInfo('${player.player_id}')"
