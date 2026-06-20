@@ -33,6 +33,12 @@
         .fs-tab { background: none; border: none; padding: 0.7rem 1.4rem; font-size: 1rem; font-weight: 600; font-family: inherit; color: var(--text-secondary); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; display: inline-flex; align-items: center; gap: 0.4rem; }
         .fs-tab:hover { color: var(--primary); }
         .fs-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        /* 시즌·기간 통합 컨트롤 바 */
+        .ctrl-bar { display: flex; align-items: center; gap: 0.85rem 2rem; flex-wrap: wrap; padding: 1rem 1.25rem; }
+        .ctrl-group { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+        .ctrl-group label { white-space: nowrap; flex-shrink: 0; margin: 0; }
+        .ctrl-divider { align-self: stretch; width: 1px; min-height: 1.8rem; background: var(--border-color); }
+        @media (max-width: 640px) { .ctrl-divider { display: none; } }
         /* 정렬 가능한 표 헤더 */
         .table th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
         .table th.sortable:hover { color: #3b82f6; }
@@ -76,22 +82,23 @@
 
         <!-- 시즌·기간 컨트롤 (나란히) -->
         <div class="card mb-3">
-            <div class="card-body" style="display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap;">
-                <span style="display:flex;align-items:center;gap:0.6rem;">
+            <div class="card-body ctrl-bar">
+                <div class="ctrl-group">
                     <label for="season-select"><strong>시즌</strong></label>
                     <select id="season-select" class="input" style="max-width:120px;">
                         <option value="">불러오는 중…</option>
                     </select>
                     <span class="text-muted" id="season-note" style="font-size:0.85rem;"></span>
-                </span>
-                <span style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
+                </div>
+                <div class="ctrl-divider" aria-hidden="true"></div>
+                <div class="ctrl-group">
                     <label for="range-start"><strong>기간</strong></label>
                     <input type="date" id="range-start" class="input" style="max-width:160px;">
                     <span class="text-muted">~</span>
                     <input type="date" id="range-end" class="input" style="max-width:160px;">
                     <button type="button" id="range-go" class="tabbtn active">조회</button>
                     <span class="text-muted" id="range-note" style="font-size:0.85rem;"></span>
-                </span>
+                </div>
             </div>
         </div>
 
