@@ -383,6 +383,9 @@
 
                 currentPlayer = player;
 
+                // 외국인 선수는 연봉/계약금이 달러, 국내 선수는 원 단위로 저장되어 통화 표기를 구분한다.
+                const isForeign = isForeignPlayer(player);
+
                 // Header Banner Bar
                 const PHOTO_PLACEHOLDER = '../assets/player_no_image.png';  // KBO 공식 no-Image
                 const cdnImg = player.image_url || '';
@@ -442,11 +445,11 @@
                         <div class="player-info-vertical">
                             <div class="info-item">
                                 <span class="info-label">연봉</span>
-                                <span class="info-value">${formatMoney(player.salary)}</span>
+                                <span class="info-value">${formatMoney(player.salary, isForeign ? 'USD' : 'KRW')}</span>
                             </div>
                             <div class="info-item">
                                 <span class="info-label">입단 계약금</span>
-                                <span class="info-value">${formatMoney(player.signing_bonus)}</span>
+                                <span class="info-value">${formatMoney(player.signing_bonus, isForeign ? 'USD' : 'KRW')}</span>
                             </div>
                             <div class="info-item">
                                 <span class="info-label">입단년도 / 지명순위</span>

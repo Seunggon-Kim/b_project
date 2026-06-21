@@ -9,11 +9,27 @@ function formatNumber(num) {
 }
 
 /**
- * Format money (KRW)
+ * 외국인 선수 여부 판정.
+ * KBO 외국인 선수는 신인 드래프트가 아니라 '자유선발'·'부상 대체 외국인선수'(향후 '아시아쿼터' 포함)로
+ * 입단하며, 그 표기가 players.draft_order/draft_year에 그대로 남는다. 국내 선수는 연봉·계약금이 원,
+ * 외국인 선수는 달러 단위로 저장되어 있어 통화 표기의 기준으로 쓴다.
+ * (검증: 전체 585명 중 43명이 이 신호로 분류 → 저장 연봉이 외국인 ≤160만, 국내 ≥1,500만으로 완전 분리)
  */
-function formatMoney(amount) {
+function isForeignPlayer(player) {
+    if (!player) return false;
+    const draft = `${player.draft_order || ''} ${player.draft_year || ''}`;
+    return draft.includes('자유선발') || draft.includes('외국인선수') || draft.includes('아시아쿼터');
+}
+
+/**
+ * Format money. 국내 선수 연봉/계약금은 원, 외국인 선수는 달러 단위로 저장되어 있어 통화를 구분한다.
+ * @param {number} amount 금액
+ * @param {('KRW'|'USD')} [currency='KRW'] 통화 (USD면 '달러', 그 외 '원')
+ */
+function formatMoney(amount, currency = 'KRW') {
     if (!amount) return '-';
-    return `${formatNumber(amount)}원`;
+    const unit = currency === 'USD' ? '달러' : '원';
+    return `${formatNumber(amount)}${unit}`;
 }
 
 /**
@@ -229,6 +245,7 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         formatNumber,
         formatMoney,
+        isForeignPlayer,
         formatAverage,
         formatERA,
         formatIP,
