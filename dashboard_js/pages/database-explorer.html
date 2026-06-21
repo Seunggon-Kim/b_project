@@ -508,11 +508,11 @@
                     <h3 class="card-title">
                         <span class="material-symbols-outlined h1-icon">schedule</span>자동 수집 스케줄 (Cron)
                     </h3>
-                    <span class="text-muted" style="font-size: 0.875rem;">총 8개 작업</span>
+                    <span class="text-muted" style="font-size: 0.875rem;">총 9개 작업</span>
                 </div>
                 <div class="card-body">
                     <p class="text-secondary mb-2" style="font-size: 0.9rem;">
-                        EC2 서버(crontab)에서 자동 실행되어 아래 테이블들을 채우는 수집·집계 모듈입니다.
+                        EC2 서버(crontab)에서 자동 실행되는 수집·집계 모듈과 배포 자동화입니다.
                         서버는 UTC로 동작하므로 실행 시각은 KST(UTC+9)로 변환해 표기했습니다.
                     </p>
                     <div class="dbx-cron-wrap">
@@ -592,6 +592,15 @@
                                         (월 1회 전체 보정)</td>
                                     <td class="dbx-cron-kst" title="크론식(UTC): 0 4 1 * *">매월 1일 13:00</td>
                                     <td class="dbx-cron-upd pending" data-job="player_info">-</td>
+                                </tr>
+                                <tr>
+                                    <td class="dbx-cron-mods">auto_deploy_poll.sh
+                                        <span class="sub">deploy.sh (fetch → reset → restart → health)</span>
+                                    </td>
+                                    <td class="dbx-cron-desc">GitHub main에 새 커밋이 감지되면 최신 코드를 서버에 자동 반영합니다.
+                                        교체 후 API를 재시작하고 헬스체크하며, 실패 시 직전 상태로 자동 롤백합니다.</td>
+                                    <td class="dbx-cron-kst" title="크론식: */3 * * * *">3분마다</td>
+                                    <td class="dbx-cron-upd pending" data-job="auto_deploy">-</td>
                                 </tr>
                             </tbody>
                         </table>
