@@ -54,4 +54,9 @@ print(f"  imported {total} rows, DB total for date: {cur.fetchone()[0]}")
 con.close()
 PY
 
+# 3. play_by_play → games 보강 (없는 gameID만 INSERT OR IGNORE)
+#    team_range API 가 play_by_play 를 games 와 INNER JOIN 하므로, games 가 안 채워지면
+#    PBP 가 적재돼도 기간별 표에서 누락된다(2026-06 회귀 원인). 매일 보강해 재발 방지.
+venv/bin/python data_collection/games_from_pbp.py 2>&1 | tail -3 | tee -a "$LOG"
+
 echo "===== Done $(date) =====" | tee -a "$LOG"
