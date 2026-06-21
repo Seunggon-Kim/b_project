@@ -282,6 +282,14 @@
     }
     function fmt(v, digits = 1) { return (v === null || v === undefined) ? '—' : Number(v).toFixed(digits); }
     function deltaClass(v) { if (v > 0.5) return 'delta-pos'; if (v < -0.5) return 'delta-neg'; return ''; }
+    function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+    // 선수 이름 -> 선수 분석 딥링크. 이름 없음/Unknown/무 id는 링크 없이 일반 텍스트. article은 /pages/ 하위라 형제 경로.
+    function playerLink(name, id) {
+        if (name == null || name === '') return '—';
+        const text = escapeHtml(name);
+        if (id === null || id === undefined || id === '' || name === 'Unknown') return text;
+        return `<a class="player-link" href="player-analytics?id=${encodeURIComponent(id)}">${text}</a>`;
+    }
 
     async function init() {
         const seasons = await fetchJSON('/wrc/seasons');
@@ -379,7 +387,7 @@
             const cls = deltaClass(r.delta_methods);
             tr.innerHTML = `
                 <td>${i + 1}</td>
-                <td class="left" style="font-weight:600;">${r.player_name || '—'}</td>
+                <td class="left" style="font-weight:600;">${playerLink(r.player_name, r.batter_ID)}</td>
                 <td>${r.player_team || '—'}</td>
                 <td>${r.PA}</td>
                 <td class="left">${r.home_stadium || '—'}</td>
@@ -436,7 +444,7 @@
             const tr = document.createElement('tr');
             const cls = deltaClass(r.delta);
             tr.innerHTML = `
-                <td class="left">${r.player_name || '—'}</td>
+                <td class="left">${playerLink(r.player_name, r.batter_ID)}</td>
                 <td>${r.player_team || '—'}</td>
                 <td>${r.PA}</td>
                 <td class="left">${r.home_stadium || '—'}</td>

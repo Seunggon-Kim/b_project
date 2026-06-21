@@ -345,7 +345,7 @@
 
         // Column Definitions
         const BATTER_COLUMNS = [
-            { key: 'player_name', label: '선수명', default: true },
+            { key: 'player_name', label: '선수명', default: true, format: (v, row) => playerLink(v, row && row.player_id) },
             { key: 'player_team', label: '팀', default: true },
             { key: 'games', label: 'G', default: true },
             { key: 'batting_average', label: 'AVG', default: true, format: formatAverage },
@@ -386,7 +386,7 @@
         ];
 
         const PITCHER_COLUMNS = [
-            { key: 'player_name', label: '선수명', default: true },
+            { key: 'player_name', label: '선수명', default: true, format: (v, row) => playerLink(v, row && row.player_id) },
             { key: 'player_team', label: '팀', default: true },
             { key: 'earned_run_average', label: 'ERA', default: true, format: formatERA },
             { key: 'games', label: 'G', default: true },
@@ -763,7 +763,7 @@
             const rows = sorted.map((batter) => {
                 return BATTER_COLUMNS.filter(c => selectedBatterCols.includes(c.key)).map(col => {
                     let val = batter[col.key];
-                    if (col.format) return col.format(val);
+                    if (col.format) return col.format(val, batter);
                     return val || (val === 0 ? 0 : '-');
                 });
             });
@@ -806,7 +806,7 @@
             const rows = sorted.map((pitcher) => {
                 return PITCHER_COLUMNS.filter(c => selectedPitcherCols.includes(c.key)).map(col => {
                     let val = pitcher[col.key];
-                    if (col.format) return col.format(val);
+                    if (col.format) return col.format(val, pitcher);
                     return val || (val === 0 ? 0 : '-');
                 });
             });

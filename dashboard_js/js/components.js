@@ -117,6 +117,25 @@ function createBadge(text, type = 'primary') {
 }
 
 /**
+ * HTML 이스케이프 — 텍스트를 안전하게 마크업에 삽입
+ */
+function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+/**
+ * 선수 이름 -> 선수 분석(player-analytics) 딥링크.
+ * id 없으면 링크 없이 일반 텍스트. 페이지 위치(root vs /pages/)에 맞춰 경로 자동 결정.
+ */
+function playerLink(name, id, cls) {
+    const text = escapeHtml(name);
+    if (id === null || id === undefined || id === '') return text;
+    const base = window.location.pathname.includes('/pages/') ? '' : 'pages/';
+    const klass = cls ? `player-link ${cls}` : 'player-link';
+    return `<a class="${klass}" href="${base}player-analytics?id=${encodeURIComponent(id)}">${text}</a>`;
+}
+
+/**
  * Create table from data
  */
 function createTable(headers, rows) {
@@ -221,6 +240,8 @@ if (typeof module !== 'undefined' && module.exports) {
         createEmptyState,
         createBadge,
         createTable,
+        escapeHtml,
+        playerLink,
         showNotification,
         debounce,
         setActiveNav
