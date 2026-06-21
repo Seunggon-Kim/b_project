@@ -198,6 +198,40 @@
             transform: none !important;
             overflow: visible !important;
         }
+
+        /* 탭 — 요인 통계(factor-stats) 페이지와 동일한 형태: 가운데 정렬·밑줄 강조 */
+        .fs-tabs {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            border-bottom: 2px solid var(--border-color);
+            margin-bottom: 1.25rem;
+        }
+
+        .fs-tab {
+            background: none;
+            border: none;
+            padding: 0.7rem 1.4rem;
+            font-size: 1rem;
+            font-weight: 600;
+            font-family: inherit;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .fs-tab:hover {
+            color: var(--primary);
+        }
+
+        .fs-tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
     </style>
     <script src="../js/theme-toggle.js"></script>
     <script src="../js/nav.js"></script>
@@ -228,18 +262,14 @@
         <h1 class="fade-in"><span class="material-symbols-outlined">query_stats</span> 선수 통계</h1>
         <p class="text-secondary mb-3">타자 및 투수 성적 상세 조회</p>
 
-        <!-- Tabs -->
-        <div class="mb-3">
-            <div style="display: flex; justify-content: center; gap: 1rem; border-bottom: 2px solid var(--border-color);">
-                <button id="tab-batters" class="btn btn-secondary" onclick="switchTab('batters')"
-                    style="border-radius: 0; border-bottom: 3px solid var(--primary);">
-                    <span class="material-symbols-outlined">sports_cricket</span> 타자 통계
-                </button>
-                <button id="tab-pitchers" class="btn btn-secondary" onclick="switchTab('pitchers')"
-                    style="border-radius: 0; border-bottom: 3px solid transparent;">
-                    <span class="material-symbols-outlined">bolt</span> 투수 통계
-                </button>
-            </div>
+        <!-- Tabs (요인 통계 페이지와 동일한 .fs-tabs 형태) -->
+        <div class="fs-tabs" id="stat-tabs">
+            <button id="tab-batters" class="fs-tab active" onclick="switchTab('batters')">
+                <span class="material-symbols-outlined">sports_cricket</span> 타자 통계
+            </button>
+            <button id="tab-pitchers" class="fs-tab" onclick="switchTab('pitchers')">
+                <span class="material-symbols-outlined">bolt</span> 투수 통계
+            </button>
         </div>
 
         <!-- Filter Controls -->
@@ -249,7 +279,7 @@
                     <!-- Common Filters -->
                     <div class="filter-group">
                         <label for="season-select" class="text-muted">시즌:</label>
-                        <select id="season-select" class="input" style="width: auto;" onchange="refreshStats()">
+                        <select id="season-select" class="input" style="width: auto;" onchange="onSeasonChange()">
                             <!-- 시즌 목록이 동적으로 주입됩니다 -->
                         </select>
                     </div>
@@ -368,6 +398,9 @@
             { key: 'on_base_percentage', label: 'OBP', default: true, format: formatAverage },
             { key: 'slugging_percentage', label: 'SLG', default: true, format: formatAverage },
             { key: 'on_base_plus_slugging', label: 'OPS', default: true, format: formatAverage },
+            { key: 'woba', label: 'wOBA', default: true, format: formatAverage },
+            { key: 'wraa', label: 'wRAA', default: true, format: (v) => (v || v === 0) ? (v > 0 ? '+' : '') + parseFloat(v).toFixed(1) : '-' },
+            { key: 'wrc_plus', label: 'wRC+', default: true, format: (v) => (v || v === 0) ? Math.round(v) : '-' },
             { key: 'multi_hits', label: '멀티히트', default: false },
             { key: 'runners_in_scoring_position', label: '득점권타율', default: false, format: formatAverage },
             { key: 'pinch_hit_batting_average', label: '대타타율', default: false, format: formatAverage },
@@ -454,14 +487,46 @@
         // 사용 가능한 시즌 목록 (시즌 API 호출 실패 시 폴백)
         const FALLBACK_SEASONS = [2026, 2025, 2024, 2023];
 
+        // 시즌별 규정타석/규정이닝 맵 (백엔드 /stats/regulation). 실패 시 풀시즌 기본값으로 폴백.
+        let REGULATION = {};
+        const REG_PA_FALLBACK = 446;   // 144경기 × 3.1
+        const REG_IP_FALLBACK = 144;   // 144경기 × 1.0
+        function qualPA(season) { const r = REGULATION[String(season)]; return (r && r.qual_pa) ? r.qual_pa : REG_PA_FALLBACK; }
+        function qualIP(season) { const r = REGULATION[String(season)]; return (r && r.qual_ip) ? r.qual_ip : REG_IP_FALLBACK; }
+
         async function init() {
-            populatePAOptions();
-            populateIPOptions();
-            await loadSeasons(); // 시즌 드롭다운을 현재 데이터 기준으로 채움
-            await loadTeams(); // 팀 목록이 로드될 때까지 대기
+            await loadRegulation();                  // 시즌별 규정타석/규정이닝 맵
+            await loadSeasons();                      // 시즌 드롭다운(최신 시즌 기본 선택)
+            populatePAOptions(getSelectedSeason());   // 선택 시즌 기준 규정타석 옵션(기본 선택값)
+            populateIPOptions(getSelectedSeason());
+            await loadTeams();                        // 팀 목록이 로드될 때까지 대기
             renderColumnSelector();
             // 초기 탭 상태에 맞춰 필터 표시 및 데이터 로드
             switchTab('batters');
+        }
+
+        async function loadRegulation() {
+            try {
+                const data = await API.getRegulation();
+                REGULATION = data.regulation || {};
+            } catch (error) {
+                console.error('Error loading regulation:', error);
+                REGULATION = {};
+            }
+        }
+
+        function onSeasonChange() {
+            // 시즌 변경 시 규정타석/규정이닝 라벨을 갱신(선택 상태는 유지)하고 데이터 재조회
+            updateQualOptionLabels();
+            refreshStats();
+        }
+
+        function updateQualOptionLabels() {
+            const season = getSelectedSeason();
+            const paOpt = document.querySelector('#min-pa option[value="qual"]');
+            if (paOpt) paOpt.textContent = `규정 타석(${qualPA(season)})`;
+            const ipOpt = document.querySelector('#min-ip option[value="qual"]');
+            if (ipOpt) ipOpt.textContent = `규정 이닝(${qualIP(season)})`;
         }
 
         async function loadSeasons() {
@@ -519,10 +584,12 @@
             updateTeamFilter();
         }
 
-        function populatePAOptions() {
+        function populatePAOptions(season) {
             const paSelect = document.getElementById('min-pa');
+            const qp = qualPA(season);
             paSelect.innerHTML = '<option value="0">전체</option>';
-            paSelect.innerHTML += '<option value="446">규정 타석(446)</option>';
+            // 규정 타석은 시즌별 동적(3.1 × 팀경기수)이며 기본 선택값. 실제 임계값은 조회 시 qualPA()로 해석.
+            paSelect.innerHTML += `<option value="qual" selected>규정 타석(${qp})</option>`;
 
             // 10 to 250 in steps of 10
             for (let i = 10; i < 250; i += 10) {
@@ -535,10 +602,12 @@
             }
         }
 
-        function populateIPOptions() {
+        function populateIPOptions(season) {
             const ipSelect = document.getElementById('min-ip');
+            const qi = qualIP(season);
             ipSelect.innerHTML = '<option value="0">전체</option>';
-            ipSelect.innerHTML += '<option value="144">규정 이닝(144)</option>';
+            // 규정 이닝도 시즌별 동적(1.0 × 팀경기수)이며 기본 선택값(타자 규정타석과 대칭).
+            ipSelect.innerHTML += `<option value="qual" selected>규정 이닝(${qi})</option>`;
 
             for (let i = 10; i <= 250; i += 10) {
                 ipSelect.innerHTML += `<option value="${i}">${i}이닝 이상</option>`;
@@ -548,9 +617,9 @@
         function switchTab(tab) {
             currentTab = tab;
 
-            // UI Updates
-            document.getElementById('tab-batters').style.borderBottom = tab === 'batters' ? '3px solid var(--primary)' : '3px solid transparent';
-            document.getElementById('tab-pitchers').style.borderBottom = tab === 'pitchers' ? '3px solid var(--primary)' : '3px solid transparent';
+            // UI Updates — .fs-tab.active 토글(요인 통계 페이지와 동일 방식)
+            document.getElementById('tab-batters').classList.toggle('active', tab === 'batters');
+            document.getElementById('tab-pitchers').classList.toggle('active', tab === 'pitchers');
 
             document.getElementById('batters-section').classList.toggle('hidden', tab !== 'batters');
             document.getElementById('batter-filters').classList.toggle('hidden', tab !== 'batters');
@@ -661,7 +730,8 @@
         async function loadBatterStats() {
             const tableDiv = document.getElementById('batters-table');
             const limit = parseInt(document.getElementById('display-limit').value);
-            const minPa = parseInt(document.getElementById('min-pa').value);
+            const minPaRaw = document.getElementById('min-pa').value;
+            const minPa = minPaRaw === 'qual' ? qualPA(getSelectedSeason()) : (parseInt(minPaRaw) || 0);
 
             const allCheckboxes = document.getElementsByName('team-choice');
 
@@ -696,7 +766,8 @@
         async function loadPitcherStats() {
             const tableDiv = document.getElementById('pitchers-table');
             const limit = parseInt(document.getElementById('display-limit').value);
-            const minIp = parseInt(document.getElementById('min-ip').value);
+            const minIpRaw = document.getElementById('min-ip').value;
+            const minIp = minIpRaw === 'qual' ? qualIP(getSelectedSeason()) : (parseInt(minIpRaw) || 0);
 
             const allCheckboxes = document.getElementsByName('team-choice');
 
@@ -744,8 +815,9 @@
                 let vA = a[batterSort.key];
                 let vB = b[batterSort.key];
 
-                if (vA === null || vA === undefined) vA = -999;
-                if (vB === null || vB === undefined) vB = -999;
+                // 결측(NULL)은 정렬 방향과 무관하게 항상 맨 아래로(음수 가능한 wRAA 때문에 방향-인지 센티넬 사용)
+                if (vA === null || vA === undefined) vA = (batterSort.direction === 'asc' ? Infinity : -Infinity);
+                if (vB === null || vB === undefined) vB = (batterSort.direction === 'asc' ? Infinity : -Infinity);
 
                 if (typeof vA === 'string' && isNaN(vA)) {
                     return batterSort.direction === 'asc' ? vA.localeCompare(vB) : vB.localeCompare(vA);

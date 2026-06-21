@@ -118,6 +118,21 @@ class API {
     }
 
     /**
+     * Get per-season regulation thresholds (규정타석/규정이닝)
+     * 시즌별 { team_games, qual_pa, qual_ip } 맵을 반환합니다. 실패 시 빈 객체.
+     */
+    static async getRegulation() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/stats/regulation`);
+            if (!response.ok) throw new Error('Failed to fetch regulation');
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching regulation:', error);
+            return { regulation: {} };
+        }
+    }
+
+    /**
      * Get batter statistics
      * Added min_pa support
      */

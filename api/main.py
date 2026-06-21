@@ -47,12 +47,22 @@ def robust_player_lookup(cur, player_id):
     cur.execute("SELECT * FROM players WHERE player_id = ?", (player_id,))
     row = cur.fetchone()
     if row: return dict(row)
-    
+
     if str(player_id).isdigit():
         cur.execute("SELECT * FROM players WHERE player_id = ?", (int(player_id),))
         row = cur.fetchone()
         if row: return dict(row)
     return None
+
+def _has_table(cur, name):
+    """sqlite_master에 해당 table/view가 있는지 확인(없는 DB에서도 안전하게 동작하도록 가드)."""
+    try:
+        return cur.execute(
+            "SELECT 1 FROM sqlite_master WHERE type IN ('table','view') AND name=?",
+            (name,)
+        ).fetchone() is not None
+    except Exception:
+        return False
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
@@ -342,14 +352,51 @@ async def get_stats_seasons():
     conn.close()
     return {"seasons": seasons}
 
+@app.get("/stats/regulation")
+async def get_regulation():
+    """시즌별 규정타석/규정이닝을 반환합니다.
+    규정타석 = 3.1 × 팀경기수, 규정이닝 = 1.0 × 팀경기수.
+    팀경기수 = 시즌 내 타자 MAX(games) (진행 중 시즌은 진행 경기수가 반영되어 임계값이 함께 상승).
+    /leaders 의 규정타석 산식과 동일하므로 페이지 간 기준이 일치합니다."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT season, MAX(games) AS team_games
+        FROM kbo_official_batter_stats
+        WHERE season IS NOT NULL AND games IS NOT NULL
+        GROUP BY season
+    """)
+    out = {}
+    for r in cur.fetchall():
+        g = r["team_games"] or 0
+        out[str(r["season"])] = {
+            "team_games": g,
+            "qual_pa": int(round(3.1 * g)),
+            "qual_ip": g,
+        }
+    conn.close()
+    return {"regulation": out}
+
 @app.get("/stats/batters")
 async def get_batter_stats(season: int = 2025, limit: int = 100, min_pa: int = 0, team_ids: str = None):
     conn = get_db_connection()
     cur = conn.cursor()
-    query = """
-        SELECT b.*, p.player_name, p.team_id, p.position, b.on_base_plus_slugging as ops 
+    # wOBA/wRAA/wRC+ 는 wrc_plus_comparison(자체 파크팩터 산식, half-PF=wRC_half)에서 가져온다.
+    # 해당 테이블이 없는 DB(구버전·로컬 스냅샷)에서는 NULL 폴백으로 안전하게 동작한다.
+    # PA<50 등 산출 대상이 아닌 타자는 LEFT JOIN 으로 비게 되어 프런트에서 '-'로 표기된다.
+    has_wrc = _has_table(cur, "wrc_plus_comparison")
+    if has_wrc:
+        wrc_select = (", ROUND(w.wOBA, 3) AS woba, ROUND(w.wRAA_FG, 1) AS wraa, "
+                      "ROUND(w.wRC_half, 1) AS wrc_plus")
+        wrc_join = (" LEFT JOIN wrc_plus_comparison w "
+                    "ON CAST(w.batter_ID AS TEXT) = b.player_id AND w.season = b.season")
+    else:
+        wrc_select = ", NULL AS woba, NULL AS wraa, NULL AS wrc_plus"
+        wrc_join = ""
+    query = f"""
+        SELECT b.*, p.player_name, p.team_id, p.position, b.on_base_plus_slugging as ops{wrc_select}
         FROM kbo_official_batter_stats b
-        JOIN players p ON b.player_id = p.player_id
+        JOIN players p ON b.player_id = p.player_id{wrc_join}
         WHERE b.season = ? AND b.plate_appearance >= ?
     """
     params = [season, min_pa]
