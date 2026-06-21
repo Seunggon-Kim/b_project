@@ -44,6 +44,7 @@
         .table th.sortable:hover { color: #3b82f6; }
         .table th.sorted { color: #3b82f6; }
         .sort-ind { font-size: 0.72em; margin-left: 3px; vertical-align: middle; }
+        .th-info { font-size: 0.95em; margin-left: 2px; vertical-align: middle; color: var(--text-muted); cursor: help; }
     </style>
     <script src="../js/theme-toggle.js"></script>
     <script src="../js/nav.js"></script>
@@ -185,7 +186,8 @@
                     const cls = sortable ? (active ? 'sortable sorted' : 'sortable') : '';
                     const dk = sortable ? ` data-key="${c.key}"` : '';
                     const title = sortable ? ' title="클릭하면 정렬됩니다"' : '';
-                    return `<th class="${cls}"${dk}${title}>${c.label}${ind}</th>`;
+                    const tip = c.tip ? `<span class="th-info material-symbols-outlined" title="${esc(c.tip)}">info</span>` : '';
+                    return `<th class="${cls}"${dk}${title}>${c.label}${ind}${tip}</th>`;
                 }).join('');
 
                 const tbody = arr.map((row, i) => {
@@ -261,9 +263,9 @@
             { key: 'BB', label: 'BB', type: 'num' }, { key: 'SO', label: 'SO', type: 'num' },
             { key: 'HR', label: 'HR', type: 'num' },
             { key: 'WHIP', label: 'WHIP', type: 'num', fmt: v => f2(v) },
-            { key: 'RA9', label: 'RA/9', type: 'num', fmt: v => f2(v) },
+            { key: 'RA9', label: 'RA/9', type: 'num', fmt: v => f2(v), tip: 'RA/9 = 9이닝당 실점(Runs Allowed/9). 기간별은 PBP에 자책 구분이 없어 ERA 대신 사용합니다.' },
             { key: 'K9', label: 'K/9', type: 'num', fmt: v => f2(v) },
-            { key: 'AVG_against', label: 'AVG', type: 'num', fmt: v => avg3(v) }
+            { key: 'AVG_against', label: 'AVG', type: 'num', fmt: v => avg3(v), tip: '피안타율 — 투수가 상대한 타자들의 타율입니다.' }
         ];
 
         // ===== 집계 (선수 기록 합산) =====
