@@ -83,11 +83,22 @@
         .table-container {
             max-height: 80vh !important;
             overflow-y: auto !important;
-            overflow-x: auto !important;
+            /* 하단 기본 가로 스크롤바 제거 — 가로 스크롤은 상단 .scroll-top 이 프로그램적으로 구동 */
+            overflow-x: hidden !important;
             width: 100%;
             -webkit-overflow-scrolling: touch;
             border-radius: var(--border-radius);
             position: relative;
+        }
+
+        /* 표 상단 가로 스크롤바(.table-container 와 양방향 동기화) */
+        .scroll-top {
+            overflow-x: auto;
+            overflow-y: hidden;
+        }
+
+        .scroll-top-inner {
+            height: 1px;
         }
 
         /* 테이블 구조 설정 */
@@ -803,6 +814,40 @@
             else renderPitcherTable();
         }
 
+        // 표 상단에 가로 스크롤바를 만들어 .table-container 와 양방향 동기화한다.
+        // 하단 기본 가로 스크롤바는 .table-container { overflow-x: hidden } 으로 제거했고,
+        // 컨테이너는 scrollLeft 로 프로그램적으로만 가로 스크롤된다(렌더마다 새로 부착).
+        function attachTopScrollbar(mountEl) {
+            const container = mountEl.querySelector('.table-container');
+            const table = container && container.querySelector('table');
+            if (!container || !table) return;
+
+            const top = document.createElement('div');
+            top.className = 'scroll-top';
+            const inner = document.createElement('div');
+            inner.className = 'scroll-top-inner';
+            top.appendChild(inner);
+            mountEl.insertBefore(top, container);
+
+            // 상단 바의 스크롤 폭을 표 전체 폭에 맞춘다
+            inner.style.width = container.scrollWidth + 'px';
+
+            // 양방향 동기화(피드백 루프 방지용 lock)
+            let lock = false;
+            top.addEventListener('scroll', () => {
+                if (lock) return;
+                lock = true;
+                container.scrollLeft = top.scrollLeft;
+                lock = false;
+            });
+            container.addEventListener('scroll', () => {
+                if (lock) return;
+                lock = true;
+                top.scrollLeft = container.scrollLeft;
+                lock = false;
+            });
+        }
+
         function renderBatterTable() {
             const tableDiv = document.getElementById('batters-table');
             if (currentBatterData.length === 0) {
@@ -841,6 +886,7 @@
             });
 
             tableDiv.innerHTML = createTable(headers, rows);
+            attachTopScrollbar(tableDiv);
         }
 
         function renderPitcherTable() {
@@ -884,6 +930,7 @@
             });
 
             tableDiv.innerHTML = createTable(headers, rows);
+            attachTopScrollbar(tableDiv);
         }
 
         // Initialize
