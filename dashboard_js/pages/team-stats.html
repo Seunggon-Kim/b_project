@@ -96,7 +96,7 @@
                     <span class="text-muted">~</span>
                     <input type="date" id="range-end" class="input" style="max-width:185px;">
                     <button type="button" id="range-go" class="tabbtn active">조회</button>
-                    <span class="text-muted" id="range-note" style="font-size:0.85rem;"></span>
+                    <span class="text-muted" id="range-note" style="font-size:0.85rem;white-space:nowrap;"></span>
                 </div>
             </div>
         </div>
@@ -263,7 +263,7 @@
             { key: 'WHIP', label: 'WHIP', type: 'num', fmt: v => f2(v) },
             { key: 'RA9', label: 'RA/9', type: 'num', fmt: v => f2(v) },
             { key: 'K9', label: 'K/9', type: 'num', fmt: v => f2(v) },
-            { key: 'AVG_against', label: '피AVG', type: 'num', fmt: v => avg3(v) }
+            { key: 'AVG_against', label: 'AVG', type: 'num', fmt: v => avg3(v) }
         ];
 
         // ===== 집계 (선수 기록 합산) =====
