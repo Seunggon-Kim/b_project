@@ -14,6 +14,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
+import os
 import pandas as pd
 import sqlite3
 
@@ -50,7 +51,13 @@ def setup_driver():
     chrome_options.add_argument('--window-size=1920,1080')
     chrome_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
     
-    service = Service(ChromeDriverManager().install())
+    # 서버(ARM 등)에서는 시스템 chromedriver를 사용합니다.
+    # Google이 ARM64용 chromedriver를 배포하지 않아 ChromeDriverManager가 실패합니다.
+    _drv = os.environ.get("CHROMEDRIVER_PATH")
+    _bin = os.environ.get("CHROME_BINARY")
+    if _bin:
+        chrome_options.binary_location = _bin
+    service = Service(_drv) if _drv else Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=chrome_options)
     return driver
 
