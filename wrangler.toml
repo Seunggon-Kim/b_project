@@ -1,0 +1,14 @@
+# Cloudflare Workers / D1 설정
+#
+# 계획 A(데이터 기반 구축) 단계에서는 D1 명령만 사용하므로 main 을 두지 않습니다.
+# Worker 진입점(main = "src/index.js")은 계획 B에서 추가합니다.
+#
+# 참고: docs/superpowers/specs/2026-08-17-cloudflare-migration-design.md
+
+name = "kbo-api"
+compatibility_date = "2026-08-17"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "kbo-stats"
+database_id = "505c67f5-45ff-42ee-bce9-2f5f00cf90e7"

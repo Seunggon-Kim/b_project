@@ -241,3 +241,11 @@ dashboard_js/cron_status.json
 config/email_config.json
 ec2_config.local.ps1
 *.env
+
+# Node / Cloudflare
+node_modules/
+.wrangler/
+
+# 이관 중간 산출물
+migration/out/
+migration/golden/

@@ -1,0 +1,27 @@
+{
+  "name": "b_project",
+  "version": "1.0.0",
+  "description": "```\r b_project/\r ├── 📂 crawler/              # 크롤러 스크립트 및 수집 데이터\r ├── 📂 data_collection/      # 데이터 수집 및 처리 스크립트\r ├── 📂 database/             # SQLite 데이터베이스 파일\r ├── 📂 dashboard/            # Streamlit 대시보드\r ├── 📂 config/               # 설정 파일 (이메일 등)\r ├── 📂 logs/                 # 로그 파일\r ├── 📂 .streamlit/           # Streamlit 설정\r └── 📄 기타 유틸리티 파일들\r ```",
+  "main": "api_js_server.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Seunggon-Kim/b_project.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Seunggon-Kim/b_project/issues"
+  },
+  "homepage": "https://github.com/Seunggon-Kim/b_project#readme",
+  "devDependencies": {
+    "wrangler": "^4.123.0"
+  }
+}
