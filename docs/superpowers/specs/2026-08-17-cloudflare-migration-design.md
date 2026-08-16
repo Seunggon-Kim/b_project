@@ -82,8 +82,9 @@ AWS 계정은 2026-10-12까지 유료 전환하지 않으면 삭제됩니다. Or
 
 | 대상 | 처리 |
 |---|---|
-| `api/main.py` (1,565줄) | **JS로 이식.** 유일한 재작성 대상 |
-| 크롤러 9종 (Python) | **변경 없음.** GitHub Actions에서 실행 |
+| `api/main.py` (1,565줄) | **JS로 이식.** 유일한 언어 재작성 대상 |
+| 크롤러 9종 중 7종 (Python) | **변경 없음.** GitHub Actions에서 실행 |
+| `selenium_batter_scraper.py`, `selenium_pitcher_scraper.py` | **Selenium 제거, HTTP 직접 호출로 전환** (5장) |
 | `park_factors/` 파이프라인 | **변경 없음.** Actions에서 실행 |
 | `dashboard_js/` 7개 페이지 | API 베이스 URL만 교체 |
 | SQL 쿼리문 | **변경 없음.** D1이 SQLite 호환 |
@@ -132,9 +133,44 @@ monthly.yml  매월 1일: player_info
 
 각 단계는 독립적으로 실패할 수 있게 합니다. `official_stats` 가 실패해도 `pbp` 는 진행합니다.
 
+### 공식 기록 수집을 Selenium에서 HTTP 직접 호출로 전환
+
+현재 `official_stats` 만 Selenium을 씁니다. 대상은 두 페이지입니다.
+
+```
+Record/Player/HitterBasic/Basic1.aspx
+Record/Player/PitcherBasic/Basic1.aspx
+```
+
+ASP.NET WebForms 페이지라 드롭다운과 페이지 넘김이 postback으로 동작해 브라우저가 필요했습니다. 이런 페이지는 대개 `__VIEWSTATE`, `__EVENTVALIDATION`, `__EVENTTARGET` 을 포함한 POST 요청으로 직접 호출할 수 있습니다.
+
+이 프로젝트는 이미 같은 사이트를 브라우저 없이 호출하고 있습니다.
+
+```
+/ws/Main.asmx/GetKboGameList        (api/main.py)
+/ws/Schedule.asmx/GetScheduleList   (data_collection/futures_schedule.py)
+```
+
+전환 시 효과입니다.
+
+| 항목 | Selenium | HTTP 직접 호출 |
+|---|---|---|
+| Actions 분 | 월 약 450분 | **월 약 30분** |
+| 1회 실행 시간 | 약 15분 | 1분 미만 |
+| 필요 자원 | Chromium, chromedriver, 메모리 1GB | `requests` 만 |
+| 안정성 | 브라우저 타이밍 이슈로 흔들림 | 안정적 |
+
+부수 효과로 커밋 `d6f0232` 에서 추가한 `CHROMEDRIVER_PATH` 패치가 불필요해집니다. Oracle ARM 대응용이었는데 Selenium 자체가 사라지므로 의미가 없어집니다.
+
+비용은 두 페이지의 postback 구조를 파악하는 작업입니다. KBO가 페이지 구조를 바꾸면 깨지지만, 그 점은 Selenium도 동일합니다.
+
+**주의**: 이 전환은 브라우저 지문 기반 차단은 우회하지만 **IP 대역 차단은 우회하지 못합니다.** 위험 1의 완전한 해결책이 아닙니다.
+
 ### GitHub Actions 분 예산
 
 저장소가 비공개이므로 월 2,000분이 무료 한도입니다.
+
+**전환 전 (Selenium 유지)**
 
 ```
 daily.yml     하루 20~30분 x 30일 = 월 600~900분
@@ -142,7 +178,15 @@ monthly.yml   월 30분
 합계          월 630~930분   (한도 2,000분)
 ```
 
-futures를 Actions에 두면 30분 간격 기준 월 720분이 추가되어 예산이 빠듯해집니다. 그래서 Worker Cron으로 분리했습니다.
+**전환 후 (HTTP 직접 호출)**
+
+```
+daily.yml     하루 5~8분 x 30일 = 월 150~240분
+monthly.yml   월 10분
+합계          월 160~250분   (한도 2,000분)
+```
+
+전환 후에는 여유가 크게 늘어 futures를 Actions로 되돌리는 선택지도 열립니다. 30분 간격 기준 월 720분을 더해도 총 880~970분으로 한도 안입니다. 위험 3이 현실화되면 이 경로를 씁니다.
 
 ### D1 적재 방식
 
@@ -220,7 +264,7 @@ Actions가 매일 테이블별 CSV를 생성해 gzip 압축 후 R2에 올려둡�
 | Pages 대역폭 | 무제한 | | 충분 |
 | R2 저장 | 10GB | 100MB 미만 | 충분 |
 | R2 전송 | 무료 | | 충분 |
-| GitHub Actions | 2,000분/월 | 630~930분 | 충분 |
+| GitHub Actions | 2,000분/월 | 전환 전 630~930분<br>전환 후 160~250분 | 충분 |
 
 ### 3년 후 저장 한계 대응
 
@@ -238,7 +282,20 @@ Actions가 매일 테이블별 CSV를 생성해 gzip 압축 후 R2에 올려둡�
 
 발생 시 매일 02:00 공식 기록 수집이 실패해 타자·투수 성적이 갱신되지 않습니다.
 
-**대응**: `official_stats` 만 집 PC의 작업 스케줄러로 돌리고 결과를 D1에 전송합니다. PC를 24시간 켜둘 필요는 없으며 하루 한 번 켜져 있을 때 실행되면 됩니다. 나머지 설계는 그대로 유지됩니다.
+**대응은 아래 순서로 시도합니다.**
+
+| 순서 | 방법 | 뚫리는 경우 |
+|---|---|---|
+| 1 | **HTTP 직접 호출로 전환** (5장 참조) | 브라우저 지문·헤드리스 탐지가 원인일 때 |
+| 2 | **Cloudflare Worker에서 호출** | IP 대역 차단이지만 Cloudflare 대역은 열려 있을 때. GitHub 러너는 Azure 대역이라 판정이 다를 수 있습니다. 단 CPU 10ms 안에 VIEWSTATE 파싱과 페이지 순회가 끝나야 합니다 |
+| 3 | **집 PC 작업 스케줄러** | 위 둘이 모두 실패할 때. 한국 IP가 필요한 경우의 유일한 무료 수단입니다 |
+
+3번을 쓰더라도 PC를 24시간 켜둘 필요는 없습니다. 하루 한 번 켜져 있을 때 실행되면 됩니다. 나머지 설계는 그대로 유지됩니다.
+
+**검토했으나 채택하지 않은 방법**
+
+- **네이버 API로 대체**: 타자 42개, 투수 57개 컬럼을 채워야 하는데 `blown_save`, `wins_game_relieved`, `balk`, `go_ao` 같은 세부 항목을 네이버가 제공하지 않습니다. 기능 동일 목표와 충돌합니다.
+- **무료 프록시**: 신뢰성과 보안 문제가 있어 제외합니다.
 
 **확인 시점**: M1에서 DB 재구축을 Actions로 실행하며 판명됩니다.
 
@@ -339,8 +396,17 @@ CPU 10ms 안에 KBO 퓨처스 일정 파싱이 끝난다는 가정에 기반합�
 | **M3** | API 이식. **네이버 연동 5개(`schedule`, `schedule/futures`, `standings`, `leaders`, `players/{id}/news`)부터** | **위험 2** |
 | **M4** | 나머지 24개 엔드포인트 이식, 골든 비교 통과 | |
 | **M5** | 프론트엔드 API 베이스 URL 교체, Pages 배포 | |
-| **M6** | Actions 워크플로 정기화, Worker Cron 등록, R2 CSV 내보내기 | **위험 3** |
+| **M6** | Actions 워크플로 정기화, Worker Cron 등록, R2 CSV 내보내기, **공식 기록 수집을 HTTP 직접 호출로 전환** | **위험 3** |
 | **M7** | 공개, 모니터링 | |
+
+### HTTP 전환의 실행 시점은 M1 결과에 따라 달라집니다
+
+| M1 결과 | 실행 시점 | 성격 |
+|---|---|---|
+| Actions에서 KBO 접속 성공 | **M6** | 최적화. Actions 분을 15배 아끼고 안정성을 올립니다 |
+| Actions에서 KBO 차단 | **M1 직후 즉시** | 위험 1의 1차 대응. 이걸로 뚫리면 집 PC가 불필요해집니다 |
+
+어느 경우든 하게 될 작업이므로 순서만 조건부입니다.
 
 M1에서 DB 재구축을 Actions로 실행하는 이유는, 어차피 필요한 작업이므로 이를 통해 위험 1이 첫 단계에서 드러나기 때문입니다. 차단되면 로컬로 전환하며, 버려지는 작업은 없습니다.
 
@@ -368,3 +434,5 @@ M4가 가장 깁니다. wRC+ 계열 8개와 DB 탐색 3개가 무거운 편입�
 | iptables, 보안목록 | 서버가 없음 |
 | DuckDNS 갱신 | 고정 주소 `pages.dev` |
 | 서버 SSH 접속 | 서버가 없음 |
+| Selenium, Chromium, chromedriver | 공식 기록 수집을 HTTP 직접 호출로 전환 |
+| `CHROMEDRIVER_PATH` 패치 (커밋 `d6f0232`) | Selenium 자체가 사라지므로 불필요 |
