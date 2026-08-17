@@ -15,6 +15,7 @@
     <link rel="icon" type="image/svg+xml" href="../assets/favicon/diamond.svg">
     <link rel="apple-touch-icon" href="../assets/favicon/diamond-180.png">
     <link rel="stylesheet" href="../css/style.css">
+    <script src="../js/config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
@@ -269,8 +270,8 @@
     </main>
 
     <script>
-    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const API = isLocal ? 'http://localhost:8000' : '/api';
+    // 주소는 js/config.js 가 정합니다.
+    const API = window.KBO_API_BASE;
     let stadiumChart = null, distChart = null;
     const ARTICLE_IDS = ['wrc-plus'];
     let interactiveInited = false;

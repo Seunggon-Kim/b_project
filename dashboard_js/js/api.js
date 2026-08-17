@@ -1,7 +1,6 @@
 // API Configuration and Helper Functions
-// Nginx Proxy 사용 (/api)
-const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const API_BASE_URL = isLocal ? 'http://localhost:8000' : '/api';
+// 주소는 js/config.js 가 정합니다. 이 파일보다 먼저 로드되어야 합니다.
+const API_BASE_URL = window.KBO_API_BASE;
 
 class API {
     /**
