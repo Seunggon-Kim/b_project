@@ -2,12 +2,14 @@
   "name": "b_project",
   "version": "1.0.0",
   "description": "```\r b_project/\r ├── 📂 crawler/              # 크롤러 스크립트 및 수집 데이터\r ├── 📂 data_collection/      # 데이터 수집 및 처리 스크립트\r ├── 📂 database/             # SQLite 데이터베이스 파일\r ├── 📂 dashboard/            # Streamlit 대시보드\r ├── 📂 config/               # 설정 파일 (이메일 등)\r ├── 📂 logs/                 # 로그 파일\r ├── 📂 .streamlit/           # Streamlit 설정\r └── 📄 기타 유틸리티 파일들\r ```",
-  "main": "api_js_server.js",
+  "main": "src/index.js",
   "directories": {
     "doc": "docs"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "wrangler dev --remote --port 8787",
+    "test": "node --test",
+    "deploy": "wrangler deploy"
   },
   "repository": {
     "type": "git",
@@ -16,7 +18,8 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "//type": "Workers 와 test/ 가 ES module 입니다. 브라우저용 dashboard_js/*.js 는 script 태그로 로드되어 이 설정과 무관합니다.",
+  "type": "module",
   "bugs": {
     "url": "https://github.com/Seunggon-Kim/b_project/issues"
   },

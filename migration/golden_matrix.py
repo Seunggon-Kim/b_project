@@ -89,6 +89,11 @@ def _add(matrix, path, params=None, tag=""):
         key += "_" + "_".join("%s_%s" % (k, params[k]) for k in sorted(params))
     name = safe_name(key)
 
+    # 루트 경로 '/' 는 safe_name 을 거치면 빈 문자열이 됩니다. 그대로 두면
+    # 파일이 '.json' 으로 저장되어 확장자만 있는 숨김 파일이 됩니다.
+    if not name:
+        name = "root"
+
     # safe_name 이 한글 등 ASCII 외 문자를 지우므로 q=김 과 q= 의 이름이 같아집니다.
     # 파일이 덮어써지지 않도록 겹치면 번호를 붙입니다. 목록 순서가 같으면
     # 매번 같은 이름이 나오므로 정답지와 실제 응답의 파일명이 어긋나지 않습니다.

@@ -387,7 +387,7 @@ test('queryStr 은 없으면 기본값을 돌려줍니다', () => {
 - [ ] **Step 2: 테스트가 실패하는지 확인합니다**
 
 ```powershell
-node --test test/router.test.js
+node --testrouter.test.js
 ```
 
 기대: `Cannot find module` 로 실패합니다.
@@ -565,13 +565,29 @@ database_id = "505c67f5-45ff-42ee-bce9-2f5f00cf90e7"
 
 - [ ] **Step 8: package.json 에 스크립트를 추가합니다**
 
+**두 가지를 함께 고쳐야 합니다.**
+
+`"type": "commonjs"` 로 되어 있으면 `test/*.js` 의 `import` 가
+`SyntaxError: Cannot use import statement outside a module` 로 죽습니다.
+`"module"` 로 바꾸십시오. 브라우저용 `dashboard_js/*.js` 는 script 태그로
+로드되어 이 설정과 무관하고, `api_js_server.js` 는 git 비추적 잔재라 영향이
+없습니다.
+
+`main` 이 `api_js_server.js` 를 가리키고 있습니다. 추적되지 않는 파일이라
+`src/index.js` 로 바꿉니다. Workers 는 `wrangler.toml` 의 `main` 을 보므로
+동작에는 영향이 없지만, 가리키는 곳이 없는 설정을 남겨 둘 이유가 없습니다.
+
+테스트 명령은 **인자 없는 `node --test`** 입니다. `node --test test/` 처럼
+디렉터리를 주면 Node 24 에서 실패합니다.
+
+
 기존 내용을 지우지 말고 `scripts` 만 더합니다.
 
 ```json
 {
   "scripts": {
     "dev": "wrangler dev --remote --port 8787",
-    "test": "node --test test/",
+    "test": "node --test",
     "deploy": "wrangler deploy"
   }
 }
@@ -580,7 +596,7 @@ database_id = "505c67f5-45ff-42ee-bce9-2f5f00cf90e7"
 - [ ] **Step 9: 테스트가 통과하는지 확인합니다**
 
 ```powershell
-node --test test/router.test.js
+node --testrouter.test.js
 ```
 
 기대: 11개 모두 pass
@@ -922,7 +938,7 @@ test('속성 안의 부등호에 속지 않습니다', () => {
 - [ ] **Step 2: 테스트가 실패하는지 확인합니다**
 
 ```powershell
-node --test test/html.test.js
+node --testhtml.test.js
 ```
 
 기대: `Cannot find module` 로 실패합니다.
@@ -964,7 +980,7 @@ export function stripTags(html) {
 - [ ] **Step 4: 테스트가 통과하는지 확인합니다**
 
 ```powershell
-node --test test/html.test.js
+node --testhtml.test.js
 ```
 
 기대: 8개 모두 pass
@@ -1056,7 +1072,7 @@ test('last10 과 streak 이 없으면 빈 문자열입니다', () => {
 - [ ] **Step 6: 테스트가 실패하는지 확인합니다**
 
 ```powershell
-node --test test/standings_parse.test.js
+node --teststandings_parse.test.js
 ```
 
 기대: `Cannot find module` 로 실패합니다.
@@ -1213,7 +1229,7 @@ router.add('GET', '/standings', standings);
 - [ ] **Step 11: 테스트가 통과하는지 확인합니다**
 
 ```powershell
-node --test test/
+node --test
 ```
 
 기대: Task 1 의 11개 + html 8개 + standings 8개 = 27개 pass
@@ -1314,7 +1330,7 @@ test('kstToday 는 YYYY-MM-DD 형태입니다', () => {
 - [ ] **Step 2: 테스트가 실패하는지 확인합니다**
 
 ```powershell
-node --test test/kst.test.js
+node --testkst.test.js
 ```
 
 기대: `Cannot find module` 로 실패합니다.
@@ -1349,7 +1365,7 @@ export function kstToday() {
 - [ ] **Step 4: 테스트가 통과하는지 확인합니다**
 
 ```powershell
-node --test test/kst.test.js
+node --testkst.test.js
 ```
 
 기대: 6개 모두 pass
@@ -1777,7 +1793,7 @@ test('CDATA 로 감싼 제목을 읽습니다', () => {
 - [ ] **Step 2: 테스트가 실패하는지 확인합니다**
 
 ```powershell
-node --test test/news_parse.test.js
+node --testnews_parse.test.js
 ```
 
 기대: `Cannot find module` 로 실패합니다.
@@ -1883,7 +1899,7 @@ router.add('GET', '/players/:id/news', news);
 - [ ] **Step 5: 테스트가 통과하는지 확인합니다**
 
 ```powershell
-node --test test/
+node --test
 ```
 
 기대: 앞선 27개 + news 8개 = 35개 pass
@@ -1998,7 +2014,7 @@ test('0 은 하이픈이 아닙니다', () => {
 - [ ] **Step 2: 테스트가 실패하는지 확인합니다**
 
 ```powershell
-node --test test/leaders_calc.test.js
+node --testleaders_calc.test.js
 ```
 
 기대: `Cannot find module` 로 실패합니다.
@@ -2121,7 +2137,7 @@ router.add('GET', '/leaders', leaders);
 - [ ] **Step 7: 테스트가 통과하는지 확인합니다**
 
 ```powershell
-node --test test/
+node --test
 ```
 
 기대: 앞선 35개 + leaders 8개 = 43개 pass
@@ -2214,7 +2230,7 @@ py migration/golden_compare.py migration/golden/expected migration/golden/actual
 - [ ] **Step 3: 전체 테스트를 돌립니다**
 
 ```powershell
-node --test test/
+node --test
 py -m pytest tests/ -q
 ```
 
@@ -2249,7 +2265,7 @@ git push
 
 계획 B 가 끝나면 아래가 모두 참이어야 합니다.
 
-- [ ] `node --test test/` 가 전부 통과합니다 (43개)
+- [ ] `node --test` 가 전부 통과합니다 (43개)
 - [ ] `py -m pytest tests/ -q` 가 전부 통과합니다 (66개. Task 0 이 2개를 더합니다)
 - [ ] `/schedule` 정답지의 `games` 가 비어 있지 않습니다 (Task 0)
 - [ ] `npx wrangler deploy` 가 성공하고 `workers.dev` 주소가 응답합니다

@@ -104,6 +104,23 @@ def test_build_matrix_survives_missing_derived_tables():
     assert len(matrix) > 20
 
 
+def test_no_empty_name():
+    """이름이 비면 파일이 '.json' 으로 저장됩니다.
+
+    루트 경로 '/' 는 safe_name 을 거치면 빈 문자열이 됩니다. 그대로 두면
+    확장자만 있는 숨김 파일이 되어 도구마다 다르게 취급됩니다.
+    """
+    for item in build_matrix(_conn()):
+        assert item["name"], "이름이 빈 항목: %s" % item["path"]
+
+
+def test_root_path_gets_a_name():
+    matrix = build_matrix(_conn())
+    root = [i for i in matrix if i["path"] == "/"]
+    assert len(root) == 1
+    assert root[0]["name"] == "root"
+
+
 def test_schedule_uses_hyphenated_date():
     """/schedule 은 YYYY-MM-DD 를 기대합니다.
 
