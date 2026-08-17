@@ -1,5 +1,6 @@
 import { createRouter } from './lib/router.js';
 import { json, serverError } from './lib/respond.js';
+import { standings } from './routes/standings.js';
 
 const router = createRouter();
 
@@ -8,6 +9,8 @@ router.add('GET', '/', () => json({
   message: 'KBO Baseball Analytics API Active',
   version: '1.0.7',
 }));
+
+router.add('GET', '/standings', standings);
 
 // 위험 2 판정용 임시 엔드포인트입니다. 판정이 끝나면 Task 8 에서 제거합니다.
 //
