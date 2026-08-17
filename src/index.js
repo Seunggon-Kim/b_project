@@ -1,5 +1,6 @@
 import { createRouter } from './lib/router.js';
 import { json, serverError } from './lib/respond.js';
+import { withCache } from './lib/cachepolicy.js';
 import { standings } from './routes/standings.js';
 import { schedule } from './routes/schedule.js';
 import { futures } from './routes/futures.js';
@@ -67,7 +68,11 @@ router.add('GET', '/wrc/distribution', wrcDistribution);
 export default {
   async fetch(request, env, ctx) {
     try {
-      return await router.handle(request, env, ctx);
+      const res = await router.handle(request, env, ctx);
+      // Cache-Control 을 여기서 한 번에 붙입니다. 라우트마다 붙이면
+      // 빠뜨리기 쉽고, 빠뜨린 곳은 캐시가 안 걸려 D1 을 그대로 읽습니다.
+      // 정책은 lib/cachepolicy.js 에 있습니다.
+      return withCache(res, new URL(request.url).pathname);
     } catch (err) {
       return serverError(err);
     }

@@ -15,3 +15,9 @@ compatibility_date = "2026-08-17"
 binding = "DB"
 database_name = "kbo-stats"
 database_id = "505c67f5-45ff-42ee-bce9-2f5f00cf90e7"
+
+# Workers Cache (2026-07-06 출시). 전 플랜 무료이고 workers.dev 에서도
+# 동작합니다. 캐시에 맞으면 Worker 가 실행되지 않아 D1 읽기가 0 입니다.
+# 응답의 Cache-Control 로 수명을 정합니다 - src/lib/cachepolicy.js
+[cache]
+enabled = true
