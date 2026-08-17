@@ -812,8 +812,20 @@ git commit -m "feat(migration): SQLite 테이블을 D1 청크 SQL 로 내보내�
 **Interfaces:**
 - Consumes: `migration/out/*.sql`, Task 1의 `wrangler.toml`
 - Produces:
-  - `load_chunks(files, db_name, progress_path, limit=None) -> tuple[int, int]` — (성공 수, 실패 수) 를 반환하고 성공한 파일명을 `progress_path` 에 한 줄씩 기록합니다.
+  - `load_chunks(files, db_name, progress_path) -> tuple[int, int]` — (성공 수, 실패 수) 를 반환하고 성공한 파일명을 `progress_path` 에 한 줄씩 기록합니다.
   - `pending_files(all_files, progress_path) -> list[Path]` — 아직 적재하지 않은 파일 목록을 반환합니다.
+  - `index_counts(conn) -> dict[str, int]` — 테이블별 인덱스 개수.
+  - `write_cost(rows, n_indexes) -> int` — D1 이 계상할 쓰기 행 수. `rows * (1 + n_indexes)`.
+  - `plan_batch(files, manifest, idx_counts, budget) -> tuple[list[Path], int]` — 예산 안에 드는 파일만 골라 냅니다.
+
+> **[개정 2026-08-17] 하루치를 파일 개수(`--limit`)가 아니라 쓰기 행 예산(`--budget`)으로 셉니다.**
+>
+> 한 행을 넣을 때 계상되는 쓰기는 `1 + 그 테이블의 인덱스 수` 입니다. `play_by_play` 는 행당 4,
+> `teams` 는 행당 1 이라 파일 개수로는 하루치를 맞출 수 없습니다. `manifest.json` 의 행 수와
+> 로컬 스키마의 인덱스 수를 곱해 예산을 세고, 넘기 직전에 멈춥니다. 한도에 부딪혀 실패한 뒤
+> 되짚는 것보다 미리 멈추는 편이 안전합니다.
+>
+> 전체 예상 쓰기는 **930,840행**이고, 하루 95,000 예산이면 **10일**입니다.
 
 - [ ] **Step 1: 실패하는 테스트를 작성합니다**
 
@@ -1048,54 +1060,51 @@ git commit -m "feat(migration): 재개 가능한 D1 적재 도구와 행 수 검
 
 ---
 
-## Task 8: play_by_play 3일 분할 적재
+## Task 8: 10일 분할 적재
+
+> **[개정 2026-08-17] 3일이 아니라 10일입니다.**
+>
+> 인덱스가 쓰기 행을 배로 늘립니다. 전체 237,971행을 넣는 데 계상되는 쓰기는 **930,840행**이고,
+> 하루 예산 95,000 으로 나누면 10일입니다. 근거는 Task 5·6 의 개정 항목에 있습니다.
+> 비용은 그대로 0원이고 걸리는 시간만 늘어납니다.
 
 **Files:**
 - Modify: 없음 (Task 7의 도구를 사용합니다)
 
 **Interfaces:**
-- Consumes: `migration/out/16_play_by_play_*.sql` 약 1,149개 청크
-- Produces: D1의 `play_by_play` 229,667행
+- Consumes: `migration/out/*.sql` 250개 청크 (그중 `20_play_by_play_*` 230개)
+- Produces: D1의 전체 테이블, `play_by_play` 229,667행
 
-청크 하나가 200행이므로 하루 한도 100,000행은 **청크 450개**에 해당합니다. 안전 여유를 두고 하루 400개씩 넣습니다.
-
-- [ ] **Step 1: 1일차를 적재합니다**
+- [ ] **Step 1: 오늘치를 적재합니다**
 
 ```powershell
-py migration/load_to_d1.py --pattern "16_play_by_play_*.sql" --limit 400
+py migration/load_to_d1.py --dry-run    # 무엇이 몇 행 들어갈지 먼저 봅니다
+py migration/load_to_d1.py
 ```
 
-기대: 400개가 OK 로 출력됩니다. 약 80,000행이 들어갑니다.
+기대: `이번에 넣을 것 N개, 예상 쓰기 ...행` 이 나오고 파일이 하나씩 OK 로 찍힙니다.
+그날 이미 다른 쓰기를 했다면 `--budget` 을 낮춰 잡습니다.
 
-중간에 FAIL 이 나면서 한도 관련 오류가 보이면 그날은 중단하고 다음 날 재개합니다. 진행 상태는 `migration/out/.progress` 에 남아 있습니다.
+중간에 실패가 나면 그 지점에서 멈춥니다. 진행 상태는 `migration/out/.progress` 에 남습니다.
 
-- [ ] **Step 2: 1일차 결과를 확인합니다**
+- [ ] **Step 2: 그날 결과를 확인합니다**
 
 ```powershell
-npx wrangler d1 execute kbo-stats --remote --command "SELECT COUNT(*) AS n FROM play_by_play"
+py migration/verify_d1.py
 ```
 
-기대: 약 80,000
+- [ ] **Step 3: 다음 날 이어서 적재합니다**
 
-- [ ] **Step 3: 하루 기다린 뒤 2일차를 적재합니다**
-
-D1 일일 한도는 UTC 자정에 초기화됩니다. 한국 시간 오전 9시 이후에 실행합니다.
+D1 일일 한도는 UTC 자정에 초기화됩니다. 한국 시간 오전 9시 이후에 같은 명령을 실행합니다.
+`.progress` 에 기록된 파일은 건너뛰므로 인자를 바꿀 필요가 없습니다.
 
 ```powershell
-py migration/load_to_d1.py --pattern "16_play_by_play_*.sql" --limit 400
+py migration/load_to_d1.py
 ```
 
-기대: 남은 것 749개 중 400개가 OK 로 출력됩니다.
+`이 속도면 N일 남았습니다` 가 매번 출력됩니다. 0 이 될 때까지 반복합니다.
 
-- [ ] **Step 4: 하루 기다린 뒤 3일차를 적재합니다**
-
-```powershell
-py migration/load_to_d1.py --pattern "16_play_by_play_*.sql"
-```
-
-`--limit` 없이 실행해 남은 349개를 모두 넣습니다.
-
-- [ ] **Step 5: 전체를 검증합니다**
+- [ ] **Step 4: 전체를 검증합니다**
 
 ```powershell
 py migration/verify_d1.py
@@ -1103,13 +1112,13 @@ py migration/verify_d1.py
 
 기대: 모든 테이블이 일치하고 `불일치 0건` 이 출력됩니다.
 
-- [ ] **Step 6: 인덱스가 살아 있는지 확인합니다**
+- [ ] **Step 5: 인덱스가 살아 있는지 확인합니다**
 
 ```powershell
 npx wrangler d1 execute kbo-stats --remote --command "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='play_by_play'"
 ```
 
-기대: `idx_pbp_game`, `idx_pbp_batter`, `idx_pbp_pitcher`, `idx_pbp_date`, `idx_pbp_pitcher_date`, `idx_pbp_batter_date` 가 보입니다.
+기대: `idx_pbp_game`, `idx_pbp_batter`, `idx_pbp_pitcher` 세 개가 보입니다.
 
 - [ ] **Step 7: 저장 용량을 확인합니다**
 

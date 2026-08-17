@@ -1,0 +1,173 @@
+# -*- coding: utf-8 -*-
+"""청크 SQL 파일을 D1 에 순서대로 적재합니다.
+
+하루 한도를 파일 개수가 아니라 **쓰기 행 수**로 셉니다
+---------------------------------------------------
+D1 무료 플랜은 하루 100,000 행까지 씁니다. 그런데 한 행을 넣을 때 실제로 계상되는
+쓰기는 `1 + 그 테이블의 인덱스 수` 입니다. `play_by_play` 는 인덱스가 3개라 행당 4,
+`teams` 는 인덱스가 없어 행당 1 입니다. 파일 개수로 세면 이 차이를 놓칩니다.
+
+그래서 `manifest.json` 의 파일별 행 수와 로컬 스키마의 인덱스 수를 곱해 예산을
+계산하고, 예산을 넘기 직전에 멈춥니다. 한도에 부딪혀 실패한 뒤 되짚는 것보다
+미리 멈추는 편이 안전합니다.
+
+성공한 파일은 `.progress` 에 기록되어 두 번 넣지 않습니다.
+"""
+import argparse
+import json
+import sqlite3
+import subprocess
+import sys
+from pathlib import Path
+
+# 하루 한도 100,000 에서 5,000 을 여유로 남깁니다.
+DEFAULT_BUDGET = 95_000
+
+
+def pending_files(all_files, progress_path):
+    """아직 적재하지 않은 파일 목록을 반환합니다."""
+    progress_path = Path(progress_path)
+    done = set()
+    if progress_path.exists():
+        for line in progress_path.read_text(encoding="utf-8").splitlines():
+            name = line.strip()
+            if name:
+                done.add(name)
+    return [f for f in all_files if Path(f).name not in done]
+
+
+def index_counts(conn):
+    """테이블별 인덱스 개수를 셉니다. 이름 없는 자동 인덱스는 제외합니다."""
+    counts = {
+        name: 0
+        for (name,) in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    for (tbl,) in conn.execute(
+            "SELECT tbl_name FROM sqlite_master "
+            "WHERE type='index' AND sql IS NOT NULL"):
+        if tbl in counts:
+            counts[tbl] += 1
+    return counts
+
+
+def write_cost(rows, n_indexes):
+    """D1 이 계상할 쓰기 행 수. 테이블 1 + 인덱스마다 1."""
+    return rows * (1 + n_indexes)
+
+
+def plan_batch(files, manifest, idx_counts, budget=DEFAULT_BUDGET):
+    """예산 안에 들어가는 파일만 골라 (파일 목록, 예상 쓰기 수) 를 돌려줍니다.
+
+    `budget` 이 0 이면 전부 고릅니다. 예산보다 큰 파일 하나뿐이면 그것만이라도
+    시도합니다. 그렇게 하지 않으면 큰 파일에서 영원히 진행이 멈춥니다.
+    """
+    by_name = {f["name"]: f for f in manifest.get("files", [])}
+    chosen = []
+    total = 0
+    for f in files:
+        f = Path(f)
+        if f.name not in by_name:
+            raise KeyError(
+                "%s 가 manifest 에 없습니다. export_to_d1.py 를 다시 실행하십시오."
+                % f.name)
+        info = by_name[f.name]
+        cost = write_cost(info["rows"], idx_counts.get(info["table"], 0))
+        if budget and chosen and total + cost > budget:
+            break
+        chosen.append(f)
+        total += cost
+        if budget and total >= budget:
+            break
+    return chosen, total
+
+
+def load_chunks(files, db_name, progress_path):
+    """청크를 하나씩 D1 에 적재하고 (성공 수, 실패 수) 를 반환합니다."""
+    progress_path = Path(progress_path)
+    ok = 0
+    fail = 0
+    for i, f in enumerate(files, start=1):
+        f = Path(f)
+        cmd = 'npx wrangler d1 execute %s --remote --file="%s" --yes' % (
+            db_name, f.as_posix())
+        result = subprocess.run(cmd, capture_output=True, text=True,
+                                shell=True, encoding="utf-8", errors="replace")
+        if result.returncode == 0:
+            ok += 1
+            with progress_path.open("a", encoding="utf-8") as fh:
+                fh.write(f.name + "\n")
+            print("[%d/%d] OK   %s" % (i, len(files), f.name))
+        else:
+            fail += 1
+            print("[%d/%d] 실패 %s" % (i, len(files), f.name))
+            print((result.stderr or result.stdout or "").strip()[:800])
+            # 한도 초과일 가능성이 높으므로 즉시 멈춥니다.
+            break
+    return ok, fail
+
+
+def main():
+    ap = argparse.ArgumentParser(description="청크 SQL 을 D1 에 적재합니다")
+    ap.add_argument("--dir", default="migration/out")
+    ap.add_argument("--db", default="kbo-stats")
+    ap.add_argument("--local-db", default="database/kbo_stats.db",
+                    help="인덱스 수를 세기 위한 로컬 DB")
+    ap.add_argument("--budget", type=int, default=DEFAULT_BUDGET,
+                    help="이번 실행의 쓰기 행 예산. 0 이면 제한 없음")
+    ap.add_argument("--pattern", default="*.sql",
+                    help="적재 대상 파일 패턴 (예: 20_play_by_play_*.sql)")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="무엇을 넣을지만 보여 주고 넣지 않습니다")
+    args = ap.parse_args()
+
+    out_dir = Path(args.dir)
+    progress = out_dir / ".progress"
+    manifest_path = out_dir / "manifest.json"
+    if not manifest_path.exists():
+        print("manifest 가 없습니다: %s" % manifest_path)
+        print("먼저 py migration/export_to_d1.py 를 실행하십시오.")
+        return 1
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    conn = sqlite3.connect(args.local_db)
+    idx = index_counts(conn)
+    conn.close()
+
+    all_files = sorted(f for f in out_dir.glob(args.pattern)
+                       if f.name != "00_schema.sql")
+    todo = pending_files(all_files, progress)
+    print("전체 %d개, 남은 것 %d개" % (len(all_files), len(todo)))
+    if not todo:
+        print("모두 적재했습니다.")
+        return 0
+
+    batch, cost = plan_batch(todo, manifest, idx, budget=args.budget)
+    remaining = sum(
+        write_cost(f["rows"], idx.get(f["table"], 0))
+        for f in manifest["files"]
+        if f["name"] in {p.name for p in todo})
+    print("이번에 넣을 것 %d개, 예상 쓰기 %s행 (남은 총량 %s행)" % (
+        len(batch), format(cost, ","), format(remaining, ",")))
+    if args.budget:
+        days = -(-remaining // args.budget)
+        print("이 속도면 %d일 남았습니다." % days)
+
+    if args.dry_run:
+        for f in batch[:5]:
+            print("  %s" % f.name)
+        if len(batch) > 5:
+            print("  ... 외 %d개" % (len(batch) - 5))
+        return 0
+
+    ok, fail = load_chunks(batch, args.db, progress)
+    print()
+    print("성공 %d, 실패 %d" % (ok, fail))
+    if fail:
+        print("실패 지점부터 같은 명령으로 재개할 수 있습니다.")
+        print("한도 초과라면 UTC 자정(한국 시간 오전 9시) 이후에 다시 실행하십시오.")
+    return 1 if fail else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

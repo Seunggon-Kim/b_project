@@ -232,28 +232,44 @@ PBP           경기 5개 x 약 300플레이 = 약 1,500행
 합계          약 3,000행   (한도 100,000행/일)
 ```
 
-### 최초 적재는 3일에 나눕니다
+### 최초 적재는 10일에 나눕니다
 
-D1 무료 쓰기 한도가 하루 10만 행인데 `play_by_play` 만 229,667행입니다.
+> **[정정 2026-08-17] 당초 "3일" 로 적었으나 실측 결과 10일입니다.**
 
-```
-1일차   play_by_play 외 전체 (2,427행) + PBP 약 90,000행
-2일차   PBP 약 90,000행
-3일차   PBP 나머지 약 50,000행
-```
+D1 무료 쓰기 한도가 하루 10만 행인데, 한 행을 넣을 때 계상되는 쓰기는 `1 + 그 테이블의
+인덱스 수` 입니다. 문서에 "Indexes will add an additional written row" 로 명시돼 있고
+실측으로도 확인했습니다. `play_by_play` 는 인덱스 3개라 행당 4 입니다.
 
-일회성 작업입니다. 이 3일 동안은 사이트를 공개하지 않습니다.
+| 항목 | 값 |
+|---|---|
+| 넣을 행 | 237,971 |
+| 계상되는 쓰기 | **930,840** |
+| 하루 예산 | 95,000 (한도 100,000 에서 여유 5,000) |
+| 소요 | **10일** |
 
-### 인덱스
+일회성 작업이고 비용은 0원입니다. 이 기간에는 사이트를 공개하지 않습니다.
 
-D1 읽기 한도는 하루 500만 행입니다. `play_by_play` 전체 스캔이 한 번에 229,667행을 소비하므로 인덱스가 필수입니다.
+적재 진행은 `migration/out/.progress` 에 파일 단위로 남아, 매일 같은 명령을 다시 실행하면
+이어서 들어갑니다.
+
+### 인덱스는 적재 전에 만듭니다
+
+**적재를 마치고 인덱스를 만드는 순서는 쓸 수 없습니다.** 1,000행 테이블에 `CREATE INDEX`
+하나를 실행하니 `rows_written` 이 1,001 이었습니다. 229,667행이면 단일 DDL 하나가 하루
+한도를 그 자체로 넘는데, DDL 은 며칠에 나눠 실행할 수 없습니다. 인덱스를 먼저 만들어 두면
+같은 비용이 행 단위로 쪼개져 여러 날에 나뉩니다.
+
+인덱스는 로컬에 이미 있는 세 개만 옮깁니다.
 
 ```sql
-CREATE INDEX idx_pbp_date    ON play_by_play(game_date);
-CREATE INDEX idx_pbp_pitcher ON play_by_play(pitcher_ID, game_date);
-CREATE INDEX idx_pbp_batter  ON play_by_play(batter_ID, game_date);
-CREATE INDEX idx_pbp_game    ON play_by_play(gameID);
+CREATE INDEX idx_pbp_game    ON play_by_play(gameID);      -- games 조인, 시즌 커버 스캔
+CREATE INDEX idx_pbp_batter  ON play_by_play(batter_ID);   -- 타자 조회
+CREATE INDEX idx_pbp_pitcher ON play_by_play(pitcher_ID);  -- 투수 조회
 ```
+
+당초 설계에 있던 `game_date` 기반 인덱스는 넣지 않습니다. `api/main.py` 의 play_by_play
+쿼리는 시즌을 전부 `substr(gameID,1,4)` 로 거르고 `game_date` 로 거르는 쿼리가 하나도
+없습니다. 한 번도 쓰이지 않을 인덱스에 적재 일수를 더 쓸 이유가 없습니다.
 
 이식 과정에서 실제 쿼리 패턴을 보고 인덱스를 추가합니다.
 
