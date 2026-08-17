@@ -136,15 +136,26 @@ def build_statements(table, columns, rows, max_stmt_bytes=MAX_STATEMENT_BYTES):
 
 
 def export_table(conn, table, out_dir, rows_per_file=ROWS_PER_FILE, order=0,
-                 max_stmt_bytes=MAX_STATEMENT_BYTES):
-    """테이블 하나를 청크 SQL 파일들로 내보내고 (경로, 행수) 목록을 돌려줍니다."""
+                 max_stmt_bytes=MAX_STATEMENT_BYTES, where=None):
+    """테이블 하나를 청크 SQL 파일들로 내보내고 (경로, 행수) 목록을 돌려줍니다.
+
+    `where` 를 주면 그 조건에 맞는 행만 내보냅니다. 시즌 하나를 새로 넣을
+    때 표 전체를 다시 올릴 이유가 없습니다. play_by_play 40만 행을 다시
+    올리면 쓰기가 160만 계상됩니다(인덱스 3개 포함).
+
+    조건은 호출자가 만든 SQL 조각이 그대로 들어갑니다. 사용자 입력을
+    넣지 마십시오.
+    """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     columns = [r[1] for r in conn.execute('PRAGMA table_info("%s")' % table)]
     if not columns:
         return []
 
-    cur = conn.execute('SELECT * FROM "%s"' % table)
+    sql = 'SELECT * FROM "%s"' % table
+    if where:
+        sql += " WHERE " + where
+    cur = conn.execute(sql)
     result = []
     chunk_no = 0
     while True:
