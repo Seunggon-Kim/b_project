@@ -30,9 +30,11 @@ D1 에 넣고 Worker 는 D1 만 읽습니다. 응답도 빨라집니다.
 """
 import argparse
 import io
+import json
 import os
 import re
 import sqlite3
+import subprocess
 import sys
 import time
 import urllib.error
@@ -76,12 +78,71 @@ def kst_now():
     return datetime.now(timezone.utc) + timedelta(hours=9)
 
 
-def target_players(conn, season, limit=None):
+# --- 선수 목록 원천 -------------------------------------------------------
+#
+# 로컬에서는 SQLite 를 읽고, GitHub Actions 에서는 D1 을 읽습니다.
+#
+# 러너에는 `database/kbo_stats.db` 가 없습니다. 127MB 라 git 에 두지 않기
+# 때문입니다. 처음에 이 사실을 놓쳐 워크플로가 `unable to open database file`
+# 로 죽었습니다. D1 에 같은 표가 이미 적재돼 있으므로 그쪽을 읽습니다.
+
+
+def d1_query(sql, db_name="kbo-stats"):
+    """`wrangler d1 execute --json` 으로 D1 에 질의합니다.
+
+    출력에 진행 메시지가 섞이므로 첫 `[` 부터 잘라 파싱합니다.
+    한글은 wrangler 가 UTF-8 로 내보내므로 인코딩을 명시해 읽습니다.
+    """
+    cmd = ('npx wrangler d1 execute %s --remote --command "%s" --yes --json'
+           % (db_name, sql.replace('"', '\\"')))
+    r = subprocess.run(cmd, capture_output=True, shell=True)
+    out = r.stdout.decode("utf-8", "replace")
+    if r.returncode != 0:
+        err = r.stderr.decode("utf-8", "replace")
+        raise RuntimeError((err or out)[:600])
+    i = out.find("[")
+    if i < 0:
+        raise RuntimeError("JSON 을 찾지 못했습니다: %s" % out[:300])
+    data = json.loads(out[i:])
+    rows = []
+    for item in data:
+        if isinstance(item, dict):
+            rows.extend(item.get("results", []))
+    return rows
+
+
+class D1Source:
+    """D1 을 SQLite 커넥션처럼 쓰기 위한 얇은 껍데기입니다."""
+
+    def __init__(self, db_name="kbo-stats"):
+        self.db_name = db_name
+
+    def query(self, sql):
+        return d1_query(sql, self.db_name)
+
+
+class SqliteSource:
+    def __init__(self, path):
+        self.conn = sqlite3.connect(
+            "file:%s?mode=ro" % path.replace("\\", "/"), uri=True)
+        self.conn.row_factory = sqlite3.Row
+
+    def query(self, sql):
+        return [dict(r) for r in self.conn.execute(sql)]
+
+    def close(self):
+        self.conn.close()
+
+
+def target_players(source, season, limit=None):
     """뉴스를 모을 선수 목록을 돌려줍니다.
 
     해당 시즌 출전 기록이 있는 선수를 봅니다. MIN_PA·MIN_GAMES 가 0 이면
     한 번이라도 나온 선수 전원입니다. 기준을 왜 0 으로 두는지는 그 상수의
     주석을 보십시오.
+
+    D1 과 SQLite 를 함께 쓰려고 바인딩 대신 값을 문자열에 넣습니다. 세 값
+    모두 이 파일 안에서 정한 정수라 외부 입력이 섞이지 않습니다.
     """
     sql = """
         SELECT p.player_id, p.player_name, p.team_id, t.team_name
@@ -89,28 +150,31 @@ def target_players(conn, season, limit=None):
         LEFT JOIN teams t ON p.team_id = t.team_id
         WHERE p.player_id IN (
             SELECT player_id FROM kbo_official_batter_stats
-            WHERE season = ? AND plate_appearance >= ?
+            WHERE season = %d AND plate_appearance >= %d
             UNION
             SELECT player_id FROM kbo_official_pitcher_stats
-            WHERE season = ? AND games >= ?
+            WHERE season = %d AND games >= %d
         )
         ORDER BY p.player_name, p.player_id
-    """
-    rows = conn.execute(sql, (season, MIN_PA, season, MIN_GAMES)).fetchall()
+    """ % (int(season), int(MIN_PA), int(season), int(MIN_GAMES))
+    rows = source.query(" ".join(sql.split()))
     return rows[:limit] if limit else rows
 
 
-def ambiguous_names(conn):
+def ambiguous_names(source):
     """이름이 겹치는 선수 이름 집합입니다. 585명 중 20조가 있습니다."""
-    return {n for (n,) in conn.execute(
+    rows = source.query(
         "SELECT player_name FROM players GROUP BY player_name "
-        "HAVING COUNT(*) > 1")}
+        "HAVING COUNT(*) > 1")
+    return {r["player_name"] for r in rows}
 
 
-def latest_season(conn):
-    row = conn.execute(
-        "SELECT MAX(season) FROM kbo_official_batter_stats").fetchone()
-    return row[0] if row and row[0] else kst_now().year
+def latest_season(source):
+    rows = source.query(
+        "SELECT MAX(season) AS s FROM kbo_official_batter_stats")
+    if rows and rows[0].get("s"):
+        return rows[0]["s"]
+    return kst_now().year
 
 
 def fetch_rss(query, timeout=20, retries=2):
@@ -166,6 +230,10 @@ def sql_literal(v):
 def main():
     ap = argparse.ArgumentParser(description="선수 뉴스를 모아 D1 SQL 을 만듭니다")
     ap.add_argument("--db", default=DB)
+    ap.add_argument("--source", choices=["sqlite", "d1"], default=None,
+                    help="선수 목록을 어디서 읽을지. 기본은 로컬 DB 파일이 "
+                         "있으면 sqlite, 없으면 d1 입니다")
+    ap.add_argument("--d1-name", default="kbo-stats")
     ap.add_argument("--season", type=int, default=None)
     ap.add_argument("--limit", type=int, default=None,
                     help="앞에서 N 명만 (맛보기용)")
@@ -175,17 +243,29 @@ def main():
                     help="SQL 을 쓰지 않고 결과만 출력합니다")
     args = ap.parse_args()
 
-    conn = sqlite3.connect("file:%s?mode=ro" % args.db.replace("\\", "/"),
-                           uri=True)
-    conn.row_factory = sqlite3.Row
-    season = args.season or latest_season(conn)
-    dupes = ambiguous_names(conn)
-    players = target_players(conn, season, args.limit)
-    conn.close()
+    # 원천을 고릅니다. GitHub Actions 러너에는 로컬 DB 파일이 없어(127MB 라
+    # git 에 두지 않습니다) 자동으로 D1 을 씁니다.
+    mode = args.source
+    if mode is None:
+        mode = "sqlite" if os.path.exists(args.db) else "d1"
 
-    print("시즌 %s, 대상 선수 %d명, 이름 겹침 %d조" % (
-        season, len(players), len(dupes)))
+    if mode == "sqlite":
+        source = SqliteSource(args.db)
+    else:
+        source = D1Source(args.d1_name)
+
+    season = args.season or latest_season(source)
+    dupes = ambiguous_names(source)
+    players = target_players(source, season, args.limit)
+    if hasattr(source, "close"):
+        source.close()
+
+    print("원천 %s, 시즌 %s, 대상 선수 %d명, 이름 겹침 %d조" % (
+        mode, season, len(players), len(dupes)))
     print()
+    if not players:
+        print("대상 선수가 없습니다. 원천을 확인하십시오.")
+        return 1
 
     fetched_at = kst_now().strftime("%Y-%m-%d %H:%M:%S")
     rows = []

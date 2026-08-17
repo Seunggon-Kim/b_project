@@ -55,11 +55,18 @@ jobs:
 
       # 선수 뉴스를 모아 D1 적재용 SQL 을 만듭니다.
       # Worker 는 구글을 부르지 못하므로 여기서 미리 모아 둡니다.
+      #
+      # 선수 목록은 D1 에서 읽습니다. 러너에는 database/kbo_stats.db 가
+      # 없습니다. 127MB 라 git 에 두지 않기 때문입니다. 그래서 이 단계도
+      # Cloudflare 인증이 필요합니다.
       - name: 선수 뉴스 수집
         id: news
         if: steps.google_probe.outcome == 'success'
         continue-on-error: true
-        run: python data_collection/collect_player_news.py
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: python data_collection/collect_player_news.py --source d1
 
       - name: 선수 뉴스 D1 적재
         id: news_load
