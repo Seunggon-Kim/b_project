@@ -10,6 +10,10 @@ import { dashboardStats } from './routes/dashboard.js';
 import { playersSearch, playerDetail } from './routes/players.js';
 import { statsSeasons, statsRegulation } from './routes/stats.js';
 import { dbTables } from './routes/dbexplorer.js';
+import {
+  wrcSeasons, wrcByStadium, wrcLeaderboard,
+  wrcTopChanges, wrcBatter, wrcBatterSearch,
+} from './routes/wrc.js';
 
 const router = createRouter();
 
@@ -34,6 +38,14 @@ router.add('GET', '/db/tables', dbTables);
 // 순서가 뒤바뀌면 'search' 가 선수 ID 로 잡힙니다.
 router.add('GET', '/players/search', playersSearch);
 router.add('GET', '/players/:id', playerDetail);
+
+router.add('GET', '/wrc/seasons', wrcSeasons);
+router.add('GET', '/wrc/by-stadium', wrcByStadium);
+router.add('GET', '/wrc/leaderboard', wrcLeaderboard);
+router.add('GET', '/wrc/top-changes', wrcTopChanges);
+// batter-search 를 batter/:id 보다 먼저 둡니다. 둘 다 3세그먼트입니다.
+router.add('GET', '/wrc/batter-search', wrcBatterSearch);
+router.add('GET', '/wrc/batter/:id', wrcBatter);
 
 export default {
   async fetch(request, env, ctx) {
