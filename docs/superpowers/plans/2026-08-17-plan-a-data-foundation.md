@@ -506,6 +506,30 @@ Get-Content migration\out\00_schema.sql -TotalCount 5
 
 기대: `DROP TABLE IF EXISTS` 로 시작하는 내용이 보입니다.
 
+> **[개정 2026-08-17] `EXTRA_INDEXES` 는 빈 목록으로 둡니다.**
+>
+> 원래 이 계획은 `idx_pbp_date`, `idx_pbp_pitcher_date`, `idx_pbp_batter_date` 를 추가하라고 적었습니다.
+> 두 가지 이유로 넣지 않습니다.
+>
+> **첫째, 그 인덱스는 쓰이지 않습니다.** `api/main.py` 의 play_by_play 쿼리는 시즌을 전부
+> `substr(gameID,1,4)` 로 거릅니다. `game_date` 로 거르는 쿼리가 하나도 없습니다.
+>
+> **둘째, 인덱스마다 적재 일수가 늘어납니다.** D1 은 인덱스 하나당 쓰기 행을 하나 더 셉니다.
+> 실측했습니다.
+>
+> | 실측 | 결과 |
+> |---|---|
+> | 인덱스 6개 상태로 play_by_play 1,000행 삽입 | `rows_written` = **7,007** |
+> | 1,000행 테이블에 `CREATE INDEX` 하나 | `rows_written` = **1,001** |
+>
+> 두 번째 수치가 중요합니다. "인덱스 없이 적재하고 나중에 만들기"가 불가능하다는 뜻입니다.
+> 229,667행에 인덱스를 만들면 단일 DDL 하나가 229,667 쓰기라 하루 한도 100,000 을 그 자체로
+> 넘고, DDL 은 며칠에 나눠 실행할 수 없습니다. **인덱스를 먼저 만들어 두고 적재해야** 비용이
+> 행 단위로 쪼개져 여러 날에 나뉩니다.
+>
+> 그래서 로컬에 이미 있는 세 개(`gameID`, `batter_ID`, `pitcher_ID`)만 옮깁니다. 행당 쓰기는
+> 1 + 3 = 4 이고, 하루 25,000행씩 넣게 됩니다.
+
 - [ ] **Step 6: D1에 스키마를 적용합니다**
 
 ```powershell
@@ -540,11 +564,31 @@ git commit -m "feat(migration): SQLite 스키마를 D1 적용용 SQL 로 변환�
 **Interfaces:**
 - Consumes: `database/kbo_stats.db`
 - Produces:
-  - `export_table(conn, table, out_dir, batch_size=200, order=0) -> list[Path]` — 테이블 하나를 청크 SQL 파일들로 내보내고 경로 목록을 반환합니다. `order` 는 파일명 앞의 2자리 순번입니다.
-  - `TABLE_ORDER: list[str]` — 적재 순서를 정한 테이블 이름 16개. `migration/verify_d1.py` 가 이 목록을 재사용합니다.
+  - `export_table(conn, table, out_dir, rows_per_file=1000, order=0) -> list[tuple[Path, int]]` — 테이블 하나를 청크 SQL 파일들로 내보내고 (경로, 행수) 목록을 반환합니다. `order` 는 파일명 앞의 2자리 순번입니다.
+  - `build_statements(table, columns, rows, max_stmt_bytes=90000) -> list[str]` — 행 목록을 크기 한도를 지키는 INSERT 문 여러 개로 나눕니다.
+  - `TABLE_ORDER: list[str]` — 적재 순서를 정한 테이블 이름 20개. `migration/verify_d1.py` 가 이 목록을 재사용합니다.
+  - `missing_from_order(conn) -> list[str]` — DB 에는 있는데 `TABLE_ORDER` 에 없는 테이블을 알려줍니다.
   - `rows_to_insert(table, columns, rows) -> str` — 행 묶음을 INSERT 문 하나로 만듭니다.
   - `sql_literal(value) -> str` — 파이썬 값을 SQL 리터럴로 변환합니다.
-  - 파일명 규칙: `{순번2자리}_{테이블명}_{청크번호4자리}.sql` (예: `10_play_by_play_0001.sql`)
+  - `migration/out/manifest.json` — 파일별 테이블·행수·바이트. 로더가 하루 쓰기 예산을 세는 데 씁니다.
+  - 파일명 규칙: `{순번2자리}_{테이블명}_{청크번호4자리}.sql` (예: `20_play_by_play_0001.sql`)
+
+> **[개정 2026-08-17] 고정 200행 묶음을 버리고, 크기 기준 적응 분할로 바꿨습니다.**
+>
+> 계획은 "play_by_play 74컬럼 약 257자/행이므로 200행이면 55KB" 라고 적었습니다. 실측하니
+> **행당 1,299바이트**로 5배 틀렸고, 200행이면 260KB 라 100KB 한도를 넘습니다. 행 크기는
+> 테이블마다 크게 다릅니다.
+>
+> | 테이블 | 행당 평균 | 행당 최대 |
+> |---|---|---|
+> | `team_logos` | 14,080 B | **87,593 B** (로고가 통째로 들어 있습니다) |
+> | `play_by_play` | 1,299 B | 1,483 B |
+> | `team_stadium_by_season` | 120 B | 130 B |
+>
+> 그래서 행을 하나씩 붙여 보며 90KB 를 넘기 직전에 문을 끊습니다(`build_statements`).
+> 그리고 파일 하나에 INSERT 문을 여러 개 담습니다. `wrangler d1 execute --file` 이 파일 안의
+> 문을 순서대로 실행하므로 호출 횟수가 크게 줍니다. 파일당 1,000행 기준으로 250개 파일이 나오고,
+> 가장 큰 파일이 0.55MB 입니다. 이 크기가 D1 에 들어가는 것을 실측으로 확인했습니다(4.7초).
 
 - [ ] **Step 1: 실패하는 테스트를 작성합니다**
 
