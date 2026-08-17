@@ -1,0 +1,79 @@
+name: daily
+
+# 이 단계에서는 수동 실행만 합니다. 정기 실행은 계획 D 에서 추가합니다.
+on:
+  workflow_dispatch:
+
+jobs:
+  official-stats:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 의존성 설치
+        run: |
+          python -m pip install --upgrade pip
+          pip install selenium webdriver-manager beautifulsoup4 lxml requests pandas
+
+      # 위험 1 판정의 핵심입니다. 여기서 막히면 뒤 단계는 볼 것도 없습니다.
+      - name: KBO 도달 확인 (HTTP)
+        id: http_probe
+        continue-on-error: true
+        run: python .github/scripts/probe_kbo.py --mode http
+
+      # HTTP 는 되는데 이것만 실패하면 브라우저 지문 탐지입니다.
+      # 전체 수집(10팀)은 오래 걸리므로 표가 그려지는지만 먼저 봅니다.
+      - name: KBO 도달 확인 (Selenium)
+        id: selenium_probe
+        continue-on-error: true
+        run: python .github/scripts/probe_kbo.py --mode selenium
+
+      - name: 타자 기록 수집
+        id: scrape
+        continue-on-error: true
+        run: python data_collection/selenium_batter_scraper.py
+
+      - name: 산출물 업로드
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: official-stats-output
+          path: |
+            logs/
+            crawler/save/official_stats/
+          if-no-files-found: warn
+
+      - name: 판정 요약
+        if: always()
+        run: |
+          echo "## 위험 1 판정" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 단계 | 결과 |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| HTTP 도달 | ${{ steps.http_probe.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Selenium 도달 | ${{ steps.selenium_probe.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 전체 수집 | ${{ steps.scrape.outcome }} |" >> $GITHUB_STEP_SUMMARY
+
+      # 판정 결과를 실패로 드러내야 로그를 놓치지 않습니다.
+      - name: 판정 실패 시 종료 코드
+        if: always()
+        run: |
+          if [ "${{ steps.http_probe.outcome }}" != "success" ]; then
+            echo "HTTP 도달에 실패했습니다. 설계 7장 위험 1 의 사다리 2번(Cloudflare Worker)으로 넘어갑니다."
+            exit 1
+          fi
+          if [ "${{ steps.selenium_probe.outcome }}" != "success" ]; then
+            echo "HTTP 는 되는데 Selenium 이 실패했습니다. HTTP 직접 호출 전환을 즉시 과제로 올립니다."
+            exit 1
+          fi
+          if [ "${{ steps.scrape.outcome }}" != "success" ]; then
+            echo "프로브는 통과했으나 전체 수집이 실패했습니다. 접근 문제가 아니라 스크래퍼 쪽 문제입니다."
+            exit 1
+          fi
+          echo "세 단계 모두 통과했습니다."
