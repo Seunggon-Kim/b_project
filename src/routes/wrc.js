@@ -285,3 +285,94 @@ function missingSeason() {
     }],
   }, 422);
 }
+
+/**
+ * 파이썬 `round(x, digits)` 를 흉내 냅니다.
+ *
+ * 파이썬 round 는 .5 에서 짝수 쪽으로 갑니다. JS 의 toFixed 나 Math.round 는
+ * 항상 올립니다. 소수 자리에도 같은 규칙이 적용되므로 자릿수를 곱해 정수로
+ * 만든 뒤 pyRound 를 태웁니다.
+ */
+export function pyRoundTo(x, digits) {
+  const f = 10 ** digits;
+  return pyRound(x * f) / f;
+}
+
+/**
+ * 원본 `stats(values)` (api/main.py:1046-1057) 입니다.
+ *
+ * 분위수를 보간하지 않고 **정렬된 배열의 인덱스**로 집습니다.
+ * median 도 `v[n // 2]` 라 짝수 개일 때 두 값의 평균이 아니라 위쪽 값입니다.
+ * `statistics.median` 을 쓰지 않는다는 점이 중요합니다.
+ *
+ * 값이 하나도 없으면 **`{n: 0}` 만** 돌려줍니다. mean·p10 등 다른 키가
+ * 아예 없습니다.
+ */
+export function distStats(values) {
+  const v = values.filter((x) => x !== null && x !== undefined)
+    .sort((a, b) => a - b);
+  const n = v.length;
+  if (n === 0) return { n: 0 };
+  const sum = v.reduce((a, b) => a + b, 0);
+  return {
+    n,
+    mean: pyRoundTo(sum / n, 2),
+    p10: pyRoundTo(v[Math.floor(n * 0.10)], 1),
+    median: pyRoundTo(v[Math.floor(n / 2)], 1),
+    p90: pyRoundTo(v[Math.floor(n * 0.90)], 1),
+  };
+}
+
+/**
+ * 원본 `histogram(values, 5, 40, 200)` (api/main.py:1059-1066) 입니다.
+ *
+ * `int(v // bin_size) * bin_size` 로 구간을 정하고 40~200 으로 자릅니다.
+ * 파이썬의 `//` 는 내림 나눗셈이라 음수에서 `Math.trunc` 와 다릅니다.
+ * **`Math.floor` 를 써야 합니다.** 여기서는 40 으로 잘려 결과가 같지만,
+ * 원본과 다른 연산을 남겨 둘 이유가 없습니다.
+ */
+export function distHistogram(values, binSize = 5, minV = 40, maxV = 200) {
+  const bins = new Map();
+  for (const v of values) {
+    if (v === null || v === undefined) continue;
+    const b = Math.max(minV, Math.min(maxV, Math.floor(v / binSize) * binSize));
+    bins.set(b, (bins.get(b) || 0) + 1);
+  }
+  return [...bins.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([bin, count]) => ({ bin, count }));
+}
+
+/** 원본 api/main.py:1032-1080 입니다. 시즌 wRC+ 분포입니다. */
+export async function wrcDistribution(request, env) {
+  const url = new URL(request.url);
+  const season = queryInt(url, 'season', null);
+  if (season === null) return missingSeason();
+  const minPa = await effMinPa(env.DB, season, queryInt(url, 'min_pa', 100));
+
+  const { results } = await env.DB.prepare(`
+    SELECT wRC_home, wRC_half, wRC_weighted
+    FROM wrc_plus_comparison
+    WHERE PA >= ? AND season = ?
+  `).bind(minPa, season).all();
+
+  const home = results.map((r) => r.wRC_home);
+  const half = results.map((r) => r.wRC_half);
+  const weighted = results.map((r) => r.wRC_weighted);
+
+  return json({
+    season,
+    n: results.length,
+    min_pa: minPa,
+    stats: {
+      home: distStats(home),
+      half: distStats(half),
+      weighted: distStats(weighted),
+    },
+    histogram: {
+      home: distHistogram(home),
+      half: distHistogram(half),
+      weighted: distHistogram(weighted),
+    },
+  });
+}

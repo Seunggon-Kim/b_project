@@ -876,14 +876,41 @@ py migration/golden_compare.py migration/golden/expected migration/golden/actual
   엔드포인트(Task 6, 그리고 `_eff_min_pa` 를 쓰는 wRC+ 일부)는 적재가 끝나야 값이
   맞습니다. 그 사실을 알고 진행하되, 코드 이식 자체는 먼저 끝낼 수 있습니다.
 
-## 실측 결과
+## 실측 결과 (2026-08-17)
 
-Task 4 에서 채웁니다.
+배포본 `/probe/cpu` 로 쟀습니다. **판정은 wall_ms 숫자가 아니라 요청이
+200 으로 끝나는지**입니다. CPU 한도를 넘으면 Cloudflare 가 요청을 끊습니다.
 
-| 항목 | 행 수 | 결과 | 판정 |
+| 항목 | 읽은 행 | 경과 | 결과 |
 |---|---|---|---|
-| `pbp_scan` | | | |
-| `pitcher` | | | |
-| `wrc_all` | | | |
-| `logo` | | | |
-| CSV `play_by_play` 전체 | | | |
+| `logo` (team_logos 1행) | 1 | 753ms | **통과** |
+| `wrc_all` (분위수 계산) | 155 | 144ms | **통과** |
+| `usage` (투수 단위 집계) | 80 | 138ms | **통과** |
+| `pbp_scan` (한 달 스캔) | 5,667 | 357ms | **통과** |
+| `pbp_all` (전량 읽기) | 18,000 | 1,329ms | **통과** |
+
+`team_logos` 컬럼은 `code, name, league, mime, source` 입니다. `mime` 이
+따로 있으니 그 값을 content-type 으로 쓰면 됩니다.
+
+### 이 수치를 그대로 믿으면 안 됩니다
+
+**지금 D1 의 `play_by_play` 는 18,000행입니다. 적재가 끝나면 229,667행,
+12.8배가 됩니다.** 위 측정은 8% 짜리 데이터에서 나온 것입니다.
+
+| 대상 | 지금 | 적재 완료 후 | 위험 |
+|---|---|---|---|
+| `pbp_all` = CSV 전체 | 18,000행 | 229,667행 | 74컬럼이면 JSON 이 300MB 급. **Workers 메모리 128MB 초과 가능** |
+| `pbp_scan` = `/stats/team_range` | 5,667행 (한 달) | 시즌 전체 요청이면 229,667행 | 정답지에 `start=20250301&end=20251031` 요청이 있습니다 |
+| `usage` | 80행 | 투수당 수천 행 | 규모가 제한적이라 여유 |
+
+**따라서 적재 완료 후 재측정이 필수입니다.** 특히 CSV 전체와 team_range 는
+그때 다시 재고 R2 우회 여부를 정합니다(Task 8).
+
+지금 시점의 결론은 이렇습니다.
+
+- Task 5 (`/logo`) — 지금 진행합니다. 데이터가 늘지 않습니다
+- Task 6 (`/usage`, `/team_range`) — 코드는 지금 옮기되, 값 검증과 부하
+  판정은 적재 완료 후
+- Task 7 (`/wrc/distribution`) — 지금 진행합니다. `wrc_plus_comparison` 은
+  이미 전량 적재돼 있어 데이터가 늘지 않습니다
+- Task 8 (CSV) — **적재 완료 후에 판정합니다**
