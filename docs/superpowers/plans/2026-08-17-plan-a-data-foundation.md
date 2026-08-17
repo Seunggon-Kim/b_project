@@ -4,7 +4,10 @@
 
 **Goal:** 로컬 SQLite의 전체 데이터를 Cloudflare D1에 적재하고, API 이식의 정확성을 기계적으로 검증할 골든 정답지를 만듭니다.
 
-**Architecture:** 로컬 SQLite(127.5MB, 232,094행)에서 누락된 파생 테이블 6종을 먼저 생성한 뒤, 테이블별 INSERT 문을 청크로 나눠 `wrangler d1 execute --remote` 로 D1에 적재합니다. D1 무료 쓰기 한도가 하루 10만 행이므로 `play_by_play` 는 3일에 걸쳐 재개 가능한 방식으로 넣습니다. 적재가 끝나면 현재 FastAPI를 로컬에서 띄워 29개 엔드포인트의 응답을 저장해 정답지로 씁니다.
+**Architecture:** 로컬 SQLite(127.5MB, 237,873행)에서 누락된 파생·마스터 테이블 6종을 먼저 채운 뒤, 테이블별 INSERT 문을 청크로 나눠 `wrangler d1 execute --remote` 로 D1에 적재합니다. D1 무료 쓰기 한도가 하루 10만 행이므로 `play_by_play` 는 3일에 걸쳐 재개 가능한 방식으로 넣습니다. 적재가 끝나면 현재 FastAPI를 로컬에서 띄워 29개 엔드포인트의 응답을 저장해 정답지로 씁니다.
+
+> **[개정 2026-08-17]** 로컬 DB 는 전체 스냅샷이 아니라 **2025 시즌 원천만** 담고 있습니다. 파생 테이블 6종은
+> 계산으로 만드는 대신 다른 사본에서 복원했습니다. 경위와 결과는 Task 3 을, 배경은 설계 문서 §1 정정 항목을 보십시오.
 
 **Tech Stack:** Python 3.13, SQLite, Node 24 / npm 11, Cloudflare Wrangler, Cloudflare D1, GitHub Actions, pytest
 
@@ -240,129 +243,120 @@ git commit -m "docs(migration): D1 이관 절차 문서 추가"
 
 ---
 
-## Task 3: 파크팩터 파이프라인 실행으로 누락 테이블 5종 생성
+## Task 3: 파생·마스터 테이블 복원 — 완료 (2026-08-17)
 
-**Files:**
-- Modify: 없음 (기존 스크립트 실행만 합니다)
+> **[개정] 당초 계획은 "파크팩터 파이프라인을 돌려 5종을 생성"이었습니다. 실행 불가로 판명되어
+> "다른 사본에서 복원"으로 바꿨습니다. 아래는 실제로 수행한 내용입니다.**
 
-**Interfaces:**
-- Consumes: `database/kbo_stats.db` 의 `play_by_play`, `kbo_official_batter_stats`
-- Produces: `self_park_factor`, `wrc_plus_comparison`, `weighted_pf`, `re24_matrix_by_season`, `kbo_run_values_by_season` 테이블. `api/main.py` 의 wRC+ 계열 엔드포인트 8개가 `wrc_plus_comparison` 을 참조합니다.
+### 왜 바꿨는가
 
-`park_factors/run_pipeline.sh` 는 `cd /home/ubuntu/b_project` 가 하드코딩되어 Windows에서 실행할 수 없습니다. 세 스크립트를 직접 순서대로 실행합니다.
+Task 2 진단에서 로컬 DB 가 **2025 시즌 원천만** 담고 있음을 확인했습니다(설계 문서 §1 정정 항목 참조).
+이 사실이 원래 Task 3 을 두 방향에서 무너뜨립니다.
 
-- [ ] **Step 1: 의존성을 설치합니다**
+1. **입력이 없습니다.** `park_factors/build_wrc_plus.py` 는 재빌드 스크립트라 `kbo_woba_weights_by_season`,
+   `team_stadium_by_season`, `stadium_dim`, `v_batter_wrc_plus` 뷰가 이미 있어야 동작합니다. 로컬 DB 에는
+   넷 다 없었습니다. 게다가 47행이 **기존 `wrc_plus_comparison` 행에서 시즌 상수 L 을 역산**하므로,
+   빈 상태에서는 어차피 0행이 나옵니다.
+2. **돌리면 손해입니다.** 두 스크립트 모두 `DELETE` 후 재삽입입니다. 원천 PBP 가 2025 뿐인 지금 실행하면
+   다른 곳에 남아 있던 2015~2024·2026 파생이 2025 로 덮여 사라집니다.
 
-```powershell
-py -m pip install pandas numpy
-```
+### 무엇을 했는가
 
-기대: 이미 설치되어 있으면 `Requirement already satisfied` 가 출력됩니다.
+`migration/restore_derived.py` 를 만들어 아래를 복원했습니다.
 
-- [ ] **Step 2: 파크팩터를 계산합니다**
+| 테이블 | 출처 | 결과 |
+|---|---|---|
+| `wrc_plus_comparison` | `database/_bak_20260605_dump.sql` | 2,140행, 2015~2026 |
+| `weighted_pf_by_batter_season` | 같은 덤프 | 3,487행, 2015~2026 |
+| `team_stadium_by_season` | 같은 덤프 | 110행, 2015~2025 |
+| `statiz_park_factor` | `cricket_project/database/kbo_stats.db` | 100행, 2015~2025 |
+| `statiz_yearly_constants` | 같은 DB | 16행, 2011~2026 |
+| `stadium_dim` | 스크립트 내 수동 시드 | 16행 |
+
+`self_park_factor`(2025, 9행)는 `compute_self_park_factors.py` 로 생성했습니다. 이 스크립트만은 PBP 만
+읽으므로 실행에 문제가 없었고, 작업 전 백업에 해당 테이블이 없어 덮어쓴 것도 없습니다.
+
+- [x] **Step 1: DB 경로 하드코딩을 걷어냅니다**
+
+`park_factors` 세 스크립트의 `DB = '/home/ubuntu/b_project/database/kbo_stats.db'` 를 환경변수 `KBO_DB`
+우선, 없으면 저장소 기준 상대경로로 바꿨습니다. EC2 절대경로는 Windows 와 Actions 러너 어디서도
+동작하지 않습니다. 지금 실행하지 않더라도 재크롤링 이후 필요하므로 미리 고쳐 둡니다.
+
+- [x] **Step 2: 파크팩터를 계산합니다**
 
 ```powershell
 py park_factors/compute_self_park_factors.py
 ```
 
-기대: 오류 없이 종료하고 `self_park_factor` 테이블이 생성됩니다.
+결과: `self_park_factor` 9행(2025). 2026 은 원천이 없어 0행입니다.
 
-- [ ] **Step 3: 생성 여부를 확인합니다**
-
-```powershell
-py -c "import sqlite3;c=sqlite3.connect('database/kbo_stats.db');print(c.execute('SELECT COUNT(*) FROM self_park_factor').fetchone()[0])"
-```
-
-기대: 0보다 큰 숫자가 출력됩니다.
-
-- [ ] **Step 4: wRC+를 계산합니다**
+- [x] **Step 3: 복원 대상을 미리 확인합니다**
 
 ```powershell
-py park_factors/build_wrc_plus.py
+py migration/restore_derived.py
 ```
 
-기대: `wrc_plus_comparison` 과 `weighted_pf` 테이블이 생성됩니다.
+기대: 6개 테이블의 출처·행 수·시즌 범위가 출력되고 DB 는 바뀌지 않습니다.
 
-- [ ] **Step 5: RE24와 득점가치를 계산합니다**
+- [x] **Step 4: 복원을 반영합니다**
 
 ```powershell
-py park_factors/build_re24_run_values.py --write
+py migration/restore_derived.py --write
 ```
 
-기대: `re24_matrix_by_season` 과 `kbo_run_values_by_season` 테이블이 생성됩니다.
+기대: `kbo_stats.db.bak_<타임스탬프>` 백업이 생기고 6개 테이블이 반영됩니다. 마지막 줄에
+`stadium_dim 이 실제 구장명 14개를 모두 덮습니다.` 가 나와야 합니다. 덮지 못한 구장명이 있으면
+`STADIUM_DIM` 시드에 추가하고 다시 실행합니다.
 
-- [ ] **Step 6: 5개 테이블이 모두 생겼는지 확인합니다**
-
-```powershell
-py -c "import sqlite3;c=sqlite3.connect('database/kbo_stats.db');ts=['self_park_factor','wrc_plus_comparison','weighted_pf','re24_matrix_by_season','kbo_run_values_by_season'];[print(t, c.execute('SELECT COUNT(*) FROM \"%s\"' % t).fetchone()[0]) for t in ts]"
-```
-
-기대: 5개 테이블 모두 행 수가 0보다 큽니다. 하나라도 오류가 나면 해당 스크립트의 로그를 확인합니다.
-
-- [ ] **Step 7: 커밋합니다**
-
-DB 파일은 git 비추적입니다. 커밋할 소스 변경은 없으므로 진행 기록만 남깁니다.
-
-```powershell
-git commit --allow-empty -m "chore(migration): 파크팩터 파이프라인 실행으로 파생 테이블 5종 생성"
-```
-
----
-
-## Task 4: registry_sync 실행으로 player_history 생성
-
-**Files:**
-- Modify: 없음 (기존 스크립트 실행만 합니다)
-
-**Interfaces:**
-- Consumes: `database/kbo_stats.db` 의 `players`, KBO 구단별 선수 명단 페이지
-- Produces: `player_history` 테이블. `api/main.py` 의 선수 조회 엔드포인트가 참조합니다.
-
-- [ ] **Step 1: 스크립트 인자를 확인합니다**
-
-```powershell
-py data_collection/player_registry_sync.py --help
-```
-
-기대: 사용 가능한 옵션이 출력됩니다. 출력된 옵션을 확인한 뒤 Step 2를 실행합니다.
-
-- [ ] **Step 2: 동기화를 실행합니다**
-
-```powershell
-py data_collection/player_registry_sync.py
-```
-
-기대: KBO에서 선수 명단을 받아 `players` 를 갱신하고 `player_history` 를 생성합니다.
-
-네트워크 오류로 실패하면 KBO 사이트 접근 여부를 먼저 확인합니다.
-
-```powershell
-py -c "import requests;r=requests.get('https://www.koreabaseball.com', timeout=15);print(r.status_code)"
-```
-
-기대: `200`
-
-- [ ] **Step 3: 생성 여부를 확인합니다**
-
-```powershell
-py -c "import sqlite3;c=sqlite3.connect('database/kbo_stats.db');print('player_history', c.execute('SELECT COUNT(*) FROM player_history').fetchone()[0])"
-```
-
-기대: 0보다 큰 숫자가 출력됩니다.
-
-- [ ] **Step 4: 전체 테이블 수를 확인합니다**
+- [x] **Step 5: 테이블 수를 확인합니다**
 
 ```powershell
 py -c "import sqlite3;c=sqlite3.connect('database/kbo_stats.db');print(c.execute(\"SELECT COUNT(*) FROM sqlite_master WHERE type='table'\").fetchone()[0])"
 ```
 
-기대: `17` (기존 11개 + Task 3의 5개 + `player_history` 1개)
+결과: `18` (기존 12개 + `self_park_factor` 를 뺀 복원 6개).
 
-- [ ] **Step 5: 커밋합니다**
+- [x] **Step 6: API 를 띄워 전수 확인합니다**
 
 ```powershell
-git commit --allow-empty -m "chore(migration): registry_sync 실행으로 player_history 생성"
+py -m uvicorn api.main:app --host 127.0.0.1 --port 8199
 ```
+
+29개 엔드포인트를 모두 호출해 확인했습니다. HTTP 오류 0건입니다. wRC+ 계열은 `?season=2019` 처럼
+과거 시즌을 지정해도 정상 응답합니다.
+
+### 하지 않은 것과 그 이유
+
+| 대상 | 판단 |
+|---|---|
+| `build_wrc_plus.py` 실행 | **금지.** 돌리면 2015~2024·2026 파생이 사라집니다. 재크롤링 이후에 실행합니다 |
+| `build_re24_run_values.py --write` 실행 | **보류.** 2025 PBP 만으로 계산하면 `season=0` 통합 기준선이 한 시즌으로 왜곡됩니다. API 미참조라 급하지 않습니다 |
+| `re24_matrix_by_season`, `kbo_run_values_by_season` | 위와 같은 이유로 만들지 않습니다. `api/main.py` 어디에서도 참조하지 않습니다 |
+
+---
+
+## Task 4: player_history — 계획 D로 이월
+
+**당초 계획**: `player_registry_sync.py` 를 실행해 `player_history` 를 만든다.
+
+**변경**: 만들지 않고 넘어갑니다.
+
+계획 수립 당시 `api/main.py` 가 이 테이블을 참조한다고 적었으나, 실제로 확인하니 참조하지 않습니다.
+`player_history` 를 쓰는 곳은 `data_collection/player_registry_sync.py` 와
+`data_collection/daily_player_detector.py` 뿐이고, 둘 다 수집 파이프라인 내부용입니다.
+서빙 경로에 없으므로 D1 적재 대상이 아닙니다.
+
+이 테이블은 선수 속성 변경 이력(SCD Type 2)이라 **시간이 지나며 쌓이는 성격**입니다. 지금 만들면
+초기 적재 한 시점만 담긴 껍데기가 됩니다. 크롤러를 Actions 에서 정상 가동한 뒤 자연히 쌓이게 하는 편이
+맞습니다. 계획 D 에서 다룹니다.
+
+- [x] **확인: API 가 참조하지 않음을 검증했습니다**
+
+```powershell
+py -c "import io,re;s=io.open('api/main.py',encoding='utf-8').read();print('참조 횟수:', len(re.findall('player_history', s)))"
+```
+
+기대: `참조 횟수: 0`
 
 ---
 
@@ -1884,7 +1878,10 @@ git push
 
 ## 계획 A에서 하지 않는 것
 
-- **데이터 최신화**: D1에 넣는 것은 2026-06-06 스냅샷과 그로부터 계산한 파생 테이블입니다. 6월 6일 이후 재크롤링은 계획 D의 컷오버 직전에 수행합니다. 정답지와 D1이 같은 데이터라 골든 비교에는 지장이 없습니다.
+- **데이터 최신화**: D1에 넣는 것은 **2025 시즌 원천**과, 다른 사본에서 복원한 파생 테이블(wRC+ 계열은 2015~2026)입니다. 2015~2024·2026 원천 재크롤링은 계획 D에서 수행합니다. 정답지와 D1이 같은 데이터를 보므로 골든 비교에는 지장이 없습니다.
+- **`/wrc/seasons` 의 시즌 목록 제한**: 이 엔드포인트는 시즌 목록을 `play_by_play` 에서 뽑아 파생 테이블과 조인합니다(`api/main.py:834`). PBP 가 2025 뿐이라 화면 셀렉터에 2025 만 나옵니다. 데이터는 살아 있고 원천을 되채우면 자동으로 풀립니다. 지금 고치면 골든 정답지의 기준이 흔들리므로 **코드를 건드리지 않습니다.** 계획 D 재크롤링 이후 재확인 항목입니다.
+- **`re24_matrix_by_season` / `kbo_run_values_by_season` 생성**: 2025 PBP 만으로 계산하면 통합 기준선이 왜곡되고, `api/main.py` 가 참조하지 않습니다. 계획 D로 미룹니다.
+- **`player_history` 생성**: API 미참조이며 시간에 따라 쌓이는 이력 테이블입니다. 계획 D로 미룹니다.
 - **API 이식**: 계획 B에서 합니다.
 - **프론트엔드 변경**: 계획 C에서 합니다.
 - **정기 실행 설정**: `daily.yml` 은 이 계획에서 `workflow_dispatch` 만 둡니다. 정기 실행과 D1 적재 단계는 계획 D에서 붙입니다.
