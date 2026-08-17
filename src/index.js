@@ -2,7 +2,9 @@ import { createRouter } from './lib/router.js';
 import { json, serverError } from './lib/respond.js';
 import { standings } from './routes/standings.js';
 import { schedule } from './routes/schedule.js';
+import { futures } from './routes/futures.js';
 import { news } from './routes/news.js';
+import { leaders } from './routes/leaders.js';
 
 const router = createRouter();
 
@@ -14,7 +16,9 @@ router.add('GET', '/', () => json({
 
 router.add('GET', '/standings', standings);
 router.add('GET', '/schedule', schedule);
+router.add('GET', '/schedule/futures', futures);
 router.add('GET', '/players/:id/news', news);
+router.add('GET', '/leaders', leaders);
 
 // 위험 2 판정용 임시 엔드포인트입니다. 판정이 끝나면 Task 8 에서 제거합니다.
 //
