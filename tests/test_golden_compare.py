@@ -28,6 +28,30 @@ def test_int_and_float_are_different():
     assert len(diffs) == 1
 
 
+def test_whole_float_to_int_is_allowed_when_loose():
+    """SQLite REAL 에 든 85.0 을 JS 는 85 로 내보냅니다.
+
+    파이썬은 float(85.0) 을 JSON 에 85.0 으로 쓰지만, JS 의 Number 는
+    정수와 실수를 구분하지 않아 JSON.stringify(85.0) 이 늘 85 입니다.
+    이식으로 고칠 수 있는 차이가 아니고, 클라이언트가 파싱하면 같은 값이라
+    화면에도 영향이 없습니다. 값이 같을 때만 허용합니다.
+    """
+    assert compare_values({"n": 85.0}, {"n": 85}, numeric_loose=True) == []
+
+
+def test_loose_still_catches_real_difference():
+    """값이 다르면 느슨하게 봐도 잡아야 합니다."""
+    assert compare_values({"n": 85.5}, {"n": 85}, numeric_loose=True) != []
+
+
+def test_loose_does_not_touch_strings():
+    assert compare_values({"n": "85"}, {"n": 85}, numeric_loose=True) != []
+
+
+def test_loose_off_by_default():
+    assert compare_values({"n": 85.0}, {"n": 85}) != []
+
+
 def test_null_and_empty_string_are_different():
     diffs = compare_values({"a": None}, {"a": ""})
     assert len(diffs) == 1

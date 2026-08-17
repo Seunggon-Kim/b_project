@@ -5,6 +5,11 @@ import { schedule } from './routes/schedule.js';
 import { futures } from './routes/futures.js';
 import { news } from './routes/news.js';
 import { leaders } from './routes/leaders.js';
+import { teams } from './routes/teams.js';
+import { dashboardStats } from './routes/dashboard.js';
+import { playersSearch, playerDetail } from './routes/players.js';
+import { statsSeasons, statsRegulation } from './routes/stats.js';
+import { dbTables } from './routes/dbexplorer.js';
 
 const router = createRouter();
 
@@ -19,6 +24,16 @@ router.add('GET', '/schedule', schedule);
 router.add('GET', '/schedule/futures', futures);
 router.add('GET', '/players/:id/news', news);
 router.add('GET', '/leaders', leaders);
+router.add('GET', '/teams', teams);
+router.add('GET', '/dashboard/stats', dashboardStats);
+router.add('GET', '/stats/seasons', statsSeasons);
+router.add('GET', '/stats/regulation', statsRegulation);
+router.add('GET', '/db/tables', dbTables);
+
+// /players/search 를 :id 보다 먼저 등록합니다. 둘 다 2세그먼트라
+// 순서가 뒤바뀌면 'search' 가 선수 ID 로 잡힙니다.
+router.add('GET', '/players/search', playersSearch);
+router.add('GET', '/players/:id', playerDetail);
 
 export default {
   async fetch(request, env, ctx) {

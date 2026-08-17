@@ -50,7 +50,8 @@ def _is_number(v):
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
-def compare_values(expected, actual, path="", rel_tol=1e-9, structural=False):
+def compare_values(expected, actual, path="", rel_tol=1e-9, structural=False,
+                   numeric_loose=False):
     """두 값을 비교하고 차이 설명 목록을 반환합니다."""
     if structural:
         e = shape_of(expected)
@@ -66,6 +67,14 @@ def compare_values(expected, actual, path="", rel_tol=1e-9, structural=False):
 
     # 부동소수점 허용 오차. 단 int 와 float 의 혼용은 타입 차이로 봅니다.
     if _is_number(expected) and _is_number(actual):
+        # SQLite REAL 에 든 85.0 을 파이썬은 85.0 으로, JS 는 85 로 씁니다.
+        # JS 의 Number 는 정수와 실수를 구분하지 않아 JSON.stringify(85.0) 이
+        # 늘 85 입니다. 이식으로 고칠 수 있는 차이가 아니고 값도 같습니다.
+        # numeric_loose 를 켜면 그 경우만 통과시킵니다. 85.5 대 85 는 그대로
+        # 잡힙니다.
+        if (numeric_loose and float(expected) == float(actual)
+                and type(expected) is not type(actual)):
+            return []
         if isinstance(expected, float) or isinstance(actual, float):
             if isinstance(expected, float) and isinstance(actual, float):
                 if math.isclose(expected, actual, rel_tol=rel_tol, abs_tol=1e-12):
@@ -93,7 +102,8 @@ def compare_values(expected, actual, path="", rel_tol=1e-9, structural=False):
                 diffs.append("%s: 정답지에 없습니다" % child)
             else:
                 diffs.extend(
-                    compare_values(expected[key], actual[key], child, rel_tol))
+                    compare_values(expected[key], actual[key], child, rel_tol,
+                                   structural, numeric_loose))
         return diffs
 
     if isinstance(expected, list):
@@ -102,7 +112,8 @@ def compare_values(expected, actual, path="", rel_tol=1e-9, structural=False):
                     % (loc, len(expected), len(actual))]
         diffs = []
         for i, (e, a) in enumerate(zip(expected, actual)):
-            diffs.extend(compare_values(e, a, "%s[%d]" % (path, i), rel_tol))
+            diffs.extend(compare_values(e, a, "%s[%d]" % (path, i), rel_tol,
+                                        structural, numeric_loose))
         return diffs
 
     if expected == actual:
@@ -110,7 +121,7 @@ def compare_values(expected, actual, path="", rel_tol=1e-9, structural=False):
     return ["%s: 기대 %r, 실제 %r" % (loc, expected, actual)]
 
 
-def compare_dirs(expected_dir, actual_dir, rel_tol=1e-9):
+def compare_dirs(expected_dir, actual_dir, rel_tol=1e-9, numeric_loose=True):
     """두 디렉터리의 같은 이름 JSON 파일들을 비교합니다."""
     expected_dir = Path(expected_dir)
     actual_dir = Path(actual_dir)
@@ -126,7 +137,8 @@ def compare_dirs(expected_dir, actual_dir, rel_tol=1e-9):
         e = json.loads(ef.read_text(encoding="utf-8"))
         a = json.loads(af.read_text(encoding="utf-8"))
         structural = is_live_path(ef.name)
-        diffs = compare_values(e, a, "", rel_tol, structural=structural)
+        diffs = compare_values(e, a, "", rel_tol, structural=structural,
+                               numeric_loose=numeric_loose)
         if diffs:
             different.append("%s%s\n    %s" % (
                 ef.name, " (구조 비교)" if structural else "",

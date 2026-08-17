@@ -70,7 +70,7 @@ export function teamCode(team) {
  * 정확히 x.5 로 떨어지는 경기 수(예: 75경기 -> 232.5)에서 규정타석이
  * 1 어긋납니다. 원본 round(3.1 * team_g) 와 같게 맞춥니다.
  */
-function pyRound(x) {
+export function pyRound(x) {
   const floor = Math.floor(x);
   if (x - floor === 0.5) return floor % 2 === 0 ? floor : floor + 1;
   return Math.round(x);
