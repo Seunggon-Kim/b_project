@@ -554,9 +554,24 @@ CPU 10ms 안에 KBO 퓨처스 일정 파싱이 끝난다는 가정에 기반합�
 | **M2** | D1 분할 적재, 골든 응답 정답지 생성 | | **완료 (2026-08-17). 250/250 청크, 237,971행, 검증 불일치 0건.** 하루 10만행 제한이 실제로는 막히지 않아 10일이 아닌 하루에 끝났습니다 |
 | **M3** | API 이식. **네이버 연동 5개(`schedule`, `schedule/futures`, `standings`, `leaders`, `players/{id}/news`)부터** | **위험 2** | **완료 (2026-08-17). 위험 2 해소** |
 | **M4** | 나머지 24개 엔드포인트 이식, 골든 비교 통과 | | **완료 (2026-08-17). 29/29 엔드포인트, 골든 102건 전부 일치·불일치 0건. JS 145 · 파이썬 121 테스트 통과** |
-| **M5** | 프론트엔드 API 베이스 URL 교체, Pages 배포 | | |
+| **M5** | 프론트엔드 API 베이스 URL 교체, Pages 배포 | | **완료 (2026-08-17).** 화면 `https://kbo-dashboard-a0g.pages.dev`. 일곱 페이지 중 여섯 정상, `factor-stats` 는 `re24_matrix_by_season` 부재로 깨짐(원천에 처음부터 없던 표 — 계획 D) |
 | **M6** | Actions 워크플로 정기화, Worker Cron 등록, **R2 CSV 내보내기(§CSV 전량 참조 — 선택이 아니라 필수가 되었습니다)**, **공식 기록 수집을 HTTP 직접 호출로 전환** | **위험 3** | |
 | **M7** | 공개, 모니터링 | | |
+
+### 지금 살아 있는 주소
+
+```
+화면   https://kbo-dashboard-a0g.pages.dev
+API    https://kbo-api.bstats-baseball.workers.dev
+```
+
+`kbo-dashboard` 는 이미 쓰이는 이름이라 Cloudflare 가 `-a0g` 를 붙였습니다.
+Worker 와 달리 Pages 는 계정 서브도메인이 아니라 프로젝트 이름이 그대로
+주소이고, 전 세계에서 유일해야 합니다.
+
+배포는 `npm run deploy` (API) 와 `npm run deploy:pages` (화면) 입니다.
+Pages 쪽은 `--branch main` 이 붙어 있어야 프로덕션 주소로 갑니다. 없으면
+현재 git 브랜치 이름의 프리뷰로 올라가고 그 주소는 배포마다 바뀝니다.
 
 ### CSV 전량 내려받기는 Workers 에서 불가능합니다 (M4 실측)
 

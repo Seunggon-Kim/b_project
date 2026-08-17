@@ -9,7 +9,9 @@
   "scripts": {
     "dev": "wrangler dev --remote --port 8787",
     "test": "node --test",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "//deploy:pages": "--branch main 이 있어야 프로덕션 주소로 갑니다. 없으면 현재 git 브랜치 이름의 프리뷰로 올라가고, 그 주소는 배포마다 바뀝니다.",
+    "deploy:pages": "wrangler pages deploy dashboard_js --project-name kbo-dashboard --branch main"
   },
   "repository": {
     "type": "git",

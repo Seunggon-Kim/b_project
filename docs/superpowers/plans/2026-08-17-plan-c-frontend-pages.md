@@ -212,7 +212,7 @@ git commit -m "refactor(frontend): API 주소를 config.js 한 곳으로 모으�
 npx wrangler pages project create kbo-dashboard --production-branch main
 ```
 
-이름은 주소가 됩니다. `https://kbo-dashboard.pages.dev` 가 됩니다.
+이름은 주소가 됩니다. `https://kbo-dashboard-a0g.pages.dev` 가 됩니다.
 Worker 와 달리 **계정 서브도메인이 아니라 프로젝트 이름이 그대로 주소**입니다.
 전 세계에서 유일해야 하므로 이미 쓰는 이름이면 다른 것을 고르십시오.
 
@@ -233,7 +233,7 @@ npx wrangler pages deploy dashboard_js --project-name kbo-dashboard
 - [ ] **Step 4: 주소가 응답하는지 봅니다**
 
 ```powershell
-curl.exe -s -o NUL -w "%{http_code}`n" https://kbo-dashboard.pages.dev/
+curl.exe -s -o NUL -w "%{http_code}`n" https://kbo-dashboard-a0g.pages.dev/
 ```
 
 기대: `200`. 새 주소는 퍼지는 데 몇 분 걸릴 수 있습니다.
@@ -303,7 +303,7 @@ def fetch(url, timeout=30):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--pages", default="https://kbo-dashboard.pages.dev")
+    ap.add_argument("--pages", default="https://kbo-dashboard-a0g.pages.dev")
     ap.add_argument("--api", default="https://kbo-api.bstats-baseball.workers.dev")
     args = ap.parse_args()
 
@@ -438,7 +438,7 @@ Pages 주소와 확인 결과를 적습니다.
 `README.md` 나 설계 문서에 아래를 남깁니다. 다음에 접속할 때 찾기 쉽도록.
 
 ```
-화면   https://kbo-dashboard.pages.dev
+화면   https://kbo-dashboard-a0g.pages.dev
 API    https://kbo-api.bstats-baseball.workers.dev
 ```
 
@@ -467,16 +467,67 @@ API    https://kbo-api.bstats-baseball.workers.dev
 - 계획 B2 Task 8 (`/db/table/{name}/csv`) 이 끝나 있어야 합니다. DB 탐색기 페이지가 그것을 씁니다.
 - D1 적재가 끝나 있어야 화면 숫자가 맞습니다. 적재 중에는 경기 수와 타석 수가 실제보다 적게 보입니다.
 
-## 확인 결과
+## 확인 결과 (2026-08-17)
 
-Task 4 에서 채웁니다.
+주소가 계획과 다릅니다. `kbo-dashboard` 는 이미 쓰이는 이름이라 Cloudflare
+가 접미사를 붙였습니다.
+
+```
+화면   https://kbo-dashboard-a0g.pages.dev
+API    https://kbo-api.bstats-baseball.workers.dev
+```
+
+헤드리스 Chrome 으로 일곱 페이지를 열고, 콘솔 오류와 실패한 요청을 걷어
+확인했습니다(`migration/check_pages_browser.py`). 눌러야 나오는 것들은
+따로 눌러 봤습니다(`migration/check_pages_interact.py`).
 
 | 페이지 | 결과 | 비고 |
 |---|---|---|
-| `/` | | |
-| `/pages/player-stats.html` | | |
-| `/pages/team-stats.html` | | |
-| `/pages/player-analytics.html` | | |
-| `/pages/factor-stats.html` | | |
-| `/pages/database-explorer.html` | | |
-| `/pages/article.html` | | |
+| `/` | 정상 | 경기 카드·팀 순위·개인 순위 모두 데이터가 들어옵니다 |
+| `/pages/player-stats.html` | 정상 | |
+| `/pages/team-stats.html` | 정상 | 팀 타격 표에 10개 구단이 나옵니다 |
+| `/pages/player-analytics.html` | 정상 | 검색해야 나오는 화면입니다. "김도영" 검색 확인 |
+| `/pages/factor-stats.html` | **깨짐** | 아래 참조 |
+| `/pages/database-explorer.html` | 정상 | 표 18개, `play_by_play` 열기 확인 |
+| `/pages/article.html` | 정상 | 목록·본문 열기 확인 (296자 → 3,191자) |
+
+로고 두 경로 모두 정상입니다. 1군 카드의 정적 파일과, 퓨처스 카드가 쓰는
+`/logo` API(D1 BLOB) 둘 다 확인했습니다. 퓨처스 탭에서 로고 이미지 50개 중
+깨진 것이 0개입니다. `naturalWidth` 로 봤습니다. `src` 만 보면 404 여도
+붙어 있는 것처럼 보입니다.
+
+### factor-stats 가 깨진 이유는 이전 때문이 아닙니다
+
+`re24_matrix_by_season` 표가 D1 에 없어 404 가 납니다. 그런데 이 표는
+**로컬 DB 에도, 백업 덤프에도 없습니다.** 적재에서 빠뜨린 것이 아니라
+원천에 처음부터 없었습니다. `migration/export_to_d1.py` 의 `TABLE_ORDER`
+주석에 "아직 없는 테이블"로 이미 적혀 있습니다.
+
+EC2 에서는 있었을 것입니다. 화면이 그것을 부르고 있으니까요. 로컬 DB 가
+2025 시즌만 담은 축소본이라 이 파생 표가 함께 오지 않았습니다.
+
+**재생성해서 넣지 않기로 했습니다.** `park_factors/build_re24_run_values.py`
+로 만들 수는 있지만, dry-run 결과 `season=0` 의 값이 `season=2025` 와
+n_obs 까지 완전히 같습니다. 이 표의 `season=0` 은 "2015~2025 열한 시즌을
+모은 기준선"이라는 뜻인데 지금 넣으면 실제로는 한 시즌입니다. 화면은
+열한 시즌으로 표시합니다. **틀린 라벨을 붙인 값이라 없는 것보다 나쁩니다.**
+계획 D 에서 나머지 시즌을 다시 모은 뒤 만들어야 맞습니다.
+
+곁들여 드러난 것이 있습니다. 이 화면은 파크 팩터와 RE24 를 `Promise.all`
+로 함께 부르므로, **RE24 하나가 404 면 파크 팩터 탭까지 같이 죽습니다.**
+파크 팩터 데이터(`statiz_park_factor`)는 D1 에 멀쩡히 있는데도 못 봅니다.
+원본에서는 두 표가 다 있어 드러나지 않던 결함입니다.
+
+고치려면 화면 코드를 손대야 하는데, 이 계획은 "화면 동작을 바꾸지
+않습니다"가 원칙입니다. 여기서 고치면 무엇이 이전 때문에 깨졌고 무엇이
+원래 그랬는지 경계가 흐려집니다. **판단을 남겨 둡니다.**
+
+### 데이터 탐색의 Cron 표는 이제 사실이 아닙니다
+
+`database-explorer.html` 의 "자동 수집 스케줄(Cron)" 표가 EC2 crontab 을
+기준으로 하드코딩되어 있습니다. 그 서버는 없습니다. 표에 적힌 아홉 개
+작업(`auto_deploy_poll.sh` 의 "GitHub main 감지 후 서버 자동 반영" 포함)은
+지금 아무것도 돌지 않습니다. "마지막 업데이트 시간"도 전부 `-` 입니다.
+
+계획 D 에서 Actions 와 Worker Cron 으로 정기 실행을 세운 뒤, 그 내용으로
+바꿔야 합니다. 지금 고치면 아직 없는 것을 있다고 적게 됩니다.

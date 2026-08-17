@@ -1,5 +1,16 @@
 # KBO Baseball Analytics Project
 
+## 살아 있는 주소
+
+```
+화면   https://kbo-dashboard-a0g.pages.dev
+API    https://kbo-api.bstats-baseball.workers.dev
+```
+
+AWS EC2 에서 Cloudflare 무료 플랜으로 옮겼습니다(2026-08). 배포는 `npm run deploy`(API), `npm run deploy:pages`(화면)입니다.
+자세한 것은 `docs/superpowers/specs/2026-08-17-cloudflare-migration-design.md` 를 보십시오.
+
+
 ## 📁 프로젝트 폴더 구조
 
 ```
