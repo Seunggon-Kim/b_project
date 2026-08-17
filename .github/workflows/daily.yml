@@ -46,6 +46,13 @@ jobs:
         continue-on-error: true
         run: python .github/scripts/probe_kbo.py --mode selenium
 
+      # Cloudflare 엣지에서는 구글이 막혔습니다(설계 §7 위험 2 판정).
+      # 러너에서 열린다면 Actions 가 뉴스를 미리 모아 두는 안이 성립합니다.
+      - name: 구글 뉴스 도달 확인
+        id: google_probe
+        continue-on-error: true
+        run: python .github/scripts/probe_kbo.py --mode google-news
+
       - name: 타자 기록 수집
         id: scrape
         continue-on-error: true
@@ -70,6 +77,7 @@ jobs:
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
           echo "| HTTP 도달 | ${{ steps.http_probe.outcome }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Selenium 도달 | ${{ steps.selenium_probe.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 구글 뉴스 도달 | ${{ steps.google_probe.outcome }} |" >> $GITHUB_STEP_SUMMARY
           echo "| 전체 수집 | ${{ steps.scrape.outcome }} |" >> $GITHUB_STEP_SUMMARY
 
       # 판정 결과를 실패로 드러내야 로그를 놓치지 않습니다.
