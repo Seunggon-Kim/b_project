@@ -31,10 +31,20 @@ export function qualPaOf(games) {
 export async function effMinPa(db, season, requested) {
   let g = 0;
   try {
+    // 원본은 play_by_play 에서 `COUNT(DISTINCT gameID)` 를 셌습니다. 그것이
+    // D1 읽기량의 가장 큰 몫이었습니다. 이 함수를 wRC 엔드포인트 여섯 개가
+    // 전부 지나는데, 한 번 부를 때마다 229,667행을 스캔했습니다.
+    //
+    // games 표로 바꿉니다. 719행이고 idx_games_season 이 커버합니다.
+    // 2025 시즌에서 두 값이 719 로 같은 것을 확인했습니다.
+    //
+    // games 는 games_from_pbp.py 가 play_by_play 에서 INSERT OR IGNORE 로
+    // 만들므로 pbp 의 경기를 모두 담습니다. 다만 **반대는 보장되지 않습니다.**
+    // games 에 있는데 pbp 가 없는 경기(취소, 미수집)가 생기면 값이 커집니다.
+    // 재크롤링 뒤 시즌마다 두 값을 대조하십시오(계획 D Task 5 Step 3).
     const row = await db.prepare(
-      'SELECT COUNT(DISTINCT gameID) AS g FROM play_by_play '
-      + 'WHERE substr(gameID,1,4) = ?',
-    ).bind(String(season)).first();
+      'SELECT COUNT(*) AS g FROM games WHERE season = ?',
+    ).bind(Number(season)).first();
     g = (row && row.g) || 0;
   } catch {
     g = 0;
@@ -84,8 +94,10 @@ export async function wrcSeasons(request, env) {
 
   const { results: rows } = await db.prepare(`
     WITH gp AS (
-      SELECT CAST(substr(gameID,1,4) AS INT) AS season, COUNT(DISTINCT gameID) AS g
-      FROM play_by_play WHERE substr(gameID,1,4) BETWEEN '2015' AND '2026' GROUP BY 1
+      -- 원본은 play_by_play 를 풀스캔했습니다(229,667행). games 로 같은 값을
+      -- 719행에서 얻습니다. effMinPa 의 주석과 같은 근거입니다.
+      SELECT season, COUNT(*) AS g
+      FROM games WHERE season BETWEEN 2015 AND 2026 GROUP BY 1
     ),
     thr AS (
       SELECT season, MIN(?, CAST(ROUND(3.1 * ROUND(2.0*g/10.0)) AS INT)) AS t FROM gp

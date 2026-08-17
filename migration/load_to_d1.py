@@ -83,6 +83,43 @@ def plan_batch(files, manifest, idx_counts, budget=DEFAULT_BUDGET):
     return chosen, total
 
 
+def refresh_meta_counts(db_name, names):
+    """표별 행 수 메타를 다시 계산해 넣습니다.
+
+    Worker 가 `COUNT(*)` 대신 이 값을 읽습니다. D1 은 스캔한 행 수로
+    과금하는데 `COUNT(*)` 는 인덱스로 줄지 않아, 표 목록 화면 한 번에
+    24만 행을 읽던 것을 18행으로 바꾼 장치입니다(src/lib/counts.js).
+
+    **적재 뒤 반드시 불러야 합니다.** 안 부르면 화면이 낡은 행 수를
+    보여 줍니다. 틀린 숫자는 없는 숫자보다 나쁩니다.
+
+    행 수는 D1 에서 직접 셉니다. 로컬 값을 옮기면 적재가 덜 된 상태에서
+    어긋납니다. `names` 는 셀 표 이름 목록입니다.
+    """
+    lines = [
+        "CREATE TABLE IF NOT EXISTS meta_table_counts (",
+        "  name TEXT PRIMARY KEY, n INTEGER NOT NULL, updated_at TEXT NOT NULL);",
+    ]
+    for n in names:
+        lines.append(
+            "INSERT OR REPLACE INTO meta_table_counts "
+            "SELECT '%s', COUNT(*), datetime('now') FROM \"%s\";" % (n, n))
+
+    out = Path("migration/meta_counts.sql")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+
+    cmd = 'npx wrangler d1 execute %s --remote --file="%s" --yes' % (
+        db_name, out.as_posix())
+    r = subprocess.run(cmd, capture_output=True, text=True, shell=True,
+                       encoding="utf-8", errors="replace")
+    if r.returncode == 0:
+        print("행 수 메타를 갱신했습니다 (표 %d개)." % len(names))
+        return True
+    print("행 수 메타 갱신에 실패했습니다. 화면이 낡은 숫자를 보입니다.")
+    print("  다시 넣으려면: %s" % cmd)
+    return False
+
 def load_chunks(files, db_name, progress_path):
     """청크를 하나씩 D1 에 적재하고 (성공 수, 실패 수) 를 반환합니다."""
     progress_path = Path(progress_path)
@@ -146,6 +183,11 @@ def main():
 
     conn = sqlite3.connect(args.local_db)
     idx = index_counts(conn)
+    # 적재가 끝난 뒤 메타를 갱신할 때 쓸 표 목록입니다. 그 시점에는 이
+    # 연결이 닫혀 있으므로 지금 뽑아 둡니다.
+    table_names = [r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' "
+        "AND name NOT LIKE 'sqlite_%' ORDER BY name")]
     conn.close()
 
     # manifest 에 있는 것만 적재 대상입니다. 이 폴더에 다른 용도의 SQL 이
@@ -190,6 +232,11 @@ def main():
     ok, fail = load_chunks(batch, args.db, progress)
     print()
     print("성공 %d, 실패 %d" % (ok, fail))
+
+    # 적재로 행 수가 달라졌으니 메타를 다시 씁니다. 실패해도 적재 자체는
+    # 성공이므로 종료 코드를 바꾸지 않고 경고만 냅니다.
+    if ok:
+        refresh_meta_counts(args.db, table_names)
     if fail:
         print("실패 지점부터 같은 명령으로 재개할 수 있습니다.")
         print("한도 초과라면 UTC 자정(한국 시간 오전 9시) 이후에 다시 실행하십시오.")

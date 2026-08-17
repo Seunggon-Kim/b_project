@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS meta_table_counts (
+  name TEXT PRIMARY KEY, n INTEGER NOT NULL, updated_at TEXT NOT NULL);
+INSERT OR REPLACE INTO meta_table_counts SELECT 'futures_games', COUNT(*), datetime('now') FROM "futures_games";
+INSERT OR REPLACE INTO meta_table_counts SELECT 'futures_teams', COUNT(*), datetime('now') FROM "futures_teams";
+INSERT OR REPLACE INTO meta_table_counts SELECT 'game_team_stats', COUNT(*), datetime('now') FROM "game_team_stats";
+INSERT OR REPLACE INTO meta_table_counts SELECT 'games', COUNT(*), datetime('now') FROM "games";
+INSERT OR REPLACE INTO meta_table_counts SELECT 'kbo_official_batter_stats', COUNT(*), datetime('now') FROM "kbo_official_batter_stats";
+INSERT OR REPLACE INTO meta_table_counts SELECT 'kbo_official_pitcher_stats', COUNT(*), datetime('now') FROM "kbo_official_pitcher_stats";
+INSERT OR REPLACE INTO meta_table_counts SELECT 'play_by_play', COUNT(*), datetime('now') FROM "play_by_play";
+INSERT OR REPLACE INTO meta_table_counts SELECT 'player_news', COUNT(*), datetime('now') FROM "player_news";
+INSERT OR REPLACE INTO meta_table_counts SELECT 'players', COUNT(*), datetime('now') FROM "players";
+INSERT OR REPLACE INTO meta_table_counts SELECT 'self_park_factor', COUNT(*), datetime('now') FROM "self_park_factor";
+INSERT OR REPLACE INTO meta_table_counts SELECT 'stadium_dim', COUNT(*), datetime('now') FROM "stadium_dim";
+INSERT OR REPLACE INTO meta_table_counts SELECT 'statiz_park_factor', COUNT(*), datetime('now') FROM "statiz_park_factor";
+INSERT OR REPLACE INTO meta_table_counts SELECT 'statiz_yearly_constants', COUNT(*), datetime('now') FROM "statiz_yearly_constants";
+INSERT OR REPLACE INTO meta_table_counts SELECT 'team_logos', COUNT(*), datetime('now') FROM "team_logos";
+INSERT OR REPLACE INTO meta_table_counts SELECT 'team_stadium_by_season', COUNT(*), datetime('now') FROM "team_stadium_by_season";
+INSERT OR REPLACE INTO meta_table_counts SELECT 'teams', COUNT(*), datetime('now') FROM "teams";
+INSERT OR REPLACE INTO meta_table_counts SELECT 'weighted_pf_by_batter_season', COUNT(*), datetime('now') FROM "weighted_pf_by_batter_season";
+INSERT OR REPLACE INTO meta_table_counts SELECT 'wrc_plus_comparison', COUNT(*), datetime('now') FROM "wrc_plus_comparison";

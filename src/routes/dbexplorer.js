@@ -1,6 +1,7 @@
 import { json } from '../lib/respond.js';
 import { queryInt } from '../lib/router.js';
 import { csvExportPlan, csvRow, isRealType } from '../lib/csv.js';
+import { countOf, countsOf } from '../lib/counts.js';
 import { columnDict, tableMeta } from '../lib/coldict.js';
 
 /**
@@ -10,11 +11,17 @@ import { columnDict, tableMeta } from '../lib/coldict.js';
  * D1 은 자체 내부 표(`_cf_KV` 등)를 갖고 있습니다. 원본은 `sqlite_%` 만
  * 걸러 내므로 그대로 두면 목록에 섞입니다. 정답지와 맞추려면 그것도 빼야
  * 합니다. `_cf_` 로 시작하는 것을 함께 거릅니다.
+ *
+ * `meta_` 도 거릅니다. 읽기량을 줄이려고 만든 `meta_table_counts` 같은
+ * 내부 표입니다. 원본에 없던 것이라 그대로 두면 데이터 탐색기에
+ * 나타나 표가 18개에서 19개로 늘어납니다. 사용자에게 보일 이유가 없고,
+ * 앞으로 만들 메타 표도 같은 접두사를 쓰면 자동으로 빠집니다.
  */
 export async function listTableNames(db) {
   const { results } = await db.prepare(
     "SELECT name FROM sqlite_master WHERE type='table' "
     + "AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\' "
+    + "AND name NOT LIKE 'meta\\_%' ESCAPE '\\' "
     + 'ORDER BY name',
   ).all();
   return results.map((r) => r.name);
@@ -30,16 +37,16 @@ export async function dbTables(request, env) {
   const tmeta = meta.tables || {};
   const names = await listTableNames(db);
 
+  // 원본은 표마다 `COUNT(*)` 를 돌렸습니다. 18개 표를 합쳐 한 번에 약
+  // 24만 행을 읽었고 그 95% 가 play_by_play 였습니다. 미리 적어 둔 값을
+  // 한 번에 읽습니다. 자세한 사정은 lib/counts.js 주석에 있습니다.
+  const known = await countsOf(db, names);
+
   const result = [];
   for (const name of names) {
-    let n = null;
-    try {
-      const row = await db.prepare(`SELECT COUNT(*) AS n FROM "${name}"`).first();
-      n = row ? row.n : null;
-    } catch {
-      // 원본도 실패하면 None 을 넣습니다. 0 이 아닙니다.
-      n = null;
-    }
+    // 메타에 없는 표는 개별로 셉니다. 새로 만든 표에서도 화면이 동작해야
+    // 합니다. 원본과 같이 실패하면 0 이 아니라 null 입니다.
+    const n = known.has(name) ? known.get(name) : await countOf(db, name);
     const info = await db.prepare(`PRAGMA table_info("${name}")`).all();
     const m = tmeta[name] || {};
     result.push({
@@ -92,8 +99,7 @@ export async function dbTable(request, env, ctx, params) {
   }));
   const columns = info.results.map((c) => c.name);
 
-  const totalRow = await db
-    .prepare(`SELECT COUNT(*) AS n FROM "${tableName}"`).first();
+  const total = await countOf(db, tableName);
   const { results: rows } = await db
     .prepare(`SELECT * FROM "${tableName}" LIMIT ? OFFSET ?`)
     .bind(limit, offset).all();
@@ -103,7 +109,7 @@ export async function dbTable(request, env, ctx, params) {
     schema,
     columns,
     rows,
-    total: totalRow ? totalRow.n : 0,
+    total: total === null ? 0 : total,
     limit,
     offset,
     table_desc: tmeta.table_desc || '',
@@ -180,9 +186,8 @@ export async function dbTableCsv(request, env, ctx, params) {
   // 내보낼 행 수를 미리 셉니다. 한도를 넘으면 잘린 파일을 주는 대신
   // 이유를 알립니다. 스트림을 연 뒤에는 상태 코드를 바꿀 수 없으니
   // 반드시 열기 전에 판단해야 합니다.
-  const totalRow = await db
-    .prepare(`SELECT COUNT(*) AS n FROM "${tableName}"`).first();
-  const total = totalRow ? totalRow.n : 0;
+  const totalCount = await countOf(db, tableName);
+  const total = totalCount === null ? 0 : totalCount;
   const plan = csvExportPlan(total, lim, off, CSV_MAX_ROWS);
   const startAt = plan.startAt;
   if (plan.tooLarge) {
