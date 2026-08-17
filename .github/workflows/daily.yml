@@ -1,8 +1,20 @@
 name: daily
 
-# 이 단계에서는 수동 실행만 합니다. 정기 실행은 계획 D 에서 추가합니다.
+# 정기 실행은 계획 D 에서 추가합니다.
+#
+# workflow_dispatch 는 워크플로 파일이 기본 브랜치에 있어야 트리거됩니다.
+# 지금은 작업 브랜치에만 있어 UI 버튼이 뜨지 않으므로, 위험 1 을 판정할 동안만
+# push 트리거를 함께 둡니다. 관련 파일이 바뀔 때만 돌도록 paths 로 좁혔습니다.
+# main 에 합치면서 push 트리거는 제거합니다.
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feat/cloudflare-migration
+    paths:
+      - '.github/workflows/daily.yml'
+      - '.github/scripts/probe_kbo.py'
+      - 'data_collection/selenium_batter_scraper.py'
 
 jobs:
   official-stats:
