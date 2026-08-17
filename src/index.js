@@ -8,7 +8,7 @@ import { leaders } from './routes/leaders.js';
 import { teams } from './routes/teams.js';
 import { dashboardStats } from './routes/dashboard.js';
 import {
-  playersSearch, playerDetail, playerArsenal,
+  playersSearch, playerDetail, playerArsenal, playerUsage,
 } from './routes/players.js';
 import {
   statsSeasons, statsRegulation, statsBatters, statsPitchers,
@@ -16,6 +16,7 @@ import {
 import { dbTables, dbTable } from './routes/dbexplorer.js';
 import { games } from './routes/games.js';
 import { logo } from './routes/logo.js';
+import { statsTeamRange } from './routes/teamrange.js';
 import {
   wrcSeasons, wrcByStadium, wrcLeaderboard,
   wrcTopChanges, wrcBatter, wrcBatterSearch, wrcDistribution,
@@ -45,6 +46,8 @@ router.add('GET', '/db/tables', dbTables);
 router.add('GET', '/players/search', playersSearch);
 router.add('GET', '/players/:id', playerDetail);
 router.add('GET', '/players/:id/arsenal', playerArsenal);
+router.add('GET', '/players/:id/usage', playerUsage);
+router.add('GET', '/stats/team_range', statsTeamRange);
 router.add('GET', '/stats/batters', statsBatters);
 router.add('GET', '/stats/pitchers', statsPitchers);
 router.add('GET', '/games', games);

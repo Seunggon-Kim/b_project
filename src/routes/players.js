@@ -113,3 +113,122 @@ export async function playerArsenal(request, env, ctx, params) {
     });
   }
 }
+
+// 원본 api/main.py:280-284 의 구종 약어 표입니다. 한글 구종명 -> 두 글자 코드.
+// 없는 구종은 이름 앞 두 글자를 대문자로 씁니다.
+const PITCH_ABBR = {
+  너클볼: 'KN', 스위퍼: 'ST', 슬라이더: 'SL', 슬러브: 'SV',
+  싱커: 'SI', 직구: 'FF', 체인지업: 'CH', 커브: 'CU',
+  커터: 'FC', 투심: 'SI', 스플리터: 'FS',
+};
+
+/**
+ * 원본 api/main.py:291-325 의 집계입니다. 순수 함수로 떼어 테스트합니다.
+ *
+ * 좌우 타자 판정에 한 가지 요령이 있습니다. 스위치 타자(`양`)는 투수의
+ * 반대편에 서므로, 우투수면 좌타석·좌투수면 우타석으로 셉니다.
+ *
+ * 그리고 `좌` 가 아닌 것은 전부 우타로 셉니다. 값이 비었거나 모르는
+ * 문자열이어도 우타입니다. 원본의 else 분기를 그대로 옮긴 것입니다.
+ */
+export function summarizeUsage(rows) {
+  const counts = new Map();
+  let totalL = 0;
+  let totalR = 0;
+  let totalAll = 0;
+
+  for (const row of rows) {
+    const ptype = row.pitch_type;
+    const stands = row.stands || '우';
+    const throws = row.throws || '우';
+
+    let actual = stands;
+    if (stands === '양') {
+      if (throws === '우') actual = '좌';
+      else if (throws === '좌') actual = '우';
+    }
+
+    if (!counts.has(ptype)) counts.set(ptype, { L: 0, R: 0, Total: 0 });
+    const c = counts.get(ptype);
+    c.Total += 1;
+    totalAll += 1;
+
+    if (actual === '좌') {
+      c.L += 1;
+      totalL += 1;
+    } else {
+      c.R += 1;
+      totalR += 1;
+    }
+  }
+
+  const result = [];
+  for (const [ptype, c] of counts) {
+    result.push({
+      pitch_type: ptype,
+      abbreviation: PITCH_ABBR[ptype] || String(ptype).slice(0, 2).toUpperCase(),
+      count: c.Total,
+      usage_all: totalAll > 0 ? round1(c.Total / totalAll * 100) : 0,
+      usage_l: totalL > 0 ? round1(c.L / totalL * 100) : 0,
+      usage_r: totalR > 0 ? round1(c.R / totalR * 100) : 0,
+    });
+  }
+
+  // 원본: result.sort(key=lambda x: x['usage_all'], reverse=True)
+  // 파이썬 sort 는 안정 정렬이라 동률이면 넣은 순서가 유지됩니다.
+  // JS sort 도 안정 정렬이라 같습니다.
+  result.sort((a, b) => b.usage_all - a.usage_all);
+
+  return { result, totalAll, totalL, totalR };
+}
+
+/** 파이썬 round(x, 1) 입니다. .5 에서 짝수 쪽으로 갑니다. */
+function round1(x) {
+  const y = x * 10;
+  const floor = Math.floor(y);
+  const r = (y - floor === 0.5)
+    ? (floor % 2 === 0 ? floor : floor + 1)
+    : Math.round(y);
+  return r / 10;
+}
+
+/** 원본 api/main.py:250-335 입니다. 투수의 구종 구사율입니다. */
+export async function playerUsage(request, env, ctx, params) {
+  const playerId = params.id;
+  try {
+    const db = env.DB;
+    const player = await robustPlayerLookup(db, playerId);
+    if (!player) return json({ error: 'Player not found' });
+
+    const season = queryInt(new URL(request.url), 'season', 2026);
+
+    const { results } = await db.prepare(`
+      SELECT pbp.pitch_type, pbp.stands, pbp.throws
+      FROM play_by_play pbp
+      WHERE pbp.pitcher_ID = ?
+      AND substr(pbp.gameID,1,4) = CAST(? AS TEXT)
+      AND pbp.pitch_type IS NOT NULL
+      AND pbp.pitch_type NOT IN ('', '-', 'null')
+    `).bind(player.player_id, season).all();
+
+    // 원본은 행이 없으면 usage 만 있는 짧은 응답을 돌려줍니다.
+    // total_pitches 같은 키가 아예 없습니다.
+    if (!results.length) {
+      return json({ player_id: playerId, usage: [] });
+    }
+
+    const { result, totalAll, totalL, totalR } = summarizeUsage(results);
+    return json({
+      player_id: playerId,
+      total_pitches: totalAll,
+      total_l: totalL,
+      total_r: totalR,
+      usage: result,
+    });
+  } catch (err) {
+    return json({
+      error: String(err && err.message ? err.message : err),
+      traceback: String((err && err.stack) || ''),
+    });
+  }
+}

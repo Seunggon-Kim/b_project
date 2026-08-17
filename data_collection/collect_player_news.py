@@ -249,7 +249,10 @@ def main():
     ap.add_argument("--season", type=int, default=None)
     ap.add_argument("--limit", type=int, default=None,
                     help="앞에서 N 명만 (맛보기용)")
-    ap.add_argument("--out", default="migration/out/news.sql")
+    # migration/out/ 은 D1 적재 청크 전용입니다. load_to_d1.py 가
+    # 그 폴더의 *.sql 을 전부 집어 가므로 뉴스 SQL 을 섞으면
+    # manifest 에 없는 파일이라며 적재가 멈춥니다. 따로 둡니다.
+    ap.add_argument("--out", default="migration/news/news.sql")
     ap.add_argument("--delay", type=float, default=DELAY_SEC)
     ap.add_argument("--dry-run", action="store_true",
                     help="SQL 을 쓰지 않고 결과만 출력합니다")

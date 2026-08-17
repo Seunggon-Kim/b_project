@@ -134,8 +134,21 @@ def main():
     idx = index_counts(conn)
     conn.close()
 
-    all_files = sorted(f for f in out_dir.glob(args.pattern)
-                       if f.name != "00_schema.sql")
+    # manifest 에 있는 것만 적재 대상입니다. 이 폴더에 다른 용도의 SQL 이
+    # 섞여도(뉴스 적재본 등) 멈추지 않고 건너뜁니다.
+    known = {f["name"] for f in manifest.get("files", [])}
+    all_files = []
+    stray = []
+    for f in sorted(out_dir.glob(args.pattern)):
+        if f.name == "00_schema.sql":
+            continue
+        if f.name in known:
+            all_files.append(f)
+        else:
+            stray.append(f.name)
+    if stray:
+        print("목록에 없어 건너뛴 파일 %d개: %s" % (
+            len(stray), ", ".join(stray[:3])))
     todo = pending_files(all_files, progress)
     print("전체 %d개, 남은 것 %d개" % (len(all_files), len(todo)))
     if not todo:
