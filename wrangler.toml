@@ -1,5 +1,10 @@
 # Cloudflare Workers / D1 설정
 #
+# 배포 주소: https://kbo-api.bstats-baseball.workers.dev
+#   name(kbo-api) + 계정 서브도메인(bstats-baseball) 으로 만들어집니다.
+#   서브도메인은 계정당 하나이고 대시보드 Workers & Pages > Account Details 에서 바꿉니다.
+#   바꾸면 이전 주소가 즉시 죽으므로, 프론트엔드를 붙인 뒤에는 손대지 않습니다.
+#
 # 참고: docs/superpowers/specs/2026-08-17-cloudflare-migration-design.md
 
 name = "kbo-api"
