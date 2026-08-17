@@ -8,7 +8,13 @@ Compute self KBO park factors (2015-2026) from play_by_play and load into self_p
 Re-run safe: rebuilds self_park_factor from scratch each run (latest PBP -> updated 2026).
 """
 import sqlite3, datetime
-DB = '/home/ubuntu/b_project/database/kbo_stats.db'
+import os
+from pathlib import Path
+# DB 경로: 환경변수 KBO_DB 우선, 없으면 저장소 기준 상대경로.
+# EC2 절대경로는 Windows 와 GitHub Actions 러너에서 동작하지 않습니다.
+DB = os.environ.get("KBO_DB") or str(
+    Path(__file__).resolve().parent.parent / "database" / "kbo_stats.db"
+)
 con = sqlite3.connect(DB); con.row_factory = sqlite3.Row; cur = con.cursor()
 
 VALID_YEARS = list(range(2015, 2027))

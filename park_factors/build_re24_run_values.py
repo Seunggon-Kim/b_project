@@ -19,9 +19,15 @@ Per real season we store the 12 canonical events; season=0 stores all event type
 Run with --write to back up and overwrite; without it, dry-run prints a summary only.
 """
 import sqlite3, sys, numpy as np, pandas as pd
+import os
+from pathlib import Path
 from collections import defaultdict
 
-DB='/home/ubuntu/b_project/database/kbo_stats.db'
+# DB 경로: 환경변수 KBO_DB 우선, 없으면 저장소 기준 상대경로.
+# EC2 절대경로는 Windows 와 GitHub Actions 러너에서 동작하지 않습니다.
+DB = os.environ.get("KBO_DB") or str(
+    Path(__file__).resolve().parent.parent / "database" / "kbo_stats.db"
+)
 # Rolling 1-step backup (matches build_wrc_plus convention). The immutable
 # pre-rebuild snapshot is preserved separately as *_bak_20260606.
 BACKUP_SUFFIX='_bak'

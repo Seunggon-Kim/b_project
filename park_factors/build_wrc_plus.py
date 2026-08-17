@@ -9,7 +9,13 @@ AND new PBP. Formulas reverse-engineered exactly (wOBA verified to 1e-5).
   wRC  = K + (2 - PF)*100 ,  K = (wraa_per_pa / L[season])*100   (L = season run constant, derived from prior rows)
 """
 import sqlite3, statistics
-DB='/home/ubuntu/b_project/database/kbo_stats.db'
+import os
+from pathlib import Path
+# DB 경로: 환경변수 KBO_DB 우선, 없으면 저장소 기준 상대경로.
+# EC2 절대경로는 Windows 와 GitHub Actions 러너에서 동작하지 않습니다.
+DB = os.environ.get("KBO_DB") or str(
+    Path(__file__).resolve().parent.parent / "database" / "kbo_stats.db"
+)
 con=sqlite3.connect(DB); con.row_factory=sqlite3.Row; cur=con.cursor()
 YEARS=list(range(2015,2027)); YSTR=[str(y) for y in YEARS]; WRC_MIN_PA=50
 
