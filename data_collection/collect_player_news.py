@@ -73,6 +73,18 @@ DELAY_SEC = 1.5
 MIN_PA = 0
 MIN_GAMES = 0
 
+# 이 비율에 못 미치게 모이면 SQL 을 쓰지 않고 기존 D1 내용을 그대로 둡니다.
+#
+# 구글은 실행 위치에 따라 성공률이 크게 흔들립니다. 로컬(한국 가정용 IP)에서는
+# 585명 중 582명이 되지만, GitHub Actions 러너에서는 같은 날 40분 사이에
+# 5/5 였다가 0/5 가 되었습니다. Cloudflare 엣지는 20% 안팎입니다. 데이터센터
+# IP 를 구글이 걸러 내기 때문입니다.
+#
+# 절반도 못 모은 날 갱신을 강행하면, 그날 실패한 선수의 기사가 통째로 사라지고
+# 다음 성공 때까지 빈 채로 남습니다. 그럴 바에는 어제 기사를 그대로 보여 주는
+# 편이 낫습니다.
+MIN_SUCCESS_RATIO = 0.5
+
 
 def kst_now():
     return datetime.now(timezone.utc) + timedelta(hours=9)
@@ -325,18 +337,44 @@ def main():
             print("  %s #%d %s | %s" % (r[0], r[1], r[2][:44], r[4][:12]))
         return 0
 
+    # 구글이 막아 대부분 실패한 날에는 아예 쓰지 않습니다.
+    #
+    # 처음에는 `DELETE FROM player_news` 로 통째로 갈아 끼웠습니다. 그러면
+    # 절반이 실패한 날 기존 뉴스가 지워지고 일부만 남습니다. 구글이 실행
+    # 위치에 따라 0%~100% 로 들쭉날쭉하다는 것을 확인한 뒤 고쳤습니다.
+    #
+    # 이제 성공한 선수만 지우고 다시 넣습니다. 실패한 선수의 기존 기사는
+    # 그대로 남습니다. 뉴스가 며칠 묵는 것이 통째로 사라지는 것보다 낫습니다.
+    if n_ok == 0:
+        print()
+        print("기사를 하나도 모으지 못했습니다. SQL 을 쓰지 않습니다.")
+        print("기존 D1 내용을 그대로 둡니다.")
+        return 1
+
+    ratio = n_ok / float(len(players))
+    if ratio < MIN_SUCCESS_RATIO:
+        print()
+        print("성공률 %.0f%% 로 기준 %.0f%% 에 못 미쳐 SQL 을 쓰지 않습니다."
+              % (ratio * 100, MIN_SUCCESS_RATIO * 100))
+        print("일부만 갱신하면 그날 실패한 선수의 기사가 오래 묵게 됩니다.")
+        return 1
+
+    touched = sorted({r[0] for r in rows})
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     with io.open(out, "w", encoding="utf-8", newline="\n") as f:
-        # 통째로 갈아 끼웁니다. 선수마다 지우고 넣으면 문이 두 배가 됩니다.
-        f.write("DELETE FROM player_news;\n")
+        # 성공한 선수만 지웁니다. IN 목록이 길어 200명씩 끊습니다.
+        for i in range(0, len(touched), 200):
+            chunk = touched[i:i + 200]
+            f.write("DELETE FROM player_news WHERE player_id IN (%s);\n"
+                    % ",".join(sql_literal(p) for p in chunk))
         for r in rows:
             f.write("INSERT INTO player_news "
                     "(player_id, rank, title, link, press, pub_date, fetched_at) "
                     "VALUES (%s);\n" % ",".join(sql_literal(v) for v in r))
     print()
-    print("%s 에 %d행을 썼습니다 (%.1fKB)" % (
-        out, len(rows), out.stat().st_size / 1024))
+    print("%s 에 %d행을 썼습니다 (%.1fKB, 선수 %d명 갱신)" % (
+        out, len(rows), out.stat().st_size / 1024, len(touched)))
     return 0
 
 
