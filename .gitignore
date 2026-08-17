@@ -246,6 +246,11 @@ ec2_config.local.ps1
 node_modules/
 .wrangler/
 
+# 위 17행의 `lib/` 는 Python 빌드 산출물(build/lib) 을 겨냥한 규칙인데,
+# 경로 제한이 없어 Worker 소스인 src/lib/ 까지 걸러 냅니다.
+# 그대로 두면 라우터와 유틸이 통째로 커밋에서 빠집니다.
+!src/lib/
+
 # 이관 중간 산출물
 migration/out/
 migration/golden/
