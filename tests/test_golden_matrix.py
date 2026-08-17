@@ -11,8 +11,9 @@ def _conn(with_derived=True):
         "INSERT INTO players VALUES (?,?)",
         [("1001", "가나다"), ("1002", "라마바"), ("1003", "사아자")],
     )
-    conn.execute("CREATE TABLE games (season INTEGER)")
-    conn.executemany("INSERT INTO games VALUES (?)", [(2025,), (2025,)])
+    conn.execute("CREATE TABLE games (season INTEGER, game_date INTEGER)")
+    conn.executemany("INSERT INTO games VALUES (?,?)",
+                     [(2025, 20250322), (2025, 20251004)])
     if with_derived:
         conn.execute(
             "CREATE TABLE wrc_plus_comparison (batter_ID TEXT, season INTEGER, PA INTEGER)")
@@ -144,3 +145,24 @@ def test_futures_uses_hyphenated_date():
     assert dates
     for d in dates:
         assert len(d) == 10 and d.count("-") == 2, d
+
+
+def test_schedule_covers_finished_games():
+    """종료된 경기가 있는 날짜를 반드시 포함합니다.
+
+    개막 무렵 날짜만 넣으면 네이버가 statusCode=BEFORE 를 돌려줘서
+    score 와 decisions(승/패/세이브 투수)가 전부 비어 버립니다. 그러면
+    정답지에 그 필드가 null 로만 남아 이식 검증이 그 부분을 건너뜁니다.
+    games 테이블의 마지막 경기일을 함께 넣어 종료 상태를 덮습니다.
+    """
+    matrix = build_matrix(_conn())
+    dates = {i["params"].get("date") for i in matrix if i["path"] == "/schedule"}
+    assert "2025-10-04" in dates, dates
+
+
+def test_schedule_has_two_dated_requests():
+    """경기 전 상태와 종료 상태를 모두 훑어야 합니다."""
+    matrix = build_matrix(_conn())
+    dated = [i for i in matrix
+             if i["path"] == "/schedule" and "date" in i["params"]]
+    assert len(dated) == 2, [i["params"] for i in dated]

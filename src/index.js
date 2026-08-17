@@ -1,6 +1,7 @@
 import { createRouter } from './lib/router.js';
 import { json, serverError } from './lib/respond.js';
 import { standings } from './routes/standings.js';
+import { schedule } from './routes/schedule.js';
 
 const router = createRouter();
 
@@ -11,6 +12,7 @@ router.add('GET', '/', () => json({
 }));
 
 router.add('GET', '/standings', standings);
+router.add('GET', '/schedule', schedule);
 
 // 위험 2 판정용 임시 엔드포인트입니다. 판정이 끝나면 Task 8 에서 제거합니다.
 //

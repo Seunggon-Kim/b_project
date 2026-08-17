@@ -68,6 +68,22 @@ def _seasons(conn):
     return [int(r[0]) for r in rows]
 
 
+def _last_game_date(conn):
+    """games 의 마지막 경기일을 'YYYY-MM-DD' 로 돌려줍니다.
+
+    종료된 경기가 있는 날짜를 잡기 위한 것입니다. 개막 무렵 날짜만 쓰면
+    네이버가 statusCode=BEFORE 를 돌려줘서 score 와 decisions 가 전부 비고,
+    정답지에 null 만 남아 그 부분의 이식 검증이 통째로 빠집니다.
+    """
+    row = conn.execute("SELECT MAX(game_date) FROM games").fetchone()
+    if not row or not row[0]:
+        return None
+    s = str(row[0])
+    if len(s) != 8 or not s.isdigit():
+        return None
+    return "%s-%s-%s" % (s[:4], s[4:6], s[6:8])
+
+
 def _derived_seasons(conn):
     """파생 테이블이 덮는 시즌 중 최신·중간·최초를 뽑습니다."""
     if not _has_table(conn, "wrc_plus_comparison"):
@@ -191,12 +207,23 @@ def build_matrix(conn):
     _add(matrix, "/logo/ZZ", tag="nonexistent")
 
     # 날짜 지정 일정.
+    #
     # /schedule 은 date 를 그대로 네이버에 넘기므로 YYYY-MM-DD 여야 합니다
     # (api/main.py:1190-1193). YYYYMMDD 로 보내면 400 이 돌아와 games 가
     # 빈 배열이 되고, 정답지로서 값을 잃습니다.
-    game_day = "%d-04-01" % season
-    _add(matrix, "/schedule", {"date": game_day})
-    _add(matrix, "/schedule/futures", {"date": game_day})
+    #
+    # 두 날짜를 넣습니다. 개막 무렵(4월 1일)은 네이버가 statusCode=BEFORE 로
+    # 주어 score 와 decisions 가 전부 비고, 시즌 마지막 경기일은 RESULT 라
+    # 점수와 승/패/세이브 투수가 채워집니다. 하나만 쓰면 나머지 분기의
+    # 이식이 검증되지 않은 채 넘어갑니다.
+    opening_day = "%d-04-01" % season
+    _add(matrix, "/schedule", {"date": opening_day})
+    _add(matrix, "/schedule/futures", {"date": opening_day})
+
+    finished_day = _last_game_date(conn)
+    if finished_day and finished_day != opening_day:
+        _add(matrix, "/schedule", {"date": finished_day})
+        _add(matrix, "/schedule/futures", {"date": finished_day})
 
     return matrix
 

@@ -1986,9 +1986,21 @@ test('정수와 분수가 섞인 이닝을 바꿉니다', () => {
   assert.equal(ipToOuts('68 2/3'), 206);
 });
 
+test('앞뒤 공백이 있어도 값이 같습니다', () => {
+  // 이 테스트가 없으면 split(/\s+/) 의 빈 조각 문제를 놓칩니다.
+  assert.equal(ipToOuts(' 68 1/3 '), 205);
+  assert.equal(ipToOuts('68  1/3'), 205);
+});
+
 test('빈 값은 0 입니다', () => {
   assert.equal(ipToOuts(''), 0);
   assert.equal(ipToOuts(null), 0);
+  assert.equal(ipToOuts(undefined), 0);
+});
+
+test('숫자 타입도 받습니다', () => {
+  assert.equal(ipToOuts(68), 204);
+  assert.equal(ipToOuts(0), 0);
 });
 
 test('숫자가 아닌 값은 0 으로 칩니다', () => {
@@ -2074,11 +2086,19 @@ export const WOBA_CONST = {
   2026: [1.191, 0.364, 0.493, 0.802, 1.175, 1.411],
 };
 
-/** 원본 _ip_to_outs(1549-1564): '68 1/3' -> 205 */
+/**
+ * 원본 _ip_to_outs(1549-1564): '68 1/3' -> 205
+ *
+ * `.trim().filter(Boolean)` 이 꼭 필요합니다. Python 의 `str.split()` 은 빈
+ * 조각을 내지 않지만 JS 의 `split(/\s+/)` 는 앞뒤 공백에서 빈 문자열을 냅니다.
+ * 그 빈 조각이 `parseInt('') = NaN` 을 거쳐 whole 을 0 으로 덮어써서,
+ * ' 68 1/3 ' 이 205 가 아니라 1 이 됩니다.
+ */
 export function ipToOuts(s) {
   let whole = 0;
   let frac = 0;
-  for (const part of String(s ?? '').split(/\s+/)) {
+  const text = s === null || s === undefined ? '' : String(s);
+  for (const part of text.trim().split(/\s+/).filter(Boolean)) {
     if (part.includes('/')) {
       const n = Number.parseInt(part.split('/')[0], 10);
       frac = Number.isNaN(n) ? 0 : n;
