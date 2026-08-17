@@ -67,10 +67,30 @@
 ### `/schedule`
 
 ```
-{date: str, count: int, games: [...], error?: str}
+{date: str, count: int, games: [
+  {gameId: str, datetime: str, time: str, stadium: str, broadChannel: str,
+   statusCode: str, statusInfo: str, currentInning: str,
+   home: {code: str, name: str, emblem: str, score: int|null,
+          starter: str, starterId: int|null,
+          currentPitcher: str, currentPitcherId: int|null},
+   away: {   위와 같은 여덟 개 필드   },
+   decisions: {win: str, winId: int|null, lose: str, loseId: int|null,
+               save: str, saveId: int|null},
+   final: bool, live: bool, cancel: bool, showScore: bool, winner: str}
+], error?: str}
 ```
 
-`error` 는 실패했을 때만 붙습니다. **`games` 안쪽 구조는 아래 주의 사항을 보십시오.**
+`error` 는 실패했을 때만 붙습니다.
+
+**`/schedule/futures` 와 필드가 다릅니다.** 둘 다 경기 목록이지만 출처가 달라
+구조가 갈립니다. `/schedule` 에는 `broadChannel`·`datetime`·`statusCode` 와
+투수 ID 필드들이 있고, `/schedule/futures` 에는 `series`·`seriesId`·
+`currentBatter` 가 있습니다. 한쪽 구현을 복사해 다른 쪽에 쓰지 마십시오.
+
+`starterId`·`currentPitcherId`·`winId` 류는 `_attach_pitcher_ids`
+(`api/main.py:1446-1473`)가 채웁니다. 투수 이름을 `players` 테이블에서 찾아
+붙이는데, 못 찾으면 `null` 입니다. 정답지에서 `null` 로 나온 것은 그 시점에
+매칭이 안 됐다는 뜻이지 필드를 빼도 된다는 뜻이 아닙니다.
 
 ### `/schedule/futures`
 

@@ -102,3 +102,28 @@ def test_build_matrix_survives_missing_derived_tables():
     """파생 테이블이 없는 DB 에서도 죽지 않아야 합니다."""
     matrix = build_matrix(_conn(with_derived=False))
     assert len(matrix) > 20
+
+
+def test_schedule_uses_hyphenated_date():
+    """/schedule 은 YYYY-MM-DD 를 기대합니다.
+
+    api/main.py:1190-1193 이 date 를 그대로 네이버에 넘기므로, YYYYMMDD 로
+    보내면 400 이 돌아와 정답지가 빈 배열로 굳습니다. 그 상태로는 이식본도
+    비어 있을 때 통과해 버려 검증이 되지 않습니다.
+    """
+    matrix = build_matrix(_conn())
+    dates = [i["params"]["date"] for i in matrix
+             if i["path"] == "/schedule" and "date" in i["params"]]
+    assert dates, "날짜를 지정한 /schedule 요청이 있어야 합니다"
+    for d in dates:
+        assert len(d) == 10 and d.count("-") == 2, d
+
+
+def test_futures_uses_hyphenated_date():
+    """/schedule/futures 도 같은 형식을 받습니다."""
+    matrix = build_matrix(_conn())
+    dates = [i["params"]["date"] for i in matrix
+             if i["path"] == "/schedule/futures" and "date" in i["params"]]
+    assert dates
+    for d in dates:
+        assert len(d) == 10 and d.count("-") == 2, d

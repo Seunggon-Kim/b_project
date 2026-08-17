@@ -185,9 +185,13 @@ def build_matrix(conn):
     _add(matrix, "/logo/LG")
     _add(matrix, "/logo/ZZ", tag="nonexistent")
 
-    # 날짜 지정 일정
-    _add(matrix, "/schedule", {"date": "%d0401" % season})
-    _add(matrix, "/schedule/futures", {"date": "%d0401" % season})
+    # 날짜 지정 일정.
+    # /schedule 은 date 를 그대로 네이버에 넘기므로 YYYY-MM-DD 여야 합니다
+    # (api/main.py:1190-1193). YYYYMMDD 로 보내면 400 이 돌아와 games 가
+    # 빈 배열이 되고, 정답지로서 값을 잃습니다.
+    game_day = "%d-04-01" % season
+    _add(matrix, "/schedule", {"date": game_day})
+    _add(matrix, "/schedule/futures", {"date": game_day})
 
     return matrix
 
