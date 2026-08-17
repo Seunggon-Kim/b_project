@@ -7,9 +7,14 @@ import { news } from './routes/news.js';
 import { leaders } from './routes/leaders.js';
 import { teams } from './routes/teams.js';
 import { dashboardStats } from './routes/dashboard.js';
-import { playersSearch, playerDetail } from './routes/players.js';
-import { statsSeasons, statsRegulation } from './routes/stats.js';
-import { dbTables } from './routes/dbexplorer.js';
+import {
+  playersSearch, playerDetail, playerArsenal,
+} from './routes/players.js';
+import {
+  statsSeasons, statsRegulation, statsBatters, statsPitchers,
+} from './routes/stats.js';
+import { dbTables, dbTable } from './routes/dbexplorer.js';
+import { games } from './routes/games.js';
 import {
   wrcSeasons, wrcByStadium, wrcLeaderboard,
   wrcTopChanges, wrcBatter, wrcBatterSearch,
@@ -38,6 +43,11 @@ router.add('GET', '/db/tables', dbTables);
 // 순서가 뒤바뀌면 'search' 가 선수 ID 로 잡힙니다.
 router.add('GET', '/players/search', playersSearch);
 router.add('GET', '/players/:id', playerDetail);
+router.add('GET', '/players/:id/arsenal', playerArsenal);
+router.add('GET', '/stats/batters', statsBatters);
+router.add('GET', '/stats/pitchers', statsPitchers);
+router.add('GET', '/games', games);
+router.add('GET', '/db/table/:name', dbTable);
 
 router.add('GET', '/wrc/seasons', wrcSeasons);
 router.add('GET', '/wrc/by-stadium', wrcByStadium);

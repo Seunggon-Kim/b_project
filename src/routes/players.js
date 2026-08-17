@@ -1,4 +1,5 @@
 import { json } from '../lib/respond.js';
+import { queryInt } from '../lib/router.js';
 
 /**
  * 원본 robust_player_lookup (api/main.py:45-55) 입니다.
@@ -70,4 +71,45 @@ export async function playerDetail(request, env, ctx, params) {
     batter_seasons: batter.results,
     pitcher_seasons: pitcher.results,
   });
+}
+
+/**
+ * 원본 api/main.py:214-248 입니다. 투수의 구종 데이터입니다.
+ *
+ * play_by_play 를 투수 하나로 걸러 읽습니다. idx_pbp_pitcher 를 타므로
+ * 전체 스캔이 아닙니다. 실측에서 한 투수당 2,209행이었습니다.
+ */
+export async function playerArsenal(request, env, ctx, params) {
+  const playerId = params.id;
+  try {
+    const db = env.DB;
+    const player = await robustPlayerLookup(db, playerId);
+    if (!player) {
+      // 원본은 404 가 아니라 200 + error 를 돌려줍니다.
+      return json({ error: 'Player not found' });
+    }
+    const season = queryInt(new URL(request.url), 'season', 2026);
+
+    const { results } = await db.prepare(`
+      SELECT pbp.pitch_type, pbp.px, pbp.pz, pbp.speed, pbp.pitch_result,
+             pbp.pfx_x, pbp.pfx_z, pbp.game_date, pbp.x0, pbp.z0,
+             pbp.sz_top, pbp.sz_bot
+      FROM play_by_play pbp
+      WHERE pbp.pitcher_ID = ?
+      AND substr(pbp.gameID,1,4) = CAST(? AS TEXT)
+      AND pbp.px IS NOT NULL
+      AND pbp.pz IS NOT NULL
+      AND pbp.pitch_type IS NOT NULL
+      AND pbp.pitch_type NOT IN ('', '-', 'null')
+    `).bind(player.player_id, season).all();
+
+    // 원본은 요청받은 player_id 를 그대로 돌려줍니다. DB 에서 찾은 것이
+    // 아닙니다. 문자열과 정수가 섞여 있어 값이 다를 수 있습니다.
+    return json({ player_id: playerId, arsenal: results, count: results.length });
+  } catch (err) {
+    return json({
+      error: String(err && err.message ? err.message : err),
+      traceback: String((err && err.stack) || ''),
+    });
+  }
 }
