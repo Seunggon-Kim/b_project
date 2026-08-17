@@ -26,7 +26,7 @@ D1 에 넣고 Worker 는 D1 만 읽습니다. 응답도 빨라집니다.
 ------
     py data_collection/collect_player_news.py --limit 5 --dry-run   # 맛보기
     py data_collection/collect_player_news.py                       # 전체
-    npx wrangler d1 execute kbo-stats --remote --file=migration/out/news.sql
+    npx wrangler d1 execute kbo-stats --remote --file=migration/news/news.sql
 """
 import argparse
 import io

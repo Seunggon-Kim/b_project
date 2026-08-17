@@ -18,6 +18,7 @@ import json
 import sqlite3
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 # 하루 한도 100,000 에서 5,000 을 여유로 남깁니다.
@@ -91,8 +92,21 @@ def load_chunks(files, db_name, progress_path):
         f = Path(f)
         cmd = 'npx wrangler d1 execute %s --remote --file="%s" --yes' % (
             db_name, f.as_posix())
-        result = subprocess.run(cmd, capture_output=True, text=True,
-                                shell=True, encoding="utf-8", errors="replace")
+        # 일시적인 네트워크 오류로 한 파일이 실패했다고 전체를 멈출 이유는
+        # 없습니다. 한 번 더 시도하고, 그래도 안 되면 그때 멈춥니다.
+        # 실제로 적재 도중 한 번 그런 일이 있었는데, 다시 넣으니 바로
+        # 들어갔습니다.
+        result = None
+        for attempt in range(2):
+            result = subprocess.run(cmd, capture_output=True, text=True,
+                                    shell=True, encoding="utf-8",
+                                    errors="replace")
+            if result.returncode == 0:
+                break
+            if attempt == 0:
+                print("[%d/%d] 재시도 %s" % (i, len(files), f.name))
+                time.sleep(3)
+
         if result.returncode == 0:
             ok += 1
             with progress_path.open("a", encoding="utf-8") as fh:
@@ -102,7 +116,7 @@ def load_chunks(files, db_name, progress_path):
             fail += 1
             print("[%d/%d] 실패 %s" % (i, len(files), f.name))
             print((result.stderr or result.stdout or "").strip()[:800])
-            # 한도 초과일 가능성이 높으므로 즉시 멈춥니다.
+            # 두 번 다 실패했습니다. 한도 초과일 수 있으니 멈춥니다.
             break
     return ok, fail
 

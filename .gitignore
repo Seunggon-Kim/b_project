@@ -254,3 +254,6 @@ node_modules/
 # 이관 중간 산출물
 migration/out/
 migration/golden/
+# 뉴스 SQL 은 Actions 가 매번 새로 만들어 D1 에 적재하는 산출물입니다.
+# 1.4MB 이고 하루면 낡습니다. 레포에 둘 이유가 없습니다.
+migration/news/

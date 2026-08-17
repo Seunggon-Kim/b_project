@@ -9,6 +9,7 @@
   막습니다. 브라우저 형태의 User-Agent 를 보냅니다.
 """
 import argparse
+import hashlib
 import json
 import sqlite3
 import sys
@@ -35,9 +36,9 @@ def fetch(base, item, timeout):
         "User-Agent": UA, "Accept": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.status, r.read()
+            return r.status, r.read(), r.headers.get("content-type", "")
     except urllib.error.HTTPError as e:
-        return e.code, e.read()
+        return e.code, e.read(), e.headers.get("content-type", "")
 
 
 def main():
@@ -60,7 +61,7 @@ def main():
     failed = []
     for item in matrix:
         try:
-            status, raw = fetch(args.base_url, item, args.timeout)
+            status, raw, ctype = fetch(args.base_url, item, args.timeout)
         except Exception as exc:
             failed.append((item["name"], "%s: %s" % (type(exc).__name__, exc)))
             continue
@@ -69,8 +70,15 @@ def main():
         try:
             body = json.loads(text)
         except ValueError:
-            skipped += 1
-            continue
+            # JSON 이 아닌 응답(CSV, PNG)입니다. golden_capture.py 와 같은
+            # 방식으로 content-type·길이·해시로 요약합니다. 이렇게 해야
+            # 바이트 단위 비교가 됩니다. 그냥 건너뛰면 /logo 와 CSV 다섯이
+            # 검증에서 통째로 빠집니다.
+            body = {
+                "__content_type__": ctype,
+                "__length__": len(raw),
+                "__sha256__": hashlib.sha256(raw).hexdigest(),
+            }
 
         # 아직 이식하지 않은 경로입니다. 라우터가 내는 404 를 그대로 저장하면
         # 불일치 목록이 미이식 항목으로 가득 차 실제 문제를 가립니다.

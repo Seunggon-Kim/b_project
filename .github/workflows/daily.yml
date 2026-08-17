@@ -90,7 +90,7 @@ jobs:
             exit 1
           fi
           npx --yes wrangler@4 d1 execute kbo-stats --remote \
-            --file=migration/out/news.sql --yes
+            --file=migration/news/news.sql --yes
 
       - name: 타자 기록 수집
         id: scrape
