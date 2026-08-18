@@ -781,43 +781,84 @@ Task 2 에서 캐시를 켰으므로 적재 뒤 비우지 않으면 최대 한 �
 `KBO_DB` 환경변수를 봅니다(`build_re24_run_values.py:28`). 같은 방식으로
 맞추면 됩니다.
 
-## Task 6: 정기 실행을 세웁니다
+## Task 6: 정기 실행을 세웁니다 — 완료 (2026-08-18)
 
-**Files:** `.github/workflows/daily.yml`, `monthly.yml`, `wrangler.toml`, `src/index.js`
+**Files:** `.github/workflows/{daily,weekly,monthly}.yml`, `data_collection/*`,
+`src/routes/{admin,jobs}.js`, `dashboard_js/pages/database-explorer.html`
 
-- [ ] **Step 1: daily.yml 에 스케줄과 빠진 단계를 넣습니다**
+- [x] **Step 1: daily.yml 에 스케줄과 빠진 단계를 넣었습니다**
 
-지금 daily.yml 에는 `schedule:` 이 없고, 타자 수집만 있으며, 통계·PBP 의
-D1 적재 경로가 없습니다(뉴스만 적재합니다).
+`33 18 * * *` UTC = 03:33 KST 입니다. 정각을 피했습니다.
 
-**cron 은 정각을 피하십시오.** GitHub 문서가 "높은 부하 시간대에 지연될
-수 있고 매 시각 정각이 그렇다"고 명시합니다. `17`, `43` 같은 분을 쓰십시오.
+| 단계 | 스크립트 | 비고 |
+|---|---|---|
+| PBP | `daily_pbp_to_d1.py` | 날짜 단위 멱등 |
+| games | `daily_games_to_d1.py` | PBP 성공 시에만 |
+| 퓨처스 | `futures_to_d1.py` | 30분 → 하루 1회로 낮춤 |
+| 공식 통계 | selenium ×2 → `csv_to_d1.py` | UPSERT, created_at 보존 |
+| 뉴스 | `collect_player_news.py` | 기존 유지 |
+| 캐시 비우기 | `POST /admin/purge-cache` | 마지막 |
 
-- [ ] **Step 2: 60일 자동 비활성화에 대비합니다**
+**퓨처스를 하루 1회로 낮춘 근거.** 화면의 퓨처스 일정(`/schedule/futures`)은
+Worker 가 KBO 스코어보드를 그때그때 프록시합니다(`src/routes/futures.js`).
+`futures_games` 표를 읽지 않습니다. 그 표는 분석용 창고라 30분 간격이
+필요 없습니다. **Worker Cron 이식(원래 Step 4)은 하지 않아도 됩니다.**
 
-공개 저장소는 60일간 활동이 없으면 스케줄 워크플로가 꺼집니다.
-매일 도는 워크플로가 있으면 실행 자체가 활동으로 잡히는지 **확인하십시오.**
-확실하지 않으면 워크플로가 실패했을 때 알림을 받는 장치를 두십시오.
+- [x] **Step 2: 60일 자동 비활성화 대비**
 
-- [ ] **Step 3: monthly.yml 을 만듭니다**
+핵심 단계가 실패하면 워크플로가 빨갛게 끝나도록 마지막에 판정 단계를
+두었습니다. 조용히 초록으로 끝나면 몇 주 뒤에나 알아차립니다.
 
-`player_info_scraper.py`. 585명 × sleep 2초라 40~90분 추정입니다.
+- [x] **Step 3: monthly.yml**
 
-- [ ] **Step 4: 퓨처스를 Worker Cron 으로 옮깁니다**
+`13 4 1 * *` UTC = 매월 1일 13:13 KST. D1 에서 `players` 만 받아 임시
+SQLite 를 만들고 `KBO_DB` 로 넘긴 뒤 되돌립니다.
 
-`futures_schedule.py` 를 JS 로 다시 써서 `scheduled` 핸들러에 넣습니다.
-30분 간격입니다.
+- [x] **Step 4: 퓨처스** — Step 1 참조. 이식 불필요로 판정했습니다.
 
-**이식이 어렵거나 오래 걸리면 Actions 2시간 간격으로 두십시오.**
-저장소가 공개라 분 부담이 없습니다. 30분 정시성은 있으면 좋은 것이지
-없으면 안 되는 것이 아닙니다.
+- [x] **Step 5: 실행 시각을 D1 에 기록합니다**
 
-- [ ] **Step 5: 실행 시각을 D1 에 기록합니다**
+`meta_job_runs` 표 + `GET /jobs/status` + 화면 연결까지 했습니다.
+실측: `{"jobs":{"games":"2026-08-18 11:12"},...}`, `max-age=60`.
 
-EC2 의 `cron_status.json` 을 대체합니다. 화면의 "마지막 업데이트 시간"이
-이것을 읽습니다.
+- [x] **weekly.yml (계획에 없던 것)**
 
-- [ ] **Step 6: 하루 돌려 보고 결과를 봅니다**
+파크팩터 파이프라인은 `play_by_play` 전량을 훑습니다. Worker 에서 못
+합니다. 러너가 `wrangler d1 export` 로 내려받아 SQLite 를 만들고
+(`migration/d1_to_sqlite.py`), 파이프라인을 돌리고, 결과 표만 되돌립니다
+(`migration/sqlite_to_d1.py`). **매일 돌리면 안 됩니다.** 12시즌 전량
+내려받기가 약 276만 행이라 하루 한도 500만의 절반을 넘습니다.
+
+- [ ] **Step 6: 하루 돌려 보고 결과를 봅니다** — 남았습니다
+
+워크플로 파일이 작업 브랜치에만 있어 `workflow_dispatch` 버튼이 뜨지
+않습니다. `main` 에 합친 뒤 한 번 수동 실행하십시오. 그 전에
+**`ADMIN_TOKEN` 을 저장소 Secrets 에 넣어야** 캐시 비우기가 동작합니다.
+
+### 이 과정에서 드러난 것
+
+**퓨처스 "2주 공백"의 원인을 찾았습니다.** 서버 정지와 무관합니다.
+`futures_schedule.py` 가 취소 여부를 `relay + stadium` 에서만 찾는데,
+취소 사유는 **마지막 셀(비고)** 에 옵니다. 끝에서 2번째는 구장입니다.
+
+```
+08.06(목) | 10:00 | 고양 vs 롯데 | (relay 빈칸) | ... | 상동 | 폭염취소
+                                                        ^^^^   ^^^^^^^^
+                                                     stadium    비고(안 봄)
+```
+
+그래서 2026-08-05~10 폭염취소 30경기가 `scheduled` 로 남아 영영 다가올
+경기로 보였습니다. 고친 뒤 2026-08 기준 취소 41 / 종료 22 / 예정 53 으로
+과거 날짜에 빈 곳이 없습니다.
+
+**백필 드라이버가 실패를 성공으로 보고했습니다.** 두 번 다른 방식으로요.
+
+1. 종료코드 0 인데 `failed=74` 였습니다(2018-04, 113경기 중 74개가 예외로
+   빠짐). `download.py` 는 한 경기 실패로 배치를 멈추지 않고 세기만 합니다.
+   이제 `failed>0` 이면 재시도합니다.
+2. 실패 사유로 `if sp.exists() & ~(sp.is_dir()):` 를 찍었습니다. 파이썬
+   3.13 DeprecationWarning 이 stderr 에 남긴 소스 줄일 뿐이고, 진짜 원인
+   (DNS 실패)은 `log.txt` 에 있었습니다.
 
 ---
 
