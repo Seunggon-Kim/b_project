@@ -1,6 +1,7 @@
 import { json } from '../lib/respond.js';
 import { queryInt, queryStr } from '../lib/router.js';
 import { pyRound } from './leaders.js';
+import { fanOut, allSeasons, seasonDateRange } from '../lib/shard.js';
 
 // wRC+ 계열 여섯 개입니다. 모두 wrc_plus_comparison 과 규정타석 계산을
 // 공유해 한 파일에 둡니다.
@@ -244,13 +245,27 @@ export async function wrcBatter(request, env, ctx, params) {
     ORDER BY wrc.season
   `).bind(batterId).all();
 
-  const { results: stadiumDist } = await db.prepare(`
-    SELECT substr(gameID,1,4) AS season, stadium, COUNT(*) AS pa
-    FROM play_by_play
-    WHERE batter_ID = ? AND substr(gameID,1,4) BETWEEN '2015' AND '2026'
-    GROUP BY season, stadium
-    ORDER BY season, pa DESC
-  `).bind(batterId).all();
+  // play_by_play 가 시즌별 D1 에 나뉘어 있습니다. 이 질의만은 전 시즌을
+  // 봐야 하므로 네 DB 에 모두 묻고 이어붙입니다.
+  //
+  // season 을 `substr(gameID,1,4)` 로 뽑던 것을 game_date 로 바꿨습니다.
+  // 포스트시즌 gameID 는 앞 네 자리가 시리즈 코드(3333/4444/6666)라
+  // 그대로 두면 그 경기들이 '3333' 시즌으로 묶여 화면에 나옵니다.
+  // 자세한 설명은 lib/shard.js 의 seasonDateRange 에 있습니다.
+  //
+  // 원본이 문자열 season 을 돌려주므로 형태를 맞춥니다.
+  const stadiumDist = await fanOut(env, allSeasons(), async (pdb, seasons) => {
+    const from = seasonDateRange(seasons[0]).from;
+    const to = seasonDateRange(seasons[seasons.length - 1]).to;
+    const { results } = await pdb.prepare(`
+      SELECT CAST(game_date / 10000 AS TEXT) AS season, stadium, COUNT(*) AS pa
+      FROM play_by_play
+      WHERE batter_ID = ? AND game_date >= ? AND game_date < ?
+      GROUP BY season, stadium
+      ORDER BY season, pa DESC
+    `).bind(batterId, from, to).all();
+    return results;
+  });
 
   // 원본: history 가 비면 None 입니다. 빈 문자열이 아닙니다.
   const name = history.length ? history[0].player_name : null;

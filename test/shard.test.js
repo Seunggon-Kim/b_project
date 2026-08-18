@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   SHARDS, allSeasons, shardOf, groupBySeason, fanOut, hasSeason,
+  seasonDateRange, seasonsBetween,
 } from '../src/lib/shard.js';
 
 const planPath = fileURLToPath(new URL('../migration/shard_plan.json', import.meta.url));
@@ -108,4 +109,39 @@ test('fanOut 은 빈 시즌 목록에 아무 DB 도 부르지 않습니다', asy
   const out = await fanOut(env, [], async (db) => { called.push(db.tag); return []; });
   assert.deepEqual(called, []);
   assert.deepEqual(out, []);
+});
+
+// --- game_date 로 시즌을 고릅니다 ------------------------------------
+
+test('시즌의 game_date 범위를 만듭니다', () => {
+  assert.deepEqual(seasonDateRange(2017), { from: 20170000, to: 20180000 });
+  assert.deepEqual(seasonDateRange('2026'), { from: 20260000, to: 20270000 });
+  assert.equal(seasonDateRange('x'), null);
+});
+
+test('포스트시즌 경기가 범위 안에 들어옵니다', () => {
+  // 33331008NCLT02017 은 gameID 앞 4자가 '3333' 이지만
+  // game_date 는 20171008 이라 2017 범위에 들어옵니다.
+  const r = seasonDateRange(2017);
+  for (const gd of [20171008, 20171009, 20170401, 20171130]) {
+    assert.ok(gd >= r.from && gd < r.to, String(gd));
+  }
+  // 옆 시즌으로 새지 않습니다.
+  assert.ok(!(20180401 >= r.from && 20180401 < r.to));
+});
+
+test('기간이 걸치는 시즌을 모두 찾습니다', () => {
+  assert.deepEqual(seasonsBetween(20170401, 20170930), [2017]);
+  assert.deepEqual(seasonsBetween(20171001, 20190501), [2017, 2018, 2019]);
+});
+
+test('배정에 없는 연도는 기간에서 빠집니다', () => {
+  // 2014 이전을 물어도 오류가 아니라 빈 결과입니다.
+  assert.deepEqual(seasonsBetween(20120101, 20140101), []);
+  assert.deepEqual(seasonsBetween(20140101, 20150501), [2015]);
+});
+
+test('뒤집힌 기간은 빈 목록입니다', () => {
+  assert.deepEqual(seasonsBetween(20190501, 20170401), []);
+  assert.deepEqual(seasonsBetween('a', 20170401), []);
 });

@@ -2,6 +2,9 @@ import { json } from '../lib/respond.js';
 import { queryInt } from '../lib/router.js';
 import { csvExportPlan, csvRow, isRealType } from '../lib/csv.js';
 import { countOf, countsOf } from '../lib/counts.js';
+import {
+  isSharded, SHARDED_TABLES, shardCounts, sliceRows, shardTableInfo,
+} from '../lib/pbpvirtual.js';
 import { columnDict, tableMeta } from '../lib/coldict.js';
 
 /**
@@ -28,6 +31,22 @@ export async function listTableNames(db) {
 }
 
 /**
+ * 화면에 보일 표 이름 전부입니다.
+ *
+ * `play_by_play` 는 공용 DB 에 없고 샤드 네 개에 나뉘어 있습니다.
+ * 그대로 두면 데이터 탐색기에서 표가 통째로 사라집니다. 목록에
+ * 끼워 넣고, 원본과 같은 이름순을 지킵니다.
+ */
+export async function visibleTableNames(env) {
+  const names = await listTableNames(env.DB);
+  const set = new Set(names);
+  for (const t of SHARDED_TABLES) {
+    if (!set.has(t)) names.push(t);
+  }
+  return names.sort();
+}
+
+/**
  * 원본 api/main.py:646-670 입니다.
  * 표 목록에 행 수·컬럼 수와 사전의 분류·설명·갱신주기를 붙입니다.
  */
@@ -35,7 +54,7 @@ export async function dbTables(request, env) {
   const db = env.DB;
   const meta = columnDict();
   const tmeta = meta.tables || {};
-  const names = await listTableNames(db);
+  const names = await visibleTableNames(env);
 
   // 원본은 표마다 `COUNT(*)` 를 돌렸습니다. 18개 표를 합쳐 한 번에 약
   // 24만 행을 읽었고 그 95% 가 play_by_play 였습니다. 미리 적어 둔 값을
@@ -46,8 +65,18 @@ export async function dbTables(request, env) {
   for (const name of names) {
     // 메타에 없는 표는 개별로 셉니다. 새로 만든 표에서도 화면이 동작해야
     // 합니다. 원본과 같이 실패하면 0 이 아니라 null 입니다.
-    const n = known.has(name) ? known.get(name) : await countOf(db, name);
-    const info = await db.prepare(`PRAGMA table_info("${name}")`).all();
+    // 나뉜 표는 샤드 합계를 내고 스키마도 샤드에서 읽습니다.
+    // 공용 DB 에는 그 표가 없습니다.
+    let n;
+    let info;
+    if (isSharded(name)) {
+      const parts = await shardCounts(env, name);
+      n = parts.reduce((acc, x) => acc + x.n, 0);
+      info = await shardTableInfo(env, name);
+    } else {
+      n = known.has(name) ? known.get(name) : await countOf(db, name);
+      info = await db.prepare(`PRAGMA table_info("${name}")`).all();
+    }
     const m = tmeta[name] || {};
     result.push({
       name,
@@ -76,10 +105,11 @@ export async function dbTable(request, env, ctx, params) {
   const db = env.DB;
   const tableName = params.name;
 
-  const names = await listTableNames(db);
+  const names = await visibleTableNames(env);
   if (!names.includes(tableName)) {
     return json({ detail: 'Table not found' }, 404);
   }
+  const sharded = isSharded(tableName);
 
   const url = new URL(request.url);
   // 원본: limit = max(1, min(int(limit), 500)), offset = max(0, int(offset))
@@ -89,7 +119,9 @@ export async function dbTable(request, env, ctx, params) {
   const tmeta = tableMeta(tableName);
   const cdesc = tmeta.columns || {};
 
-  const info = await db.prepare(`PRAGMA table_info("${tableName}")`).all();
+  const info = sharded
+    ? await shardTableInfo(env, tableName)
+    : await db.prepare(`PRAGMA table_info("${tableName}")`).all();
   const schema = info.results.map((c) => ({
     name: c.name,
     type: c.type || '',
@@ -99,10 +131,22 @@ export async function dbTable(request, env, ctx, params) {
   }));
   const columns = info.results.map((c) => c.name);
 
-  const total = await countOf(db, tableName);
-  const { results: rows } = await db
-    .prepare(`SELECT * FROM "${tableName}" LIMIT ? OFFSET ?`)
-    .bind(limit, offset).all();
+  // 나뉜 표는 샤드 경계를 넘어 세고 읽습니다. 화면에는 여전히 한 표로
+  // 보여야 합니다. 순서가 원본과 같은 근거는 lib/pbpvirtual.js 에 적어
+  // 두었습니다.
+  let total;
+  let rows;
+  if (sharded) {
+    const parts = await shardCounts(env, tableName);
+    total = parts.reduce((acc, x) => acc + x.n, 0);
+    rows = await sliceRows(env, tableName, offset, limit);
+  } else {
+    total = await countOf(db, tableName);
+    const r = await db
+      .prepare(`SELECT * FROM "${tableName}" LIMIT ? OFFSET ?`)
+      .bind(limit, offset).all();
+    rows = r.results;
+  }
 
   return json({
     table: tableName,
@@ -163,12 +207,15 @@ export async function dbTableCsv(request, env, ctx, params) {
   const db = env.DB;
   const tableName = params.name;
 
-  const names = await listTableNames(db);
+  const names = await visibleTableNames(env);
   if (!names.includes(tableName)) {
     return json({ detail: 'Table not found' }, 404);
   }
+  const sharded = isSharded(tableName);
 
-  const info = await db.prepare(`PRAGMA table_info("${tableName}")`).all();
+  const info = sharded
+    ? await shardTableInfo(env, tableName)
+    : await db.prepare(`PRAGMA table_info("${tableName}")`).all();
   const columns = info.results.map((c) => c.name);
   // REAL 컬럼은 정수값이라도 `150.0` 처럼 써야 파이썬 출력과 바이트가
   // 같아집니다. 자세한 사정은 lib/csv.js 의 csvCell 주석에 있습니다.
@@ -186,7 +233,13 @@ export async function dbTableCsv(request, env, ctx, params) {
   // 내보낼 행 수를 미리 셉니다. 한도를 넘으면 잘린 파일을 주는 대신
   // 이유를 알립니다. 스트림을 연 뒤에는 상태 코드를 바꿀 수 없으니
   // 반드시 열기 전에 판단해야 합니다.
-  const totalCount = await countOf(db, tableName);
+  let totalCount;
+  if (sharded) {
+    const parts = await shardCounts(env, tableName);
+    totalCount = parts.reduce((acc, x) => acc + x.n, 0);
+  } else {
+    totalCount = await countOf(db, tableName);
+  }
   const total = totalCount === null ? 0 : totalCount;
   const plan = csvExportPlan(total, lim, off, CSV_MAX_ROWS);
   const startAt = plan.startAt;
@@ -228,10 +281,14 @@ export async function dbTableCsv(request, env, ctx, params) {
         }
       }
 
-      const { results } = await db
-        .prepare(`SELECT * FROM "${tableName}" LIMIT ? OFFSET ?`)
-        .bind(take, offset)
-        .all();
+      // 나뉜 표는 샤드 경계를 넘어 읽습니다. 한 페이지가 두 샤드에
+      // 걸치면 두 곳에서 나눠 읽어 이어붙입니다.
+      const results = sharded
+        ? await sliceRows(env, tableName, offset, take)
+        : (await db
+          .prepare(`SELECT * FROM "${tableName}" LIMIT ? OFFSET ?`)
+          .bind(take, offset)
+          .all()).results;
 
       if (!results.length) {
         controller.close();

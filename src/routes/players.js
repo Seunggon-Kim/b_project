@@ -1,5 +1,6 @@
 import { json } from '../lib/respond.js';
 import { queryInt } from '../lib/router.js';
+import { shardOf, seasonDateRange } from '../lib/shard.js';
 
 /**
  * 원본 robust_player_lookup (api/main.py:45-55) 입니다.
@@ -90,18 +91,28 @@ export async function playerArsenal(request, env, ctx, params) {
     }
     const season = queryInt(new URL(request.url), 'season', 2026);
 
-    const { results } = await db.prepare(`
+    // play_by_play 는 시즌별 D1 에 나뉘어 있습니다. 이 질의는 시즌
+    // 하나만 보므로 담당 DB 한 개만 두드립니다.
+    const pdb = shardOf(env, season);
+    const range = seasonDateRange(season);
+    if (!pdb || !range) {
+      // 배정에 없는 시즌입니다. 빈 결과를 주면 "그 해엔 안 던졌다"로
+      // 보여 데이터가 없는 것을 알 수 없습니다.
+      return json({ player_id: playerId, arsenal: [], count: 0 });
+    }
+
+    const { results } = await pdb.prepare(`
       SELECT pbp.pitch_type, pbp.px, pbp.pz, pbp.speed, pbp.pitch_result,
              pbp.pfx_x, pbp.pfx_z, pbp.game_date, pbp.x0, pbp.z0,
              pbp.sz_top, pbp.sz_bot
       FROM play_by_play pbp
       WHERE pbp.pitcher_ID = ?
-      AND substr(pbp.gameID,1,4) = CAST(? AS TEXT)
+      AND pbp.game_date >= ? AND pbp.game_date < ?
       AND pbp.px IS NOT NULL
       AND pbp.pz IS NOT NULL
       AND pbp.pitch_type IS NOT NULL
       AND pbp.pitch_type NOT IN ('', '-', 'null')
-    `).bind(player.player_id, season).all();
+    `).bind(player.player_id, range.from, range.to).all();
 
     // 원본은 요청받은 player_id 를 그대로 돌려줍니다. DB 에서 찾은 것이
     // 아닙니다. 문자열과 정수가 섞여 있어 값이 다를 수 있습니다.
@@ -202,14 +213,20 @@ export async function playerUsage(request, env, ctx, params) {
 
     const season = queryInt(new URL(request.url), 'season', 2026);
 
-    const { results } = await db.prepare(`
+    const pdb = shardOf(env, season);
+    const range = seasonDateRange(season);
+    if (!pdb || !range) {
+      return json({ player_id: playerId, usage: [] });
+    }
+
+    const { results } = await pdb.prepare(`
       SELECT pbp.pitch_type, pbp.stands, pbp.throws
       FROM play_by_play pbp
       WHERE pbp.pitcher_ID = ?
-      AND substr(pbp.gameID,1,4) = CAST(? AS TEXT)
+      AND pbp.game_date >= ? AND pbp.game_date < ?
       AND pbp.pitch_type IS NOT NULL
       AND pbp.pitch_type NOT IN ('', '-', 'null')
-    `).bind(player.player_id, season).all();
+    `).bind(player.player_id, range.from, range.to).all();
 
     // 원본은 행이 없으면 usage 만 있는 짧은 응답을 돌려줍니다.
     // total_pitches 같은 키가 아예 없습니다.

@@ -1,5 +1,6 @@
 import { json } from '../lib/respond.js';
 import { pyRound } from './leaders.js';
+import { fanOut, seasonsBetween } from '../lib/shard.js';
 
 // 기간별 팀 성적입니다. 원본 api/main.py:448-596.
 //
@@ -215,24 +216,41 @@ export async function statsTeamRange(request, env) {
     if (dmax === null || gd > dmax) dmax = gd;
   }
 
+  // play_by_play 가 시즌별 D1 에 나뉘어 있습니다. D1 은 DB 를 가로지르는
+  // 조인을 못 하므로, 각 샤드에 games 사본을 함께 두고 그 안에서
+  // 조인합니다. 기간이 걸치는 시즌의 DB 에만 묻습니다.
+  //
+  // 두 질의 모두 팀별로 누적할 뿐 순서를 보지 않아서, 이어붙이는 순서가
+  // 결과를 바꾸지 않습니다.
+  const seasons = seasonsBetween(s, e);
+
   // 타석 단위 집계
-  const { results: paRows } = await db.prepare(
-    'SELECT p.inning_topbot, p.pa_result, gm.home_team_id, gm.away_team_id '
-    + 'FROM play_by_play p JOIN games gm ON gm.game_id = p.gameID '
-    + "WHERE gm.game_date>=? AND gm.game_date<=? AND gm.game_type='정규시즌' "
-    + "AND p.pa_result IS NOT NULL AND p.pa_result<>''",
-  ).bind(s, e).all();
+  const paRows = await fanOut(env, seasons, async (pdb) => {
+    const r = await pdb.prepare(
+      'SELECT p.inning_topbot, p.pa_result, gm.home_team_id, gm.away_team_id '
+      + 'FROM play_by_play p JOIN games gm ON gm.game_id = p.gameID '
+      + "WHERE gm.game_date>=? AND gm.game_date<=? AND gm.game_type='정규시즌' "
+      + "AND p.pa_result IS NOT NULL AND p.pa_result<>''",
+    ).bind(s, e).all();
+    return r.results;
+  });
   accumulatePa(teams, paRows);
 
   // 아웃과 실점. 삼진 아웃은 outs_on_play 에 잡히지 않아 따로 셉니다.
-  const { results: sumRows } = await db.prepare(
-    'SELECT p.inning_topbot, gm.home_team_id, gm.away_team_id, '
-    + 'SUM(p.outs_on_play) AS oop, SUM(p.runs_scored) AS runs, '
-    + "SUM(CASE WHEN p.pa_result='삼진' THEN 1 ELSE 0 END) AS ko "
-    + 'FROM play_by_play p JOIN games gm ON gm.game_id = p.gameID '
-    + "WHERE gm.game_date>=? AND gm.game_date<=? AND gm.game_type='정규시즌' "
-    + 'GROUP BY p.inning_topbot, gm.home_team_id, gm.away_team_id',
-  ).bind(s, e).all();
+  //
+  // GROUP BY 결과를 여러 DB 에서 이어붙이면 같은 조합이 여러 번 나올 수
+  // 있습니다. 아래 루프가 += 로 누적하므로 합계는 맞습니다.
+  const sumRows = await fanOut(env, seasons, async (pdb) => {
+    const r = await pdb.prepare(
+      'SELECT p.inning_topbot, gm.home_team_id, gm.away_team_id, '
+      + 'SUM(p.outs_on_play) AS oop, SUM(p.runs_scored) AS runs, '
+      + "SUM(CASE WHEN p.pa_result='삼진' THEN 1 ELSE 0 END) AS ko "
+      + 'FROM play_by_play p JOIN games gm ON gm.game_id = p.gameID '
+      + "WHERE gm.game_date>=? AND gm.game_date<=? AND gm.game_type='정규시즌' "
+      + 'GROUP BY p.inning_topbot, gm.home_team_id, gm.away_team_id',
+    ).bind(s, e).all();
+    return r.results;
+  });
 
   for (const row of sumRows) {
     const bat = row.inning_topbot === TOP ? row.away_team_id : row.home_team_id;

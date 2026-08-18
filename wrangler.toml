@@ -21,3 +21,29 @@ database_id = "505c67f5-45ff-42ee-bce9-2f5f00cf90e7"
 # 응답의 Cache-Control 로 수명을 정합니다 - src/lib/cachepolicy.js
 [cache]
 enabled = true
+
+# play_by_play 를 시즌별로 나눈 D1 입니다.
+#
+# 한 표가 D1 한 DB 한도(500MB)를 넘습니다. 12시즌이면 약 1.5GB 입니다.
+# 표를 쪼갤 수는 없으니 DB 를 나눕니다. 배정 정본은
+# migration/shard_plan.json 이고 src/lib/shard.js 가 사본입니다.
+
+[[d1_databases]]
+binding = "DB_2015_2017"
+database_name = "kbo-pbp-2015-2017"
+database_id = "92d5b1c7-7d35-4279-876e-c88caa3bccad"
+
+[[d1_databases]]
+binding = "DB_2018_2020"
+database_name = "kbo-pbp-2018-2020"
+database_id = "f9420d0e-dce5-4bab-a210-298aba89d63d"
+
+[[d1_databases]]
+binding = "DB_2021_2023"
+database_name = "kbo-pbp-2021-2023"
+database_id = "b6bf7d3e-dfef-480e-ae6f-a2c18278b77e"
+
+[[d1_databases]]
+binding = "DB_2024_2026"
+database_name = "kbo-pbp-2024-2026"
+database_id = "0ee0dec0-eeac-47da-b31d-ee38426fbb92"

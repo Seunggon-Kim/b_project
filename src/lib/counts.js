@@ -65,3 +65,22 @@ export async function countsOf(db, tables) {
   }
   return out;
 }
+
+/**
+ * 샤드에 나뉜 표의 전체 행 수입니다.
+ *
+ * `play_by_play` 는 D1 네 개에 나뉘어 있어 한 DB 를 세면 1/4 만 나옵니다.
+ * 화면이 "270만 행"이라고 말해야 하는데 "70만 행"이 보이면 사용자는
+ * 데이터가 사라진 줄 압니다.
+ *
+ * 각 샤드의 메타 표에서 읽으므로 `COUNT(*)` 를 돌지 않습니다. 하나라도
+ * 값을 못 얻으면 합계가 틀리므로 null 을 돌려줍니다. **틀린 숫자보다
+ * 빈칸이 낫습니다.**
+ */
+export async function shardedCountOf(env, shards, table) {
+  const dbs = shards.map((s) => env[s.binding]).filter(Boolean);
+  if (dbs.length !== shards.length) return null;
+  const parts = await Promise.all(dbs.map((db) => countOf(db, table)));
+  if (parts.some((n) => typeof n !== 'number')) return null;
+  return parts.reduce((a, b) => a + b, 0);
+}
