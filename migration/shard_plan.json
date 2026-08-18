@@ -1,0 +1,37 @@
+{
+  "note": "시즌 -> D1 배정표입니다. 이 파일이 정본입니다. Worker(src/lib/shard.js)와 적재 스크립트(migration/shard_plan.py)가 이 값을 따릅니다. shard.js 의 표는 사본이고 test/shard.test.js 가 두 값이 같은지 강제합니다. 한쪽만 고치면 테스트가 실패합니다.",
+  "why": "play_by_play 한 표가 D1 한 DB 한도(500MB)를 넘습니다. 12시즌이면 약 1.5GB 입니다. 표를 쪼갤 수는 없으니 DB 를 나눕니다. 시즌으로 나누는 이유는 화면이 시즌 셀렉터로 동작해 대부분의 질의가 한 시즌에 갇히기 때문입니다.",
+  "shared": {
+    "binding": "DB",
+    "database": "kbo-stats",
+    "database_id": "505c67f5-45ff-42ee-bce9-2f5f00cf90e7",
+    "note": "play_by_play 를 뺀 나머지 표 전부(약 2.7MB). games 의 정본도 여기입니다."
+  },
+  "shards": [
+    {
+      "binding": "DB_2015_2017",
+      "database": "kbo-pbp-2015-2017",
+      "database_id": "92d5b1c7-7d35-4279-876e-c88caa3bccad",
+      "seasons": [2015, 2016, 2017]
+    },
+    {
+      "binding": "DB_2018_2020",
+      "database": "kbo-pbp-2018-2020",
+      "database_id": "f9420d0e-dce5-4bab-a210-298aba89d63d",
+      "seasons": [2018, 2019, 2020]
+    },
+    {
+      "binding": "DB_2021_2023",
+      "database": "kbo-pbp-2021-2023",
+      "database_id": "b6bf7d3e-dfef-480e-ae6f-a2c18278b77e",
+      "seasons": [2021, 2022, 2023]
+    },
+    {
+      "binding": "DB_2024_2026",
+      "database": "kbo-pbp-2024-2026",
+      "database_id": "0ee0dec0-eeac-47da-b31d-ee38426fbb92",
+      "seasons": [2024, 2025, 2026]
+    }
+  ],
+  "growth": "새 시즌(2027)이 생기면 마지막 샤드가 네 시즌이 됩니다. 그때 용량을 재고 필요하면 샤드를 하나 더 만드십시오. 계정 한도 10개 중 지금 5개를 씁니다."
+}
