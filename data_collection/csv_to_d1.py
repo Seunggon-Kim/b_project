@@ -101,6 +101,27 @@ def main():
         print("D1 에 %s 표가 없습니다." % args.table)
         return 1
 
+    # CSV 헤더에 기호가 섞인 컬럼이 있습니다. 투수 CSV 의 `k/bb` 가
+    # D1 에서는 `k_bb` 입니다. 이름이 다르면 그 컬럼이 조용히 빠져서
+    # 새 투수의 `k_bb` 가 영영 NULL 로 남습니다.
+    #
+    # 기호를 밑줄로 바꿔 한 번 더 맞춰 봅니다. 억지로 짝지우지 않도록
+    # **D1 에 그 이름이 실제로 있고, CSV 에 그 이름이 따로 없을 때만**
+    # 바꿉니다.
+    known = set(table_cols)
+    renames = {}
+    for k in list(rows[0].keys()):
+        if k in known:
+            continue
+        alt = re.sub(r"[^0-9a-zA-Z_]", "_", k).lower()
+        if alt in known and alt not in rows[0]:
+            renames[k] = alt
+    if renames:
+        print("이름을 맞춘 컬럼 %d개: %s"
+              % (len(renames),
+                 ", ".join("%s -> %s" % kv for kv in renames.items())))
+        rows = [{renames.get(k, k): v for k, v in r.items()} for r in rows]
+
     available = set(rows[0].keys()) | set(consts.keys())
     columns = [c for c in table_cols if c in available]
     keep = []
