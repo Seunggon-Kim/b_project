@@ -22,51 +22,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from d1_load import (  # noqa: E402
+    build_inserts, d1_columns, refresh_count, run_d1_file,
+)
+
 ROOT = Path(__file__).resolve().parent.parent
-DB_NAME = "kbo-stats"
-
-# D1 문 하나의 상한은 100,000 바이트입니다. 여유를 두고 자릅니다.
-MAX_STATEMENT_BYTES = 90_000
-
-
-def sql_literal(v):
-    """CSV 값 하나를 SQL 리터럴로 만듭니다.
-
-    CSV 는 모든 값이 문자열입니다. 빈 칸은 NULL 로, 나머지는 문자열로
-    넣습니다. 숫자로 바꾸지 않는 이유가 있습니다. **컬럼 타입은 D1 이
-    알고 있고 SQLite 는 문자열을 알아서 변환합니다.** 여기서 추측해
-    바꾸면 `007` 같은 값이 7 이 되어 원본과 달라집니다.
-    """
-    if v is None or v == "":
-        return "NULL"
-    return "'" + str(v).replace("'", "''") + "'"
-
-
-def build_inserts(table, columns, rows, max_bytes=MAX_STATEMENT_BYTES):
-    """행 목록을 INSERT 문 여러 개로 나눕니다."""
-    if not rows:
-        return []
-    head = 'INSERT INTO "%s" (%s) VALUES ' % (
-        table, ",".join('"%s"' % c for c in columns))
-    # **문자 수가 아니라 바이트로 세야 합니다.** D1 의 한도는 바이트이고,
-    # 이 표에는 선수 이름과 상황 서술이 한글로 들어 있어 UTF-8 로 세 배가
-    # 됩니다. 처음에 len() 으로 셌다가 문 하나가 108,774 바이트가 되어
-    # 한도 100,000 을 넘었고, wrangler 가 D1_RESET_DO 로 실패했습니다.
-    head_bytes = len(head.encode("utf-8"))
-    out, batch, size = [], [], 0
-    for r in rows:
-        piece = "(" + ",".join(sql_literal(r.get(c)) for c in columns) + ")"
-        n = len(piece.encode("utf-8"))
-        # 한 행이라도 넣고 나서 크기를 봅니다. 빈 배치를 내보내면
-        # 문법 오류가 됩니다.
-        if batch and size + n + 1 > max_bytes - head_bytes:
-            out.append(head + ",".join(batch) + ";")
-            batch, size = [], 0
-        batch.append(piece)
-        size += n + 1
-    if batch:
-        out.append(head + ",".join(batch) + ";")
-    return out
 
 
 def read_csv_rows(path):
@@ -80,41 +42,6 @@ def read_csv_rows(path):
     raise RuntimeError("인코딩을 알 수 없습니다: %s" % path)
 
 
-def d1_columns(table):
-    """D1 의 실제 컬럼 순서를 읽습니다.
-
-    CSV 헤더를 그대로 믿지 않습니다. 크롤러가 컬럼을 더하거나 순서를
-    바꿔도 D1 스키마가 정본입니다. 다른 컬럼을 넣으려 하면 적재가
-    통째로 실패합니다.
-    """
-    out = run_d1('PRAGMA table_info("%s");' % table, json_out=True)
-    import json as _json
-    data = _json.loads(out[out.find("["):])
-    return [r["name"] for r in data[0]["results"]]
-
-
-def run_d1(sql, json_out=False):
-    cmd = ["npx", "--yes", "wrangler@4", "d1", "execute", DB_NAME,
-           "--remote", "--command", sql, "--yes"]
-    if json_out:
-        cmd.append("--json")
-    r = subprocess.run(cmd, capture_output=True, text=True, shell=True,
-                       encoding="utf-8", errors="replace")
-    if r.returncode != 0:
-        raise RuntimeError("wrangler 실패: %s" % (r.stderr or r.stdout)[:400])
-    return r.stdout
-
-
-def run_d1_file(path):
-    cmd = ["npx", "--yes", "wrangler@4", "d1", "execute", DB_NAME,
-           "--remote", "--file", str(path), "--yes"]
-    r = subprocess.run(cmd, capture_output=True, text=True, shell=True,
-                       encoding="utf-8", errors="replace")
-    if r.returncode != 0:
-        raise RuntimeError("wrangler 실패: %s" % (r.stderr or r.stdout)[:400])
-    return r.stdout
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", default=None, help="YYYYMMDD, 기본값은 어제")
@@ -125,10 +52,12 @@ def main():
                     help="이미 받아 둔 CSV 로만 SQL 을 만듭니다")
     args = ap.parse_args()
 
-    day = args.date or (datetime.date.today()
+    # 러너는 UTC 라 그냥 어제를 잡으면 한국 날짜가 하루 어긋납니다.
+    kst = datetime.timezone(datetime.timedelta(hours=9))
+    day = args.date or (datetime.datetime.now(kst).date()
                         - datetime.timedelta(days=1)).strftime("%Y%m%d")
     year = day[:4]
-    print("대상 날짜: %s" % day)
+    print("대상 날짜: %s (KST 기준)" % day)
 
     save_dir = ROOT / args.save_dir
     if not args.skip_crawl:
@@ -159,7 +88,7 @@ def main():
     print("행 %s개" % format(len(rows), ","))
 
     columns = d1_columns("play_by_play")
-    # pbp_id 는 넣지 않습니다. D1 이 이미 229,667행을 갖고 있어 CSV 의
+    # pbp_id 는 넣지 않습니다. D1 이 이미 40만 행 넘게 갖고 있어 CSV 의
     # 번호와 부딪힙니다. INTEGER PRIMARY KEY 라 빼면 자동으로 붙습니다.
     insert_cols = [c for c in columns if c != "pbp_id"]
     missing = [c for c in insert_cols if c not in (rows[0] or {})]
@@ -195,9 +124,7 @@ def main():
 
     # 행 수 메타를 갱신합니다. 이것을 빠뜨리면 화면이 어제 숫자를
     # 계속 보여 줍니다(src/lib/counts.js).
-    run_d1("INSERT OR REPLACE INTO meta_table_counts "
-           "SELECT 'play_by_play', COUNT(*), datetime('now') "
-           "FROM play_by_play;")
+    refresh_count("play_by_play")
     print("행 수 메타 갱신 완료")
     return 0
 

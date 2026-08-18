@@ -24,6 +24,13 @@ const LIVE = [
 // 없습니다.
 const STATIC_LONG = ['/logo/'];
 
+// 절대 캐시하면 안 되는 곳입니다.
+//
+// `/admin/purge-cache` 가 캐시되면 두 번째 호출부터 Worker 가 실행되지
+// 않습니다. 캐시를 비우라는 요청이 캐시에 먹혀 아무 일도 일어나지
+// 않습니다.
+const NEVER = ['/admin'];
+
 // 나머지는 수집이 하루 한 번 도므로 한 시간이면 충분합니다.
 // stale-while-revalidate 를 붙여, 만료 직후 요청은 낡은 값을 즉시 주고
 // 뒤에서 갱신합니다. 사용자가 기다리지 않습니다.
@@ -37,6 +44,9 @@ const SWR = 86400;
  * 동안 굳습니다. 판단은 부르는 쪽이 합니다.
  */
 export function cacheControlFor(pathname) {
+  for (const prefix of NEVER) {
+    if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return null;
+  }
   for (const [prefix, ttl] of LIVE) {
     if (pathname === prefix || pathname.startsWith(`${prefix}/`)) {
       return `public, max-age=${ttl}`;

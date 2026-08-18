@@ -257,3 +257,17 @@ migration/golden/
 # 뉴스 SQL 은 Actions 가 매번 새로 만들어 D1 에 적재하는 산출물입니다.
 # 1.4MB 이고 하루면 낡습니다. 레포에 둘 이유가 없습니다.
 migration/news/
+
+# 시즌 백필 산출물. CSV 수천 개(수백 MB)라 레포에 두지 않습니다.
+crawler/save_backfill/
+crawler/save_2026/
+crawler/save_daily/
+crawler/backfill*.log
+crawler/backfill*.log.err
+migration/_backfill_tmp/
+migration/out_*/
+
+# 적재용으로 매번 새로 만드는 SQL 입니다. 산출물이라 레포에 두지 않습니다.
+migration/daily_pbp.sql
+migration/daily_games.sql
+migration/upsert_*.sql

@@ -15,6 +15,7 @@ import {
   statsSeasons, statsRegulation, statsBatters, statsPitchers,
 } from './routes/stats.js';
 import { dbTables, dbTable, dbTableCsv } from './routes/dbexplorer.js';
+import { purgeCache } from './routes/admin.js';
 import { games } from './routes/games.js';
 import { logo } from './routes/logo.js';
 import { statsTeamRange } from './routes/teamrange.js';
@@ -64,6 +65,11 @@ router.add('GET', '/wrc/top-changes', wrcTopChanges);
 router.add('GET', '/wrc/batter-search', wrcBatterSearch);
 router.add('GET', '/wrc/batter/:id', wrcBatter);
 router.add('GET', '/wrc/distribution', wrcDistribution);
+
+// 원본에 없던 관리 엔드포인트입니다. 적재가 끝나면 캐시를 비웁니다.
+// POST 로 둡니다. 상태를 바꾸는 일이고, GET 이면 브라우저 프리페치나
+// 링크 미리보기가 실수로 부를 수 있습니다.
+router.add('POST', '/admin/purge-cache', purgeCache);
 
 export default {
   async fetch(request, env, ctx) {
