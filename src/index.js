@@ -16,6 +16,7 @@ import {
 } from './routes/stats.js';
 import { dbTables, dbTable, dbTableCsv } from './routes/dbexplorer.js';
 import { purgeCache } from './routes/admin.js';
+import { jobsStatus } from './routes/jobs.js';
 import { games } from './routes/games.js';
 import { logo } from './routes/logo.js';
 import { statsTeamRange } from './routes/teamrange.js';
@@ -70,6 +71,10 @@ router.add('GET', '/wrc/distribution', wrcDistribution);
 // POST 로 둡니다. 상태를 바꾸는 일이고, GET 이면 브라우저 프리페치나
 // 링크 미리보기가 실수로 부를 수 있습니다.
 router.add('POST', '/admin/purge-cache', purgeCache);
+
+// 수집이 마지막으로 언제 돌았는지 알려줍니다. 원본에는 없고, EC2 의
+// cron_status.json 정적 파일을 대신합니다.
+router.add('GET', '/jobs/status', jobsStatus);
 
 export default {
   async fetch(request, env, ctx) {

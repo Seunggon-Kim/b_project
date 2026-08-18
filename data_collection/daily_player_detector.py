@@ -11,15 +11,24 @@ Step 2: 매일 player 변경 감지 + selenium 재크롤 + SCD Type 2 history �
   2. player_history: 새 row INSERT (valid_from = today)
   3. players: UPDATE current state
 """
+import os
 import sys
-sys.path.insert(0, "/home/ubuntu/b_project/data_collection")
+import tempfile
+from pathlib import Path
+
+# EC2 절대경로(/home/ubuntu/...)는 윈도우와 GitHub Actions 러너에서
+# 동작하지 않습니다. 그 서버는 2026-07-14 에 없어졌습니다.
+_HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(_HERE))
 import sqlite3
 import time
 import logging
 from datetime import date
 
-DB = "/home/ubuntu/b_project/database/kbo_stats.db"
-LOG = "/tmp/daily_player_detector.log"
+# DB 경로: 환경변수 KBO_DB 우선, 없으면 저장소 기준 상대경로.
+DB = os.environ.get("KBO_DB") or str(
+    _HERE.parent / "database" / "kbo_stats.db")
+LOG = os.path.join(tempfile.gettempdir(), "daily_player_detector.log")
 
 logging.basicConfig(
     level=logging.INFO,

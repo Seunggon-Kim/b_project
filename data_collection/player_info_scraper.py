@@ -2,6 +2,7 @@
 KBO 선수 상세 정보 크롤러 (테스트 버전 - 처음 5명만)
 기존 player_id를 사용하여 선수 상세 정보 수집
 """
+import os
 import time
 import re
 import logging
@@ -37,8 +38,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# DB 경로
-DB_PATH = PROJECT_ROOT / 'database' / 'kbo_stats.db'
+# DB 경로: 환경변수 KBO_DB 우선, 없으면 저장소 기준 상대경로.
+# GitHub Actions 러너에는 database/kbo_stats.db 가 없습니다. 226MB 라
+# git 에 두지 않기 때문입니다. 월간 워크플로가 D1 에서 players 만 받아
+# 임시 SQLite 를 만들고 그 경로를 KBO_DB 로 넘깁니다
+# (park_factors/*.py 와 같은 방식입니다).
+DB_PATH = Path(os.environ.get('KBO_DB') or
+               (PROJECT_ROOT / 'database' / 'kbo_stats.db'))
 
 
 def setup_driver():

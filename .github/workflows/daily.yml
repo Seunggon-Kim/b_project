@@ -1,25 +1,48 @@
 name: daily
 
-# 정기 실행은 계획 D 에서 추가합니다.
+# 매일 도는 수집입니다. EC2 crontab 의 02:00~05:40 KST 작업들을 대신합니다.
 #
-# workflow_dispatch 는 워크플로 파일이 기본 브랜치에 있어야 트리거됩니다.
-# 지금은 작업 브랜치에만 있어 UI 버튼이 뜨지 않으므로, 위험 1 을 판정할 동안만
-# push 트리거를 함께 둡니다. 관련 파일이 바뀔 때만 돌도록 paths 로 좁혔습니다.
-# main 에 합치면서 push 트리거는 제거합니다.
+# ## cron 은 정각을 피합니다
+#
+# GitHub 문서가 "높은 부하 시간대에 지연될 수 있고 매 시각 정각이 특히
+# 그렇다"고 명시합니다. 그래서 33분에 둡니다. 그래도 몇십 분 늦을 수
+# 있습니다. 정시성이 필요한 작업을 여기 넣지 마십시오.
+#
+# ## 60일 자동 비활성화
+#
+# 공개 저장소는 60일간 활동이 없으면 스케줄 워크플로가 꺼집니다.
+# 매일 실행 자체가 활동으로 잡히는지 확실치 않으므로, 실패하면 워크플로가
+# 빨간색으로 끝나게 두어 알림을 받으십시오(마지막 단계).
+#
+# ## 필요한 시크릿
+#
+#   CLOUDFLARE_API_TOKEN   D1 적재
+#   CLOUDFLARE_ACCOUNT_ID  D1 적재
+#   ADMIN_TOKEN            적재 뒤 캐시 비우기 (Worker 시크릿과 같은 값)
+
 on:
+  # 18:33 UTC = 03:33 KST. 전날 경기가 모두 끝난 뒤입니다.
+  schedule:
+    - cron: '33 18 * * *'
   workflow_dispatch:
-  push:
-    branches:
-      - feat/cloudflare-migration
-    paths:
-      - '.github/workflows/daily.yml'
-      - '.github/scripts/probe_kbo.py'
-      - 'data_collection/selenium_batter_scraper.py'
+
+# 앞 실행이 아직 돌고 있으면 겹치지 않게 합니다. 같은 날짜를 두 번
+# 넣어도 멱등이지만, D1 쓰기를 두 배로 쓸 이유가 없습니다.
+concurrency:
+  group: daily-collect
+  cancel-in-progress: false
+
+env:
+  API_BASE: https://kbo-api.bstats-baseball.workers.dev
 
 jobs:
-  official-stats:
+  collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 120
+
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
     steps:
       - uses: actions/checkout@v4
@@ -33,108 +56,205 @@ jobs:
           python -m pip install --upgrade pip
           pip install selenium webdriver-manager beautifulsoup4 lxml requests pandas
 
-      # 위험 1 판정의 핵심입니다. 여기서 막히면 뒤 단계는 볼 것도 없습니다.
-      - name: KBO 도달 확인 (HTTP)
-        id: http_probe
-        continue-on-error: true
-        run: python .github/scripts/probe_kbo.py --mode http
+      # 토큰이 없으면 수집만 하고 아무것도 안 남습니다. 시간만 쓰고
+      # 끝나므로 먼저 막습니다.
+      - name: 인증 확인
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "CLOUDFLARE_API_TOKEN 이 없습니다."
+            echo "Settings > Secrets and variables > Actions 에 등록하십시오."
+            exit 1
+          fi
+          npx --yes wrangler@4 d1 info kbo-stats > /dev/null
+          echo "D1 접근 확인"
 
-      # HTTP 는 되는데 이것만 실패하면 브라우저 지문 탐지입니다.
-      # 전체 수집(10팀)은 오래 걸리므로 표가 그려지는지만 먼저 봅니다.
-      - name: KBO 도달 확인 (Selenium)
-        id: selenium_probe
+      # --- 1. 어제 경기 PBP (원래 03:30 KST) -------------------------
+      - name: PBP 수집·적재
+        id: pbp
         continue-on-error: true
-        run: python .github/scripts/probe_kbo.py --mode selenium
+        run: python data_collection/daily_pbp_to_d1.py
 
-      # 구글이 러너 IP 를 얼마나 받아 주는지 기록만 합니다.
-      #
-      # 실측이 크게 흔들립니다. 같은 날 40분 사이에 5/5 였다가 0/5 가 되었고,
-      # Cloudflare 엣지는 20% 안팎입니다. 데이터센터 IP 를 구글이 걸러 내는데
-      # 러너도 Azure 공유 풀이라 그때그때 다릅니다.
-      #
-      # 그래서 이 프로브 결과로 수집을 막지 않습니다. 수집 스크립트가 자체
-      # 재시도를 하고, 절반도 못 모으면 스스로 쓰지 않습니다.
-      - name: 구글 뉴스 도달 확인
-        id: google_probe
+      - name: PBP 결과 기록
+        if: always()
         continue-on-error: true
-        run: python .github/scripts/probe_kbo.py --mode google-news
+        run: |
+          python data_collection/record_job_run.py --job pbp \
+            --status ${{ steps.pbp.outcome == 'success' && 'ok' || 'fail' }}
 
-      # 선수 뉴스를 모아 D1 적재용 SQL 을 만듭니다.
+      # --- 2. 경기 메타 (PBP 가 있어야 도출됩니다) --------------------
+      # PBP 만 넣고 이걸 빠뜨리면 새 경기가 화면에 안 나옵니다.
+      - name: games 적재
+        id: games
+        if: steps.pbp.outcome == 'success'
+        continue-on-error: true
+        run: python data_collection/daily_games_to_d1.py
+
+      - name: games 결과 기록
+        if: always()
+        continue-on-error: true
+        run: |
+          python data_collection/record_job_run.py --job games \
+            --status ${{ steps.games.outcome == 'success' && 'ok' || (steps.games.outcome == 'skipped' && 'skip' || 'fail') }}
+
+      # --- 2-1. 퓨처스 일정 -------------------------------------------
+      # EC2 는 30분마다 돌렸습니다. 그럴 필요가 없습니다. 화면의 퓨처스
+      # 일정(`/schedule/futures`)은 Worker 가 KBO 스코어보드를 그때그때
+      # 프록시하므로 이 표를 읽지 않습니다. `futures_games` 는 분석용
+      # 창고라서 하루 한 번이면 충분합니다.
+      - name: 퓨처스 일정 적재
+        id: futures
+        continue-on-error: true
+        run: python data_collection/futures_to_d1.py
+
+      - name: 퓨처스 결과 기록
+        if: always()
+        continue-on-error: true
+        run: |
+          python data_collection/record_job_run.py --job futures \
+            --status ${{ steps.futures.outcome == 'success' && 'ok' || 'fail' }}
+
+      # --- 3. KBO 공식 통계 (원래 02:00 KST) --------------------------
+      # Selenium 으로 KBO 사이트를 읽습니다. 러너 IP 가 막히면 여기서
+      # 실패합니다(설계 7장 위험 1).
+      - name: 타자 기록 수집
+        id: scrape_batter
+        continue-on-error: true
+        run: python data_collection/selenium_batter_scraper.py
+
+      - name: 타자 기록 D1 적재
+        id: load_batter
+        if: steps.scrape_batter.outcome == 'success'
+        continue-on-error: true
+        run: |
+          python data_collection/csv_to_d1.py \
+            --table kbo_official_batter_stats \
+            --csv "crawler/save/official_stats/batter_stats_$(TZ=Asia/Seoul date +%Y).csv" \
+            --key player_id,season
+
+      - name: 투수 기록 수집
+        id: scrape_pitcher
+        continue-on-error: true
+        run: python data_collection/selenium_pitcher_scraper.py
+
+      - name: 투수 기록 D1 적재
+        id: load_pitcher
+        if: steps.scrape_pitcher.outcome == 'success'
+        continue-on-error: true
+        run: |
+          python data_collection/csv_to_d1.py \
+            --table kbo_official_pitcher_stats \
+            --csv "crawler/save/official_stats/pitcher_stats_$(TZ=Asia/Seoul date +%Y).csv" \
+            --key player_id,season
+
+      - name: 공식 통계 결과 기록
+        if: always()
+        continue-on-error: true
+        run: |
+          if [ "${{ steps.load_batter.outcome }}" = "success" ] && [ "${{ steps.load_pitcher.outcome }}" = "success" ]; then
+            S=ok
+          else
+            S=fail
+          fi
+          python data_collection/record_job_run.py --job official_stats --status $S \
+            --note "타자 ${{ steps.load_batter.outcome }} / 투수 ${{ steps.load_pitcher.outcome }}"
+
+      # --- 4. 선수 뉴스 -----------------------------------------------
       # Worker 는 구글을 부르지 못하므로 여기서 미리 모아 둡니다.
+      # 선수 목록은 D1 에서 읽습니다(러너에 로컬 DB 가 없습니다).
       #
-      # 선수 목록은 D1 에서 읽습니다. 러너에는 database/kbo_stats.db 가
-      # 없습니다. 127MB 라 git 에 두지 않기 때문입니다. 그래서 이 단계도
-      # Cloudflare 인증이 필요합니다.
-      #
-      # 절반도 못 모으면 스크립트가 SQL 을 쓰지 않고 1 로 끝납니다. 그러면
-      # 다음 적재 단계가 건너뛰어져 기존 D1 내용이 그대로 남습니다.
+      # 러너 IP 를 구글이 걸러 냅니다. 실측이 크게 흔들립니다(같은 날
+      # 40분 사이에 5/5 였다가 0/5). 절반도 못 모으면 스크립트가 SQL 을
+      # 쓰지 않고 1 로 끝나므로, 다음 적재가 건너뛰어지고 D1 은 그대로
+      # 남습니다.
       - name: 선수 뉴스 수집
         id: news
         continue-on-error: true
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: python data_collection/collect_player_news.py --source d1
 
       - name: 선수 뉴스 D1 적재
         id: news_load
         if: steps.news.outcome == 'success'
         continue-on-error: true
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "CLOUDFLARE_API_TOKEN 이 없어 적재를 건너뜁니다."
-            echo "저장소 Settings > Secrets 에 등록하면 이 단계가 동작합니다."
-            exit 1
-          fi
           npx --yes wrangler@4 d1 execute kbo-stats --remote \
             --file=migration/news/news.sql --yes
 
-      - name: 타자 기록 수집
-        id: scrape
+      - name: 뉴스 결과 기록
+        if: always()
         continue-on-error: true
-        run: python data_collection/selenium_batter_scraper.py
+        run: |
+          python data_collection/record_job_run.py --job news \
+            --status ${{ steps.news_load.outcome == 'success' && 'ok' || 'fail' }}
 
+      # --- 5. 캐시 비우기 ---------------------------------------------
+      # 이걸 빠뜨리면 적재해도 최대 한 시간 동안 화면이 어제 숫자를
+      # 보여 줍니다. 2026 시즌을 넣었을 때 실제로 겪은 문제입니다.
+      - name: 캐시 비우기
+        id: purge
+        if: always()
+        continue-on-error: true
+        env:
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+        run: |
+          if [ -z "$ADMIN_TOKEN" ]; then
+            echo "ADMIN_TOKEN 이 없어 캐시를 비우지 못합니다."
+            echo "화면이 최대 한 시간 동안 옛 값을 보여 줍니다."
+            exit 1
+          fi
+          code=$(curl -s -o /tmp/purge.txt -w '%{http_code}' -X POST \
+            "$API_BASE/admin/purge-cache" -H "Authorization: Bearer $ADMIN_TOKEN")
+          cat /tmp/purge.txt; echo
+          test "$code" = "200"
+
+      # --- 6. 결과 요약 ------------------------------------------------
       - name: 산출물 업로드
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: official-stats-output
+          name: daily-output
           path: |
             logs/
             crawler/save/official_stats/
+            log.txt
           if-no-files-found: warn
+          retention-days: 7
 
-      - name: 판정 요약
+      - name: 요약
         if: always()
         run: |
-          echo "## 위험 1 판정" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| 단계 | 결과 |" >> $GITHUB_STEP_SUMMARY
-          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
-          echo "| HTTP 도달 | ${{ steps.http_probe.outcome }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Selenium 도달 | ${{ steps.selenium_probe.outcome }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 구글 뉴스 도달 | ${{ steps.google_probe.outcome }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 선수 뉴스 수집 | ${{ steps.news.outcome }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 선수 뉴스 D1 적재 | ${{ steps.news_load.outcome }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 전체 수집 | ${{ steps.scrape.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## 일일 수집 결과"
+            echo ""
+            echo "| 단계 | 결과 |"
+            echo "|---|---|"
+            echo "| PBP 수집·적재 | ${{ steps.pbp.outcome }} |"
+            echo "| games 적재 | ${{ steps.games.outcome }} |"
+            echo "| 타자 수집 | ${{ steps.scrape_batter.outcome }} |"
+            echo "| 타자 적재 | ${{ steps.load_batter.outcome }} |"
+            echo "| 투수 수집 | ${{ steps.scrape_pitcher.outcome }} |"
+            echo "| 투수 적재 | ${{ steps.load_pitcher.outcome }} |"
+            echo "| 뉴스 수집 | ${{ steps.news.outcome }} |"
+            echo "| 뉴스 적재 | ${{ steps.news_load.outcome }} |"
+            echo "| 캐시 비우기 | ${{ steps.purge.outcome }} |"
+          } >> $GITHUB_STEP_SUMMARY
 
-      # 판정 결과를 실패로 드러내야 로그를 놓치지 않습니다.
-      - name: 판정 실패 시 종료 코드
+      # 실패를 초록색으로 덮지 않습니다. 조용히 멈춘 수집을 몇 주 뒤에
+      # 발견하는 것이 이 이관에서 가장 큰 위험입니다.
+      - name: 실패 판정
         if: always()
         run: |
-          if [ "${{ steps.http_probe.outcome }}" != "success" ]; then
-            echo "HTTP 도달에 실패했습니다. 설계 7장 위험 1 의 사다리 2번(Cloudflare Worker)으로 넘어갑니다."
+          fail=0
+          for s in "${{ steps.pbp.outcome }}" "${{ steps.load_batter.outcome }}" \
+                   "${{ steps.load_pitcher.outcome }}" "${{ steps.purge.outcome }}"; do
+            if [ "$s" != "success" ]; then fail=1; fi
+          done
+          # games 는 경기가 없는 날 건너뛰므로 skipped 를 실패로 보지 않습니다.
+          if [ "${{ steps.games.outcome }}" = "failure" ]; then fail=1; fi
+          # 뉴스는 구글이 러너 IP 를 걸러 내 자주 실패합니다. 데이터가
+          # 사라지는 것이 아니라 갱신이 하루 밀릴 뿐이라 실패로 보지
+          # 않습니다. 요약 표에는 그대로 남습니다.
+          if [ "$fail" = "1" ]; then
+            echo "위 표에서 success 가 아닌 단계를 보십시오."
             exit 1
           fi
-          if [ "${{ steps.selenium_probe.outcome }}" != "success" ]; then
-            echo "HTTP 는 되는데 Selenium 이 실패했습니다. HTTP 직접 호출 전환을 즉시 과제로 올립니다."
-            exit 1
-          fi
-          if [ "${{ steps.scrape.outcome }}" != "success" ]; then
-            echo "프로브는 통과했으나 전체 수집이 실패했습니다. 접근 문제가 아니라 스크래퍼 쪽 문제입니다."
-            exit 1
-          fi
-          echo "세 단계 모두 통과했습니다."
+          echo "모두 통과했습니다."

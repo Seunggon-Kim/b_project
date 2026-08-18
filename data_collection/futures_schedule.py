@@ -185,7 +185,13 @@ def parse_schedule(data, year):
         # 상태: 종료=relay에 REVIEW(리뷰) 링크. 진행 중 경기는 asmx가 0:0으로 표기하므로
         # 스코어 유무로 final 판정하면 안 됨(라이브=빈 relay, 예정=PREVIEW 링크).
         relay = bc.get("relay", "")
-        cancel = "취소" in (relay + stadium)
+        # 취소 사유는 **마지막 셀(비고)** 에 들어옵니다. 끝에서 2번째는
+        # 구장입니다. 예전에는 relay 와 구장만 봐서 취소를 놓쳤고,
+        # 2026-08-05~10 의 폭염취소 30경기가 "예정"으로 남아 화면에
+        # 영영 다가올 경기로 보였습니다. 대시보드에 2주가 비어 보인
+        # 것도 이것 때문입니다.
+        note = _txt(cells[-1].get("Text", "")) if cells else ""
+        cancel = "취소" in (relay + stadium + note)
         if cancel:
             status = "canceled"
         elif "section=REVIEW" in relay:

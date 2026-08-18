@@ -237,6 +237,20 @@ class API {
     static dbCsvUrl(name) {
         return `${API_BASE_URL}/db/table/${encodeURIComponent(name)}/csv`;
     }
+
+    /**
+     * 수집 작업이 마지막으로 언제 돌았는지.
+     *
+     * 예전에는 서버 cron 이 15분마다 다시 쓰던 정적 파일
+     * (`cron_status.json`)을 읽었습니다. 이제 서버가 없고 Pages 는
+     * 정적 호스팅이라 실행 중에 파일을 못 바꿉니다. GitHub Actions 가
+     * D1 에 기록하고 Worker 가 읽어 줍니다.
+     */
+    static async getJobsStatus() {
+        const response = await fetch(`${API_BASE_URL}/jobs/status`, { cache: 'no-store' });
+        if (!response.ok) throw new Error('Failed to fetch jobs status');
+        return await response.json();
+    }
 }
 
 // Export for use in other modules

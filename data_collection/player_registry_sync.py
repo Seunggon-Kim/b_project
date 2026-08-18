@@ -29,6 +29,7 @@ cron (KST 05:40, 스탯·PBP·detector 이후):
 """
 import argparse
 import logging
+import os
 import re
 import sqlite3
 import time
@@ -56,7 +57,12 @@ import player_flags as pf
 CLASSIFY_SEASON = 2026
 
 PROJECT_ROOT = Path(__file__).parent.parent
-DB_PATH = PROJECT_ROOT / "database" / "kbo_stats.db"
+# DB 경로: 환경변수 KBO_DB 우선, 없으면 저장소 기준 상대경로.
+# 러너에는 database/kbo_stats.db 가 없습니다. 226MB 라 git 에 두지
+# 않기 때문입니다. 워크플로가 D1 에서 필요한 표만 받아 임시 SQLite 를
+# 만들고 그 경로를 KBO_DB 로 넘깁니다.
+DB_PATH = Path(os.environ.get("KBO_DB") or
+               (PROJECT_ROOT / "database" / "kbo_stats.db"))
 
 BASE = "https://www.koreabaseball.com"
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

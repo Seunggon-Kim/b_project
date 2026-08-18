@@ -9,10 +9,16 @@
 
 매일 19:30 UTC cron (PBP 18:30 + detector 19:00 후)
 """
+import os
 import sqlite3
 from datetime import date
+from pathlib import Path
 
-DB = "/home/ubuntu/b_project/database/kbo_stats.db"
+# DB 경로: 환경변수 KBO_DB 우선, 없으면 저장소 기준 상대경로.
+# EC2 절대경로(/home/ubuntu/...)는 윈도우와 GitHub Actions 러너에서
+# 동작하지 않습니다. 그 서버는 2026-07-14 에 없어졌습니다.
+DB = os.environ.get("KBO_DB") or str(
+    Path(__file__).resolve().parent.parent / "database" / "kbo_stats.db")
 TODAY = date.today()
 CURR_YEAR = TODAY.year
 

@@ -509,12 +509,15 @@
                     <h3 class="card-title">
                         <span class="material-symbols-outlined h1-icon">schedule</span>자동 수집 스케줄 (Cron)
                     </h3>
-                    <span class="text-muted" style="font-size: 0.875rem;">총 9개 작업</span>
+                    <span class="text-muted" style="font-size: 0.875rem;">총 7개 작업</span>
                 </div>
                 <div class="card-body">
                     <p class="text-secondary mb-2" style="font-size: 0.9rem;">
-                        EC2 서버(crontab)에서 자동 실행되는 수집·집계 모듈과 배포 자동화입니다.
-                        서버는 UTC로 동작하므로 실행 시각은 KST(UTC+9)로 변환해 표기했습니다.
+                        GitHub Actions에서 자동 실행되는 수집·집계 모듈입니다.
+                        Actions는 UTC로 동작하므로 실행 시각은 KST(UTC+9)로 변환해 표기했습니다.
+                        cron은 정각을 피해 잡았습니다. GitHub 문서가 매 시각 정각은 부하로
+                        지연될 수 있다고 안내하기 때문입니다. 실제 실행이 예정보다 수십 분
+                        늦을 수 있습니다.
                     </p>
                     <div class="dbx-cron-wrap">
                         <table class="dbx-cron-table">
@@ -529,83 +532,76 @@
                             <tbody>
                                 <tr>
                                     <td class="dbx-cron-mods">
-                                        selenium_batter_scraper.py <span class="seq">→</span>
-                                        kbo_to_db.py <span class="seq">→</span>
-                                        selenium_pitcher_scraper.py <span class="seq">→</span>
-                                        pitcher_to_db.py <span class="seq">→</span>
-                                        email_notifier.py
+                                        daily_pbp_to_d1.py
+                                        <span class="sub">crawler/pbp.py &rarr; D1</span>
                                     </td>
-                                    <td class="dbx-cron-desc">KBO 공식 타자·투수 통계를 Selenium으로 크롤링해 DB에 UPSERT 저장하고,
-                                        완료되면 수집 결과 요약을 이메일로 발송합니다.</td>
-                                    <td class="dbx-cron-kst" title="크론식(UTC): 0 17 * * *">매일 02:00</td>
-                                    <td class="dbx-cron-upd pending" data-job="official_stats">-</td>
-                                </tr>
-                                <tr>
-                                    <td class="dbx-cron-mods">daily_kbo_pbp.sh
-                                        <span class="sub">crawler/pbp.py</span>
-                                    </td>
-                                    <td class="dbx-cron-desc">어제 경기의 PBP(투구·타석 단위) 데이터를 크롤링해 play_by_play 테이블에 적재합니다.
-                                        같은 날짜는 멱등 재적재됩니다.</td>
-                                    <td class="dbx-cron-kst" title="크론식(UTC): 30 18 * * *">매일 03:30</td>
+                                    <td class="dbx-cron-desc">어제 경기의 PBP(투구·타석 단위) 데이터를 수집해 play_by_play에 적재합니다.
+                                        같은 날짜를 다시 넣어도 결과가 같습니다(날짜 단위로 지우고 넣습니다).</td>
+                                    <td class="dbx-cron-kst" title="크론식(UTC): 33 18 * * *">매일 03:33</td>
                                     <td class="dbx-cron-upd pending" data-job="pbp">-</td>
                                 </tr>
                                 <tr>
-                                    <td class="dbx-cron-mods">daily_player_detector.py</td>
-                                    <td class="dbx-cron-desc">어제 PBP·공식 통계와 players 테이블을 대조해 이적·등번호 변경이 의심되는 선수를
-                                        재크롤링하고, 선수 이력(player_history)을 SCD Type 2로 갱신합니다.</td>
-                                    <td class="dbx-cron-kst" title="크론식(UTC): 0 19 * * *">매일 04:00</td>
-                                    <td class="dbx-cron-upd pending" data-job="player_detector">-</td>
+                                    <td class="dbx-cron-mods">daily_games_to_d1.py</td>
+                                    <td class="dbx-cron-desc">적재된 PBP에서 경기 메타(games)를 도출합니다. 팀 별칭 해석과
+                                        포스트시즌 판정은 games_from_pbp.py 규칙을 그대로 씁니다.</td>
+                                    <td class="dbx-cron-kst" title="PBP 단계 직후">매일 03:33<br>(PBP 직후)</td>
+                                    <td class="dbx-cron-upd pending" data-job="games">-</td>
                                 </tr>
                                 <tr>
-                                    <td class="dbx-cron-mods">daily_cleanup_orphan_stats.py</td>
-                                    <td class="dbx-cron-desc">PBP 기록이 0건인데 공식 통계에만 남아 있는 시범경기·오분류 row를 정리합니다.
-                                        (PBP·변경 감지 작업 이후 실행)</td>
-                                    <td class="dbx-cron-kst" title="크론식(UTC): 30 19 * * *">매일 04:30</td>
-                                    <td class="dbx-cron-upd pending" data-job="cleanup">-</td>
-                                </tr>
-                                <tr>
-                                    <td class="dbx-cron-mods">park_factors/run_pipeline.sh
-                                        <span class="sub">compute_self_park_factors.py → build_wrc_plus.py → build_re24_run_values.py</span>
+                                    <td class="dbx-cron-mods">futures_to_d1.py
+                                        <span class="sub">futures_schedule.py &rarr; D1</span>
                                     </td>
-                                    <td class="dbx-cron-desc">누적 PBP·통계로 자체 파크팩터, wOBA/wRC+, RE24·득점가치 지표를 재계산해
-                                        갱신합니다.</td>
-                                    <td class="dbx-cron-kst" title="크론식(UTC): 0 20 * * *">매일 05:00</td>
-                                    <td class="dbx-cron-upd pending" data-job="park_factors">-</td>
-                                </tr>
-                                <tr>
-                                    <td class="dbx-cron-mods">player_registry_sync.py</td>
-                                    <td class="dbx-cron-desc">KBO 구단별 소속선수 명단(육성 포함)·등록 현황·이동 현황(트레이드,
-                                        등번호 변경, FA, 추가 등록)과 현 시즌 통계·PBP를 대조해 신규 영입 선수를 players에
-                                        등록하고, 이적·등번호 변경을 선수 이력(SCD Type 2)에 반영합니다.</td>
-                                    <td class="dbx-cron-kst" title="크론식(UTC): 40 20 * * *">매일 05:40</td>
-                                    <td class="dbx-cron-upd pending" data-job="registry_sync">-</td>
-                                </tr>
-                                <tr>
-                                    <td class="dbx-cron-mods">futures_schedule.py</td>
-                                    <td class="dbx-cron-desc">KBO 퓨처스리그(2군) 경기 일정·결과를 공식 Schedule.asmx에서 수집해
-                                        futures_games 테이블을 갱신합니다.</td>
-                                    <td class="dbx-cron-kst" title="크론식(UTC): */30 3-14 * * *">매일 12:00~23:30<br>(30분 간격)</td>
+                                    <td class="dbx-cron-desc">퓨처스리그(2군) 일정·결과를 KBO Schedule.asmx에서 수집해 futures_games를
+                                        갱신합니다. 화면의 퓨처스 일정은 실시간 스코어보드를 그때그때 읽으므로 이 표를
+                                        기다리지 않습니다.</td>
+                                    <td class="dbx-cron-kst" title="크론식(UTC): 33 18 * * *">매일 03:33</td>
                                     <td class="dbx-cron-upd pending" data-job="futures">-</td>
+                                </tr>
+                                <tr>
+                                    <td class="dbx-cron-mods">
+                                        selenium_batter_scraper.py <span class="seq">&rarr;</span>
+                                        selenium_pitcher_scraper.py <span class="seq">&rarr;</span>
+                                        csv_to_d1.py
+                                    </td>
+                                    <td class="dbx-cron-desc">KBO 공식 타자·투수 통계를 수집해 kbo_official_*_stats에 갱신 저장합니다
+                                        (있으면 갱신, 없으면 추가).</td>
+                                    <td class="dbx-cron-kst" title="크론식(UTC): 33 18 * * *">매일 03:33</td>
+                                    <td class="dbx-cron-upd pending" data-job="official_stats">-</td>
+                                </tr>
+                                <tr>
+                                    <td class="dbx-cron-mods">collect_player_news.py</td>
+                                    <td class="dbx-cron-desc">선수별 최신 뉴스를 모아 player_news에 적재합니다. 절반도 모으지 못하면
+                                        적재하지 않고 기존 내용을 그대로 둡니다.</td>
+                                    <td class="dbx-cron-kst" title="크론식(UTC): 33 18 * * *">매일 03:33</td>
+                                    <td class="dbx-cron-upd pending" data-job="news">-</td>
+                                </tr>
+                                <tr>
+                                    <td class="dbx-cron-mods">park_factors 파이프라인
+                                        <span class="sub">compute_self_park_factors.py &rarr; build_wrc_plus.py &rarr; build_re24_run_values.py</span>
+                                    </td>
+                                    <td class="dbx-cron-desc">누적 PBP·통계로 자체 파크팩터, wOBA/wRC+, RE24·득점가치를 다시 계산합니다.
+                                        play_by_play 전체를 훑어야 하는 계산이라 주 1회로 둡니다.</td>
+                                    <td class="dbx-cron-kst" title="크론식(UTC): 47 20 * * 1">매주 화 05:47</td>
+                                    <td class="dbx-cron-upd pending" data-job="park_factors">-</td>
                                 </tr>
                                 <tr>
                                     <td class="dbx-cron-mods">player_info_scraper.py</td>
                                     <td class="dbx-cron-desc">기존 player_id 기준으로 선수 상세 프로필을 전체 재수집합니다.
                                         (월 1회 전체 보정)</td>
-                                    <td class="dbx-cron-kst" title="크론식(UTC): 0 4 1 * *">매월 1일 13:00</td>
+                                    <td class="dbx-cron-kst" title="크론식(UTC): 13 4 1 * *">매월 1일 13:13</td>
                                     <td class="dbx-cron-upd pending" data-job="player_info">-</td>
-                                </tr>
-                                <tr>
-                                    <td class="dbx-cron-mods">auto_deploy_poll.sh
-                                        <span class="sub">deploy.sh (fetch → reset → restart → health)</span>
-                                    </td>
-                                    <td class="dbx-cron-desc">GitHub main에 새 커밋이 감지되면 최신 코드를 서버에 자동 반영합니다.
-                                        교체 후 API를 재시작하고 헬스체크하며, 실패 시 직전 상태로 자동 롤백합니다.</td>
-                                    <td class="dbx-cron-kst" title="크론식: */3 * * * *">3분마다</td>
-                                    <td class="dbx-cron-upd pending" data-job="auto_deploy">-</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
+                    <p class="text-secondary mt-2" style="font-size: 0.85rem;">
+                        아직 자동으로 돌지 않는 작업이 있습니다.
+                        <strong>daily_player_detector.py</strong>(이적·등번호 변경 감지),
+                        <strong>daily_cleanup_orphan_stats.py</strong>(PBP 없는 통계 행 정리),
+                        <strong>player_registry_sync.py</strong>(구단 등록 명단 대조)는
+                        스크립트로 남아 있지만 사람이 직접 돌려야 합니다.
+                        서버 자동 배포(auto_deploy)는 Pages·Workers 배포로 대체되어 없어졌습니다.
+                    </p>
                 </div>
             </div>
         </section>
@@ -854,24 +850,33 @@
         }
 
         // 자동 수집 스케줄: 작업별 '마지막 업데이트 시간' 채우기
-        // (cron_status.json은 서버 cron이 */15분마다 갱신하는 정적 파일)
+        //
+        // 예전에는 서버 cron이 15분마다 다시 쓰던 정적 파일
+        // (cron_status.json)을 읽었습니다. 그 서버는 없어졌고 Pages는
+        // 정적 호스팅이라 실행 중에 파일을 못 바꿉니다. 이제 GitHub
+        // Actions가 D1에 기록하고 Worker가 읽어 줍니다.
         async function loadCronStatus() {
             try {
-                const res = await fetch('../cron_status.json', { cache: 'no-store' });
-                if (!res.ok) return;
-                const data = await res.json();
+                const data = await API.getJobsStatus();
                 const jobs = (data && data.jobs) || {};
+                const details = (data && data.details) || {};
                 document.querySelectorAll('.dbx-cron-upd[data-job]').forEach(td => {
-                    const v = jobs[td.getAttribute('data-job')];
+                    const key = td.getAttribute('data-job');
+                    const v = jobs[key];
                     if (v) {
-                        td.textContent = v;
+                        const st = (details[key] && details[key].status) || 'ok';
+                        // 시각만 보이면 실패한 실행도 성공처럼 보입니다.
+                        td.textContent = st === 'ok' ? v : `${v} (${st === 'fail' ? '실패' : '건너뜀'})`;
                         td.classList.remove('pending');
+                        if (details[key] && details[key].note) {
+                            td.title = details[key].note;
+                        }
                     } else {
                         td.textContent = '기록 없음';
                     }
                 });
             } catch (e) {
-                // 파일이 아직 없거나 파싱 실패 시 기본값(-) 유지
+                // 아직 기록이 없거나 호출 실패 시 기본값(-) 유지
             }
         }
 

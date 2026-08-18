@@ -154,6 +154,15 @@ def run_chunk(start, end, save_root, timeout_sec, tmp_dir):
             cause = tail[-1][:300] if tail else "출력 없음"
         return False, secs, "종료코드 %d :: %s" % (rc, cause)
 
+    # **종료코드 0 이어도 경기를 못 받았을 수 있습니다.** download.py 는
+    # 한 경기가 예외로 실패해도 배치를 멈추지 않고 `failed` 로 셉니다.
+    # 2018-04 에서 네트워크가 끊겼을 때 113경기 중 74경기가 이렇게
+    # 빠졌는데 종료코드는 0 이었습니다. 성공으로 넘기면 그대로 구멍이
+    # 남습니다. 다시 부르면 이미 받은 것은 건너뛰므로 재시도가 쌉니다.
+    m = re.search(r"failed=(\d+)", summary)
+    if m and int(m.group(1)) > 0:
+        return False, secs, "예외로 빠진 경기 %s개 :: %s" % (m.group(1), summary)
+
     return True, secs, summary
 
 
