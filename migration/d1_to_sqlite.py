@@ -60,6 +60,9 @@ PIPELINE_TABLES = [
     "statiz_park_factor",
     "statiz_yearly_constants",
     "self_park_factor",
+    # wOBA 가중치입니다. build_woba_weights.py 가 다시 만들지만,
+    # 만들기 전에 표가 있어야 롤링 백업(_bak)을 뜰 수 있습니다.
+    "kbo_woba_weights_by_season",
     "wrc_plus_comparison",
     "weighted_pf_by_batter_season",
 ]

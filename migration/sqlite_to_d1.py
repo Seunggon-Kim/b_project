@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # 파크팩터 파이프라인이 쓰는 표입니다.
 DERIVED_TABLES = [
     "self_park_factor",
+    "kbo_woba_weights_by_season",
     "wrc_plus_comparison",
     "weighted_pf_by_batter_season",
     "re24_matrix_by_season",
