@@ -22,13 +22,15 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent
+sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(ROOT))
 
 from d1_load import (  # noqa: E402
     build_inserts, d1_columns, refresh_count, run_d1_file,
 )
-
-ROOT = Path(__file__).resolve().parent.parent
+from migration import shard_plan  # noqa: E402
 
 
 def read_csv_rows(path):
@@ -59,6 +61,18 @@ def main():
     year = day[:4]
     print("대상 날짜: %s (KST 기준)" % day)
 
+    # `play_by_play` 는 시즌별 D1 네 개에 나뉘어 있습니다. 공용
+    # DB(kbo-stats)에는 이 표가 없습니다. 예전처럼 공용 DB 에 넣으면
+    # 워커가 읽지 않아 **오류 없이 화면만 어제에 멈춥니다.** 그게 제일
+    # 찾기 어려운 고장이라 배정에 없으면 여기서 멈춥니다.
+    pbp_db = shard_plan.db_of(year)
+    if not pbp_db:
+        print("%s 시즌을 담당하는 D1 이 배정표에 없습니다." % year)
+        print("migration/shard_plan.json 에 시즌을 넣고 D1 을 만든 뒤")
+        print("src/lib/shard.js 사본까지 맞춘 다음 다시 돌리십시오.")
+        return 1
+    print("대상 D1: %s" % pbp_db)
+
     save_dir = ROOT / args.save_dir
     if not args.skip_crawl:
         cmd = [sys.executable, str(ROOT / "crawler" / "pbp.py"),
@@ -87,8 +101,8 @@ def main():
         rows.extend(read_csv_rows(f))
     print("행 %s개" % format(len(rows), ","))
 
-    columns = d1_columns("play_by_play")
-    # pbp_id 는 넣지 않습니다. D1 이 이미 40만 행 넘게 갖고 있어 CSV 의
+    columns = d1_columns("play_by_play", db_name=pbp_db)
+    # pbp_id 는 넣지 않습니다. 샤드가 이미 70만 행 안팎을 갖고 있어 CSV 의
     # 번호와 부딪힙니다. INTEGER PRIMARY KEY 라 빼면 자동으로 붙습니다.
     insert_cols = [c for c in columns if c != "pbp_id"]
     missing = [c for c in insert_cols if c not in (rows[0] or {})]
@@ -119,12 +133,13 @@ def main():
     if not os.environ.get("CLOUDFLARE_API_TOKEN"):
         print("CLOUDFLARE_API_TOKEN 이 없습니다. wrangler 로그인 세션으로 시도합니다.")
 
-    run_d1_file(out)
-    print("D1 적재 완료")
+    run_d1_file(out, db_name=pbp_db)
+    print("D1 적재 완료 (%s)" % pbp_db)
 
     # 행 수 메타를 갱신합니다. 이것을 빠뜨리면 화면이 어제 숫자를
-    # 계속 보여 줍니다(src/lib/counts.js).
-    refresh_count("play_by_play")
+    # 계속 보여 줍니다(src/lib/counts.js). 나뉜 표라서 **샤드마다**
+    # 따로 적어 두고, 화면은 네 값을 더해 보여 줍니다.
+    refresh_count("play_by_play", db_name=pbp_db)
     print("행 수 메타 갱신 완료")
     return 0
 
