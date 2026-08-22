@@ -17,6 +17,40 @@ export const LATEST_TEAM_SQL = `
      WHERE player_id = p.player_id AND player_team IS NOT NULL
   ) ORDER BY season DESC LIMIT 1`;
 
+/** 바깥 `p` 행이 마지막으로 기록을 남긴 시즌입니다. */
+export const LATEST_SEASON_SQL = `
+  SELECT MAX(season) FROM (
+    SELECT season FROM kbo_official_batter_stats WHERE player_id = p.player_id
+    UNION ALL
+    SELECT season FROM kbo_official_pitcher_stats WHERE player_id = p.player_id
+  )`;
+
+/**
+ * 공식 기록이 있는 가장 최근 시즌입니다.
+ *
+ * `is_active` 를 여기에 기대어 계산합니다. `players` 표에는 그 컬럼이
+ * **없습니다.** 원본에는 있었지만 D1 으로 옮길 때 넘어오지 않았습니다
+ * (backfill_player_flags.py 가 만들던 값입니다). 그래서 화면이
+ * `player.is_active` 를 보는 다섯 곳이 전부 undefined 를 받아
+ * **모든 선수를 은퇴 선수로 취급**했습니다. 소속도 등번호도 팀 색도
+ * 나오지 않았습니다.
+ *
+ * 컬럼을 새로 만들지 않는 이유는 team_id 와 같습니다. 아무도 갱신하지
+ * 않는 컬럼은 곧 낡습니다. 그해 공식 기록에 이름이 있으면 현역으로
+ * 봅니다. 매일 적재와 함께 저절로 최신이 됩니다.
+ *
+ * 한계도 적어 둡니다. 로스터에는 있는데 아직 한 경기도 안 뛴 선수는
+ * 비현역으로 잡힙니다. 시즌 초에 그런 선수가 늘어납니다.
+ */
+export async function currentSeason(db) {
+  const row = await db.prepare(
+    'SELECT MAX(s) AS s FROM ('
+    + 'SELECT MAX(season) AS s FROM kbo_official_batter_stats'
+    + ' UNION ALL SELECT MAX(season) FROM kbo_official_pitcher_stats)',
+  ).first();
+  return row && row.s != null ? Number(row.s) : null;
+}
+
 /**
  * 원본 robust_player_lookup (api/main.py:45-55) 입니다.
  *
@@ -51,11 +85,13 @@ export async function playersSearch(request, env) {
   // 상세 페이지와 같은 이유로 소속을 그 시즌 기록에서 가져옵니다.
   // `players.team_id` 는 아무도 채우지 않아 대부분 비어 있습니다.
   // 검색 결과만 '-' 로 남으면 상세 페이지와 어긋나 보입니다.
+  const cur = await currentSeason(env.DB);
   const { results } = await env.DB
     .prepare(
-      `SELECT p.*, COALESCE((${LATEST_TEAM_SQL}), p.team_id) AS team_id
+      `SELECT p.*, COALESCE((${LATEST_TEAM_SQL}), p.team_id) AS team_id,
+              CASE WHEN (${LATEST_SEASON_SQL}) >= ? THEN 1 ELSE 0 END AS is_active
        FROM players p WHERE p.player_name LIKE ? LIMIT 50`)
-    .bind(`%${q}%`)
+    .bind(cur == null ? 9999 : cur, `%${q}%`)
     .all();
   return json({ players: results });
 }
@@ -96,12 +132,23 @@ export async function playerDetail(request, env, ctx, params) {
   // 그 시즌 기록 행에는 player_team 이 있습니다. 가장 최근 시즌 것을
   // 씁니다. 현역은 올해 소속이 되고 은퇴 선수는 마지막 소속이 됩니다.
   // 리더보드·기록실과 같은 규칙입니다(routes/leaders.js, routes/stats.js).
+  const cur = await currentSeason(db);
   return json({
     ...player,
     team_id: latestTeam(batter.results, pitcher.results) || player.team_id,
+    is_active: isActive(batter.results, pitcher.results, cur) ? 1 : 0,
     batter_seasons: batter.results,
     pitcher_seasons: pitcher.results,
   });
+}
+
+/** 가장 최근 시즌에 기록이 있으면 현역으로 봅니다. */
+export function isActive(batterRows, pitcherRows, current) {
+  if (current == null) return false;
+  for (const r of [...(batterRows || []), ...(pitcherRows || [])]) {
+    if (r && Number(r.season) >= Number(current)) return true;
+  }
+  return false;
 }
 
 /** 시즌 기록 가운데 가장 최근 시즌의 소속입니다. 없으면 null 입니다. */

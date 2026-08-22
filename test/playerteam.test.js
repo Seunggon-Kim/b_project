@@ -12,7 +12,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
-import { latestTeam } from '../src/routes/players.js';
+import { latestTeam, isActive } from '../src/routes/players.js';
 
 test('선수 상세가 시즌 기록에서 소속을 채웁니다', () => {
   const src = readFileSync('src/routes/players.js', 'utf8');
@@ -65,4 +65,46 @@ test('시즌이 문자열로 와도 숫자로 비교합니다', () => {
 test('기록이 없으면 null 입니다', () => {
   assert.equal(latestTeam([], []), null);
   assert.equal(latestTeam(null, undefined), null);
+});
+
+// --- is_active ---------------------------------------------------------
+//
+// `players` 표에 `is_active` 컬럼이 없습니다. 원본에는 있었는데 D1 으로
+// 옮길 때 넘어오지 않았습니다. 화면은 다섯 곳에서 이 값을 보는데 전부
+// undefined 를 받아 **모든 선수를 은퇴 선수로 취급**했습니다. 소속도
+// 등번호도 팀 색도 안 나왔습니다. 컬럼이 없다는 것만으로는 아무 데서도
+// 오류가 나지 않아, 화면을 직접 보기 전에는 알 수 없었습니다.
+
+test('가장 최근 시즌에 기록이 있으면 현역입니다', () => {
+  assert.equal(isActive([{ season: 2026 }], [], 2026), true);
+  assert.equal(isActive([], [{ season: 2026 }], 2026), true);
+});
+
+test('마지막 기록이 옛 시즌이면 비현역입니다', () => {
+  assert.equal(isActive([{ season: 2021 }], [], 2026), false);
+});
+
+test('타자와 투수 중 한쪽만 최신이어도 현역입니다', () => {
+  assert.equal(isActive([{ season: 2019 }], [{ season: 2026 }], 2026), true);
+});
+
+test('시즌이 문자열이어도 숫자로 비교합니다', () => {
+  assert.equal(isActive([{ season: '2026' }], [], 2026), true);
+  assert.equal(isActive([{ season: '999' }], [], 2026), false);
+});
+
+test('기준 시즌을 모르면 현역이라고 하지 않습니다', () => {
+  // 빈 DB 에서 전원을 현역으로 칠하는 쪽이 더 나쁩니다.
+  assert.equal(isActive([{ season: 2026 }], [], null), false);
+});
+
+test('기록이 없으면 비현역입니다', () => {
+  assert.equal(isActive([], [], 2026), false);
+  assert.equal(isActive(null, undefined, 2026), false);
+});
+
+test('상세와 검색 둘 다 is_active 를 내려줍니다', () => {
+  const src = readFileSync('src/routes/players.js', 'utf8');
+  assert.match(src, /is_active:\s*isActive\(/, '상세가 is_active 를 안 줍니다.');
+  assert.ok(src.includes('AS is_active'), '검색이 is_active 를 안 줍니다.');
 });
