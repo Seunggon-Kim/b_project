@@ -113,8 +113,16 @@ cur.execute("DROP VIEW IF EXISTS v_stadium_pf")
 cur.execute("""CREATE VIEW v_stadium_pf AS SELECT spf.season, spf.stadium AS stadium_full, sd.stadium_id, sd.primary_team,
     spf.run_pf, spf.single_pf, spf.double_pf, spf.triple_pf, spf.hr_pf, spf.slg_pf
     FROM self_park_factor spf LEFT JOIN stadium_dim sd ON spf.stadium = sd.full_name""")
-vb=cur.execute("SELECT sql FROM sqlite_master WHERE name='v_batter_wrc_plus'").fetchone()[0]
-cur.execute("DROP VIEW IF EXISTS v_batter_wrc_plus"); cur.execute(vb.replace("JOIN statiz_park_factor pf","JOIN self_park_factor pf"))
+# v_batter_wrc_plus 는 옛 EC2 DB 에만 있던 편의용 뷰입니다. 정의가 어디에도
+# 남아 있지 않고(덤프·D1·저장소 모두), D1 에는 뷰가 하나도 없으며 화면도
+# 뷰를 읽지 않습니다. 없으면 그냥 넘어갑니다. 예전에는 여기서
+# `None[0]` 로 죽어 commit 전에 전부 되돌아갔습니다.
+_vb=cur.execute("SELECT sql FROM sqlite_master WHERE name='v_batter_wrc_plus'").fetchone()
+if _vb and _vb[0]:
+    cur.execute("DROP VIEW IF EXISTS v_batter_wrc_plus")
+    cur.execute(_vb[0].replace("JOIN statiz_park_factor pf","JOIN self_park_factor pf"))
+else:
+    print("  v_batter_wrc_plus 뷰가 없어 건너뜁니다(정의가 남아 있지 않습니다).")
 con.commit()
 print(f"built wrc={len(wrc_rows)}, weighted_pf={len(wpf_rows)}; team_stadium {latest}<-{src}")
 

@@ -88,6 +88,33 @@ COLUMN_MAPPING = {
 }
 
 
+
+def safe_click(driver, el):
+    """가려진 요소도 눌리게 합니다.
+
+    KBO 사이트 상단 메뉴바(`div.lnb-wrap.fixed`)가 화면에 붙어 있어서,
+    페이지 위쪽에 있는 링크를 그냥 누르면 메뉴바가 클릭을 가로챕니다.
+
+        element click intercepted: <a class="next"> is not clickable
+        at point (1466, 65). Other element would receive the click:
+        <div class="wrapping lnb-wrap fixed">
+
+    실제로 2021 NC 에서 Basic2 로 넘어가는 '다음' 링크가 이렇게 막혀
+    49명 전원의 볼넷·사구·삼진이 통째로 비었습니다. **오류는 로그에만
+    남고 CSV 는 그대로 만들어져** 수집이 끝난 줄 알았습니다.
+
+    가운데로 스크롤해서 눌러 보고, 그래도 막히면 자바스크립트로
+    직접 누릅니다. JS 클릭은 가림막을 통과합니다.
+    """
+    try:
+        driver.execute_script(
+            "arguments[0].scrollIntoView({block:'center'});", el)
+        time.sleep(0.3)
+        el.click()
+        return
+    except Exception:
+        driver.execute_script("arguments[0].click();", el)
+
 def setup_driver():
     """Chrome 드라이버 설정"""
     options = Options()
@@ -220,7 +247,7 @@ def click_next_page(driver, page_num):
             By.CSS_SELECTOR, 
             f"a[id*='btnNo{page_num}']"
         )
-        page_link.click()
+        safe_click(driver, page_link)
         time.sleep(2)
         return True
     except:
@@ -264,7 +291,7 @@ def scrape_basic2_all_pages(driver, team_code):
     # "다음" 링크 클릭
     try:
         next_link = driver.find_element(By.LINK_TEXT, "다음")
-        next_link.click()
+        safe_click(driver, next_link)
         time.sleep(2)
         logging.info(f"    ✅ '다음' 클릭 완료 (Basic2로 이동)")
     except Exception as e:
@@ -307,7 +334,7 @@ def scrape_detail_all_pages(driver, team_code):
     # 세부기록 탭 클릭
     try:
         detail_link = driver.find_element(By.LINK_TEXT, "세부기록")
-        detail_link.click()
+        safe_click(driver, detail_link)
         time.sleep(2)
         logging.info(f"    ✅ '세부기록' 클릭 완료")
     except Exception as e:
