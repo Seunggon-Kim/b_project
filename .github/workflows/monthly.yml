@@ -56,11 +56,19 @@ jobs:
           fi
           npx --yes wrangler@4 d1 info kbo-stats > /dev/null
 
-      # players 만 받습니다. play_by_play 는 이 작업에 필요 없고,
-      # 받으면 읽기 한도만 크게 씁니다.
-      - name: players 내려받기
+      # players 와 공식 기록 두 표만 받습니다. play_by_play 는 이 작업에
+      # 필요 없고, 받으면 읽기 한도만 크게 씁니다.
+      #
+      # **공식 기록 두 표가 있어야 합니다.** player_info_scraper 가 수집
+      # 대상 선수 명단을 거기서 뽑습니다(get_existing_player_ids).
+      # 예전에는 `--tables players` 만 받아서 그 질의가 "no such table" 로
+      # 죽었습니다. meta_job_runs 에 player_info 기록이 한 번도 없는
+      # 이유입니다. 두 표는 합쳐 7천 행 남짓이라 비용은 무시할 수준입니다.
+      - name: players·공식기록 내려받기
         id: pull
-        run: python migration/d1_to_sqlite.py --out "$KBO_DB" --tables players
+        run: |
+          python migration/d1_to_sqlite.py --out "$KBO_DB" \
+            --tables players,kbo_official_batter_stats,kbo_official_pitcher_stats
 
       - name: 선수 프로필 수집
         id: scrape
