@@ -577,13 +577,24 @@ CPU 10ms 안에 KBO 퓨처스 일정 파싱이 끝난다는 가정에 기반합�
 ### 지금 살아 있는 주소
 
 ```
-화면   https://kbo-dashboard-a0g.pages.dev
+화면   https://bstats.pages.dev
 API    https://kbo-api.bstats-baseball.workers.dev
 ```
 
-`kbo-dashboard` 는 이미 쓰이는 이름이라 Cloudflare 가 `-a0g` 를 붙였습니다.
 Worker 와 달리 Pages 는 계정 서브도메인이 아니라 프로젝트 이름이 그대로
-주소이고, 전 세계에서 유일해야 합니다.
+주소이고, 전 세계에서 유일해야 합니다. 처음에 `kbo-dashboard` 로 만들었다가
+그 이름이 이미 남에게 쓰이고 있어 Cloudflare 가 `-a0g` 를 붙였습니다
+(`kbo-dashboard.pages.dev` 는 `kbo-dashboard.co.kr` 로 넘어가는 남의
+사이트입니다).
+
+2026-08-23 에 `bstats` 프로젝트를 새로 만들어 옮겼습니다. 예전
+`bstats.duckdns.org` 와 이름이 이어지고 접미사가 없습니다. 비용은 그대로
+0원입니다. `npm run deploy:pages` 도 새 프로젝트를 가리킵니다.
+
+옛 주소 `kbo-dashboard-a0g.pages.dev` 는 아직 살아 있습니다. 리디렉트를
+걸 방법이 없어(Pages 는 프로젝트 간 리디렉트를 지원하지 않습니다) 그냥
+두었습니다. 정리하려면 그 프로젝트를 지우면 되는데, 그러면 옛 주소는
+안내 없이 죽습니다.
 
 배포는 `npm run deploy` (API) 와 `npm run deploy:pages` (화면) 입니다.
 Pages 쪽은 `--branch main` 이 붙어 있어야 프로덕션 주소로 갑니다. 없으면
