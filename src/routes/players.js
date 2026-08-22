@@ -3,6 +3,21 @@ import { queryInt } from '../lib/router.js';
 import { shardOf, seasonDateRange } from '../lib/shard.js';
 
 /**
+ * 바깥 `p` 행의 가장 최근 시즌 소속을 뽑는 조각입니다.
+ *
+ * 타자와 투수를 합쳐서 시즌이 가장 큰 것을 고릅니다. 한쪽만 보면
+ * 두 가지를 다 한 선수의 소속이 엉뚱한 해로 잡힙니다.
+ */
+export const LATEST_TEAM_SQL = `
+  SELECT player_team FROM (
+    SELECT season, player_team FROM kbo_official_batter_stats
+     WHERE player_id = p.player_id AND player_team IS NOT NULL
+    UNION ALL
+    SELECT season, player_team FROM kbo_official_pitcher_stats
+     WHERE player_id = p.player_id AND player_team IS NOT NULL
+  ) ORDER BY season DESC LIMIT 1`;
+
+/**
  * 원본 robust_player_lookup (api/main.py:45-55) 입니다.
  *
  * players.player_id 에 문자열과 정수가 섞여 있어, 문자열로 먼저 찾고
@@ -33,8 +48,13 @@ export async function playersSearch(request, env) {
       }],
     }, 422);
   }
+  // 상세 페이지와 같은 이유로 소속을 그 시즌 기록에서 가져옵니다.
+  // `players.team_id` 는 아무도 채우지 않아 대부분 비어 있습니다.
+  // 검색 결과만 '-' 로 남으면 상세 페이지와 어긋나 보입니다.
   const { results } = await env.DB
-    .prepare('SELECT * FROM players WHERE player_name LIKE ? LIMIT 50')
+    .prepare(
+      `SELECT p.*, COALESCE((${LATEST_TEAM_SQL}), p.team_id) AS team_id
+       FROM players p WHERE p.player_name LIKE ? LIMIT 50`)
     .bind(`%${q}%`)
     .all();
   return json({ players: results });
@@ -67,11 +87,31 @@ export async function playerDetail(request, env, ctx, params) {
     + 'FROM kbo_official_pitcher_stats WHERE player_id = ? ORDER BY season DESC',
   ).bind(dbPid).all();
 
+  // `players.team_id` 는 **아무 작업도 채우지 않는 컬럼**입니다.
+  // player_info_scraper 의 INSERT 문에 team_id 가 없어서, 새로 넣은
+  // 선수는 전부 비어 있습니다(1,745명 중 1,160명). 화면에 소속이
+  // '-' 로 나옵니다. 있는 값도 최초 적재 이후 갱신되지 않아 낡았습니다
+  // (강백호가 한화인데 KT 로 남아 있었습니다).
+  //
+  // 그 시즌 기록 행에는 player_team 이 있습니다. 가장 최근 시즌 것을
+  // 씁니다. 현역은 올해 소속이 되고 은퇴 선수는 마지막 소속이 됩니다.
+  // 리더보드·기록실과 같은 규칙입니다(routes/leaders.js, routes/stats.js).
   return json({
     ...player,
+    team_id: latestTeam(batter.results, pitcher.results) || player.team_id,
     batter_seasons: batter.results,
     pitcher_seasons: pitcher.results,
   });
+}
+
+/** 시즌 기록 가운데 가장 최근 시즌의 소속입니다. 없으면 null 입니다. */
+export function latestTeam(batterRows, pitcherRows) {
+  let best = null;
+  for (const r of [...(batterRows || []), ...(pitcherRows || [])]) {
+    if (!r || !r.player_team) continue;
+    if (!best || Number(r.season) > Number(best.season)) best = r;
+  }
+  return best ? best.player_team : null;
 }
 
 /**
