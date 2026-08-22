@@ -12,10 +12,25 @@ git 에 두지 않기 때문입니다. 그래서 수집한 값을 로컬 SQLite 
 않고 바로 D1 에 넣습니다.
 """
 import json
+import os
 import subprocess
 import sys
 
 DB_NAME = "kbo-stats"
+
+# subprocess 에 **리스트**를 주면서 shell=True 를 켜면 두 플랫폼이 다르게
+# 동작합니다. 윈도우는 리스트를 이어붙여 실행하지만, POSIX 는 첫 항목만
+# 실행하고 나머지를 $0, $1... 로 넘깁니다. 러너(우분투)에서는 `npx` 만
+# 돌고 끝났습니다.
+#
+# **오류도 안 보였습니다.** 0.x초 만에 실패하고, 워크플로 단계가
+# continue-on-error 라 초록 체크로 표시됐습니다. 그래서 "성공했는데
+# 데이터가 안 들어온" 상태로 보였습니다. 로컬(윈도우) 수동 실행은
+# 멀쩡히 되니 더 찾기 어려웠습니다.
+#
+# 윈도우에서는 `npx` 가 실제로 `npx.cmd` 라 shell 없이는 찾지 못합니다.
+# 그래서 플랫폼을 보고 켭니다.
+USE_SHELL = os.name == "nt"
 
 # D1 문 하나의 상한은 100,000 바이트입니다. 여유를 두고 자릅니다.
 MAX_STATEMENT_BYTES = 90_000
@@ -116,7 +131,7 @@ def run_d1(sql, json_out=False, db_name=DB_NAME):
            "--remote", "--command", sql, "--yes"]
     if json_out:
         cmd.append("--json")
-    r = subprocess.run(cmd, capture_output=True, text=True, shell=True,
+    r = subprocess.run(cmd, capture_output=True, text=True, shell=USE_SHELL,
                        encoding="utf-8", errors="replace")
     if r.returncode != 0:
         raise RuntimeError("wrangler 실패: %s" % (r.stderr or r.stdout)[:400])
@@ -126,7 +141,7 @@ def run_d1(sql, json_out=False, db_name=DB_NAME):
 def run_d1_file(path, db_name=DB_NAME):
     cmd = ["npx", "--yes", "wrangler@4", "d1", "execute", db_name,
            "--remote", "--file", str(path), "--yes"]
-    r = subprocess.run(cmd, capture_output=True, text=True, shell=True,
+    r = subprocess.run(cmd, capture_output=True, text=True, shell=USE_SHELL,
                        encoding="utf-8", errors="replace")
     if r.returncode != 0:
         raise RuntimeError("wrangler 실패: %s" % (r.stderr or r.stdout)[:400])

@@ -37,6 +37,11 @@ from migration import shard_plan  # noqa: E402
 
 DB_NAME = "kbo-stats"
 
+# 리스트 + shell=True 는 윈도우와 POSIX 가 다르게 동작합니다. POSIX 는
+# 첫 항목만 실행하고 나머지를 버려서, 러너에서는 `npx` 만 돌고 끝납니다.
+# 자세한 사정은 data_collection/d1_load.py 의 USE_SHELL 주석에 있습니다.
+USE_SHELL = os.name == "nt"
+
 # 이 표들은 공용 DB 에 없고 시즌별 D1 네 개에 나뉘어 있습니다.
 # 한 곳만 받으면 조용히 1/4 만 계산됩니다.
 SHARDED_TABLES = {"play_by_play"}
@@ -66,7 +71,7 @@ def export_table(table, out_dir, db_name=DB_NAME, tag=None):
     cmd = ["npx", "--yes", "wrangler@4", "d1", "export", db_name,
            "--remote", "--table", table, "--output", str(dst)]
     t0 = time.time()
-    r = subprocess.run(cmd, capture_output=True, text=True, shell=True,
+    r = subprocess.run(cmd, capture_output=True, text=True, shell=USE_SHELL,
                        encoding="utf-8", errors="replace")
     if r.returncode != 0:
         raise RuntimeError("%s(%s) 내려받기 실패: %s"
