@@ -86,12 +86,17 @@ export async function statsBatters(request, env) {
       + 'ON CAST(w.batter_ID AS TEXT) = b.player_id AND w.season = b.season'
     : '';
 
-  const team = teamIdsClause(teamIds, 'p.team_id');
+  // 팀과 이름은 그 시즌 기록 행의 값을 먼저 씁니다. `players` 는 지금
+  // 명단이라 2016 기록에 2026 소속이 붙습니다. 은퇴 선수는 빈칸입니다.
+  // 올해도 시즌 중 트레이드된 선수는 두 값이 어긋납니다.
+  const TEAM = 'COALESCE(b.player_team, p.team_id)';
+  const team = teamIdsClause(teamIds, TEAM);
   const sql = `
-    SELECT b.*, p.player_name, p.team_id, p.position,
+    SELECT b.*, COALESCE(p.player_name, b.player_name) AS player_name,
+           ${TEAM} AS team_id, p.position,
            b.on_base_plus_slugging as ops${wrcSelect}
     FROM kbo_official_batter_stats b
-    JOIN players p ON b.player_id = p.player_id${wrcJoin}
+    LEFT JOIN players p ON b.player_id = p.player_id${wrcJoin}
     WHERE b.season = ? AND b.plate_appearance >= ?${team.sql}
     ORDER BY b.batting_average DESC LIMIT ?`;
 
@@ -115,12 +120,15 @@ export async function statsPitchers(request, env) {
   const minIp = queryInt(url, 'min_ip', 0);
   const teamIds = url.searchParams.get('team_ids');
 
-  const team = teamIdsClause(teamIds, 'p.team_id');
+  // 타자 쪽과 같은 이유입니다. statsBatters 주석을 보십시오.
+  const TEAM = 'COALESCE(ps.player_team, p.team_id)';
+  const team = teamIdsClause(teamIds, TEAM);
   const sql = `
-    SELECT ps.*, p.player_name, p.team_id,
+    SELECT ps.*, COALESCE(p.player_name, ps.player_name) AS player_name,
+           ${TEAM} AS team_id,
            ps.walks_plus_hits_per_inning_pitched as whip
     FROM kbo_official_pitcher_stats ps
-    JOIN players p ON ps.player_id = p.player_id
+    LEFT JOIN players p ON ps.player_id = p.player_id
     WHERE ps.season = ? AND CAST(ps.innings_pitched AS REAL) >= ?${team.sql}
     ORDER BY ps.earned_run_average ASC LIMIT ?`;
 

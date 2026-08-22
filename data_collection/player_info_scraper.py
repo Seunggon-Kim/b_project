@@ -298,28 +298,44 @@ def scrape_player_info(driver, player_id):
         return None
 
 
-def get_existing_player_ids():
-    """DB에서 최신 시즌 통계에 등장한 player_id 목록 가져오기 (시즌 자동 감지)"""
+def get_existing_player_ids(all_seasons=False):
+    """공식 기록에 등장한 player_id 목록을 가져옵니다.
+
+    기본값은 최신 시즌입니다(시즌 자동 감지 — 하드코딩하면 새 시즌
+    신규 선수가 영구 누락됩니다). 월간 워크플로가 이 기본값을 씁니다.
+    매달 12시즌을 다시 훑을 이유가 없습니다.
+
+    all_seasons 는 지난 시즌을 백필할 때만 씁니다. 리더보드와 기록실이
+    `players` 와 **이너 조인**이라, 옛 선수가 이 표에 없으면 그 시즌
+    표에서 행이 통째로 사라집니다. 2016 리더보드가 "그해 상위 5명"이
+    아니라 "지금도 명단에 남은 사람 중 상위 5명"이 됩니다. 비어 있는
+    것보다 나쁩니다. 틀렸는데 맞아 보입니다.
+    """
     conn = sqlite3.connect(DB_PATH)
 
-    # 최신 시즌 자동 감지 (하드코딩 시 새 시즌 신규 선수가 영구 누락됨)
-    season_df = pd.read_sql_query(
-        "SELECT MAX(s) AS s FROM ("
-        "SELECT MAX(season) AS s FROM kbo_official_batter_stats "
-        "UNION ALL SELECT MAX(season) FROM kbo_official_pitcher_stats)", conn)
-    season = int(season_df['s'][0])
+    if all_seasons:
+        where = ""
+        scope = "전 시즌"
+    else:
+        # 최신 시즌 자동 감지
+        season_df = pd.read_sql_query(
+            "SELECT MAX(s) AS s FROM ("
+            "SELECT MAX(season) AS s FROM kbo_official_batter_stats "
+            "UNION ALL SELECT MAX(season) FROM kbo_official_pitcher_stats)", conn)
+        season = int(season_df['s'][0])
+        where = f" WHERE season = {season}"
+        scope = f"{season} 시즌"
 
-    query_batter = f"SELECT DISTINCT player_id FROM kbo_official_batter_stats WHERE season = {season}"
-    df_batter = pd.read_sql_query(query_batter, conn)
+    df_batter = pd.read_sql_query(
+        f"SELECT DISTINCT player_id FROM kbo_official_batter_stats{where}", conn)
+    df_pitcher = pd.read_sql_query(
+        f"SELECT DISTINCT player_id FROM kbo_official_pitcher_stats{where}", conn)
 
-    query_pitcher = f"SELECT DISTINCT player_id FROM kbo_official_pitcher_stats WHERE season = {season}"
-    df_pitcher = pd.read_sql_query(query_pitcher, conn)
-    
     conn.close()
-    
+
     # 중복 제거하여 합치기
     all_ids = set(df_batter['player_id'].tolist() + df_pitcher['player_id'].tolist())
-    return sorted(list(all_ids))
+    return sorted(list(all_ids)), scope
 
 
 _FLAG_COLS_CACHE = None
@@ -402,15 +418,22 @@ def save_to_db(player_data_list):
 
 def main():
     """메인 실행 함수"""
+    import argparse
+    ap = argparse.ArgumentParser(description='KBO 선수 상세 정보 크롤러')
+    ap.add_argument('--all-seasons', action='store_true',
+                    help='최신 시즌뿐 아니라 공식 기록에 있는 모든 시즌의 '
+                         '선수를 대상으로 합니다 (지난 시즌 백필용)')
+    args = ap.parse_args()
+
     logger.info("=" * 60)
     logger.info("🏃 KBO 선수 상세 정보 크롤링 시작")
     logger.info("=" * 60)
-    
-    # 기존 player_id 목록 가져오기 (2025 시즌)
-    all_player_ids = get_existing_player_ids()
-    
-    logger.info(f"📋 전체 선수: {len(all_player_ids)}명 (2025 시즌)")
-    
+
+    all_player_ids, scope = get_existing_player_ids(
+        all_seasons=args.all_seasons)
+
+    logger.info(f"📋 전체 선수: {len(all_player_ids)}명 ({scope})")
+
     if not all_player_ids:
         logger.warning("⚠️ player_id가 없습니다. 먼저 타자/투수 통계를 수집하세요.")
         return

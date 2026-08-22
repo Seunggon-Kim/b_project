@@ -164,10 +164,17 @@ export async function leaders(request, env) {
     // 동점자 순서는 원본과 같이 SQL(ORDER BY ... DESC LIMIT 5)이 준 순서를
     // 그대로 씁니다. JS 에서 다시 정렬하지 않습니다.
     // (orderCol 은 아래 네 호출의 고정 컬럼명만 들어옵니다. 외부 입력이 아닙니다.)
+    // 팀과 이름은 그 시즌 기록 행에서 먼저 가져옵니다. `players` 는 지금
+    // 명단이라 2016 리더보드에 2026 소속이 붙고, 은퇴 선수는 팀이
+    // 빈칸이 됩니다. 조인도 LEFT 로 둡니다. 이너로 두면 명단에 없는
+    // 선수가 순위에서 통째로 빠져 **"그해 상위 5명"이 아니라 "지금도
+    // 명단에 남은 사람 중 상위 5명"** 이 됩니다. 비어 있는 것보다
+    // 나쁩니다. 틀렸는데 맞아 보입니다.
     const batterTop = async (orderCol) => {
       const { results } = await env.DB.prepare(
-        'SELECT p.player_id AS player_id, p.player_name AS name, p.team_id AS team, b.' + orderCol + ' AS val '
-        + 'FROM kbo_official_batter_stats b JOIN players p ON b.player_id=p.player_id '
+        'SELECT b.player_id AS player_id, COALESCE(p.player_name, b.player_name) AS name, '
+        + 'COALESCE(b.player_team, p.team_id) AS team, b.' + orderCol + ' AS val '
+        + 'FROM kbo_official_batter_stats b LEFT JOIN players p ON b.player_id=p.player_id '
         + 'WHERE b.season=? AND b.plate_appearance >= ? '
         + 'ORDER BY b.' + orderCol + ' DESC LIMIT 5',
       ).bind(season, qualPa).all();
@@ -185,15 +192,33 @@ export async function leaders(request, env) {
     const slgTop = await batterTop('slugging_percentage');
     const opsTop = await batterTop('on_base_plus_slugging');
 
-    // wRC+ : wrc_plus_comparison(자체 파크팩터 3년 산식, half-PF)에서 직접
-    // Top5 를 뽑습니다. 'wRC+ 강건성' 페이지와 동일 출처입니다.
-    const wrcRows = (await env.DB.prepare(
-      'SELECT p.player_id AS player_id, p.player_name AS name, p.team_id AS team, ROUND(w.wRC_half, 1) AS wrc '
-      + 'FROM wrc_plus_comparison w JOIN players p ON p.player_id = CAST(w.batter_ID AS TEXT) '
-      + 'WHERE w.season=? AND w.PA >= ? '
-      + 'ORDER BY w.wRC_half DESC LIMIT 5',
-    ).bind(season, qualPa).all()).results;
-    const wrcTop = wrcRows.map((d) => ({
+    // wRC+ 와 wOBA 는 wrc_plus_comparison(자체 파크팩터 3년 산식, half-PF)
+    // 에서 직접 Top5 를 뽑습니다. 'wRC+ 강건성' 페이지와 동일 출처입니다.
+    //
+    // 그 표에는 이름도 팀도 없고 `batter_ID` 만 있습니다. 그래서 두 곳을
+    // 더 붙입니다. 그해 공식 기록(b)이 우선이고 지금 명단(p)이 보조입니다.
+    // 둘 다 LEFT 입니다. 이너로 두면 명단에 없는 옛 선수가 순위에서
+    // 사라집니다. 이 표는 2015년부터 있어서 이미 그렇게 새고 있었습니다.
+    // 자릿수는 원본대로 SQL 의 ROUND 가 냅니다. JS 의 toFixed 만 쓰면
+    // 두 번 반올림하는 자리에서 값이 어긋날 수 있습니다. 정렬은 원본과
+    // 같이 반올림 전 값으로 합니다.
+    const wrcTopBy = async (metricCol, digits, alias) => {
+      const { results } = await env.DB.prepare(
+        'SELECT CAST(w.batter_ID AS TEXT) AS player_id, '
+        + 'COALESCE(b.player_name, p.player_name) AS name, '
+        + 'COALESCE(b.player_team, p.team_id) AS team, '
+        + 'ROUND(w.' + metricCol + ', ' + digits + ') AS ' + alias + ' '
+        + 'FROM wrc_plus_comparison w '
+        + 'LEFT JOIN players p ON p.player_id = CAST(w.batter_ID AS TEXT) '
+        + 'LEFT JOIN kbo_official_batter_stats b '
+        + 'ON b.player_id = CAST(w.batter_ID AS TEXT) AND b.season = w.season '
+        + 'WHERE w.season=? AND w.PA >= ? '
+        + 'ORDER BY w.' + metricCol + ' DESC LIMIT 5',
+      ).bind(season, qualPa).all();
+      return results;
+    };
+
+    const wrcTop = (await wrcTopBy('wRC_half', 1, 'wrc')).map((d) => ({
       player_id: d.player_id ?? null,
       name: d.name,
       team: d.team,
@@ -201,14 +226,7 @@ export async function leaders(request, env) {
       value: fmt1(d.wrc),
     }));
 
-    // wOBA : 동일 wrc_plus_comparison 출처, 규정타석 충족자 Top5 입니다.
-    const wobaRows = (await env.DB.prepare(
-      'SELECT p.player_id AS player_id, p.player_name AS name, p.team_id AS team, ROUND(w.wOBA, 3) AS woba '
-      + 'FROM wrc_plus_comparison w JOIN players p ON p.player_id = CAST(w.batter_ID AS TEXT) '
-      + 'WHERE w.season=? AND w.PA >= ? '
-      + 'ORDER BY w.wOBA DESC LIMIT 5',
-    ).bind(season, qualPa).all()).results;
-    const wobaTop = wobaRows.map((d) => ({
+    const wobaTop = (await wrcTopBy('wOBA', 3, 'woba')).map((d) => ({
       player_id: d.player_id ?? null,
       name: d.name,
       team: d.team,
@@ -217,11 +235,13 @@ export async function leaders(request, env) {
     }));
 
     // 투수는 지표마다 정렬 기준이 달라 원본처럼 전 행을 받아 여기서 고릅니다.
+    // 타자 쪽과 같은 이유로 시즌 행의 값을 먼저 쓰고 LEFT 로 조인합니다.
     const pitRows = (await env.DB.prepare(
-      'SELECT p.player_id AS player_id, p.player_name AS name, p.team_id AS team, ps.earned_run_average AS era, '
+      'SELECT ps.player_id AS player_id, COALESCE(p.player_name, ps.player_name) AS name, '
+      + 'COALESCE(ps.player_team, p.team_id) AS team, ps.earned_run_average AS era, '
       + 'ps.innings_pitched AS ip, ps.strikeout AS k, '
       + 'ps.strikeout_per_pa AS kpct, ps.base_on_balls_per_pa AS bbpct '
-      + 'FROM kbo_official_pitcher_stats ps JOIN players p ON ps.player_id=p.player_id '
+      + 'FROM kbo_official_pitcher_stats ps LEFT JOIN players p ON ps.player_id=p.player_id '
       + 'WHERE ps.season=?',
     ).bind(season).all()).results;
 
