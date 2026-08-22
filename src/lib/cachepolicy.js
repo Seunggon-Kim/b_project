@@ -34,10 +34,22 @@ const STATIC_LONG = ['/logo/'];
 // 않습니다.
 const NEVER = ['/admin'];
 
-// 나머지는 수집이 하루 한 번 도므로 한 시간이면 충분합니다.
+// 나머지는 수집이 하루 한 번 도므로 엣지에 한 시간 두면 충분합니다.
 // stale-while-revalidate 를 붙여, 만료 직후 요청은 낡은 값을 즉시 주고
 // 뒤에서 갱신합니다. 사용자가 기다리지 않습니다.
+//
+// **엣지 수명(s-maxage)과 브라우저 수명(max-age)을 따로 둡니다.**
+// 예전에는 `max-age=3600` 하나였습니다. 그러면 브라우저도 한 시간을
+// 들고 있어서, 적재 뒤 `/admin/purge-cache` 를 불러도 사용자 화면은
+// 그대로입니다. 엣지만 비워지고 브라우저 캐시에는 손이 닿지 않습니다.
+// 실제로 선수 소속을 고쳐 배포하고 캐시를 비웠는데도 화면이 옛 값을
+// 보여 줬습니다. 강력 새로고침을 해야 보였습니다.
+//
+// 엣지는 그대로 한 시간입니다. 캐시에 맞으면 Worker 가 실행되지 않아
+// D1 읽기가 0 인 성질은 유지됩니다. 브라우저만 1분으로 줄여, 한 페이지가
+// 한꺼번에 부르는 요청은 묶이되 갱신은 1분 안에 보이게 합니다.
 const DEFAULT_TTL = 3600;
+const BROWSER_TTL = 60;
 const SWR = 86400;
 
 /**
@@ -60,7 +72,8 @@ export function cacheControlFor(pathname) {
       return 'public, max-age=604800';
     }
   }
-  return `public, max-age=${DEFAULT_TTL}, stale-while-revalidate=${SWR}`;
+  return `public, max-age=${BROWSER_TTL}, s-maxage=${DEFAULT_TTL}, `
+    + `stale-while-revalidate=${SWR}`;
 }
 
 /**

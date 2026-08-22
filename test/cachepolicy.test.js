@@ -21,16 +21,27 @@ test('로고는 길게 잡습니다', () => {
   assert.match(cacheControlFor('/logo/LG'), /max-age=604800/);
 });
 
-test('나머지는 한 시간에 stale-while-revalidate 를 붙입니다', () => {
+test('나머지는 엣지 한 시간, 브라우저 1분입니다', () => {
+  // max-age 하나만 쓰면 브라우저도 한 시간을 들고 있어서, 적재 뒤
+  // 캐시를 비워도 사용자 화면이 안 바뀝니다. 실제로 겪었습니다.
   const v = cacheControlFor('/wrc/seasons');
-  assert.match(v, /max-age=3600/);
+  assert.match(v, /(^|[ ,])max-age=60,/);
+  assert.match(v, /s-maxage=3600,/);
   assert.match(v, /stale-while-revalidate=86400/);
+});
+
+test('브라우저 수명이 엣지 수명보다 짧아야 합니다', () => {
+  // 뒤집히면 캐시를 비워도 사용자에게 닿지 않습니다.
+  const v = cacheControlFor('/teams');
+  const browser = Number(/(?:^|[ ,])max-age=(\d+)/.exec(v)[1]);
+  const edge = Number(/s-maxage=(\d+)/.exec(v)[1]);
+  assert.ok(browser < edge, `브라우저 ${browser}초 >= 엣지 ${edge}초`);
 });
 
 test('접두사가 겹치는 다른 경로를 라이브로 오인하지 않습니다', () => {
   // '/games' 는 라이브지만 '/gamesomething' 은 아닙니다.
   assert.match(cacheControlFor('/games'), /max-age=300\b/);
-  assert.match(cacheControlFor('/gameslist'), /max-age=3600/);
+  assert.match(cacheControlFor('/gameslist'), /s-maxage=3600/);
 });
 
 test('200 에만 붙입니다', () => {
@@ -43,7 +54,7 @@ test('200 에만 붙입니다', () => {
 
 test('200 이면 붙입니다', () => {
   const res = withCache(new Response('x', { status: 200 }), '/teams');
-  assert.match(res.headers.get('cache-control'), /max-age=3600/);
+  assert.match(res.headers.get('cache-control'), /s-maxage=3600/);
 });
 
 test('이미 정해 둔 값이 있으면 건드리지 않습니다', () => {
