@@ -211,13 +211,28 @@ jobs:
         run: |
           if [ -z "$ADMIN_TOKEN" ]; then
             echo "ADMIN_TOKEN 이 없어 캐시를 비우지 못합니다."
-            echo "화면이 최대 한 시간 동안 옛 값을 보여 줍니다."
+            echo "화면이 갱신될 때까지 잠시 옛 값을 보여 줍니다."
             exit 1
           fi
           code=$(curl -s -o /tmp/purge.txt -w '%{http_code}' -X POST \
             "$API_BASE/admin/purge-cache" -H "Authorization: Bearer $ADMIN_TOKEN")
           cat /tmp/purge.txt; echo
-          test "$code" = "200"
+          if [ "$code" != "200" ]; then
+            # 401 이 나면 값이 틀린 것인지 잘린 것인지 구분해야 합니다.
+            # **길이만** 찍습니다. 값 자체나 앞자리를 찍으면 공개
+            # 저장소 로그에 시크릿이 남습니다.
+            #
+            # 붙여 넣을 때 앞뒤 공백·줄바꿈이 섞이면 길이가 어긋납니다.
+            # 실제로 한 번 401 로 실패했고, 그때 이 정보가 없어 원인을
+            # 좁히지 못했습니다.
+            echo "HTTP $code"
+            echo "받은 ADMIN_TOKEN 길이: ${#ADMIN_TOKEN}자 (Worker 쪽과 같아야 합니다)"
+            case "$ADMIN_TOKEN" in
+              *[![:print:]]*) echo "경고: 출력 불가 문자가 섞여 있습니다(줄바꿈 등)." ;;
+              " "*|*" ") echo "경고: 앞뒤에 공백이 있습니다." ;;
+            esac
+            exit 1
+          fi
 
       # --- 6. 결과 요약 ------------------------------------------------
       - name: 산출물 업로드
