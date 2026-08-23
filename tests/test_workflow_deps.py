@@ -59,6 +59,7 @@ ENTRYPOINTS = {
         "park_factors/build_wrc_plus.py",
         "park_factors/build_re24_run_values.py",
         "migration/sqlite_to_d1.py",
+        "migration/export_csv.py",
         "data_collection/record_job_run.py",
     ],
     "monthly.yml": [

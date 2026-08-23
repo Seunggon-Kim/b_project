@@ -184,6 +184,12 @@ export async function dbTable(request, env, ctx, params) {
 // 으로 나눠 받는 것이 유일한 방법입니다.
 const CSV_MAX_ROWS = 20000;
 
+// 전량 내려받기를 두는 곳입니다. 태그는 고정이고 자산만 매주 바뀝니다.
+// R2 를 쓰려 했지만 결제수단 등록이 필요해 예산 조건에 걸립니다.
+// 공개 저장소의 Releases 는 무료이고 저장소 용량에도 잡히지 않습니다.
+const DOWNLOAD_URL =
+  'https://github.com/Seunggon-Kim/b_project/releases/tag/data-latest';
+
 // 한 번에 읽어 올 행 수입니다.
 //
 // D1 은 Worker 호출당 쿼리 50개까지만 받습니다. 229,667행을 2,000행씩
@@ -250,7 +256,13 @@ export async function dbTableCsv(request, env, ctx, params) {
       table: tableName,
       rows: total,
       max_rows: CSV_MAX_ROWS,
-      hint: `limit 과 offset 으로 ${parts}번에 나눠 받으십시오.`,
+      // 전량은 미리 만들어 둔 파일로 받는 것이 낫습니다.
+      // 매주 자동으로 갱신됩니다(.github/workflows/weekly.yml).
+      // 136번 나눠 받으라는 안내만 있으면 사실상 못 받습니다.
+      download: DOWNLOAD_URL,
+      download_hint: '전량은 미리 만들어 둔 gzip CSV 로 받으십시오. '
+        + `${tableName} 은 시즌별로 나뉘어 있습니다.`,
+      hint: `여기서 바로 받으려면 limit 과 offset 으로 ${parts}번에 나눠 받으십시오.`,
       example: `/db/table/${tableName}/csv`
         + `?limit=${CSV_MAX_ROWS}&offset=0`,
     }, 413);

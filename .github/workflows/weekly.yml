@@ -98,6 +98,45 @@ jobs:
         if: steps.re24.outcome == 'success'
         run: python migration/sqlite_to_d1.py --db "$KBO_DB"
 
+      # --- CSV 전량 내려받기 ------------------------------------------
+      #
+      # Workers 에서는 큰 표를 통째로 못 보냅니다. 스트림이 **오류 없이
+      # 조용히 끊깁니다.** 그래서 20,000행을 넘으면 413 과 안내를 냅니다.
+      # `play_by_play` 는 136번 나눠 받아야 하는데 쓸 만하지 않습니다.
+      #
+      # 설계 문서는 R2 사전 생성본을 답으로 적었지만 R2 는 결제수단
+      # 등록이 필요해 예산 조건에 걸립니다. 공개 저장소의 Releases 는
+      # 무료이고 자산 하나에 2GB 까지 되며 저장소 용량에도 안 잡힙니다.
+      #
+      # 시즌별로 나눕니다. 한 덩어리 190MB 보다 18MB 짜리 열두 개가
+      # 받기 좋습니다. 태그는 고정이고 자산만 매주 갈아 끼웁니다.
+      - name: CSV 만들기
+        id: csv
+        if: steps.push.outcome == 'success'
+        run: python migration/export_csv.py --out dist/csv
+
+      - name: CSV 를 Releases 에 올리기
+        id: csv_upload
+        if: steps.csv.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          TAG=data-latest
+          # 릴리스가 없으면 만듭니다. 있으면 그대로 두고 자산만 바꿉니다.
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --title "데이터 전량 내려받기" \
+              --notes "매주 자동으로 갱신됩니다. play_by_play 를 시즌별 gzip CSV 로 나눠 두었습니다." \
+              --latest=false
+          fi
+          gh release upload "$TAG" dist/csv/*.csv.gz --clobber
+          gh release edit "$TAG" \
+            --notes "매주 자동으로 갱신됩니다(마지막 갱신 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M') KST).
+
+          \`play_by_play\` 를 시즌별 gzip CSV 로 나눠 두었습니다.
+          나머지 표는 2만 행 미만이라 화면에서 바로 받을 수 있습니다."
+
       - name: 캐시 비우기
         id: purge
         if: steps.push.outcome == 'success'
