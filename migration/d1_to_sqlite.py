@@ -65,6 +65,11 @@ PIPELINE_TABLES = [
     "kbo_woba_weights_by_season",
     "wrc_plus_comparison",
     "weighted_pf_by_batter_season",
+    # RE24 산출물입니다. build_re24_run_values.py 가 다시 만들지만,
+    # 만들기 전에 롤링 백업(_bak)을 뜨느라 표가 먼저 있어야 합니다.
+    # 이것을 빠뜨려 주간 워크플로가 `no such table` 로 죽었습니다.
+    "kbo_run_values_by_season",
+    "re24_matrix_by_season",
 ]
 
 

@@ -133,6 +133,18 @@ def main(write):
 
     cur=con.cursor()
     print("\n=== WRITING ===")
+    # 표가 없으면 만듭니다. 없는 상태에서 바로 백업을 뜨면
+    # `no such table` 로 죽습니다. 주간 워크플로가 실제로 그렇게
+    # 실패했습니다. 러너는 D1 에서 받은 표만 갖고 있는데, 이 두 개가
+    # 내려받기 목록에 없었습니다. 목록에도 넣었지만, 처음 도는
+    # 환경에서도 되도록 여기서도 만듭니다.
+    cur.execute("""CREATE TABLE IF NOT EXISTS kbo_run_values_by_season (
+        season INTEGER, event_type TEXT, rv_mean REAL, n_obs INTEGER,
+        PRIMARY KEY(season, event_type))""")
+    cur.execute("""CREATE TABLE IF NOT EXISTS re24_matrix_by_season (
+        season INTEGER, outs_before INTEGER, base_state INTEGER,
+        re_value REAL, n_obs INTEGER,
+        PRIMARY KEY(season, outs_before, base_state))""")
     for t in ['kbo_run_values_by_season','re24_matrix_by_season']:
         cur.execute('DROP TABLE IF EXISTS "%s%s"'%(t,BACKUP_SUFFIX))
         cur.execute('CREATE TABLE "%s%s" AS SELECT * FROM "%s"'%(t,BACKUP_SUFFIX,t))
