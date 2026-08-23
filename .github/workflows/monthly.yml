@@ -43,10 +43,13 @@ jobs:
         with:
           python-version: '3.11'
 
+      # pandas 는 player_info_scraper.py 가 씁니다. 빠져 있어서 이
+      # 워크플로도 첫 단계에서 죽었습니다(meta_job_runs 에 player_info
+      # 기록이 없는 이유 중 하나입니다).
       - name: 의존성 설치
         run: |
           python -m pip install --upgrade pip
-          pip install selenium webdriver-manager beautifulsoup4 lxml requests
+          pip install selenium webdriver-manager beautifulsoup4 lxml requests pandas
 
       - name: 인증 확인
         run: |
