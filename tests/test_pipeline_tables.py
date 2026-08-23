@@ -122,3 +122,24 @@ def test_주간_워크플로_단계가_앞_단계_성공에_걸려_있습니다(
     for step in ("woba", "wrc", "re24", "push", "csv"):
         assert "steps.%s.outcome == 'success'" % step in s, \
             "steps.%s 성공 조건을 쓰는 단계가 없습니다" % step
+
+
+def test_주간_워크플로가_쓰기_권한을_가집니다():
+    """Releases 업로드에 필요합니다.
+
+    저장소 기본값이 읽기 전용이면 GITHUB_TOKEN 으로 릴리스를 못
+    만듭니다. 실제로 44분을 돌고 마지막 단계에서 이렇게 죽었습니다.
+
+        HTTP 403: Resource not accessible by integration
+
+    워크플로에 명시하면 저장소 기본값과 무관하게 이 워크플로만
+    쓰기를 얻습니다.
+    """
+    import yaml
+    d = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "weekly.yml").read_text(
+            encoding="utf-8"))
+    perms = d.get("permissions") or {}
+    assert perms.get("contents") == "write", (
+        "weekly.yml 에 contents: write 가 없습니다. "
+        "Releases 업로드가 403 으로 실패합니다. 현재: %s" % perms)

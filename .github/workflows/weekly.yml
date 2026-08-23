@@ -27,6 +27,17 @@ concurrency:
   group: weekly-park-factors
   cancel-in-progress: false
 
+# CSV 를 Releases 에 올리려면 쓰기 권한이 필요합니다. 저장소 기본값이
+# 읽기 전용이면 GITHUB_TOKEN 으로 릴리스를 못 만듭니다.
+#
+#   HTTP 403: Resource not accessible by integration
+#   https://api.github.com/repos/.../releases
+#
+# 여기서 명시하면 저장소 기본값이 읽기 전용이어도 이 워크플로만
+# 쓰기를 얻습니다. 필요한 것만 올리고 나머지는 기본값(읽기)입니다.
+permissions:
+  contents: write
+
 env:
   API_BASE: https://kbo-api.bstats-baseball.workers.dev
   KBO_DB: /tmp/kbo_pipeline.db
