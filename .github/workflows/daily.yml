@@ -56,10 +56,13 @@ jobs:
       # 이 의존성이 보이지 않습니다. 그래서 처음부터 빠져 있었고
       # 러너에서만 ModuleNotFoundError 로 죽었습니다. 로컬에는 깔려
       # 있어서 재현도 안 됐습니다.
+      # selenium·webdriver-manager 를 뺐습니다. 공식 기록 수집이 HTTP 로
+      # 바뀌어 브라우저가 필요 없습니다. chromedriver 내려받기가 사라져
+      # 설치도 실행도 빨라집니다.
       - name: 의존성 설치
         run: |
           python -m pip install --upgrade pip
-          pip install selenium webdriver-manager beautifulsoup4 lxml requests pandas tqdm
+          pip install beautifulsoup4 lxml requests pandas tqdm
 
       # 토큰이 없으면 수집만 하고 아무것도 안 남습니다. 시간만 쓰고
       # 끝나므로 먼저 막습니다.
@@ -121,10 +124,15 @@ jobs:
       # --- 3. KBO 공식 통계 (원래 02:00 KST) --------------------------
       # Selenium 으로 KBO 사이트를 읽습니다. 러너 IP 가 막히면 여기서
       # 실패합니다(설계 7장 위험 1).
+      # 브라우저를 걷어냈습니다. Selenium 은 13분을 쓰고, 브라우저에서만
+      # 나는 고장이 있었습니다. 상단 고정 메뉴바가 '다음' 링크를 가려
+      # 2021 NC 49명의 볼넷·사구·삼진이 통째로 빈 적이 있습니다.
+      # HTTP 는 2분이고 좌표도 겹침도 없습니다. 2021 로 대조해
+      # 타자 394명 37컬럼, 투수 308명 51컬럼이 전부 일치했습니다.
       - name: 타자 기록 수집
         id: scrape_batter
         continue-on-error: true
-        run: python data_collection/selenium_batter_scraper.py
+        run: python data_collection/official_stats_http.py --kind batter
 
       - name: 타자 기록 D1 적재
         id: load_batter
@@ -139,7 +147,7 @@ jobs:
       - name: 투수 기록 수집
         id: scrape_pitcher
         continue-on-error: true
-        run: python data_collection/selenium_pitcher_scraper.py
+        run: python data_collection/official_stats_http.py --kind pitcher
 
       - name: 투수 기록 D1 적재
         id: load_pitcher

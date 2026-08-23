@@ -43,8 +43,8 @@ ENTRYPOINTS = {
         "data_collection/daily_pbp_to_d1.py",
         "data_collection/daily_games_to_d1.py",
         "data_collection/futures_to_d1.py",
-        "data_collection/selenium_batter_scraper.py",
-        "data_collection/selenium_pitcher_scraper.py",
+        # 공식 기록은 브라우저 없이 HTTP 로 읽습니다.
+        "data_collection/official_stats_http.py",
         "data_collection/csv_to_d1.py",
         "data_collection/collect_player_news.py",
         "data_collection/record_job_run.py",
