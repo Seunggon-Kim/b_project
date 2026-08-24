@@ -2,6 +2,7 @@ import { json } from '../lib/respond.js';
 import { ttlCache } from '../lib/cache.js';
 import { kstToday } from '../lib/kst.js';
 import { KBO_CODE_TO_TEAM } from './standings.js';
+import { LATEST_TEAM_SQL } from './players.js';
 
 // KBO 경기 일정/결과 (Naver 스포츠 API 프록시).
 //
@@ -220,9 +221,19 @@ async function attachPitcherIds(env, games) {
   if (names.size) {
     hasActive = await playersHasCol(env, 'is_active');
     const list = [...names];
-    const sel = 'SELECT player_id, player_name, team_id, position'
-      + (hasActive ? ', is_active' : '')
-      + ' FROM players WHERE player_name IN ('
+    // 소속은 그 시즌 기록에서 먼저 가져옵니다.
+    //
+    // `players.team_id` 는 아무 작업도 채우지 않는 컬럼이라 1,745명 중
+    // 1,160명이 비어 있습니다. 이 이름+팀 짝짓기가 그 컬럼을 쓰다 보니
+    // **소속이 빈 선수는 링크가 안 걸렸습니다.** 화면에는 그냥 글자로
+    // 나와서 오류처럼 보이지도 않습니다(시라카와·비슬리가 그랬습니다).
+    // 리더보드·기록실·선수 상세는 먼저 고쳤는데 일정 카드가 빠져
+    // 있었습니다.
+    const sel = 'SELECT p.player_id, p.player_name, '
+      + `COALESCE((${LATEST_TEAM_SQL}), p.team_id) AS team_id, `
+      + 'p.position'
+      + (hasActive ? ', p.is_active' : '')
+      + ' FROM players p WHERE p.player_name IN ('
       + list.map(() => '?').join(',') + ')';
     const { results } = await env.DB.prepare(sel).bind(...list).all();
     for (const r of results) {
