@@ -2,6 +2,20 @@ import { json } from '../lib/respond.js';
 import { queryInt } from '../lib/router.js';
 import { pyRound } from './leaders.js';
 
+// K%·BB% 는 저장된 컬럼이 아니라 셀 때마다 계산합니다.
+//
+// `strikeout_per_pa`·`base_on_balls_per_pa` 는 **2025 에만 값이 있고**
+// 나머지 열한 시즌은 전부 NULL 입니다. KBO 기록실이 이 값을 주지 않아
+// 수집기가 채울 수 없습니다. 2025 값은 옛 파이프라인이 남긴 것입니다.
+//
+// 상대타자(TBF)로 나누면 그대로 나옵니다. 2025 저장값과 대조해
+// 확인했습니다(폰세 36.2 vs 36.155, 라일리 30.5 vs 30.465).
+// `ps.*` 뒤에 같은 이름으로 내보내므로 화면은 고칠 것이 없습니다.
+const KPCT = 'CASE WHEN ps.total_batters_faced > 0 '
+  + 'THEN ps.strikeout * 100.0 / ps.total_batters_faced END';
+const BBPCT = 'CASE WHEN ps.total_batters_faced > 0 '
+  + 'THEN ps.base_on_balls * 100.0 / ps.total_batters_faced END';
+
 /** 원본 api/main.py:337-353 입니다. 기록이 있는 시즌 목록을 내림차순으로. */
 export async function statsSeasons(request, env) {
   const { results } = await env.DB.prepare(`
@@ -126,7 +140,9 @@ export async function statsPitchers(request, env) {
   const sql = `
     SELECT ps.*, COALESCE(p.player_name, ps.player_name) AS player_name,
            ${TEAM} AS team_id,
-           ps.walks_plus_hits_per_inning_pitched as whip
+           ps.walks_plus_hits_per_inning_pitched as whip,
+           ${KPCT} AS strikeout_per_pa,
+           ${BBPCT} AS base_on_balls_per_pa
     FROM kbo_official_pitcher_stats ps
     LEFT JOIN players p ON ps.player_id = p.player_id
     WHERE ps.season = ? AND CAST(ps.innings_pitched AS REAL) >= ?${team.sql}

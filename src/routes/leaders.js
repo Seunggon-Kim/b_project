@@ -240,7 +240,22 @@ export async function leaders(request, env) {
       'SELECT ps.player_id AS player_id, COALESCE(p.player_name, ps.player_name) AS name, '
       + 'COALESCE(ps.player_team, p.team_id) AS team, ps.earned_run_average AS era, '
       + 'ps.innings_pitched AS ip, ps.strikeout AS k, '
-      + 'ps.strikeout_per_pa AS kpct, ps.base_on_balls_per_pa AS bbpct '
+      // K%·BB% 는 저장된 컬럼이 아니라 여기서 셉니다.
+      //
+      // `strikeout_per_pa`·`base_on_balls_per_pa` 는 **2025 에만 값이
+      // 있습니다.** 나머지 열한 시즌은 전부 NULL 입니다. KBO 기록실이
+      // 이 값을 주지 않아 수집기가 채울 수 없고(셀레니움 때도 없었습니다),
+      // 2025 값은 옛 파이프라인이 남긴 것입니다. 그래서 K%·BB%·K-BB%
+      // 순위가 2025 말고는 전부 비어 있었습니다.
+      //
+      // 상대타자(TBF)로 나누면 그대로 나옵니다. 2025 저장값과 대조해
+      // 확인했습니다(폰세 36.2 vs 36.155, 라일리 30.5 vs 30.465).
+      // 컬럼을 새로 채우지 않는 이유는 team_id·is_active 와 같습니다.
+      // 아무도 갱신하지 않는 컬럼은 곧 낡습니다.
+      + 'CASE WHEN ps.total_batters_faced > 0 '
+      + 'THEN ps.strikeout * 100.0 / ps.total_batters_faced END AS kpct, '
+      + 'CASE WHEN ps.total_batters_faced > 0 '
+      + 'THEN ps.base_on_balls * 100.0 / ps.total_batters_faced END AS bbpct '
       + 'FROM kbo_official_pitcher_stats ps LEFT JOIN players p ON ps.player_id=p.player_id '
       + 'WHERE ps.season=?',
     ).bind(season).all()).results;
