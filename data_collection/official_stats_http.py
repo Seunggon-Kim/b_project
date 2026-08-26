@@ -20,17 +20,50 @@
 import argparse
 import csv
 import datetime
+import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from kbo_http import fetch_table  # noqa: E402
+from kbo_http import Session, fetch_table  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 SAVE_DIR = ROOT / "crawler" / "save" / "official_stats"
 
+# 지금 열 팀입니다. 사이트에서 목록을 못 읽었을 때만 씁니다.
 TEAM_CODES = ["LG", "HH", "SK", "SS", "NC", "KT", "LT", "HT", "OB", "WO"]
+
+
+def team_codes(season, delay=None):
+    """그 시즌에 실제로 있던 팀 코드입니다.
+
+    **팀 목록을 하드코딩하면 안 됩니다.** 리그는 6팀으로 시작해
+    지금 10팀입니다.
+
+        1982~1985   6팀   (삼미 있음, KT·NC·키움·SK 없음)
+        1986~1990   7팀   (빙그레 합류)
+        1991~2012   8팀   (쌍방울 합류·1999 마지막)
+        2013~2014   9팀   (NC 합류)
+        2015~       10팀  (KT 합류)
+
+    지금 코드로 1982 를 돌리면 삼미(HD) 선수가 통째로 빠지고, 없는
+    팀 네 개를 헛돕니다. 사이트가 시즌마다 맞는 목록을 주므로 그것을
+    읽습니다.
+    """
+    s = Session(delay if delay is not None else 0.3)
+    s.open("HitterBasic/Basic1.aspx")
+    s.post("ddlSeason$ddlSeason", {"ddlSeason$ddlSeason": str(season)})
+    m = re.search(r'ddlTeam_ddlTeam"[^>]*>(.*?)</select>', s.html, re.S)
+    if not m:
+        print("  [경고] %d 팀 목록을 못 읽어 현재 10팀으로 돕니다" % season)
+        return list(TEAM_CODES)
+    codes = [v for v, _ in re.findall(r'value="([^"]*)"[^>]*>([^<]*)<',
+                                      m.group(1)) if v]
+    if not codes:
+        print("  [경고] %d 팀 목록이 비어 현재 10팀으로 돕니다" % season)
+        return list(TEAM_CODES)
+    return codes
 
 # 화면 머리글 -> DB 컬럼. selenium 쪽 COLUMN_MAPPING 과 같은 표입니다.
 BATTER_MAP = {
@@ -102,7 +135,9 @@ def collect(kind, year, delay=None):
     colmap = MAPS[kind]
     out = {}
     unknown = set()
-    for team in TEAM_CODES:
+    codes = team_codes(year, delay)
+    print("  %d 시즌 %d팀: %s" % (year, len(codes), " ".join(codes)))
+    for team in codes:
         for page in PAGES[kind]:
             kw = {} if delay is None else {"delay": delay}
             header, rows = fetch_table(page, year, team, **kw)

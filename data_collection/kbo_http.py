@@ -139,13 +139,26 @@ def fetch_table(page, season, team, delay=DELAY_SEC):
     돌려주는 값은 (헤더, {player_id: [셀...]}) 입니다. 같은 선수가
     두 번 나오면 뒤엣것으로 덮지 않고 처음 것을 지킵니다. 페이지를
     잘못 넘겨 같은 쪽을 두 번 읽어도 조용히 늘어나지 않습니다.
+
+    **시즌·팀 선택은 Basic1 에서만 합니다.** Basic2·Detail 페이지에서
+    시즌을 바꾸면 팀 드롭다운이 갱신되지 않습니다. 1982 를 골라도
+    팀 목록은 현재 10팀 그대로라 삼미(HD) 같은 옛 팀을 고를 수 없고,
+    **조용히 0행이 나옵니다.** 실제로 HD 는 전 시즌 Basic2 가 비었고,
+    2015~2026 에서는 팀이 안 바뀌어 눈에 띄지 않았습니다.
+
+    화면에서도 사람은 Basic1 에서 시작해 '다음' 으로 넘어갑니다.
+    같은 순서를 따릅니다. 선택 상태는 세션 쿠키로 이어집니다.
     """
     s = Session(delay)
-    s.open(page)
+    entry = page.split("/")[0] + "/Basic1.aspx"
+    s.open(entry)
     sel = {"ddlSeason$ddlSeason": str(season), "ddlTeam$ddlTeam": team}
     # 시즌을 바꾸면 팀 선택이 초기화됩니다. 두 번에 나눠 보냅니다.
     s.post("ddlSeason$ddlSeason", {"ddlSeason$ddlSeason": str(season)})
     s.post("ddlTeam$ddlTeam", sel)
+    if page != entry:
+        # 고른 상태 그대로 목표 페이지로 넘어갑니다.
+        s.open(page)
 
     header = s.header()
     data = {}
