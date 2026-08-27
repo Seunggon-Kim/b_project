@@ -45,7 +45,22 @@ export async function dashboardStats(request, env) {
     const pitchers = await one(db,
       'SELECT COUNT(DISTINCT player_id) FROM kbo_official_pitcher_stats');
     const players = await one(db, 'SELECT COUNT(*) FROM players');
-    const teamsCount = await one(db, 'SELECT COUNT(*) FROM teams');
+    // 현재 리그에 있는 팀 수입니다. `teams` 를 그냥 세면 안 됩니다.
+    //
+    // 옛 시즌 경기를 그 시즌 이름으로 담으면서 `teams` 에 SK·넥센을
+    // 더했습니다. games 가 teams 를 FK 로 참조해 그 이름이 표에 없으면
+    // 적재가 통째로 막힙니다. 그래서 표에는 12팀이 있지만 지금 리그는
+    // 10팀입니다.
+    //
+    // `franchises` 가 활동 기간을 압니다. 아직 끝나지 않은(last_season
+    // 이 NULL 인) 프랜차이즈를 셉니다. 표가 없는 예전 스냅샷에서도
+    // 동작하도록 실패하면 teams 로 물러섭니다.
+    // one() 은 표가 없으면 0 을 돌려줍니다(null 이 아닙니다).
+    let teamsCount = await one(db,
+      'SELECT COUNT(*) FROM franchises WHERE last_season IS NULL');
+    if (!teamsCount) {
+      teamsCount = await one(db, 'SELECT COUNT(*) FROM teams');
+    }
     // 원본은 문자열 MIN/MAX(substr(...)) 이었습니다. 값이 같도록 문자열로
     // 돌려줍니다. games.season 은 정수라 그대로 쓰면 타입이 달라집니다.
     const sminRow = await one(db,

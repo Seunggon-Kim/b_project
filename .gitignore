@@ -271,3 +271,5 @@ migration/out_*/
 migration/daily_pbp.sql
 migration/daily_games.sql
 migration/upsert_*.sql
+migration/games_upsert.sql
+migration/games_parts/
