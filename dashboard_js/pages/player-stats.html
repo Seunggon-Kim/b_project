@@ -527,9 +527,13 @@
             }
         }
 
-        function onSeasonChange() {
+        async function onSeasonChange() {
             // 시즌 변경 시 규정타석/규정이닝 라벨을 갱신(선택 상태는 유지)하고 데이터 재조회
             updateQualOptionLabels();
+            // 팀 목록도 다시 받습니다. 리그는 6팀으로 시작해 지금 10팀이라
+            // 시즌마다 구성이 다릅니다. 1982 에는 삼미·MBC 가 있고 KT·NC·
+            // 키움이 없습니다. 이걸 안 하면 없는 팀으로 거르게 됩니다.
+            await loadTeams();
             refreshStats();
         }
 
@@ -568,7 +572,7 @@
 
         async function loadTeams() {
             try {
-                const data = await API.getTeams();
+                const data = await API.getTeams(getSelectedSeason());
                 const container = document.getElementById('team-checkboxes');
                 if (data.teams) {
                     container.innerHTML = data.teams.map(team => `

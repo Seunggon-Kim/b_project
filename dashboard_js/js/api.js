@@ -20,9 +20,13 @@ class API {
     /**
      * Fetch teams list
      */
-    static async getTeams() {
+    // season 을 주면 그 시즌에 실제로 있던 팀을 받습니다. 안 주면
+    // 예전처럼 현재 10팀입니다. 1982 에는 삼미·MBC 가 있고 KT·NC·
+    // 키움이 없어, 시즌을 안 넘기면 있지도 않은 팀으로 거르게 됩니다.
+    static async getTeams(season) {
         try {
-            const response = await fetch(`${API_BASE_URL}/teams`);
+            const q = season ? `?season=${encodeURIComponent(season)}` : '';
+            const response = await fetch(`${API_BASE_URL}/teams${q}`);
             if (!response.ok) throw new Error('Failed to fetch teams');
             return await response.json();
         } catch (error) {
