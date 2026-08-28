@@ -23,7 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from d1_load import build_upserts, query, refresh_count, run_d1_file  # noqa: E402
-from games_from_pbp import PLAYOFF_START, derive_games  # noqa: E402
+from games_from_pbp import derive_games  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -74,12 +74,9 @@ def main():
     year = day[:4]
     print("대상 날짜: %s (KST 기준)" % day)
 
-    # **포스트시즌 컷오프가 없는 시즌은 10월부터 오분류됩니다.**
-    # 조용히 "정규시즌"으로 넣으면 나중에 찾기 어렵습니다.
-    if str(year) not in PLAYOFF_START and int(day[4:6]) >= 10:
-        print("%s 시즌의 포스트시즌 시작일이 PLAYOFF_START 에 없습니다." % year)
-        print("games_from_pbp.py 와 load_year_pbp.py 두 곳에 넣은 뒤 다시 돌리십시오.")
-        return 1
+    # 여기에 시즌별 포스트시즌 시작일이 등록됐는지 확인하는 관문이
+    # 있었습니다. 값이 없으면 10월부터 매일 실패했습니다. 이제는
+    # 경기 ID 로 판정하므로 시즌마다 손볼 값이 없습니다.
 
     save_dir = ROOT / args.save_dir
     csvs = sorted((save_dir / year).glob("%s*.csv" % day)) \

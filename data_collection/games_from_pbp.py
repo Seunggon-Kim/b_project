@@ -11,7 +11,7 @@ gameID·game_date·home_alias·away_alias·score·stadium 이 모두 있으므�
     덮어쓰지 않는다. games 에 없는 gameID 만 새로 채운다.
   - home/away_team_id: PBP alias(크롤러가 현재 팀명으로 채움)를 우선, 옛 코드는 프랜차이즈
     매핑으로 보정. 미해결은 LOG 후 raw alias 적재(검토용).
-  - game_type: game_date >= 해당 시즌 playoff_start 컷오프면 포스트시즌, 아니면 정규시즌.
+  - game_type: gameID 접두어로 판정한다(game_type.py). 날짜 컷오프는 쓰지 않는다.
   - score: gameID 별 score_home/score_away 의 최댓값(최종 누적).
 
 실행: python data_collection/games_from_pbp.py [db_path] [--dry-run]
@@ -20,6 +20,9 @@ import os
 import sqlite3
 import sys
 from collections import Counter
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from game_type import classify, is_skippable  # noqa: E402
 
 DEFAULT_DB = os.path.join(os.path.dirname(__file__), "..", "database", "kbo_stats.db")
 
@@ -36,13 +39,8 @@ FRANCHISE_TO_TEAM_ID = {
     "KT": "KT",
 }
 
-# download.py 의 playoff_start 와 동일 (game_type 판정용 컷오프, MMDD)
-PLAYOFF_START = {
-    "2008": 1008, "2009": 920, "2010": 1005, "2011": 1008, "2012": 1008,
-    "2013": 1008, "2014": 1019, "2015": 1010, "2016": 1021, "2017": 1010,
-    "2018": 1015, "2019": 1003, "2020": 1101, "2021": 1101, "2022": 1013,
-    "2023": 1019, "2024": 1002, "2025": 1005,
-}
+# 포스트시즌 판정은 game_type.classify 가 합니다. 날짜 표를 손으로
+# 관리하던 PLAYOFF_START 는 없앴습니다. 이유는 game_type.py 에 적었습니다.
 
 
 def resolve_team_id(alias, known):
@@ -74,6 +72,16 @@ def derive_games(con, skip_existing=True):
     for gid, gd, halias, aalias, stadium, hs, as_ in raw:
         if gid in existing:
             continue
+        # 올스타전은 팀이 '나눔'·'드림' 이라 teams 에 없습니다. 넣으면
+        # FK 위반으로 그 적재가 통째로 막히고, wrangler 는 진짜 원인을
+        # `D1_RESET_DO` 로 가립니다. 실제로 games 가 30분간 절반이
+        # 된 적이 있습니다.
+        #
+        # 2025 까지는 크롤러의 수집 창(`crawler/download.py` 의
+        # `playoff_start`)이 10월 초에서 끊겨 7월 올스타전이 들어올
+        # 일이 없었습니다. 2026 은 `'1231'` 이라 연말까지 받습니다.
+        if is_skippable(gid):
+            continue
         try:
             gds = str(int(float(gd)))          # YYYYMMDD
         except (ValueError, TypeError):
@@ -81,9 +89,7 @@ def derive_games(con, skip_existing=True):
         if len(gds) < 8:
             continue
         season = int(gds[:4])
-        mmdd = int(gds[4:8])
-        cut = PLAYOFF_START.get(str(season))
-        game_type = "포스트시즌" if (cut is not None and mmdd >= cut) else "정규시즌"
+        game_type = classify(gid)
         home = resolve_team_id(halias, known)
         away = resolve_team_id(aalias, known)
         if home is None:

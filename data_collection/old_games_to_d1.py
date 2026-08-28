@@ -51,6 +51,7 @@ ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 
 from d1_load import build_upserts, d1_columns, query, run_d1_file  # noqa: E402
+from game_type import classify, is_skippable  # noqa: E402
 
 API = "https://api-gw.sports.naver.com/schedule"
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -61,14 +62,12 @@ HEADERS = {"User-Agent": UA, "Referer": "https://m.sports.naver.com/"}
 # 되돌아옵니다.
 FIRST_SEASON = 2008
 
-# 게임 ID 앞 네 자리가 시리즈 코드입니다. 정규시즌은 날짜(20140718)로
-# 시작하고, 포스트시즌과 이벤트 경기는 코드로 시작합니다.
-POSTSEASON_CODES = ("3333", "4444", "5555", "6666", "7777")
-
-# 올스타전입니다. 팀이 '나눔'·'드림' 이라 teams 에 없고, 구단 성적도
-# 아닙니다. `9999` 로 시작합니다. 넣으면 FK 위반으로 그 시즌 적재가
-# 통째로 막힙니다.
-SKIP_CODES = ("9999",)
+# 정규시즌·포스트시즌 판정과 건너뛸 경기는 game_type.py 가 정합니다.
+#
+# 여기에 `POSTSEASON_CODES` 를 따로 두고 있었는데 `6666` 이 들어가
+# 있었습니다. `6666` 은 순위결정전이고 네이버도 `kbo_p`(정규시즌)로
+# 줍니다. 2008~2014 에는 그 코드가 없어 사고는 안 났지만, 그대로
+# 뒀으면 언젠가 타이브레이커를 포스트시즌으로 넣었을 것입니다.
 
 DELAY = 0.25
 
@@ -129,7 +128,7 @@ def collect(season, delay=DELAY):
             print("  %d-%02d 일정 실패: %s" % (season, month, str(e)[:60]))
             continue
         for gid, day in ids:
-            if gid in seen or gid[:4] in SKIP_CODES:
+            if gid in seen or is_skippable(gid):
                 continue
             seen.add(gid)
             try:
@@ -146,10 +145,7 @@ def collect(season, delay=DELAY):
                 "game_id": gid,
                 "game_date": int(day.replace("-", "")),
                 "season": season,
-                # 포스트시즌 판별은 gameID 앞자리가 시리즈 코드인지로
-                # 봅니다(3333=PO, 4444=준PO, 6666=WC, 7777=KS).
-                "game_type": ("포스트시즌" if gid[:4] in POSTSEASON_CODES
-                              else "정규시즌"),
+                "game_type": classify(gid),
                 # 네이버는 현재 이름을 줍니다. 그 시즌 이름으로 바꿉니다.
                 "home_team_id": names.get(home, home),
                 "away_team_id": names.get(away, away),
