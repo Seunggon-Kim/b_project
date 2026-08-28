@@ -157,18 +157,94 @@ async function playersHasCol(env, col) {
  * 원본은 이 안에서 SELECT 를 날리지만, 여기서는 attachPitcherIds 가 미리
  * 한 번에 가져온 행을 이름+팀으로 걸러 씁니다. 결과는 같습니다.
  */
-function resolvePitcherId(byNameTeam, hasActive, name, code) {
-  if (!name || !code) return null;
+function candidatesOf(byNameTeam, hasActive, name, code) {
+  if (!name || !code) return [];
   const teamId = KBO_CODE_TO_TEAM[code];
-  if (!teamId) return null;
+  if (!teamId) return [];
   // 키 구분자는 이름·팀명에 절대 못 들어가는 NUL 문자입니다(공백은 외국인
   // 등록명에 들어갈 수 있어 피합니다).
   let rows = byNameTeam.get(name + '\u0000' + teamId) || [];
   if (hasActive) rows = rows.filter((r) => r.is_active === 1); // 현역만 링크
+  return rows;
+}
+
+/**
+ * `backnums` 는 그 경기 relay 에서 뽑은 이름 -> 등번호 지도입니다.
+ * null 이면 등번호 단계를 건너뜁니다.
+ */
+function resolvePitcherId(byNameTeam, hasActive, name, code, backnums) {
+  const rows = candidatesOf(byNameTeam, hasActive, name, code);
   if (rows.length === 0) return null;
   if (rows.length === 1) return rows[0].player_id;
   const pitchers = rows.filter((r) => (r.position || '') === '투수');
-  return pitchers.length === 1 ? pitchers[0].player_id : null;
+  if (pitchers.length === 1) return pitchers[0].player_id;
+
+  // 여기까지 오면 같은 팀에 같은 이름 투수가 둘 이상입니다.
+  // 2026 기준 두 건입니다.
+  //
+  //     박준영 한화   52731(96번)  56709(68번)
+  //     이승현 삼성   51454(57번)  60146(20번)
+  //
+  // 이름·팀·포지션이 모두 같아 더 좁힐 수 없습니다. 등번호를 보면
+  // 갈립니다. 네이버 relay 의 lineup 이 `backnum` 을 줍니다.
+  const bn = backnums && backnums.get(name);
+  if (bn) {
+    const pool = pitchers.length ? pitchers : rows;
+    const hit = pool.filter((r) => String(r.back_number ?? '') === String(bn));
+    if (hit.length === 1) return hit[0].player_id;
+  }
+  // 그래도 모르면 링크를 걸지 않습니다. 둘 중 하나를 찍으면 절반은
+  // 남의 기록으로 보냅니다. 링크 없는 글자가 낫습니다.
+  return null;
+}
+
+/**
+ * 그 경기에서 (투수 이름 -> 등번호) 를 뽑습니다.
+ *
+ * 두 곳을 봅니다. 순서가 중요합니다.
+ *
+ * **1. `preview`** — 경기 **시작 전에도** 나옵니다. 선발 예고에
+ * `backnum` 과 `pCode` 가 붙어 옵니다.
+ *
+ *     {"name":"박준영","backnum":"96","pCode":"52731","birth":"20030302"}
+ *
+ * `pCode` 는 우리 `player_id` 와 같은 값이지만 여기서는 등번호만
+ * 씁니다. 이름 짝짓기 결과와 교차 검증되는 편이 안전합니다. 네이버가
+ * 우리와 다른 선수를 가리켜도 이름·팀·포지션이 안 맞으면 링크가 안
+ * 걸립니다.
+ *
+ * **2. `relay` 의 lineup** — 경기가 시작된 뒤 실제로 등판한 투수입니다.
+ * 구원 등판은 preview 에 없으므로 이쪽이 필요합니다.
+ * 벤치 명단(`homeEntry`/`awayEntry`)은 `backnum` 이 null 이라 안 봅니다.
+ *
+ * 실패하면 빈 지도입니다. 링크 하나 못 거는 편이 일정 전체가 죽는 것보다
+ * 낫습니다.
+ */
+async function pitcherBacknums(gameId) {
+  const base = 'https://api-gw.sports.naver.com/schedule/games/' + gameId;
+  const map = new Map();
+
+  const [prev, relay] = await Promise.all([
+    kboFetchJson(base + '/preview').catch(() => null),
+    kboFetchJson(base + '/relay?inning=1').catch(() => null),
+  ]);
+
+  // 선발 정보는 `homeStarter.playerInfo` 안에 있습니다. `homeStarter`
+  // 자체에는 상대전적(`currentSeasonStatsOnOpponents`)이 함께 들어 있어
+  // 한 겹 더 들어가야 합니다.
+  const pd = ((prev || {}).result || {}).previewData || {};
+  for (const side of ['homeStarter', 'awayStarter']) {
+    const p = (pd[side] || {}).playerInfo;
+    if (p && p.name && p.backnum) map.set(p.name, String(p.backnum));
+  }
+
+  const rd = ((relay || {}).result || {}).textRelayData || {};
+  for (const side of ['homeLineup', 'awayLineup']) {
+    for (const p of ((rd[side] || {}).pitcher || [])) {
+      if (p && p.name && p.backnum) map.set(p.name, String(p.backnum));
+    }
+  }
+  return map;
 }
 
 // 경기 하나에서 (투수 이름, 팀 코드) 쌍을 뽑습니다. attachPitcherIds 의
@@ -231,7 +307,7 @@ async function attachPitcherIds(env, games) {
     // 있었습니다.
     const sel = 'SELECT p.player_id, p.player_name, '
       + `COALESCE((${LATEST_TEAM_SQL}), p.team_id) AS team_id, `
-      + 'p.position'
+      + 'p.position, p.back_number'
       + (hasActive ? ', p.is_active' : '')
       + ' FROM players p WHERE p.player_name IN ('
       + list.map(() => '?').join(',') + ')';
@@ -244,11 +320,31 @@ async function attachPitcherIds(env, games) {
     }
   }
 
+  // 등번호가 있어야 갈리는 경기만 골라 relay 를 부릅니다.
+  //
+  // **평소에는 추가 호출이 0회입니다.** 오늘 일정 기준 투수 10명 중
+  // 9명이 이름+팀+포지션으로 이미 확정됩니다. 남는 것은 같은 팀에 같은
+  // 이름 투수가 둘인 경우뿐이라 그 경기에서만 한 번 더 부릅니다.
+  const needsBacknum = (g) => Boolean(g.gameId) && pitcherPairsOf(g).some(
+    ([name, code]) => candidatesOf(byNameTeam, hasActive, name, code).length > 1
+      && resolvePitcherId(byNameTeam, hasActive, name, code, null) === null,
+  );
+  const needRelay = games.filter(needsBacknum);
+
+  const backnumsByGame = new Map();
+  if (needRelay.length) {
+    const maps = await Promise.all(needRelay.map((g) => pitcherBacknums(g.gameId)));
+    needRelay.forEach((g, i) => backnumsByGame.set(g.gameId, maps[i]));
+  }
+
   for (const g of games) {
     const home = g.home || {};
     const away = g.away || {};
     const pairs = pitcherPairsOf(g);
-    const id = (i) => resolvePitcherId(byNameTeam, hasActive, pairs[i][0], pairs[i][1]);
+    const bn = backnumsByGame.get(g.gameId) || null;
+    const id = (i) => resolvePitcherId(
+      byNameTeam, hasActive, pairs[i][0], pairs[i][1], bn,
+    );
     away.starterId = id(0);
     home.starterId = id(1);
     away.currentPitcherId = id(2);
