@@ -2316,3 +2316,16 @@ h2 .material-symbols-outlined,
     background: rgba(255, 255, 255, 0.2);
     color: #ffffff;
 }
+
+/* 퓨처스 순위는 북부·남부 두 표입니다. 1군은 한 표라 리그 이름이
+   없지만 여기서는 어느 리그인지 밝혀야 합니다. */
+.fut-league + .fut-league {
+    border-top: 1px solid var(--border-color);
+}
+
+.fut-league-name {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    padding: 0.6rem 1rem 0.2rem;
+}

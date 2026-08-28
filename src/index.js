@@ -18,6 +18,7 @@ import { purgeCache } from './routes/admin.js';
 import { jobsStatus } from './routes/jobs.js';
 import { games } from './routes/games.js';
 import { roster, rosterMoves } from './routes/roster.js';
+import { futuresStandings, futuresLeaders } from './routes/futuresrecord.js';
 import { logo } from './routes/logo.js';
 import { statsTeamRange } from './routes/teamrange.js';
 import {
@@ -36,6 +37,10 @@ router.add('GET', '/', () => json({
 router.add('GET', '/standings', standings);
 router.add('GET', '/schedule', schedule);
 router.add('GET', '/schedule/futures', futures);
+// 퓨처스 순위·개인 기록입니다. KBO 사이트를 그때그때 읽습니다(5분 캐시).
+// `/schedule/futures` 보다 뒤에 둬도 경로가 겹치지 않습니다.
+router.add('GET', '/futures/standings', futuresStandings);
+router.add('GET', '/futures/leaders', futuresLeaders);
 // `/players/:id/news` 는 없앴습니다. 뉴스 수집을 그만두기로 했습니다.
 // 1982년까지 선수를 넣으면서 대상이 562명에서 1,745명으로 늘었고,
 // 구글 뉴스는 은퇴 선수에게 쓸 만한 결과를 주지 못합니다. 매일 25분을

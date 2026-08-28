@@ -366,6 +366,7 @@
             document.getElementById('schedule-note').textContent = SCHED_META[scheduleMode].note;
             curDate = kstNow();
             loadSchedule(7);
+            applyMode();
         });
 
         loadSchedule(7);  // 첫 로드: 오늘 경기 없으면 다음 경기일로 자동 이동 (최대 7일)
@@ -422,7 +423,8 @@
                 wrap.innerHTML = '<div class="schedule-msg error">순위를 불러오지 못했습니다.</div>';
             }
         }
-        loadStandings();
+        // 첫 로드는 아래 applyMode() 가 맡습니다. 여기서 또 부르면
+        // 1군 순위를 두 번 읽습니다.
 
         // ===== 개인 순위 (KBO 공식 기록) =====
         let LEADERS_DATA = null;
@@ -489,10 +491,15 @@
             const btn = ev.target.closest('.leaders-tab');
             if (!btn) return;
             leadersTab = btn.dataset.tab;
-            document.querySelectorAll('.leaders-tab').forEach(b => b.classList.toggle('active', b === btn));
-            renderLeaders();
+            // **이 칸의 탭만 봅니다.** `.leaders-tab` 을 통째로 고르면
+            // 위쪽 1군/퓨처스 토글도 같은 클래스라 함께 꺼집니다.
+            document.querySelectorAll('#leaders-tabs .leaders-tab')
+                .forEach(b => b.classList.toggle('active', b === btn));
+            // 퓨처스 모드면 퓨처스 기록으로 그립니다. 두 모드가 탭을
+            // 함께 씁니다.
+            if (scheduleMode === 'futures') renderFuturesLeaders();
+            else renderLeaders();
         });
-        loadLeaders();
 
         // ===== 1군 등록·말소 =====
         //
@@ -599,7 +606,159 @@
         rosterSel.innerHTML = ROSTER_TEAMS
             .map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
         rosterSel.addEventListener('change', () => loadRoster(rosterSel.value));
-        loadRoster(ROSTER_TEAMS[0]);
+
+        // ===== 퓨처스 =====
+        //
+        // 상단 1군/퓨처스 토글이 경기만 바꾸던 것을 페이지 전체로
+        // 넓힙니다. 퓨처스일 때는 이렇게 됩니다.
+        //
+        //     팀 순위      북부·남부 두 표
+        //     개인 순위    wOBA·wRC+ 대신 안타·홈런
+        //     등말소·명단  숨김 (1군 전용입니다)
+        //
+        // **wOBA·wRC+ 를 빼는 이유**는 그 지표가 play_by_play 로 계산되는데
+        // 퓨처스는 타석 단위 자료가 공개되지 않기 때문입니다. 빈 칸을
+        // 보여 주는 것보다 안 보여 주는 편이 낫습니다.
+
+        // 퓨처스 개인 순위에 쓸 지표입니다. KBO 퓨처스 기록실의 컬럼
+        // 이름을 그대로 씁니다. 없는 컬럼은 카드가 빠집니다.
+        const FUT_LEADER_DEFS = {
+            batter: [
+                { col: 'AVG', label: '타율' }, { col: 'H', label: '안타' }, { col: 'RBI', label: '타점' },
+                { col: 'HR', label: '홈런' }, { col: 'SB', label: '도루' }, { col: 'R', label: '득점' },
+            ],
+            pitcher: [
+                { col: 'ERA', label: 'ERA' }, { col: 'W', label: '승' }, { col: 'SO', label: '탈삼진' },
+                { col: 'IP', label: '이닝' }, { col: 'SV', label: '세이브' }, { col: 'HLD', label: '홀드' },
+            ],
+        };
+        let FUT_STANDINGS = null;
+        let FUT_LEADERS = null;
+
+        function renderFuturesStandings(groups) {
+            if (!groups.length) {
+                return '<div class="schedule-msg error">퓨처스 순위를 불러오지 못했습니다.</div>';
+            }
+            return groups.map((g) => {
+                const rows = g.teams.map((t) => {
+                    const emblem = t.code
+                        ? `<img class="rank-emblem" src="assets/logos/${esc(t.code)}.png" alt="" loading="lazy" onerror="this.style.display='none'">`
+                        : '';
+                    return `<tr>
+                        <td class="rank-col"><span class="rank-badge rank-${t.rank}">${t.rank}</span></td>
+                        <td class="team-col"><div class="team-cell">${emblem}<span>${esc(t.team)}</span></div></td>
+                        <td>${esc(t.games)}</td>
+                        <td>${esc(t.wins)}</td>
+                        <td>${esc(t.losses)}</td>
+                        <td>${esc(t.draws)}</td>
+                        <td class="pct">${esc(t.pct)}</td>
+                        <td>${esc(t.gb)}</td>
+                        <td class="${streakClass(t.streak)}">${esc(t.streak)}</td>
+                    </tr>`;
+                }).join('');
+                return `<div class="fut-league">
+                    <div class="fut-league-name">${esc(g.league)}리그</div>
+                    <table class="standings-table"><thead><tr>
+                        <th class="rank-col">순위</th><th class="team-col">팀</th>
+                        <th>경기</th><th>승</th><th>패</th><th>무</th><th>승률</th><th>게임차</th><th>연속</th>
+                    </tr></thead><tbody>${rows}</tbody></table>
+                </div>`;
+            }).join('');
+        }
+
+        // 퓨처스 기록은 표 하나로 오므로 지표별 상위 5명을 여기서 뽑습니다.
+        // 1군은 서버가 이미 지표별로 나눠 주지만 퓨처스는 원본이 순위표
+        // 한 장입니다.
+        function futTop(group, col, lower) {
+            const i = (group.columns || []).indexOf(col);
+            if (i < 0) return null;
+            const num = (v) => {
+                // 이닝은 '82 2/3' 처럼 옵니다. 앞 정수만 봐도 순위가
+                // 뒤집히지 않습니다.
+                const m = /^(\d+(?:\.\d+)?)/.exec(String(v).trim());
+                return m ? Number.parseFloat(m[1]) : NaN;
+            };
+            const items = (group.rows || [])
+                .map((r) => ({ name: r.cells[1], team: r.cells[2], playerId: r.playerId, v: r.cells[i] }))
+                .filter((x) => Number.isFinite(num(x.v)))
+                .sort((a, b) => (lower ? num(a.v) - num(b.v) : num(b.v) - num(a.v)))
+                .slice(0, 5);
+            return items.length ? items : null;
+        }
+
+        function futLeaderCard(def, items) {
+            if (!items) return '';
+            const rows = items.map((x, i) => `
+                <div class="leader-row">
+                    <span class="leader-rank">${i + 1}</span>
+                    ${playerLink(x.name, x.playerId, 'leader-name')}
+                    <span class="leader-team">${esc(x.team)}</span>
+                    <span class="leader-value">${esc(x.v)}</span>
+                </div>`).join('');
+            return `<div class="leader-card">
+                <div class="leader-card-title">${esc(def.label)}</div>${rows}</div>`;
+        }
+
+        function renderFuturesLeaders() {
+            const wrap = document.getElementById('leaders-wrap');
+            if (!FUT_LEADERS) {
+                wrap.innerHTML = '<div class="schedule-msg error">퓨처스 개인 순위를 불러오지 못했습니다.</div>';
+                return;
+            }
+            const group = FUT_LEADERS[leadersTab] || {};
+            // ERA 만 낮을수록 좋습니다.
+            const cards = FUT_LEADER_DEFS[leadersTab]
+                .map((d) => futLeaderCard(d, futTop(group, d.col, d.col === 'ERA')))
+                .join('');
+            wrap.innerHTML = cards
+                ? `<div class="leaders-grid">${cards}</div>`
+                : '<div class="schedule-msg">퓨처스 기록이 없습니다.</div>';
+        }
+
+        async function loadFutures() {
+            const sw = document.getElementById('standings-wrap');
+            const lw = document.getElementById('leaders-wrap');
+            sw.innerHTML = '<div class="schedule-msg">불러오는 중…</div>';
+            lw.innerHTML = '<div class="schedule-msg">불러오는 중…</div>';
+            const [s, l] = await Promise.all([
+                fetch(`${API_BASE_URL}/futures/standings`).then((r) => r.json()).catch(() => null),
+                fetch(`${API_BASE_URL}/futures/leaders`).then((r) => r.json()).catch(() => null),
+            ]);
+            FUT_STANDINGS = s;
+            FUT_LEADERS = l;
+            sw.innerHTML = renderFuturesStandings((s && s.groups) || []);
+            renderFuturesLeaders();
+        }
+
+        /** 토글에 맞춰 순위·개인순위·등말소·명단을 갈아 끼웁니다. */
+        function applyMode() {
+            const fut = scheduleMode === 'futures';
+            // 등말소와 1군 명단은 1군 전용입니다. 퓨처스에는 해당 자료가
+            // 없어 빈 칸을 보여 주느니 줄을 통째로 감춥니다.
+            document.querySelector('.roster-row').style.display = fut ? 'none' : '';
+
+            document.querySelectorAll('.rank-row:not(.roster-row) .schedule-note')
+                .forEach((n) => {
+                    if (n.id === 'leaders-note') return;
+                    n.textContent = fut
+                        ? '데이터 출처: KBO 퓨처스 기록실 · 5분 캐시'
+                        : '데이터 출처: KBO 공식 (koreabaseball.com) · 5분 캐시';
+                });
+            const ln = document.getElementById('leaders-note');
+            if (ln && fut) {
+                ln.textContent = '퓨처스는 타석 단위 자료가 공개되지 않아 wOBA·wRC+ 를 내지 않습니다.';
+            }
+
+            if (fut) {
+                loadFutures();
+            } else {
+                loadStandings();
+                if (LEADERS_DATA) renderLeaders(); else loadLeaders();
+                loadRoster(rosterSel.value || ROSTER_TEAMS[0]);
+            }
+        }
+
+        applyMode();
 
     </script>
 </body>
