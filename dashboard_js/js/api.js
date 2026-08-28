@@ -203,6 +203,39 @@ class API {
     }
 
     /**
+     * 최근 1군 등록·말소입니다.
+     *
+     * KBO 는 오늘 것만 보여 줍니다. daily 가 매일 받아 쌓은 것을
+     * 읽으므로, 쌓기 시작한 날(2026-08-28)부터만 있습니다.
+     */
+    static async getRosterMoves(days = 7) {
+        try {
+            const response = await fetch(`${API_BASE_URL}/roster/moves?days=${days}`);
+            if (!response.ok) throw new Error('Failed to fetch roster moves');
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching roster moves:', error);
+            // 홈 화면의 다른 칸까지 죽이지 않습니다.
+            return { dates: [], count: 0 };
+        }
+    }
+
+    /** 지금 1군 명단입니다. 팀을 주면 그 팀만. */
+    static async getRoster(team) {
+        try {
+            const url = team
+                ? `${API_BASE_URL}/roster?team=${encodeURIComponent(team)}`
+                : `${API_BASE_URL}/roster`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Failed to fetch roster');
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching roster:', error);
+            return { players: [], count: 0 };
+        }
+    }
+
+    /**
      * DB Explorer: 전체 테이블 목록 (행/컬럼 수 포함)
      */
     static async getDbTables() {

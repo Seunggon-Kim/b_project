@@ -133,10 +133,38 @@ export async function playerDetail(request, env, ctx, params) {
   // 씁니다. 현역은 올해 소속이 되고 은퇴 선수는 마지막 소속이 됩니다.
   // 리더보드·기록실과 같은 규칙입니다(routes/leaders.js, routes/stats.js).
   const cur = await currentSeason(db);
+
+  // 지금 1군에 등록돼 있는지입니다.
+  //
+  // `is_active` 와 다릅니다. `is_active` 는 "올 시즌 기록이 있나" 이고
+  // 이것은 "지금 1군 엔트리에 있나" 입니다. 어제 말소된 선수는
+  // is_active 는 1 이지만 1군에는 없습니다.
+  //
+  // `kbo_roster` 는 daily 가 KBO 등록 현황에서 매일 새로 받습니다.
+  // 그 표가 없거나(옛 스냅샷) 못 찾으면 null 입니다. 화면은 그때
+  // 배지를 안 보여 줍니다. "말소" 로 단정하면 안 됩니다. 2군에
+  // 있는 것과 표가 없는 것은 다릅니다.
+  let roster = null;
+  try {
+    roster = await db.prepare(
+      'SELECT team, back_number, role, as_of FROM kbo_roster '
+      + 'WHERE player_id = ? LIMIT 1',
+    ).bind(dbPid).first();
+  } catch {
+    // 표가 아직 없는 환경입니다.
+  }
+
   return json({
     ...player,
     team_id: latestTeam(batter.results, pitcher.results) || player.team_id,
     is_active: isActive(batter.results, pitcher.results, cur) ? 1 : 0,
+    // 1군 등록 상태입니다. null 이면 "모름" 이지 "말소" 가 아닙니다.
+    first_team: roster ? {
+      team: roster.team,
+      back_number: roster.back_number,
+      role: roster.role,
+      as_of: roster.as_of,
+    } : null,
     batter_seasons: batter.results,
     pitcher_seasons: pitcher.results,
   });

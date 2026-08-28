@@ -17,6 +17,7 @@ import { dbTables, dbTable, dbTableCsv } from './routes/dbexplorer.js';
 import { purgeCache } from './routes/admin.js';
 import { jobsStatus } from './routes/jobs.js';
 import { games } from './routes/games.js';
+import { roster, rosterMoves } from './routes/roster.js';
 import { logo } from './routes/logo.js';
 import { statsTeamRange } from './routes/teamrange.js';
 import {
@@ -56,6 +57,9 @@ router.add('GET', '/stats/team_range', statsTeamRange);
 router.add('GET', '/stats/batters', statsBatters);
 router.add('GET', '/stats/pitchers', statsPitchers);
 router.add('GET', '/games', games);
+// 1군 등록·말소입니다. KBO 는 오늘 것만 보여 줘서 daily 가 매일 쌓습니다.
+router.add('GET', '/roster', roster);
+router.add('GET', '/roster/moves', rosterMoves);
 router.add('GET', '/db/table/:name', dbTable);
 router.add('GET', '/db/table/:name/csv', dbTableCsv);
 router.add('GET', '/logo/:code', logo);

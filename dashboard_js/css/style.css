@@ -2115,3 +2115,189 @@ h2 .material-symbols-outlined,
         justify-content: center;
     }
 }
+
+/* ========== 1군 등록·말소 · 팀별 명단 ========== */
+/* 홈 화면 아래쪽 2단입니다. 팀 순위·개인 순위와 같은 .rank-row 를
+   그대로 쓰므로 폭·헤더 정렬은 이미 맞습니다. 여기서는 안쪽만
+   정의합니다. */
+
+.mv-day {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.mv-day:last-child {
+    border-bottom: none;
+}
+
+.mv-date {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    margin-bottom: 0.6rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.mv-sum {
+    font-weight: 500;
+}
+
+/* 팀을 기준으로 한 줄씩 둡니다. 등록·말소로 나누면 "우리 팀에 무슨
+   일이 있었나" 를 보려고 두 목록을 번갈아 훑어야 합니다. */
+.mv-row {
+    display: grid;
+    grid-template-columns: 3rem 1fr 1fr;
+    gap: 0.5rem;
+    align-items: baseline;
+    padding: 0.35rem 0;
+    border-top: 1px solid var(--border-color);
+}
+
+.mv-row:first-child {
+    border-top: none;
+}
+
+.mv-team {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-muted);
+}
+
+.mv-side {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.6rem;
+}
+
+.mv-item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.3rem;
+    font-size: 0.88rem;
+}
+
+/* 색만으로 구분하지 않도록 '등록'·'말소' 글자를 함께 둡니다. */
+.mv-mark {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 0.05rem 0.35rem;
+    border-radius: 4px;
+}
+
+.mv-in {
+    background: rgba(34, 197, 94, 0.15);
+    color: #16a34a;
+}
+
+.mv-out {
+    background: rgba(239, 68, 68, 0.15);
+    color: #dc2626;
+}
+
+.mv-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.mv-pos {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.mv-none {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+/* --- 팀별 1군 명단 --- */
+
+.roster-team-select {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.85rem;
+}
+
+.rs-group {
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.rs-group:last-child {
+    border-bottom: none;
+}
+
+.rs-head {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+}
+
+.rs-cnt {
+    color: var(--text-primary);
+}
+
+/* 번호와 이름을 여러 열로 흘립니다. 34명을 한 줄씩 쌓으면 칸이
+   세로로 너무 길어집니다. */
+.rs-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+    gap: 0.15rem 0.75rem;
+}
+
+.rs-item {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    font-size: 0.9rem;
+}
+
+.rs-num {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    min-width: 1.6rem;
+    text-align: right;
+}
+
+.rs-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* 좁은 화면에서는 등록·말소를 위아래로 둡니다. */
+/* 좁은 화면에서는 팀 이름을 위로 올리고 등록·말소를 아래 두 줄로
+   흘립니다. 3열을 유지하면 이름이 한 글자씩 끊깁니다. */
+@media (max-width: 700px) {
+    .mv-row {
+        grid-template-columns: 1fr;
+        gap: 0.2rem;
+    }
+}
+
+/* 선수 상세의 1군 등록 배지입니다.
+   지금 1군 엔트리에 있으면 붙습니다. 없으면 배지를 아예 안 보여
+   줍니다. "말소" 라고 쓰면 2군에 있는 것과 우리가 아직 못 받은 것을
+   구분할 수 없습니다. */
+.first-team-badge {
+    display: inline-block;
+    margin-left: 0.5rem;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    background: rgba(34, 197, 94, 0.15);
+    color: #16a34a;
+    vertical-align: middle;
+}
+
+/* 팀 색상이 깔린 헤더에서는 흰 글씨가 돼야 읽힙니다. */
+.theme-applied .first-team-badge {
+    background: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+}

@@ -51,7 +51,7 @@
         <section class="schedule-section">
             <div class="schedule-bar">
                 <div class="schedule-bar-left">
-                    <h2 class="schedule-title"><span class="material-symbols-outlined">sports_baseball</span> KBO 경기</h2>
+                    <h2 class="schedule-title">KBO 경기</h2>
                     <div class="leaders-tabs" id="sched-toggle">
                         <button type="button" class="leaders-tab active" data-mode="main">1군</button>
                         <button type="button" class="leaders-tab" data-mode="futures">퓨처스</button>
@@ -73,7 +73,7 @@
             <!-- 좌: 팀 순위 -->
             <div class="rank-col-team">
                 <div class="schedule-bar">
-                    <h2 class="schedule-title"><span class="material-symbols-outlined">leaderboard</span> 팀 순위</h2>
+                    <h2 class="schedule-title">팀 순위</h2>
                 </div>
                 <div id="standings-wrap" class="standings-wrap"></div>
                 <p class="schedule-note">데이터 출처: KBO 공식 (koreabaseball.com) · 5분 캐시</p>
@@ -81,7 +81,7 @@
             <!-- 우: 개인 순위 -->
             <div class="rank-col-players">
                 <div class="schedule-bar">
-                    <h2 class="schedule-title"><span class="material-symbols-outlined">emoji_events</span> 개인 순위</h2>
+                    <h2 class="schedule-title">개인 순위</h2>
                     <div class="leaders-tabs" id="leaders-tabs">
                         <button type="button" class="leaders-tab active" data-tab="batter">타자</button>
                         <button type="button" class="leaders-tab" data-tab="pitcher">투수</button>
@@ -89,6 +89,27 @@
                 </div>
                 <div id="leaders-wrap" class="leaders-wrap"></div>
                 <p class="schedule-note" id="leaders-note">데이터 출처: KBO 공식 기록</p>
+            </div>
+        </section>
+
+        <!-- 1군 등말소 + 팀별 명단 (2단) -->
+        <section class="rank-row mb-3">
+            <!-- 좌: 최근 등록·말소 -->
+            <div class="rank-col-team">
+                <div class="schedule-bar">
+                    <h2 class="schedule-title">1군 등록·말소</h2>
+                </div>
+                <div id="moves-wrap" class="standings-wrap"></div>
+                <p class="schedule-note" id="moves-note">데이터 출처: KBO 등록 현황</p>
+            </div>
+            <!-- 우: 팀별 1군 명단 -->
+            <div class="rank-col-players">
+                <div class="schedule-bar">
+                    <h2 class="schedule-title">1군 명단</h2>
+                    <select id="roster-team" class="roster-team-select" aria-label="구단 선택"></select>
+                </div>
+                <div id="roster-wrap" class="leaders-wrap"></div>
+                <p class="schedule-note" id="roster-note">데이터 출처: KBO 등록 현황</p>
             </div>
         </section>
 
@@ -472,6 +493,113 @@
             renderLeaders();
         });
         loadLeaders();
+
+        // ===== 1군 등록·말소 =====
+        //
+        // KBO 는 **오늘 것만** 보여 줍니다. 어제 누가 등록됐는지 묻는
+        // 화면이 없어서 daily 가 매일 받아 쌓습니다. 그래서 쌓기
+        // 시작한 날부터만 나옵니다. 처음 며칠은 하루치뿐입니다.
+        // 팀별로 묶어 보여 줍니다. 등록·말소로 나누면 "우리 팀에 무슨
+        // 일이 있었나" 를 보려고 두 목록을 번갈아 훑어야 합니다.
+        // 팀이 기준이면 한 줄에서 들어온 사람과 나간 사람이 같이 보입니다.
+        function renderMoves(dates) {
+            if (!dates.length) {
+                return '<div class="schedule-msg">아직 쌓인 등록·말소가 없습니다.</div>';
+            }
+            return dates.map((d) => {
+                const byTeam = new Map();
+                const put = (list, key) => (list || []).forEach((p) => {
+                    if (!byTeam.has(p.team)) byTeam.set(p.team, { added: [], removed: [] });
+                    byTeam.get(p.team)[key].push(p);
+                });
+                put(d.added, 'added');
+                put(d.removed, 'removed');
+                if (!byTeam.size) return '';
+
+                const rows = [...byTeam.entries()].sort((a, b) =>
+                    a[0].localeCompare(b[0], 'ko')).map(([team, v]) => {
+                    const side = (list, cls, mark) => (list.length ? list.map((p) => `
+                        <span class="mv-item">
+                            <span class="mv-mark ${cls}">${mark}</span>
+                            ${playerLink(p.name, p.playerId, 'mv-name')}
+                            <span class="mv-pos">${esc(p.position || '')}</span>
+                        </span>`).join('') : '<span class="mv-none">-</span>');
+                    return `<div class="mv-row">
+                        <div class="mv-team">${esc(team)}</div>
+                        <div class="mv-side">${side(v.added, 'mv-in', '등록')}</div>
+                        <div class="mv-side">${side(v.removed, 'mv-out', '말소')}</div>
+                    </div>`;
+                }).join('');
+
+                return `<div class="mv-day">
+                    <div class="mv-date">${esc(d.date)}
+                        <span class="mv-sum">등록 ${(d.added || []).length} · 말소 ${(d.removed || []).length}</span>
+                    </div>
+                    <div class="mv-rows">${rows}</div>
+                </div>`;
+            }).join('');
+        }
+
+        async function loadMoves() {
+            const wrap = document.getElementById('moves-wrap');
+            wrap.innerHTML = '<div class="schedule-msg">불러오는 중…</div>';
+            const data = await API.getRosterMoves(7);
+            wrap.innerHTML = renderMoves(data.dates || []);
+            const note = document.getElementById('moves-note');
+            if (note) {
+                note.textContent = data.count
+                    ? `최근 ${data.days}일 ${data.count}건 · 데이터 출처: KBO 등록 현황`
+                    : 'KBO 는 당일 현황만 공개해 매일 모읍니다. 모으기 시작한 날부터 보입니다.';
+            }
+        }
+        loadMoves();
+
+        // ===== 팀별 1군 명단 =====
+        const ROSTER_TEAMS = ['KIA', 'KT', 'LG', 'NC', 'SSG', '두산', '롯데', '삼성', '키움', '한화'];
+        // 야구 화면다운 순서입니다. 사전순으로 두면 내야수가 맨 앞에 옵니다.
+        const ROLE_ORDER = ['투수', '포수', '내야수', '외야수'];
+
+        function renderRoster(players) {
+            if (!players.length) {
+                return '<div class="schedule-msg">명단이 없습니다.</div>';
+            }
+            const byRole = new Map();
+            for (const p of players) {
+                if (!byRole.has(p.role)) byRole.set(p.role, []);
+                byRole.get(p.role).push(p);
+            }
+            return ROLE_ORDER.filter((r) => byRole.has(r)).map((role) => {
+                const list = byRole.get(role);
+                const items = list.map((p) => `
+                    <div class="rs-item">
+                        <span class="rs-num">${esc(p.back_number)}</span>
+                        ${playerLink(p.name, p.player_id, 'rs-name')}
+                    </div>`).join('');
+                return `<div class="rs-group">
+                    <div class="rs-head">${esc(role)} <span class="rs-cnt">${list.length}</span></div>
+                    <div class="rs-list">${items}</div>
+                </div>`;
+            }).join('');
+        }
+
+        async function loadRoster(team) {
+            const wrap = document.getElementById('roster-wrap');
+            wrap.innerHTML = '<div class="schedule-msg">불러오는 중…</div>';
+            const data = await API.getRoster(team);
+            wrap.innerHTML = renderRoster(data.players || []);
+            const note = document.getElementById('roster-note');
+            if (note) {
+                note.textContent = data.asOf
+                    ? `${data.asOf} 기준 ${data.count}명 · 데이터 출처: KBO 등록 현황`
+                    : '데이터 출처: KBO 등록 현황';
+            }
+        }
+
+        const rosterSel = document.getElementById('roster-team');
+        rosterSel.innerHTML = ROSTER_TEAMS
+            .map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+        rosterSel.addEventListener('change', () => loadRoster(rosterSel.value));
+        loadRoster(ROSTER_TEAMS[0]);
 
     </script>
 </body>

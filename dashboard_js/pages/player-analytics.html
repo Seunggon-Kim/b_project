@@ -356,6 +356,27 @@
             }
         }
 
+        /**
+         * 1군 등록 배지입니다.
+         *
+         * `first_team` 은 KBO 등록 현황에서 매일 받은 것입니다. 그 표에
+         * 있으면 지금 1군에 있는 것이고, 없으면 **모르는 것**입니다.
+         *
+         * `is_active`(올 시즌 기록 있음)와 다릅니다. 어제 말소된 선수는
+         * is_active 는 1 이지만 1군에는 없습니다.
+         *
+         * **없을 때 "말소" 라고 쓰면 안 됩니다.** 2군에 있는 것과 우리가
+         * 아직 못 받은 것을 구분할 수 없습니다. 은퇴 선수도 마찬가지라
+         * 그때는 배지를 아예 안 보여 줍니다.
+         */
+        function firstTeamBadge(player) {
+            const ft = player.first_team;
+            if (!ft) return '';
+            const no = ft.back_number ? ` No.${ft.back_number}` : '';
+            return `<span class="first-team-badge" title="${ft.as_of} 기준 KBO 1군 등록 현황">`
+                + `1군 등록${no}</span>`;
+        }
+
         // Load player info
         async function loadPlayerInfo(playerId) {
             const section = document.getElementById('player-info-section');
@@ -411,7 +432,10 @@
                             ${player.is_active ? '<span class="header-bar-number">No.' + backNum + '</span>' : ''}
                             ${player.player_name}
                         </div>
-                        <div class="header-bar-team">${(player.is_active && (player.team_name || player.team_id)) ? (player.team_name || player.team_id) : '-'}</div>
+                        <div class="header-bar-team">
+                            ${(player.is_active && (player.team_name || player.team_id)) ? (player.team_name || player.team_id) : '-'}
+                            ${firstTeamBadge(player)}
+                        </div>
                     </div>
                     <div class="header-bar-info-group">
                         <div class="header-bar-details">
