@@ -23,7 +23,8 @@ import sys  # noqa: E402
 sys.path.insert(0, str(ROOT / "data_collection"))
 
 from game_type import (  # noqa: E402
-    POSTSEASON, POSTSEASON_PREFIXES, REGULAR, classify, is_skippable, prefix,
+    POSTSEASON, POSTSEASON_PREFIXES, REGULAR, classify, classify_game,
+    is_skippable, prefix,
 )
 
 # 2008~2025 열여덟 시즌을 네이버 roundCode 로 실측한 값입니다.
@@ -73,6 +74,52 @@ def test_값이_이상해도_죽지_않습니다():
         assert not is_skippable(bad)
     assert prefix(None) == ""
     assert prefix("20") == ""
+
+
+def test_시범경기는_roundCode_로만_걸러집니다():
+    """경기 ID 로는 시범경기를 못 걸러냅니다.
+
+    시범경기도 정규시즌처럼 날짜로 시작합니다(`20130309HHHT0`).
+    실제로 시범경기 53건이 정규시즌으로 들어가 2013 이 팀당 128경기가
+    아니라 139경기로 보였습니다.
+    """
+    gid = "20130309HHHT0"
+    assert classify(gid) == REGULAR                      # ID 만으로는 못 걸름
+    assert classify_game(gid, "kbo_e") is None           # roundCode 면 걸림
+    assert classify_game(gid, "kbo_r") == REGULAR
+
+
+def test_정규시즌_roundCode_가_두_가지입니다():
+    """`kbo_p` 만 정규시즌으로 보면 안 됩니다.
+
+    2008~2026 열아홉 시즌을 훑어 보니 기본값은 `kbo_r` 이고 2020 만
+    `kbo_p` 였습니다. `kbo_p` 만 통과시키면 정규시즌 경기가 거의 다
+    사라집니다.
+    """
+    for rc in ("kbo_r", "kbo_p"):
+        assert classify_game("20260415LGSS0", rc) == REGULAR
+
+
+def test_모르는_roundCode_는_버리지_않습니다():
+    """새 코드가 하나 생겼다고 시즌이 통째로 사라지면 안 됩니다."""
+    assert classify_game("20260415LGSS0", "kbo_새로운거") == REGULAR
+    assert classify_game("77771026OBSK0", "kbo_새로운거") == POSTSEASON
+    assert classify_game("20260415LGSS0", None) == REGULAR
+    assert classify_game("20260415LGSS0", "") == REGULAR
+
+
+@pytest.mark.parametrize("round_code,want", [
+    ("kbo_ps_wd", POSTSEASON), ("kbo_ps_sp", POSTSEASON),
+    ("kbo_ps_po", POSTSEASON), ("kbo_ps_ks", POSTSEASON),
+])
+def test_포스트시즌_roundCode(round_code, want):
+    # 경기 ID 가 날짜여도 roundCode 가 포스트시즌이면 포스트시즌입니다.
+    assert classify_game("20261013LGWO0", round_code) == want
+
+
+def test_올스타는_roundCode_가_없어도_걸러집니다():
+    assert classify_game("99990718WEEA0") is None
+    assert classify_game("99990718WEEA0", "kbo_r") is None
 
 
 def test_날짜_컷오프_표가_되살아나지_않았습니다():

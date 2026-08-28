@@ -1,0 +1,1 @@
+DELETE FROM games WHERE game_id='20120410OBHH0';

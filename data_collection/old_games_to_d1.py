@@ -51,7 +51,7 @@ ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 
 from d1_load import build_upserts, d1_columns, query, run_d1_file  # noqa: E402
-from game_type import classify, is_skippable  # noqa: E402
+from game_type import classify, classify_game, is_skippable  # noqa: E402
 
 API = "https://api-gw.sports.naver.com/schedule"
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -68,6 +68,20 @@ FIRST_SEASON = 2008
 # 있었습니다. `6666` 은 순위결정전이고 네이버도 `kbo_p`(정규시즌)로
 # 줍니다. 2008~2014 에는 그 코드가 없어 사고는 안 났지만, 그대로
 # 뒀으면 언젠가 타이브레이커를 포스트시즌으로 넣었을 것입니다.
+
+# 끝난 경기의 상태값입니다. **두 가지입니다.**
+#
+# `RESULT` 만 받다가 2008~2011 포스트시즌 23경기를 놓쳤습니다.
+# 2008 준플레이오프·플레이오프·한국시리즈가 통째로 빠져 그 시즌
+# 포스트시즌이 14경기가 아니라 4경기로 보였습니다.
+#
+#     33331008SSLT0  ENDED   삼성 12-3 롯데   2008 준PO
+#     55551016SSOB0  ENDED   삼성 4-8 두산    2008 PO
+#     77771029SKOB0  ENDED   SK 3-2 두산      2008 KS
+#
+# `crawler/download.py` 는 처음부터 둘 다 받고 있었습니다
+# (`if gStatusCode in ['RESULT', 'ENDED']`). 여기만 좁았습니다.
+DONE = ("RESULT", "ENDED")
 
 DELAY = 0.25
 
@@ -114,14 +128,23 @@ def season_names(season):
     return {r["cur"]: r["then_name"] for r in rows if r["cur"]}
 
 
-def collect(season, delay=DELAY):
-    """한 시즌 경기 전부입니다."""
+def collect(season, delay=DELAY, only_postseason=False):
+    """한 시즌 경기입니다.
+
+    `only_postseason` 이면 포스트시즌만 모읍니다. 2015~2025 는 정규시즌이
+    이미 들어 있는데 포스트시즌만 비어 있어, 있는 행을 건드리지 않고
+    빠진 것만 채울 때 씁니다. 크롤러 수집 창(`crawler/download.py` 의
+    `playoff_start`)이 10월 초에서 끊겨 있어서 생긴 구멍입니다.
+    """
     names = season_names(season)
     if not names:
         print("  %d: team_seasons 에 그 시즌이 없습니다" % season)
         return []
     rows, seen = [], set()
-    for month in range(3, 12):
+    # 포스트시즌만 받을 때는 9월부터 봐도 충분합니다. 가장 이른 것이
+    # 2009년 9월 20일입니다.
+    months = range(9, 13) if only_postseason else range(3, 12)
+    for month in months:
         try:
             ids = month_games(season, month)
         except Exception as e:
@@ -130,6 +153,8 @@ def collect(season, delay=DELAY):
         for gid, day in ids:
             if gid in seen or is_skippable(gid):
                 continue
+            if only_postseason and classify(gid) != "포스트시즌":
+                continue
             seen.add(gid)
             try:
                 g = game_detail(gid)
@@ -137,15 +162,28 @@ def collect(season, delay=DELAY):
                 continue
             time.sleep(delay)
             hs, aws = g.get("homeTeamScore"), g.get("awayTeamScore")
-            if g.get("statusCode") != "RESULT" or hs is None or aws is None:
-                continue  # 취소·미실시
+            if g.get("statusCode") not in DONE or hs is None or aws is None:
+                continue  # 미실시
+            # **`cancel` 을 따로 봐야 합니다.** 우천취소 경기가
+            # `statusCode="RESULT"` 로 오면서 점수만 0-0 입니다.
+            # 상태값만 믿으면 열리지도 않은 경기가 0-0 무승부로
+            # 들어갑니다. 2012-04-10 두산-한화가 그랬습니다.
+            if g.get("cancel"):
+                continue
+            # 네이버가 주는 roundCode 로 판정합니다. 경기 ID 만 보면
+            # 시범경기를 못 걸러냅니다. 시범경기도 날짜로 시작합니다.
+            kind = classify_game(gid, g.get("roundCode"))
+            if kind is None:
+                continue  # 시범경기(kbo_e)·올스타 등
+            if only_postseason and kind != "포스트시즌":
+                continue
             home = g.get("homeTeamName")
             away = g.get("awayTeamName")
             rows.append({
                 "game_id": gid,
                 "game_date": int(day.replace("-", "")),
                 "season": season,
-                "game_type": classify(gid),
+                "game_type": kind,
                 # 네이버는 현재 이름을 줍니다. 그 시즌 이름으로 바꿉니다.
                 "home_team_id": names.get(home, home),
                 "away_team_id": names.get(away, away),
@@ -175,6 +213,9 @@ def main():
     ap.add_argument("--to", dest="end", type=int, default=2014)
     ap.add_argument("--delay", type=float, default=DELAY)
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--postseason-only", action="store_true",
+                    help="포스트시즌만 받습니다. 있는 정규시즌 행을 "
+                         "건드리지 않고 빠진 것만 채울 때 씁니다.")
     args = ap.parse_args()
 
     years = [args.year] if args.year else list(range(args.start, args.end + 1))
@@ -189,7 +230,7 @@ def main():
     for year in years:
         print("=== %d ===" % year)
         t0 = datetime.datetime.now()
-        rows = collect(year, args.delay)
+        rows = collect(year, args.delay, args.postseason_only)
         secs = (datetime.datetime.now() - t0).total_seconds()
         if not rows:
             print("  경기가 없습니다.")
@@ -210,7 +251,8 @@ def main():
         # UPSERT 만 씁니다. DELETE 를 먼저 돌리지 않습니다.
         stmts = build_upserts("games", cols, ["game_id"], rows,
                               max_bytes=20000)
-        out = ROOT / "migration" / ("old_games_%d.sql" % year)
+        tag = "ps" if args.postseason_only else "all"
+        out = ROOT / "migration" / ("old_games_%s_%d.sql" % (tag, year))
         out.write_text("\n".join(stmts) + "\n", encoding="utf-8", newline="\n")
         run_d1_file(out)
         print("  적재 완료 (%d문)" % len(stmts))
