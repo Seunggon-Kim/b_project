@@ -171,8 +171,26 @@ jobs:
           python data_collection/record_job_run.py --job official_stats --status $S \
             --note "타자 ${{ steps.load_batter.outcome }} / 투수 ${{ steps.load_pitcher.outcome }}"
 
+      # --- 3-1. 1군 등록 현황·등말소 ----------------------------------
+      # **놓친 날은 영영 못 채웁니다.** KBO 는 오늘 것만 보여 주고
+      # 어제 누가 등록됐는지 묻는 화면이 없습니다. 소급이 안 됩니다.
+      #
+      # 명단은 현재 상태만 덮어쓰고(339행), 등말소만 쌓습니다. 명단을
+      # 날마다 쌓으면 1년에 12만 행이 되는데 대부분 어제와 같습니다.
+      - name: 1군 등록 현황 적재
+        id: roster
+        continue-on-error: true
+        run: python data_collection/roster_to_d1.py
+
+      - name: 등록 현황 결과 기록
+        if: always()
+        continue-on-error: true
+        run: |
+          python data_collection/record_job_run.py --job roster \
+            --status ${{ steps.roster.outcome == 'success' && 'ok' || 'fail' }}
+
       # --- 4. 옛 시즌 PBP 되채우기 (2008~2014) ------------------------
-      # 하루 예산만큼만 밀어 넣습니다. 약 51일 걸립니다.
+      # 하루 예산만큼만 밀어 넣습니다. 약 55일 걸립니다.
       #
       # D1 무료는 하루 10만 행 쓰기인데 `play_by_play` 는 인덱스가 셋이라
       # 한 행이 4로 계상됩니다(실측: 50행 -> 201). 2008~2014 는 120만
@@ -262,6 +280,7 @@ jobs:
             echo "| 타자 적재 | ${{ steps.load_batter.outcome }} |"
             echo "| 투수 수집 | ${{ steps.scrape_pitcher.outcome }} |"
             echo "| 투수 적재 | ${{ steps.load_pitcher.outcome }} |"
+            echo "| 1군 등록 현황 | ${{ steps.roster.outcome }} |"
             echo "| 옛 시즌 PBP 되채우기 | ${{ steps.backfill.outcome }} |"
             echo "| 캐시 비우기 | ${{ steps.purge.outcome }} |"
           } >> $GITHUB_STEP_SUMMARY
