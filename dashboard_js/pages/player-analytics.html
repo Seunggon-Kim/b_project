@@ -372,9 +372,10 @@
         function firstTeamBadge(player) {
             const ft = player.first_team;
             if (!ft) return '';
-            const no = ft.back_number ? ` No.${ft.back_number}` : '';
+            // 등번호는 배지에 넣지 않습니다. 바로 옆 이름 줄에 이미
+            // 'No.29' 가 있어 두 번 나옵니다.
             return `<span class="first-team-badge" title="${ft.as_of} 기준 KBO 1군 등록 현황">`
-                + `1군 등록${no}</span>`;
+                + '1군 등록</span>';
         }
 
         // Load player info

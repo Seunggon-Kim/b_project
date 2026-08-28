@@ -622,14 +622,66 @@
 
         // 퓨처스 개인 순위에 쓸 지표입니다. KBO 퓨처스 기록실의 컬럼
         // 이름을 그대로 씁니다. 없는 컬럼은 카드가 빠집니다.
+        // 1군과 같은 지표를 씁니다. 순서도 1군과 맞춥니다(좌열 3개 →
+        // 우열 3개).
+        //
+        // `calc` 가 있으면 원본 컬럼 대신 계산합니다. 퓨처스 기록실이
+        // 안 주는 값이 있기 때문입니다.
+        //
+        //     OPS            OBP + SLG. 둘 다 표에 있습니다.
+        //     BB%·K%·K-BB%   상대타자수(TBF)가 없어 어림합니다.
+        //
+        // **TBF 를 어림하는 근거**: 타자는 안타·볼넷·사구로 나가거나
+        // 아웃됩니다. 아웃은 이닝 x 3 입니다.
+        //
+        //     TBF ≈ 3 x IP + H + BB + HBP
+        //
+        // 도루 실패 같은 주루 아웃이 아웃 수에 섞여 TBF 가 조금 크게
+        // 나오고, 그만큼 K% 가 조금 작게 나옵니다. 순위가 뒤집힐
+        // 정도는 아니지만 1군의 정확한 값과 같지는 않습니다. 그래서
+        // 화면 아래에 밝힙니다.
+        const futNum = (v) => {
+            // 이닝은 '112 2/3' 처럼 옵니다. 분수까지 더합니다.
+            // 계산 지표는 '12.3%' 로 돌아오므로 % 를 먼저 뗍니다.
+            const s = String(v == null ? '' : v).trim().replace(/%$/, '');
+            const m = /^(-?\d+(?:\.\d+)?)(?:\s+(\d+)\/(\d+))?$/.exec(s);
+            if (!m) return NaN;
+            const base = Number.parseFloat(m[1]);
+            return m[2] ? base + Number(m[2]) / Number(m[3]) : base;
+        };
+        const futTbf = (g) => {
+            const ip = futNum(g.IP); const h = futNum(g.H);
+            const bb = futNum(g.BB); const hbp = futNum(g.HBP);
+            if (![ip, h, bb, hbp].every(Number.isFinite)) return NaN;
+            return 3 * ip + h + bb + hbp;
+        };
+        const pct = (n, d) => (Number.isFinite(n) && Number.isFinite(d) && d > 0
+            ? `${(100 * n / d).toFixed(1)}%` : null);
+
         const FUT_LEADER_DEFS = {
             batter: [
-                { col: 'AVG', label: '타율' }, { col: 'H', label: '안타' }, { col: 'RBI', label: '타점' },
-                { col: 'HR', label: '홈런' }, { col: 'SB', label: '도루' }, { col: 'R', label: '득점' },
+                { col: 'AVG', label: '타율' },
+                { col: 'SLG', label: '장타율' },
+                { label: 'OPS', calc: (g) => {
+                    const v = futNum(g.OBP) + futNum(g.SLG);
+                    return Number.isFinite(v) ? v.toFixed(3) : null;
+                } },
+                { col: 'OBP', label: '출루율' },
+                { col: 'H', label: '안타' },
+                { col: 'HR', label: '홈런' },
             ],
             pitcher: [
-                { col: 'ERA', label: 'ERA' }, { col: 'W', label: '승' }, { col: 'SO', label: '탈삼진' },
-                { col: 'IP', label: '이닝' }, { col: 'SV', label: '세이브' }, { col: 'HLD', label: '홀드' },
+                { col: 'IP', label: '이닝' },
+                { col: 'SO', label: '탈삼진' },
+                // 볼넷은 적을수록 좋습니다.
+                { label: 'BB%', lower: true, calc: (g) => pct(futNum(g.BB), futTbf(g)) },
+                { col: 'ERA', label: 'ERA', lower: true },
+                { label: 'K%', calc: (g) => pct(futNum(g.SO), futTbf(g)) },
+                { label: 'K-BB%', calc: (g) => {
+                    const t = futTbf(g);
+                    const v = futNum(g.SO) - futNum(g.BB);
+                    return pct(v, t);
+                } },
             ],
         };
         let FUT_STANDINGS = null;
@@ -669,34 +721,48 @@
         // 퓨처스 기록은 표 하나로 오므로 지표별 상위 5명을 여기서 뽑습니다.
         // 1군은 서버가 이미 지표별로 나눠 주지만 퓨처스는 원본이 순위표
         // 한 장입니다.
-        function futTop(group, col, lower) {
-            const i = (group.columns || []).indexOf(col);
-            if (i < 0) return null;
-            const num = (v) => {
-                // 이닝은 '82 2/3' 처럼 옵니다. 앞 정수만 봐도 순위가
-                // 뒤집히지 않습니다.
-                const m = /^(\d+(?:\.\d+)?)/.exec(String(v).trim());
-                return m ? Number.parseFloat(m[1]) : NaN;
-            };
-            const items = (group.rows || [])
-                .map((r) => ({ name: r.cells[1], team: r.cells[2], playerId: r.playerId, v: r.cells[i] }))
-                .filter((x) => Number.isFinite(num(x.v)))
-                .sort((a, b) => (lower ? num(a.v) - num(b.v) : num(b.v) - num(a.v)))
+        function futTop(group, def) {
+            const cols = group.columns || [];
+            // 행을 {컬럼명: 값} 으로 바꿔 둡니다. 계산 지표가 여러
+            // 컬럼을 함께 봐야 합니다.
+            const items = (group.rows || []).map((r) => {
+                const o = {};
+                cols.forEach((c, i) => { o[c] = r.cells[i]; });
+                const v = def.calc ? def.calc(o) : o[def.col];
+                return {
+                    name: r.cells[1], team: r.cells[2],
+                    playerId: r.playerId, teamCode: r.teamCode, v,
+                };
+            }).filter((x) => x.v != null && Number.isFinite(futNum(x.v)))
+                .sort((a, b) => (def.lower
+                    ? futNum(a.v) - futNum(b.v)
+                    : futNum(b.v) - futNum(a.v)))
                 .slice(0, 5);
             return items.length ? items : null;
         }
 
+        // 1군 `leaderCard` 와 같은 마크업을 씁니다. 클래스가 다르면
+        // 같은 자리에 다른 모양이 나옵니다.
         function futLeaderCard(def, items) {
-            if (!items) return '';
-            const rows = items.map((x, i) => `
-                <div class="leader-row">
-                    <span class="leader-rank">${i + 1}</span>
-                    ${playerLink(x.name, x.playerId, 'leader-name')}
-                    <span class="leader-team">${esc(x.team)}</span>
-                    <span class="leader-value">${esc(x.v)}</span>
-                </div>`).join('');
+            const rows = (items || []).map((x, i) => {
+                const code = x.teamCode || '';
+                const emblem = code
+                    ? `<img class="lr-emblem" src="assets/logos/${esc(code)}.png" alt="" loading="lazy" onerror="this.style.display='none'">`
+                    : '';
+                const nameHtml = x.playerId
+                    ? `<a class="lr-name player-link" href="pages/player-analytics?id=${encodeURIComponent(x.playerId)}">${esc(x.name)}</a>`
+                    : `<span class="lr-name">${esc(x.name)}</span>`;
+                return `<li class="lr-row">
+                    <span class="lr-rank">${i + 1}</span>
+                    ${emblem}
+                    ${nameHtml}
+                    <span class="lr-val">${esc(x.v)}</span>
+                </li>`;
+            }).join('');
             return `<div class="leader-card">
-                <div class="leader-card-title">${esc(def.label)}</div>${rows}</div>`;
+                <div class="leader-card-title">${esc(def.label)}</div>
+                <ol class="leader-list">${rows || '<li class="lr-empty">데이터 없음</li>'}</ol>
+            </div>`;
         }
 
         function renderFuturesLeaders() {
@@ -706,9 +772,8 @@
                 return;
             }
             const group = FUT_LEADERS[leadersTab] || {};
-            // ERA 만 낮을수록 좋습니다.
             const cards = FUT_LEADER_DEFS[leadersTab]
-                .map((d) => futLeaderCard(d, futTop(group, d.col, d.col === 'ERA')))
+                .map((d) => futLeaderCard(d, futTop(group, d)))
                 .join('');
             wrap.innerHTML = cards
                 ? `<div class="leaders-grid">${cards}</div>`
@@ -746,7 +811,11 @@
                 });
             const ln = document.getElementById('leaders-note');
             if (ln && fut) {
-                ln.textContent = '퓨처스는 타석 단위 자료가 공개되지 않아 wOBA·wRC+ 를 내지 않습니다.';
+                // 어림값을 정확한 값처럼 두지 않습니다. 1군 K%·BB% 는
+                // 상대타자수를 그대로 쓰지만 퓨처스는 그 값이 공개되지
+                // 않아 이닝·피안타·볼넷·사구로 되짚습니다.
+                ln.textContent = '퓨처스 기록실 기준 · BB%·K%·K-BB% 는 상대타자수가 '
+                    + '공개되지 않아 (3×이닝+피안타+볼넷+사구)로 어림한 값입니다';
             }
 
             if (fut) {

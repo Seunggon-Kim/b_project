@@ -15,21 +15,19 @@ const cache = ttlCache(300); // 1군 순위와 같은 5분
 const BASE = 'https://www.koreabaseball.com/Futures';
 const UA = { 'user-agent': 'Mozilla/5.0' };
 
-// 퓨처스 팀 -> 엠블럼 코드입니다. 1군에 없는 팀이 셋 있습니다.
+// 퓨처스 팀 -> 엠블럼 코드입니다.
 //
-//     상무   국군체육부대. 1군에 대응 팀이 없습니다.
-//     고양   히어로즈 2군. 1군은 '키움' 입니다.
-//     울산   롯데 2군. 1군은 '롯데' 입니다.
+// **상무와 울산은 제 로고가 따로 있습니다.** `assets/logos/SM.png`,
+// `UL.png` 입니다. 퓨처스 경기 카드가 이미 그 코드를 쓰고 있었는데
+// 순위표에서 빠뜨려 상무만 로고가 안 나왔습니다.
 //
-// 로고가 없는 팀은 빈 문자열로 두고 화면이 팀 코드 글자로 물러섭니다
-// (`emblemError`).
+//     상무   국군체육부대           SM
+//     울산   롯데 2군               UL
+//     고양   히어로즈 2군           WO (제 로고 없음, 1군 것을 씁니다)
 export const FUTURES_TEAM_CODE = {
   LG: 'LG', KT: 'KT', 두산: 'OB', 삼성: 'SS', KIA: 'HT',
   롯데: 'LT', SSG: 'SK', NC: 'NC', 키움: 'WO', 한화: 'HH',
-  // 2군 연고지 이름으로 나오는 팀입니다.
-  고양: 'WO', 울산: 'LT',
-  // 상무는 군 팀이라 대응하는 구단 로고가 없습니다.
-  상무: '',
+  상무: 'SM', 울산: 'UL', 고양: 'WO',
 };
 
 /**
@@ -139,7 +137,13 @@ async function parseLeaders(path) {
     // 이름 칸(두 번째)의 링크에서 ID 를 꺼냅니다. 없으면 null 이고
     // 화면은 링크 없이 이름만 보여 줍니다.
     const m = /playerId=(\d+)/.exec(raw[1] || '');
-    rows.push({ cells, playerId: m ? Number.parseInt(m[1], 10) : null });
+    rows.push({
+      cells,
+      playerId: m ? Number.parseInt(m[1], 10) : null,
+      // 로고 코드는 여기서 붙입니다. 화면이 팀 표를 또 갖고 있으면
+      // 한쪽만 고쳤을 때 로고가 조용히 사라집니다.
+      teamCode: FUTURES_TEAM_CODE[cells[2]] ?? '',
+    });
   }
   return { columns, rows };
 }
