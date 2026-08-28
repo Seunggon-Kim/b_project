@@ -2121,6 +2121,21 @@ h2 .material-symbols-outlined,
    그대로 쓰므로 폭·헤더 정렬은 이미 맞습니다. 여기서는 안쪽만
    정의합니다. */
 
+/* 이 줄의 머리바는 위 순위 줄보다 붙입니다. 구단 선택 알약이 탭보다
+   작아 헤더가 낮은데, 같은 1rem 을 두면 아래 표까지 멀어 보입니다.
+   좌우 두 칸에 함께 걸어야 등말소와 명단의 시작 위치가 어긋나지
+   않습니다. */
+.roster-row .schedule-bar {
+    min-height: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+/* select 는 기본이 display:block 이라 줄 아래에 여백이 생깁니다. */
+.roster-team-select {
+    display: inline-block;
+    vertical-align: middle;
+}
+
 .mv-day {
     padding: 1rem 1.25rem;
     border-bottom: 1px solid var(--border-color);
