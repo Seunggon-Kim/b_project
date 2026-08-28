@@ -155,10 +155,11 @@ def build_matrix(conn):
         _add(matrix, path, {"season": EMPTY_SEASON})
 
     # 선수 상세: 존재하는 ID 3개 + 존재하지 않는 ID
+    # `/news` 는 뺐습니다. 뉴스 수집과 라우트를 함께 없앴습니다.
     for pid in players:
-        for suffix in ["", "/news", "/arsenal", "/usage"]:
+        for suffix in ["", "/arsenal", "/usage"]:
             _add(matrix, "/players/%s%s" % (pid, suffix))
-    for suffix in ["", "/news", "/arsenal", "/usage"]:
+    for suffix in ["", "/arsenal", "/usage"]:
         _add(matrix, "/players/%s%s" % (NONEXISTENT_PLAYER_ID, suffix),
              tag="nonexistent")
 

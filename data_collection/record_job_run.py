@@ -30,7 +30,7 @@ KST = timezone(timedelta(hours=9))
 # (dashboard_js/pages/database-explorer.html).
 KNOWN_JOBS = {
     "official_stats", "pbp", "games", "player_detector", "cleanup",
-    "park_factors", "registry_sync", "futures", "player_info", "news",
+    "park_factors", "registry_sync", "futures", "player_info",
 }
 
 

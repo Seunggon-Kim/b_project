@@ -13,13 +13,13 @@ test('경로가 다르면 null 입니다', () => {
 
 test('자리표시자를 값으로 뽑습니다', () => {
   assert.deepEqual(
-    matchPath('/players/:id/news', '/players/50030/news'),
+    matchPath('/players/:id/arsenal', '/players/50030/arsenal'),
     { id: '50030' },
   );
 });
 
 test('자리표시자 개수가 다르면 매칭되지 않습니다', () => {
-  assert.equal(matchPath('/players/:id/news', '/players/50030'), null);
+  assert.equal(matchPath('/players/:id/arsenal', '/players/50030'), null);
 });
 
 test('경로 값의 퍼센트 인코딩을 풉니다', () => {

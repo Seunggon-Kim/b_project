@@ -4,7 +4,6 @@ import { withCache } from './lib/cachepolicy.js';
 import { standings } from './routes/standings.js';
 import { schedule } from './routes/schedule.js';
 import { futures } from './routes/futures.js';
-import { news } from './routes/news.js';
 import { leaders } from './routes/leaders.js';
 import { teams } from './routes/teams.js';
 import { dashboardStats } from './routes/dashboard.js';
@@ -36,7 +35,10 @@ router.add('GET', '/', () => json({
 router.add('GET', '/standings', standings);
 router.add('GET', '/schedule', schedule);
 router.add('GET', '/schedule/futures', futures);
-router.add('GET', '/players/:id/news', news);
+// `/players/:id/news` 는 없앴습니다. 뉴스 수집을 그만두기로 했습니다.
+// 1982년까지 선수를 넣으면서 대상이 562명에서 1,745명으로 늘었고,
+// 구글 뉴스는 은퇴 선수에게 쓸 만한 결과를 주지 못합니다. 매일 25분을
+// 쓰면서 러너 IP 가 걸려 자주 실패하기도 했습니다.
 router.add('GET', '/leaders', leaders);
 router.add('GET', '/teams', teams);
 router.add('GET', '/dashboard/stats', dashboardStats);

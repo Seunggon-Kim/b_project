@@ -825,7 +825,12 @@ h4 {
     white-space: nowrap;
 }
 
-/* ========== News Section ========== */
+/* ========== Player Details ========== */
+/* 칸이 셋이었습니다: 프로필·시즌별 성적·최신 뉴스.
+   뉴스 수집을 그만두면서 뉴스 칸을 없앴습니다. 칸을 그냥 빼면 오른쪽
+   3분의 1이 빈 채로 남으므로, 성적 칸이 두 칸을 씁니다.
+   아래쪽 `span 3` 짜리 전체 폭 표들이 그대로 맞도록 열은 셋을
+   유지합니다. */
 .player-details-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
@@ -835,14 +840,17 @@ h4 {
     /* 높이를 똑같이 맞춤 */
 }
 
+.player-details-grid>.stats-card {
+    grid-column: span 2;
+}
+
 #player-card {
     height: 100%;
     overflow: hidden;
 }
 
 .player-card,
-.stats-card,
-.news-card {
+.stats-card {
     height: 100%;
     /* 부모 높이에 꽉 차게 */
     margin-bottom: 0;
@@ -915,71 +923,9 @@ h4 {
     background: rgba(255, 255, 255, 0.05) !important;
 }
 
-
-.news-card {
-    display: flex;
-    flex-direction: column;
-    min-height: 480px;
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius-lg);
-    padding: 1.5rem;
-}
-
-.news-list {
-    overflow-y: auto;
-    flex-grow: 1;
-}
-
-.news-item {
-    display: flex;
-    gap: 1rem;
-    padding: 1rem;
-    border-bottom: 1px solid var(--border-color);
-    transition: var(--transition);
-    text-decoration: none;
-    color: inherit;
-}
-
-.news-item:last-child {
-    border-bottom: none;
-}
-
-.news-item:hover {
-    background: var(--bg-glass);
-    transform: translateX(5px);
-}
-
-.news-thumb {
-    width: 80px;
-    height: 60px;
-    border-radius: 4px;
-    object-fit: cover;
-    flex-shrink: 0;
-}
-
-.news-content {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-}
-
-.news-title {
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: var(--text-primary);
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    /* Standard */
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
-.news-meta {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-}
+/* `.news-card` `.news-list` `.news-item` `.news-thumb` `.news-content`
+   `.news-title` `.news-meta` 가 여기 있었습니다. 뉴스 기능을 없애면서
+   함께 지웠습니다. */
 
 /* ========== Utility Classes ========== */
 .text-center {

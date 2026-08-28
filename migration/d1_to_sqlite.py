@@ -46,9 +46,8 @@ USE_SHELL = os.name == "nt"
 # 한 곳만 받으면 조용히 1/4 만 계산됩니다.
 SHARDED_TABLES = {"play_by_play"}
 
-# 파크팩터 파이프라인이 읽는 표입니다. 전부 받지 않는 이유는
-# player_news(1.26MB)처럼 계산에 쓰이지 않는 표까지 받을 이유가
-# 없기 때문입니다.
+# 파크팩터 파이프라인이 읽는 표입니다. 계산에 쓰이지 않는 표까지
+# 받을 이유가 없어 필요한 것만 적습니다.
 PIPELINE_TABLES = [
     "play_by_play",
     "games",

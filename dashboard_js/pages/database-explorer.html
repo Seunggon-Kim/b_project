@@ -559,21 +559,13 @@
                                 </tr>
                                 <tr>
                                     <td class="dbx-cron-mods">
-                                        selenium_batter_scraper.py <span class="seq">&rarr;</span>
-                                        selenium_pitcher_scraper.py <span class="seq">&rarr;</span>
+                                        official_stats_http.py <span class="seq">&rarr;</span>
                                         csv_to_d1.py
                                     </td>
                                     <td class="dbx-cron-desc">KBO 공식 타자·투수 통계를 수집해 kbo_official_*_stats에 갱신 저장합니다
                                         (있으면 갱신, 없으면 추가).</td>
                                     <td class="dbx-cron-kst" title="크론식(UTC): 33 18 * * *">매일 03:33</td>
                                     <td class="dbx-cron-upd pending" data-job="official_stats">-</td>
-                                </tr>
-                                <tr>
-                                    <td class="dbx-cron-mods">collect_player_news.py</td>
-                                    <td class="dbx-cron-desc">선수별 최신 뉴스를 모아 player_news에 적재합니다. 절반도 모으지 못하면
-                                        적재하지 않고 기존 내용을 그대로 둡니다.</td>
-                                    <td class="dbx-cron-kst" title="크론식(UTC): 33 18 * * *">매일 03:33</td>
-                                    <td class="dbx-cron-upd pending" data-job="news">-</td>
                                 </tr>
                                 <tr>
                                     <td class="dbx-cron-mods">park_factors 파이프라인

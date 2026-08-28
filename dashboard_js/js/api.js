@@ -64,20 +64,6 @@ class API {
     }
 
     /**
-     * Get player news
-     */
-    static async getPlayerNews(playerId) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/players/${playerId}/news`);
-            if (!response.ok) throw new Error('Failed to fetch player news');
-            return await response.json();
-        } catch (error) {
-            console.error('Error fetching player news:', error);
-            return { news: [] };
-        }
-    }
-
-    /**
      * Get Pitch Arsenal
      */
     static async getPitchArsenal(playerId) {

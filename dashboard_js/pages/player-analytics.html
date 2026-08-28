@@ -73,7 +73,9 @@
                 <!-- Filled dynamically -->
             </div>
 
-            <!-- Player Details Grid (Profile + Stats + News) -->
+            <!-- Player Details Grid (Profile + Stats) -->
+            <!-- 뉴스 칸이 있었습니다. 수집을 그만두면서 없앴습니다.
+                 시즌별 성적이 그 자리를 함께 씁니다(2칸). -->
             <div class="player-details-grid fade-in">
                 <!-- Player Card -->
                 <div id="player-card"></div>
@@ -84,13 +86,6 @@
                     <div id="player-stats"></div>
                 </div>
 
-                <!-- News Card -->
-                <div class="news-card" id="player-news">
-                    <h3 class="card-title mb-2">최신 뉴스</h3>
-                    <div id="news-list" class="news-list">
-                        <!-- News items will be loaded here -->
-                    </div>
-                </div>
                 <!-- Standard Stats Table (Pitching) -->
                 <div id="detailed-stats-section" class="detailed-stats-container fade-in hidden">
                     <h3 class="card-title mb-3" id="detailed-stats-title">Standard</h3>
@@ -365,22 +360,16 @@
         async function loadPlayerInfo(playerId) {
             const section = document.getElementById('player-info-section');
             const cardDiv = document.getElementById('player-card');
-            const newsDiv = document.getElementById('news-list');
             const statsDiv = document.getElementById('player-stats');
             const headerBar = document.getElementById('player-header-bar');
 
             section.classList.remove('hidden');
             headerBar.innerHTML = '';
             cardDiv.innerHTML = createLoadingSpinner();
-            newsDiv.innerHTML = createLoadingSpinner();
             statsDiv.innerHTML = createLoadingSpinner();
 
             try {
-                // Fetch player info and news in parallel
-                const [player, newsData] = await Promise.all([
-                    API.getPlayerInfo(playerId),
-                    API.getPlayerNews(playerId)
-                ]);
+                const player = await API.getPlayerInfo(playerId);
 
                 currentPlayer = player;
 
@@ -463,21 +452,6 @@
                         </div>
                     </div>
                 `;
-
-                // News UI
-                if (newsData.news && newsData.news.length > 0) {
-                    newsDiv.innerHTML = newsData.news.map(item => `
-                        <a href="${item.link}" target="_blank" class="news-item">
-                            ${item.thumb ? `<img src="${item.thumb}" class="news-thumb" alt="thumbnail">` : ''}
-                            <div class="news-content">
-                                <div class="news-title">${item.title}</div>
-                                <div class="news-meta">${item.press}</div>
-                            </div>
-                        </a>
-                    `).join('');
-                } else {
-                    newsDiv.innerHTML = '<p class="text-muted p-2">최신 뉴스가 없습니다.</p>';
-                }
 
                 // Stats Table
                 const isPitcher = player.position === '투수';

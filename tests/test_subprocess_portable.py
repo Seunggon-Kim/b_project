@@ -25,7 +25,6 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # 워크플로가 부르는 스크립트와 그것들이 쓰는 모듈입니다.
 WORKFLOW_CODE = [
-    "data_collection/collect_player_news.py",
     "data_collection/csv_to_d1.py",
     "data_collection/d1_load.py",
     "data_collection/daily_games_to_d1.py",
@@ -78,8 +77,8 @@ def _kind(node):
 def assigned_kinds(tree, name):
     """그 이름에 무엇이 대입되는지 모읍니다.
 
-    변수라고 무조건 리스트로 보면 안 됩니다. collect_player_news.py 는
-    문자열을 변수에 담아 넘기는데, 문자열 + shell=True 는 두 플랫폼 다
+    변수라고 무조건 리스트로 보면 안 됩니다. 문자열을 변수에 담아
+    넘기는 코드가 있는데, 문자열 + shell=True 는 두 플랫폼 다
     정상입니다. 그걸 막으면 멀쩡한 코드를 고치게 됩니다.
     """
     kinds = set()

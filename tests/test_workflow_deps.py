@@ -46,7 +46,6 @@ ENTRYPOINTS = {
         # 공식 기록은 브라우저 없이 HTTP 로 읽습니다.
         "data_collection/official_stats_http.py",
         "data_collection/csv_to_d1.py",
-        "data_collection/collect_player_news.py",
         "data_collection/record_job_run.py",
         # subprocess 로 부릅니다. import 로는 안 보입니다.
         "crawler/pbp.py",

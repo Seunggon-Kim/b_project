@@ -12,7 +12,6 @@
 """
 import argparse
 import sys
-import time
 
 URL = "https://www.koreabaseball.com/Record/Player/HitterBasic/Basic1.aspx"
 
@@ -91,61 +90,17 @@ def probe_selenium():
         driver.quit()
 
 
-GOOGLE_NEWS = ("https://news.google.com/rss/search"
-               "?q=%EC%95%BC%EA%B5%AC&hl=ko&gl=KR&ceid=KR:ko")
-
-
-def probe_google_news():
-    """Actions 러너에서 구글 뉴스 RSS 가 열리는지 봅니다.
-
-    Cloudflare 엣지에서는 막혔습니다(설계 문서 §7 위험 2 판정). 다섯 번 중
-    한 번만 200 이 오고 나머지는 Google 의 `Sorry...` 봇 차단 페이지입니다.
-    러너에서 안정적으로 열린다면, Actions 가 미리 모아 두고 Worker 는 그것을
-    읽는 구조를 쓸 수 있습니다. 그 판단에 쓸 자료를 만듭니다.
-    """
-    import requests
-
-    ok = 0
-    for i in range(1, 6):
-        try:
-            r = requests.get(GOOGLE_NEWS, timeout=20, headers={
-                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                              "(KHTML, like Gecko) Chrome/125.0 Safari/537.36",
-            })
-            body = r.text
-            good = r.status_code == 200 and "<rss" in body[:600]
-            if good:
-                ok += 1
-            print("  %d회: HTTP %s, %d자, %s" % (
-                i, r.status_code, len(body), "정상 RSS" if good else "차단 또는 오류"))
-            if not good:
-                print("       앞부분: %s" % body[:120].replace("\n", " "))
-        except Exception as exc:
-            print("  %d회: 실패 (%s: %s)" % (i, type(exc).__name__, exc))
-        time.sleep(2)
-
-    print()
-    print("성공 %d / 5" % ok)
-    if ok == 5:
-        print("판정: 러너에서 안정적으로 열립니다. Actions 선수집이 가능합니다.")
-        return 0
-    if ok == 0:
-        print("판정: 러너에서도 막힙니다. Actions 선수집은 쓸 수 없습니다.")
-        return 1
-    print("판정: 간헐적입니다. 재시도를 붙여도 신뢰하기 어렵습니다.")
-    return 1
+# `google-news` 모드가 있었습니다. 러너에서 구글 뉴스 RSS 가 열리는지
+# 재던 것인데, 뉴스 수집 자체를 그만두면서 없앴습니다.
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--mode", choices=["http", "selenium", "google-news"],
-                    required=True)
+    ap.add_argument("--mode", choices=["http", "selenium"], required=True)
     args = ap.parse_args()
     if args.mode == "http":
         return probe_http()
-    if args.mode == "selenium":
-        return probe_selenium()
-    return probe_google_news()
+    return probe_selenium()
 
 
 if __name__ == "__main__":

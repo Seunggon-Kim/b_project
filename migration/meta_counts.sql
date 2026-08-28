@@ -7,7 +7,6 @@ INSERT OR REPLACE INTO meta_table_counts SELECT 'games', COUNT(*), datetime('now
 INSERT OR REPLACE INTO meta_table_counts SELECT 'kbo_official_batter_stats', COUNT(*), datetime('now') FROM "kbo_official_batter_stats";
 INSERT OR REPLACE INTO meta_table_counts SELECT 'kbo_official_pitcher_stats', COUNT(*), datetime('now') FROM "kbo_official_pitcher_stats";
 INSERT OR REPLACE INTO meta_table_counts SELECT 'play_by_play', COUNT(*), datetime('now') FROM "play_by_play";
-INSERT OR REPLACE INTO meta_table_counts SELECT 'player_news', COUNT(*), datetime('now') FROM "player_news";
 INSERT OR REPLACE INTO meta_table_counts SELECT 'players', COUNT(*), datetime('now') FROM "players";
 INSERT OR REPLACE INTO meta_table_counts SELECT 'self_park_factor', COUNT(*), datetime('now') FROM "self_park_factor";
 INSERT OR REPLACE INTO meta_table_counts SELECT 'stadium_dim', COUNT(*), datetime('now') FROM "stadium_dim";
