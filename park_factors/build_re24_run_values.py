@@ -48,9 +48,18 @@ CANON12=['1B','2B','3B','HBP','HR','IBB','OutInPlay','ROE','SO','SacBunt','SacFl
 def isval(s): return s.notna() & (s.astype(str)!='None') & (s.astype(str)!='')
 
 def load_year(con, yr):
-    q=("SELECT pbp_id,game_date,away,home,inning,inning_topbot,outs,score_home,score_away,"
-       "pa_result,on_1b,on_2b,on_3b FROM play_by_play "
-       "WHERE game_date>=%d0101 AND game_date<=%d1231 ORDER BY pbp_id" % (yr,yr))
+    # **정규시즌만 씁니다.** 득점기대값은 정규시즌 기준 지표인데, 날짜로만
+    # 거르면 10~11월 포스트시즌 타석이 그대로 섞입니다.
+    #
+    # gameID 앞 네 자리로 거르는 방법은 쓰지 않습니다. 포스트시즌은 그
+    # 자리에 연도 대신 시리즈 코드가 들어가고(3333·4444·5555·7777),
+    # 6666(순위결정전)은 코드처럼 생겼지만 정규시즌입니다. games.game_type
+    # 이 이미 그 판정을 담고 있으니 그것을 씁니다(data_collection/game_type.py).
+    q=("SELECT p.pbp_id,p.game_date,p.away,p.home,p.inning,p.inning_topbot,p.outs,"
+       "p.score_home,p.score_away,p.pa_result,p.on_1b,p.on_2b,p.on_3b "
+       "FROM play_by_play p JOIN games g ON g.game_id = p.gameID "
+       "WHERE g.game_type='정규시즌' "
+       "AND p.game_date>=%d0101 AND p.game_date<=%d1231 ORDER BY p.pbp_id" % (yr,yr))
     df=pd.read_sql_query(q,con)
     for c in ['outs','inning','score_home','score_away','pbp_id']:
         df[c]=pd.to_numeric(df[c],errors='coerce')

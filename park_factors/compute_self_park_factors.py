@@ -41,16 +41,28 @@ def park_full(home_team, stadium_short, season):
     return None if stadium_short in SECONDARY else team_park(home_team, season)
 
 def load_games(years):
-    ylist = ",".join("'%d'" % y for y in years)
-    q = f"""SELECT gameID, MAX(home) home, MAX(away) away, MAX(stadium) stadium,
-            CAST(substr(gameID,1,4) AS INT) season, SUM(runs_scored) total_runs,
-            SUM(CASE WHEN pa_result IN ('안타','내야안타','번트 안타') THEN 1 ELSE 0 END) b1,
-            SUM(CASE WHEN pa_result='2루타' THEN 1 ELSE 0 END) b2,
-            SUM(CASE WHEN pa_result='3루타' THEN 1 ELSE 0 END) b3,
-            SUM(CASE WHEN pa_result='홈런' THEN 1 ELSE 0 END) hr,
-            SUM(CASE WHEN pa_result IS NOT NULL AND pa_result NOT IN
+    # 시즌은 game_date 에서 뽑습니다. **gameID 앞 네 자리를 쓰면 안 됩니다.**
+    # 포스트시즌은 그 자리에 연도 대신 시리즈 코드가 들어가(3333·4444·
+    # 5555·7777) '3333' 시즌이 되어 결과에서 빠집니다. 그동안은 그 사고가
+    # 우연히 포스트시즌을 걸러 주고 있었지만, 정규시즌인 6666(순위결정전)
+    # 까지 함께 버리고 있었습니다.
+    #
+    # 이제 game_date 로 시즌을 정하고 games.game_type 으로 포스트시즌을
+    # 명시적으로 거릅니다. 파크팩터는 정규시즌 기준 지표입니다.
+    ylist = ",".join("%d" % y for y in years)
+    q = f"""SELECT p.gameID gameID, MAX(p.home) home, MAX(p.away) away,
+            MAX(p.stadium) stadium,
+            CAST(MAX(p.game_date) AS INT)/10000 season, SUM(p.runs_scored) total_runs,
+            SUM(CASE WHEN p.pa_result IN ('안타','내야안타','번트 안타') THEN 1 ELSE 0 END) b1,
+            SUM(CASE WHEN p.pa_result='2루타' THEN 1 ELSE 0 END) b2,
+            SUM(CASE WHEN p.pa_result='3루타' THEN 1 ELSE 0 END) b3,
+            SUM(CASE WHEN p.pa_result='홈런' THEN 1 ELSE 0 END) hr,
+            SUM(CASE WHEN p.pa_result IS NOT NULL AND p.pa_result NOT IN
                 ('삼진','볼넷','몸에 맞는 볼','자동 고의4구','고의4구','낫아웃 출루') THEN 1 ELSE 0 END) inplay
-            FROM play_by_play WHERE substr(gameID,1,4) IN ({ylist}) GROUP BY gameID"""
+            FROM play_by_play p JOIN games g ON g.game_id = p.gameID
+            WHERE g.game_type='정규시즌'
+              AND CAST(p.game_date AS INT)/10000 IN ({ylist})
+            GROUP BY p.gameID"""
     games = []
     for r in cur.execute(q):
         g = dict(r); g['stadium_full'] = park_full(g['home'], g['stadium'], g['season'])

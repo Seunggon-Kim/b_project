@@ -60,9 +60,21 @@ for r in cur.execute("""SELECT season, SUM(base_on_balls) bb, SUM(hit_by_pitch) 
         LGW[r['season']]=(w['fg_wBB']*r['bb']+w['fg_wHBP']*r['hbp']+w['fg_w1B']*r['one']+w['fg_w2B']*r['d2']+w['fg_w3B']*r['d3']+w['fg_wHR']*r['hr'])/r['den']
 
 PA={}
-q=f"""SELECT batter_ID bid, CAST(substr(gameID,1,4) AS INT) season, stadium,
-       COUNT(DISTINCT gameID||'_'||pa_number) pa FROM play_by_play
-       WHERE substr(gameID,1,4) IN ({",".join("'%s'"%y for y in YSTR)}) GROUP BY batter_ID, season, stadium"""
+# 시즌은 game_date 에서 뽑고 포스트시즌은 games.game_type 으로 거릅니다.
+#
+# 전에는 gameID 앞 네 자리를 썼습니다. 포스트시즌은 그 자리에 연도 대신
+# 시리즈 코드가 들어가(3333·4444·5555·7777) '3333' 시즌이 되어 저절로
+# 빠졌는데, 정규시즌인 6666(순위결정전)까지 함께 빠졌습니다.
+#
+# wRC+ 는 정규시즌 기준 지표라 포스트시즌 타석이 들어가면 안 됩니다.
+# 2008~2014 를 되채우면 포스트시즌 103경기가 더 들어오므로 명시적으로
+# 거릅니다.
+q=f"""SELECT p.batter_ID bid, CAST(p.game_date AS INT)/10000 season, p.stadium stadium,
+       COUNT(DISTINCT p.gameID||'_'||p.pa_number) pa
+       FROM play_by_play p JOIN games g ON g.game_id = p.gameID
+       WHERE g.game_type='정규시즌'
+         AND CAST(p.game_date AS INT)/10000 IN ({",".join("%d"%y for y in YEARS)})
+       GROUP BY p.batter_ID, season, p.stadium"""
 for r in cur.execute(q):
     try: PA.setdefault((int(r['bid']),r['season']),[]).append((r['stadium'],r['pa']))
     except (TypeError,ValueError): continue

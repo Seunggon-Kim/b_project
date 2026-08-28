@@ -25,6 +25,7 @@ import argparse
 import datetime
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -36,17 +37,34 @@ from d1_load import query  # noqa: E402
 FIRST, LAST = 2008, 2014
 
 
-def season_range(season):
-    """그 시즌 첫 경기와 마지막 경기 날짜입니다 (YYYYMMDD 문자열)."""
-    rows = query("SELECT MIN(game_date) AS lo, MAX(game_date) AS hi "
-                 "FROM games WHERE season = %d;" % int(season))
-    if not rows or rows[0]["lo"] is None:
-        return None
-    return str(rows[0]["lo"]), str(rows[0]["hi"])
+def all_ranges(tries=4):
+    """시즌별 (첫 경기, 마지막 경기) 를 **한 번에** 읽습니다.
+
+    시즌마다 따로 물으면 D1 호출이 일곱 번이 되고, 그중 한 번만
+    실패해도 세 시간짜리 수집이 중간에 죽습니다. 실제로 2010 에서
+    죽었습니다(`7403 not authorized`, 일시적 오류).
+
+    한 번으로 줄이고, 그 한 번도 재시도합니다.
+    """
+    last = None
+    for i in range(tries):
+        try:
+            rows = query(
+                "SELECT season, MIN(game_date) AS lo, MAX(game_date) AS hi "
+                "FROM games WHERE season BETWEEN %d AND %d "
+                "GROUP BY season ORDER BY season;" % (FIRST, LAST))
+            return {int(r["season"]): (str(r["lo"]), str(r["hi"])) for r in rows}
+        except Exception as e:                       # noqa: BLE001
+            last = e
+            wait = 5 * (i + 1)
+            print("  구간 조회 실패(%d/%d). %d초 뒤 다시 시도합니다: %s"
+                  % (i + 1, tries, wait, str(e)[:80]), flush=True)
+            time.sleep(wait)
+    raise RuntimeError("시즌 구간을 못 읽었습니다: %s" % last)
 
 
-def collect(season, save_root, dry_run=False):
-    lo_hi = season_range(season)
+def collect(season, save_root, ranges, dry_run=False):
+    lo_hi = ranges.get(int(season))
     if not lo_hi:
         print("  %d: games 에 그 시즌이 없습니다" % season)
         return False
@@ -104,10 +122,12 @@ def main():
 
     years = [args.year] if args.year else list(range(args.start, args.end + 1))
     print("저장 위치: %s" % save_root)
+    # D1 은 여기서 딱 한 번 부릅니다. 나머지는 네이버만 씁니다.
+    ranges = all_ranges()
     t0 = datetime.datetime.now()
     bad = []
     for y in years:
-        if not collect(y, save_root, args.dry_run):
+        if not collect(y, save_root, ranges, args.dry_run):
             bad.append(y)
     mins = (datetime.datetime.now() - t0).total_seconds() / 60
 
