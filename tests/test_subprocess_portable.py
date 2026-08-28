@@ -33,6 +33,7 @@ WORKFLOW_CODE = [
     "data_collection/player_info_scraper.py",
     "data_collection/record_job_run.py",
     "migration/d1_to_sqlite.py",
+    "migration/shard_backfill.py",
     "migration/sqlite_to_d1.py",
 ]
 

@@ -47,6 +47,8 @@ ENTRYPOINTS = {
         "data_collection/official_stats_http.py",
         "data_collection/csv_to_d1.py",
         "data_collection/record_job_run.py",
+        # 2008~2014 PBP 되채우기. 끝나면 워크플로에서 빼십시오.
+        "migration/shard_backfill.py",
         # subprocess 로 부릅니다. import 로는 안 보입니다.
         "crawler/pbp.py",
         "crawler/download.py",

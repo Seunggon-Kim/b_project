@@ -171,6 +171,35 @@ jobs:
           python data_collection/record_job_run.py --job official_stats --status $S \
             --note "타자 ${{ steps.load_batter.outcome }} / 투수 ${{ steps.load_pitcher.outcome }}"
 
+      # --- 4. 옛 시즌 PBP 되채우기 (2008~2014) ------------------------
+      # 하루 예산만큼만 밀어 넣습니다. 약 51일 걸립니다.
+      #
+      # D1 무료는 하루 10만 행 쓰기인데 `play_by_play` 는 인덱스가 셋이라
+      # 한 행이 4로 계상됩니다(실측: 50행 -> 201). 2008~2014 는 120만
+      # 행이라 계상 쓰기가 480만이고 한 번에 못 넣습니다.
+      #
+      # **위 단계들이 먼저 끝난 뒤에 둡니다.** 오늘 경기 적재가 이
+      # 백필보다 중요합니다. 예산이 모자라면 백필이 밀리는 편이 낫습니다.
+      #
+      # 진행 위치는 D1 `meta_backfill` 에 남습니다. 러너는 매번 새로
+      # 시작해 로컬 파일이 안 남습니다. 실패해도 커서가 안 옮겨져
+      # 다음 날 같은 자리에서 다시 합니다.
+      #
+      # 끝나면 이 단계는 "모두 끝났습니다" 만 찍고 넘어갑니다.
+      # 그때 지우십시오.
+      - name: 옛 시즌 PBP 되채우기
+        id: backfill
+        continue-on-error: true
+        timeout-minutes: 45
+        run: python migration/shard_backfill.py --budget 23000
+
+      - name: 되채우기 결과 기록
+        if: always()
+        continue-on-error: true
+        run: |
+          python data_collection/record_job_run.py --job pbp_backfill \
+            --status ${{ steps.backfill.outcome == 'success' && 'ok' || 'fail' }}
+
       # --- 5. 캐시 비우기 ---------------------------------------------
       # 이걸 빠뜨리면 적재해도 최대 한 시간 동안 화면이 어제 숫자를
       # 보여 줍니다. 2026 시즌을 넣었을 때 실제로 겪은 문제입니다.
@@ -233,6 +262,7 @@ jobs:
             echo "| 타자 적재 | ${{ steps.load_batter.outcome }} |"
             echo "| 투수 수집 | ${{ steps.scrape_pitcher.outcome }} |"
             echo "| 투수 적재 | ${{ steps.load_pitcher.outcome }} |"
+            echo "| 옛 시즌 PBP 되채우기 | ${{ steps.backfill.outcome }} |"
             echo "| 캐시 비우기 | ${{ steps.purge.outcome }} |"
           } >> $GITHUB_STEP_SUMMARY
 

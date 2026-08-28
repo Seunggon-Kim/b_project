@@ -32,6 +32,8 @@ test('시즌이 겹치지 않고 빠지지 않습니다', () => {
 });
 
 const env = {
+  DB_2008_2011: { tag: 'x' },
+  DB_2012_2014: { tag: 'y' },
   DB_2015_2017: { tag: 'a' },
   DB_2018_2020: { tag: 'b' },
   DB_2021_2023: { tag: 'c' },
@@ -51,11 +53,21 @@ test('문자열 시즌도 받습니다', () => {
 });
 
 test('배정에 없는 시즌은 null 입니다', () => {
-  assert.equal(shardOf(env, 2014), null);
+  // 2007 이하는 네이버에 PBP 가 없고, 2027 은 아직 안 왔습니다.
+  assert.equal(shardOf(env, 2007), null);
   assert.equal(shardOf(env, 2027), null);
   assert.equal(shardOf(env, 'abc'), null);
-  assert.equal(hasSeason(2014), false);
+  assert.equal(hasSeason(2007), false);
   assert.equal(hasSeason(2019), true);
+});
+
+test('옛 시즌도 담당 DB 가 있습니다', () => {
+  // 2008~2014 를 되채우면서 샤드 둘을 더했습니다.
+  assert.equal(shardOf(env, 2008).tag, 'x');
+  assert.equal(shardOf(env, 2011).tag, 'x');
+  assert.equal(shardOf(env, 2012).tag, 'y');
+  assert.equal(shardOf(env, 2014).tag, 'y');
+  assert.equal(hasSeason(2008), true);
 });
 
 test('필요한 DB 에만 묻습니다', () => {
@@ -79,7 +91,7 @@ test('중복과 순서가 정리됩니다', () => {
 });
 
 test('배정에 없는 시즌은 묶음에서 빠집니다', () => {
-  const g = groupBySeason(env, [2014, 2019, 2030]);
+  const g = groupBySeason(env, [2007, 2019, 2030]);
   assert.equal(g.length, 1);
   assert.deepEqual(g[0].seasons, [2019]);
 });
@@ -136,9 +148,12 @@ test('기간이 걸치는 시즌을 모두 찾습니다', () => {
 });
 
 test('배정에 없는 연도는 기간에서 빠집니다', () => {
-  // 2014 이전을 물어도 오류가 아니라 빈 결과입니다.
-  assert.deepEqual(seasonsBetween(20120101, 20140101), []);
-  assert.deepEqual(seasonsBetween(20140101, 20150501), [2015]);
+  // 2007 이하를 물어도 오류가 아니라 빈 결과입니다. 네이버가 2008
+  // 부터만 줍니다.
+  assert.deepEqual(seasonsBetween(20050101, 20070101), []);
+  assert.deepEqual(seasonsBetween(20070101, 20080501), [2008]);
+  // 옛 시즌 샤드를 더한 뒤로 2012~2014 는 배정에 있습니다.
+  assert.deepEqual(seasonsBetween(20120101, 20140101), [2012, 2013, 2014]);
 });
 
 test('뒤집힌 기간은 빈 목록입니다', () => {

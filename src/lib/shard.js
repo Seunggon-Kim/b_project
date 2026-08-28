@@ -11,6 +11,8 @@
 // import 속성을 다르게 다뤄 한쪽에서만 깨지기 때문입니다.
 
 export const SHARDS = [
+  { binding: 'DB_2008_2011', seasons: [2008, 2009, 2010, 2011] },
+  { binding: 'DB_2012_2014', seasons: [2012, 2013, 2014] },
   { binding: 'DB_2015_2017', seasons: [2015, 2016, 2017] },
   { binding: 'DB_2018_2020', seasons: [2018, 2019, 2020] },
   { binding: 'DB_2021_2023', seasons: [2021, 2022, 2023] },

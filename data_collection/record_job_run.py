@@ -31,6 +31,8 @@ KST = timezone(timedelta(hours=9))
 KNOWN_JOBS = {
     "official_stats", "pbp", "games", "player_detector", "cleanup",
     "park_factors", "registry_sync", "futures", "player_info",
+    # 2008~2014 PBP 되채우기입니다. 약 51일 걸리고 끝나면 없앱니다.
+    "pbp_backfill",
 }
 
 

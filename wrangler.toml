@@ -28,6 +28,18 @@ enabled = true
 # 표를 쪼갤 수는 없으니 DB 를 나눕니다. 배정 정본은
 # migration/shard_plan.json 이고 src/lib/shard.js 가 사본입니다.
 
+# 2008~2011 은 8개 구단 시절이라 시즌당 504~532경기입니다. 지금(720)보다
+# 적어서 네 시즌을 묶어도 세 시즌 샤드보다 작습니다.
+[[d1_databases]]
+binding = "DB_2008_2011"
+database_name = "kbo-pbp-2008-2011"
+database_id = "3d9dfeb0-63ff-4ced-b4f5-e852feb19961"
+
+[[d1_databases]]
+binding = "DB_2012_2014"
+database_name = "kbo-pbp-2012-2014"
+database_id = "1d6444f3-5840-4d05-857e-85ecdc31876b"
+
 [[d1_databases]]
 binding = "DB_2015_2017"
 database_name = "kbo-pbp-2015-2017"
