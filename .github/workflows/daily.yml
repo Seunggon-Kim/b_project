@@ -191,7 +191,7 @@ jobs:
         id: backfill
         continue-on-error: true
         timeout-minutes: 45
-        run: python migration/shard_backfill.py --budget 23000
+        run: python migration/shard_backfill.py --budget 22000
 
       - name: 되채우기 결과 기록
         if: always()
