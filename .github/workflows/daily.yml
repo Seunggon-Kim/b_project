@@ -182,12 +182,28 @@ jobs:
         continue-on-error: true
         run: python data_collection/roster_to_d1.py
 
+      # 등록 현황에서 최신 소속·등번호를 players 로 옮깁니다.
+      #
+      # monthly 의 선수 프로필 수집은 **새 선수만** 받습니다(이미 있으면
+      # 건너뜀). 그래서 기존 선수가 이적하거나 등번호를 바꿔도 영영
+      # 안 고쳐졌습니다. 실측하니 337명 중 소속 98명, 등번호 58명이
+      # 실제와 달랐습니다.
+      #
+      # 바뀐 것만 씁니다. 평소에는 0건이고 이적·번호 변경이 있는 날만
+      # 몇 건 나갑니다.
+      - name: players 소속·등번호 갱신
+        id: sync_players
+        if: steps.roster.outcome == 'success'
+        continue-on-error: true
+        run: python data_collection/sync_players_from_roster.py
+
       - name: 등록 현황 결과 기록
         if: always()
         continue-on-error: true
         run: |
           python data_collection/record_job_run.py --job roster \
-            --status ${{ steps.roster.outcome == 'success' && 'ok' || 'fail' }}
+            --status ${{ steps.roster.outcome == 'success' && 'ok' || 'fail' }} \
+            --note "players 갱신 ${{ steps.sync_players.outcome }}"
 
       # --- 4. 옛 시즌 PBP 되채우기 (2008~2014) ------------------------
       # 하루 예산만큼만 밀어 넣습니다. 약 55일 걸립니다.
