@@ -53,6 +53,10 @@
         .ctrl-group label { white-space: nowrap; flex-shrink: 0; margin: 0; }
         .ctrl-divider { align-self: stretch; width: 1px; min-height: 1.8rem; background: var(--border-color); }
         /* `tabbtn` 은 button 용이라 a 에는 줄이 남습니다. */
+        /* `tabbtn` 은 button 용이라 a 에는 줄이 남습니다. 높이도
+           button 과 다르게 잡혀(37 vs 33) 나란히 두면 어긋납니다.
+           둘 다 같은 높이로 맞춥니다. */
+        .ctrl-group .tabbtn { height: 37px; box-sizing: border-box; }
         a.tabbtn { text-decoration: none; display: inline-flex; align-items: center; }
         @media (max-width: 640px) { .ctrl-divider { display: none; } .ctrl-group { flex-wrap: wrap; } }
         /* 정렬 가능한 표 헤더 */

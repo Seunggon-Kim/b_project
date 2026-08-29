@@ -43,14 +43,33 @@ cur.execute("DELETE FROM team_stadium_by_season WHERE season=?", (latest,))
 cur.execute("INSERT INTO team_stadium_by_season (player_team,season,stadium) SELECT player_team,?,stadium FROM team_stadium_by_season WHERE season=?", (latest,src))
 TEAM_PARK={(r['player_team'],r['season']):r['stadium'] for r in cur.execute("SELECT player_team,season,stadium FROM team_stadium_by_season")}
 
-# season run constant L derived from existing rows (PF-invariant; L = wraa_per_pa*100/K)
-tmp={}
-for r in cur.execute("SELECT season,PA,wRAA_FG,wRC_home,pf_home FROM wrc_plus_comparison WHERE PA>=50"):
-    K=r['wRC_home']-(2.0-r['pf_home']/1000.0)*100.0
-    if abs(K)<10 or not r['PA']: continue   # |K|>=10 for numerical stability; median over many rows -> exact season L
-    tmp.setdefault(r['season'],[]).append((r['wRAA_FG']/r['PA'])*100.0/K)
-L={s:statistics.median(v) for s,v in tmp.items()}
-print("season L:", {s:round(L[s],5) for s in sorted(L)})
+# 시즌 득점 상수 L 입니다. FanGraphs wRC+ 식의 리그 득점/타석입니다.
+#
+# 전에는 **이미 있는 `wrc_plus_comparison` 행에서 역산**했습니다
+# (L = wraa_per_pa*100/K). 그 방식에는 두 가지 문제가 있었습니다.
+#
+#   1. 표에 없던 시즌은 만들 수 없습니다. 닭과 달걀입니다. 2008~2014
+#      PBP 를 되채웠는데도 wRC+ 는 2015년부터였던 까닭입니다.
+#   2. 값이 지난 실행에 묶입니다. 시즌이 진행 중이면 경기가 늘어도 L 은
+#      그대로라 2026 이 6.9%, 2025 가 2.4% 어긋나 있었습니다.
+#
+# PBP 로 바로 셉니다. wOBA 가중치와 RE24 도 PBP 를 쓰므로 원천이 하나로
+# 모입니다. 공식 기록으로 잰 값과 2015~2024 에서 ±0.05% 안에 듭니다.
+#
+# **득점은 모든 행에서, 타석은 타석 결과가 있는 행에서** 셉니다. 득점에
+# 타석 필터를 걸면 도루·폭투·보크로 나는 득점이 빠져 L 이 2% 낮아집니다.
+_runs={r['s']:r['v'] for r in cur.execute("""
+    SELECT CAST(p.game_date AS INT)/10000 s, SUM(COALESCE(p.runs_scored,0)) v
+      FROM play_by_play p JOIN games g ON g.game_id = p.gameID
+     WHERE g.game_type='정규시즌' GROUP BY s""")}
+_pas={r['s']:r['v'] for r in cur.execute("""
+    SELECT CAST(p.game_date AS INT)/10000 s,
+           COUNT(DISTINCT p.gameID||'_'||p.pa_number) v
+      FROM play_by_play p JOIN games g ON g.game_id = p.gameID
+     WHERE g.game_type='정규시즌'
+       AND p.pa_result IS NOT NULL AND p.pa_result<>'' GROUP BY s""")}
+L={s:_runs[s]/_pas[s] for s in _runs if _pas.get(s)}
+print("season L:", {s:round(L[s],5) for s in sorted(L) if s in YEARS})
 
 LGW={}
 for r in cur.execute("""SELECT season, SUM(base_on_balls) bb, SUM(hit_by_pitch) hbp,

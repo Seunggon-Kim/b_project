@@ -20,6 +20,11 @@
 
     <!-- Styles -->
     <link rel="stylesheet" href="../css/style.css">
+    <style>
+        /* 검색창은 본문 너비를 그대로 씁니다. */
+        .pa-search { width: 100%; }
+        .pa-search .input { width: 100%; }
+    </style>
     <script src="../js/config.js"></script>
     <script src="../js/theme-toggle.js"></script>
     <script src="../js/nav.js"></script>
@@ -51,19 +56,17 @@
         <p class="text-secondary mb-3">선수 이름을 검색하여 상세 정보와 성적을 확인하세요</p>
 
         <!-- Search Section -->
+        <!-- 카드 껍데기 없이 검색창만 둡니다. 흰 상자 안에 입력칸 하나만
+             들어 있으면 여백이 내용보다 커집니다. -->
         <section class="mb-3">
-            <div class="card">
-                <div class="card-body">
-                    <div class="search-box">
-                        <span class="material-symbols-outlined search-icon">search</span>
-                        <input type="text" id="player-search" class="input" placeholder="선수 이름을 입력하세요 (예: 김현수)"
-                            autocomplete="off">
-                    </div>
-
-                    <!-- Search Results -->
-                    <div id="search-results" class="mt-2"></div>
-                </div>
+            <div class="search-box pa-search">
+                <span class="material-symbols-outlined search-icon">search</span>
+                <input type="text" id="player-search" class="input" placeholder="선수 이름을 입력하세요 (예: 김현수)"
+                    autocomplete="off">
             </div>
+
+            <!-- Search Results -->
+            <div id="search-results" class="mt-2"></div>
         </section>
 
         <!-- Player Info Section -->
