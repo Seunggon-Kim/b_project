@@ -110,3 +110,38 @@ def test_전_시즌_옵션이_CLI_에_있습니다():
     src = (ROOT / "data_collection" / "player_info_scraper.py").read_text(
         encoding="utf-8")
     assert "--all-seasons" in src
+
+
+# --- 등말소 날짜는 KBO 가 준 날짜를 씁니다 --------------------------
+#
+# `move_date` 에 수집일을 넣고 있었습니다. KBO 등말소는 경기 2~4시간
+# 전에 갱신되므로, 새벽에 도는 daily 는 **전날 명단**을 봅니다. 그런데
+# 오늘 날짜를 붙여 저장하니 같은 내용이 이틀치로 쌓였습니다.
+#
+#     2026-08-28  등록 9 · 말소 7
+#     2026-08-29  등록 9 · 말소 7   <- 같은 선수들
+#
+# 페이지가 날짜를 줍니다. 그것을 씁니다.
+#
+#     <input ... id="..._hfSearchDate" value="20260828" />
+#     <span  ... id="..._lblGameDate">2026.08.28(금)</span>
+
+def test_페이지에서_기준일을_읽습니다():
+    from kbo_register import page_date
+    html = ('<input type="hidden" name="x$hfSearchDate" '
+            'id="cphContents_cphContents_cphContents_hfSearchDate" '
+            'value="20260828" />')
+    assert page_date(html) == "2026-08-28"
+
+
+def test_표시용_날짜로도_읽습니다():
+    from kbo_register import page_date
+    html = ('<span id="cphContents_cphContents_cphContents_lblGameDate">'
+            '2026.08.28(금)</span>')
+    assert page_date(html) == "2026-08-28"
+
+
+def test_날짜를_못_읽으면_None_입니다():
+    from kbo_register import page_date
+    # 부르는 쪽이 오늘 날짜로 물러섭니다. 없는 날짜를 지어내지 않습니다.
+    assert page_date("<html></html>") is None

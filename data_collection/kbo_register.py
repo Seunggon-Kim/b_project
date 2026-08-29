@@ -157,11 +157,41 @@ def parse_moves(html):
     return out
 
 
+def page_date(html):
+    """페이지가 말하는 기준일입니다. 못 읽으면 None 입니다.
+
+    **수집일과 다릅니다.** KBO 등말소는 경기 2~4시간 전에 갱신되므로,
+    새벽에 도는 daily 는 전날 명단을 봅니다. 수집일을 날짜로 붙이면
+    같은 내용이 이틀치로 쌓입니다. 실제로 그랬습니다.
+
+        2026-08-28  등록 9 · 말소 7
+        2026-08-29  등록 9 · 말소 7   <- 같은 선수들
+
+    페이지가 날짜를 두 군데에 둡니다.
+
+        <input ... id="..._hfSearchDate" value="20260828" />
+        <span  ... id="..._lblGameDate">2026.08.28(금)</span>
+    """
+    m = re.search(r'hfSearchDate"[^>]*value="(\d{8})"', html)
+    if m:
+        v = m.group(1)
+        return "%s-%s-%s" % (v[:4], v[4:6], v[6:])
+    m = re.search(r'lblGameDate"[^>]*>\s*(\d{4})[.\-](\d{1,2})[.\-](\d{1,2})',
+                  html)
+    if m:
+        return "%s-%s-%s" % (m.group(1), m.group(2).zfill(2),
+                             m.group(3).zfill(2))
+    return None
+
+
 def collect():
     html = fetch()
     kst = datetime.timezone(datetime.timedelta(hours=9))
+    today = datetime.datetime.now(kst).strftime("%Y-%m-%d")
     return {
-        "as_of": datetime.datetime.now(kst).strftime("%Y-%m-%d"),
+        # 페이지가 말하는 날짜가 정본입니다. 못 읽으면 오늘로 물러섭니다.
+        "as_of": page_date(html) or today,
+        "fetched_on": today,
         "roster": parse_roster(html),
         "moves": parse_moves(html),
     }

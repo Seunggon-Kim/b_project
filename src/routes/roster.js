@@ -8,10 +8,15 @@ import { queryInt } from '../lib/router.js';
 // 안 되므로 쌓기 시작한 날부터만 있습니다.
 
 /**
- * 최근 등록·말소입니다.
+ * 등록·말소입니다. 기본은 **가장 최근 하루**입니다.
  *
- * `?days=N` 은 최근 며칠인지입니다(기본 7). `?limit=N` 은 행 수
- * 상한입니다.
+ * 예전에는 최근 7일을 줬습니다. 그런데 같은 선수가 날짜만 바뀌어
+ * 여러 번 나왔습니다. `move_date` 에 수집일을 넣고 있었기 때문입니다.
+ * KBO 등말소는 경기 2~4시간 전에 갱신되므로 새벽에 도는 daily 는
+ * 전날 명단을 봅니다. 이제 페이지가 주는 날짜를 쓰므로 같은 내용이
+ * 겹치지 않지만, 화면에는 최신 하루만 보이는 편이 읽기 좋습니다.
+ *
+ * `?days=N` 을 주면 최근 N일입니다. `?limit=N` 은 행 수 상한입니다.
  *
  * **날짜별로 묶어 돌려줍니다.** 화면이 "오늘 / 어제" 로 나눠 보여
  * 주기 때문입니다. 평평한 목록으로 주면 화면에서 다시 묶어야 합니다.
@@ -22,17 +27,30 @@ import { queryInt } from '../lib/router.js';
  */
 export async function rosterMoves(request, env) {
   const url = new URL(request.url);
-  const days = Math.min(Math.max(queryInt(url, 'days', 7), 1), 60);
+  const days = Math.min(Math.max(queryInt(url, 'days', 0), 0), 60);
   const limit = Math.min(Math.max(queryInt(url, 'limit', 60), 1), 300);
 
-  // move_date 는 'YYYY-MM-DD' 문자열입니다. date() 로 비교하면 인덱스를
-  // 못 타므로 문자열 범위로 자릅니다.
-  const { results } = await env.DB.prepare(
-    "SELECT move_date, kind, team, name, position, player_id "
-    + 'FROM kbo_roster_moves '
-    + "WHERE move_date >= date('now', '+9 hours', ?) "
-    + 'ORDER BY move_date DESC, kind DESC, team LIMIT ?',
-  ).bind(`-${days} days`, limit).all();
+  const COLS = 'move_date, kind, team, name, position, player_id';
+  let results;
+  if (days === 0) {
+    // 가장 최근 하루입니다. **오늘 날짜로 자르지 않습니다.** KBO 가
+    // 경기 전에 갱신하므로 새벽에는 아직 어제 것이 최신입니다.
+    const { results: rows } = await env.DB.prepare(
+      `SELECT ${COLS} FROM kbo_roster_moves `
+      + 'WHERE move_date = (SELECT MAX(move_date) FROM kbo_roster_moves) '
+      + 'ORDER BY kind DESC, team LIMIT ?',
+    ).bind(limit).all();
+    results = rows;
+  } else {
+    // move_date 는 'YYYY-MM-DD' 문자열입니다. date() 로 비교하면
+    // 인덱스를 못 타므로 문자열 범위로 자릅니다.
+    const { results: rows } = await env.DB.prepare(
+      `SELECT ${COLS} FROM kbo_roster_moves `
+      + "WHERE move_date >= date('now', '+9 hours', ?) "
+      + 'ORDER BY move_date DESC, kind DESC, team LIMIT ?',
+    ).bind(`-${days} days`, limit).all();
+    results = rows;
+  }
 
   // 날짜별로 묶습니다. 순서는 최신 날짜가 먼저입니다.
   //
@@ -72,8 +90,18 @@ export async function rosterMoves(request, env) {
 export async function roster(request, env) {
   const url = new URL(request.url);
   const team = url.searchParams.get('team');
+  // 이 표에는 1군과 퓨처스 명단이 함께 있습니다(소속 판정에 둘 다
+  // 필요합니다). 화면이 '1군 명단' 을 부르므로 기본은 1군입니다.
+  // 그대로 두면 KIA 가 60명으로 나옵니다.
+  const league = url.searchParams.get('league') || '1군';
 
-  const where = team ? 'WHERE team = ?' : '';
+  const conds = ["league = ?"];
+  const binds = [league];
+  if (team) {
+    conds.push('team = ?');
+    binds.push(team);
+  }
+  const where = `WHERE ${conds.join(' AND ')}`;
   const stmt = env.DB.prepare(
     'SELECT team, name, back_number, role, player_id, as_of '
     + `FROM kbo_roster ${where} `
@@ -83,7 +111,7 @@ export async function roster(request, env) {
     + "WHEN '내야수' THEN 3 ELSE 4 END, CAST(back_number AS INTEGER)",
   );
 
-  const { results } = await (team ? stmt.bind(team) : stmt).all();
+  const { results } = await stmt.bind(...binds).all();
   const asOf = results.length ? results[0].as_of : null;
-  return json({ team, asOf, count: results.length, players: results });
+  return json({ team, league, asOf, count: results.length, players: results });
 }
