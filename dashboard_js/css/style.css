@@ -2125,6 +2125,15 @@ h2 .material-symbols-outlined,
    작아 헤더가 낮은데, 같은 1rem 을 두면 아래 표까지 멀어 보입니다.
    좌우 두 칸에 함께 걸어야 등말소와 명단의 시작 위치가 어긋나지
    않습니다. */
+/* 등말소·1군 명단 줄만 높이를 내용에 맞춥니다.
+ *
+ * 위 줄(.rank-row)은 두 표 길이가 비슷해 stretch 가 보기 좋습니다.
+ * 여기는 다릅니다. 등말소는 하루치라 짧고 명단은 60줄 가까이 됩니다.
+ * 늘려 맞추면 등말소 칸 아래로 400px 넘는 빈 칸이 생깁니다. */
+.roster-row {
+    align-items: start;
+}
+
 .roster-row .schedule-bar {
     min-height: 2rem;
     margin-bottom: 0.5rem;
