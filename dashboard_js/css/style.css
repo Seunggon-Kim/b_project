@@ -2367,14 +2367,31 @@ h2 .material-symbols-outlined,
     color: var(--text-secondary, #5b6472);
 }
 
-/* 홈 상단 선수 빠른 검색입니다. 경기 카드 위에 둡니다. */
+/* 홈 상단 선수 빠른 검색입니다. 경기 카드 위에 둡니다.
+ *
+ * 폭은 아래 영역과 같게 맞춥니다. 좁게 두면 화면 왼쪽에만 붙어
+ * 어중간해 보입니다. 아래 칸(.schedule-section)이 2.5rem 을 띄우므로
+ * 여기도 같은 값을 씁니다. */
 .home-search {
     position: relative;
-    margin-bottom: 16px;
+    margin-bottom: 2.5rem;
 }
 
 .home-search .search-box {
-    max-width: 420px;
+    width: 100%;
+}
+
+/* 검색창 자체를 조금 키웁니다. 화면에서 가장 먼저 눈이 가는 자리라
+ * 본문 입력칸과 같은 크기면 묻힙니다. */
+.home-search .input {
+    height: 56px;
+    font-size: 1.0625rem;
+    border-radius: 28px;
+    padding-left: 52px;
+}
+
+.home-search .search-icon {
+    left: 20px;
 }
 
 .home-search-results {
@@ -2383,7 +2400,6 @@ h2 .material-symbols-outlined,
     top: 100%;
     left: 0;
     width: 100%;
-    max-width: 420px;
     margin-top: 4px;
     background: var(--card-bg, #fff);
     border: 1px solid var(--border-color, rgba(15, 23, 42, .08));
