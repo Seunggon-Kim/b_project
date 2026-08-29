@@ -113,12 +113,15 @@ TEAM_PARK={(r['player_team'],r['season']):r['stadium'] for r in cur.execute("SEL
 _runs={r['s']:r['v'] for r in cur.execute("""
     SELECT CAST(p.game_date AS INT)/10000 s, SUM(COALESCE(p.runs_scored,0)) v
       FROM play_by_play p JOIN games g ON g.game_id = p.gameID
-     WHERE g.game_type='정규시즌' GROUP BY s""")}
+     WHERE g.game_type='정규시즌'
+       AND g.game_id NOT IN (SELECT game_id FROM truncated_games)
+     GROUP BY s""")}
 _pas={r['s']:r['v'] for r in cur.execute("""
     SELECT CAST(p.game_date AS INT)/10000 s,
            COUNT(DISTINCT p.gameID||'_'||p.pa_number) v
       FROM play_by_play p JOIN games g ON g.game_id = p.gameID
      WHERE g.game_type='정규시즌'
+       AND g.game_id NOT IN (SELECT game_id FROM truncated_games)
        AND p.pa_result IS NOT NULL AND p.pa_result<>'' GROUP BY s""")}
 L={s:_runs[s]/_pas[s] for s in _runs if _pas.get(s)}
 print("season L:", {s:round(L[s],5) for s in sorted(L) if s in YEARS})
@@ -145,6 +148,7 @@ q=f"""SELECT p.batter_ID bid, CAST(p.game_date AS INT)/10000 season, p.stadium s
        COUNT(DISTINCT p.gameID||'_'||p.pa_number) pa
        FROM play_by_play p JOIN games g ON g.game_id = p.gameID
        WHERE g.game_type='정규시즌'
+         AND g.game_id NOT IN (SELECT game_id FROM truncated_games)
          AND CAST(p.game_date AS INT)/10000 IN ({",".join("%d"%y for y in YEARS)})
        GROUP BY p.batter_ID, season, p.stadium"""
 for r in cur.execute(q):

@@ -60,6 +60,10 @@ def load_year(con, yr):
        "p.score_home,p.score_away,p.pa_result,p.on_1b,p.on_2b,p.on_3b "
        "FROM play_by_play p JOIN games g ON g.game_id = p.gameID "
        "WHERE g.game_type='정규시즌' "
+       # 잘린 경기는 뺍니다. 3회에서 끊긴 경기를 넣으면 '그 뒤로
+       # 득점이 없었다' 고 배워 기대득점이 낮게 잡히고, 그러면 아웃의
+       # 손실도 작아져 wOBA 가중치의 장타 쪽이 부풀려집니다.
+       "AND g.game_id NOT IN (SELECT game_id FROM truncated_games) "
        "AND p.game_date>=%d0101 AND p.game_date<=%d1231 ORDER BY p.pbp_id" % (yr,yr))
     df=pd.read_sql_query(q,con)
     for c in ['outs','inning','score_home','score_away','pbp_id']:

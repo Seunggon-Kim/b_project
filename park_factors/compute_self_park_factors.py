@@ -100,6 +100,10 @@ def load_games(years):
                 ('삼진','볼넷','몸에 맞는 볼','자동 고의4구','고의4구','낫아웃 출루') THEN 1 ELSE 0 END) inplay
             FROM play_by_play p JOIN games g ON g.game_id = p.gameID
             WHERE g.game_type='정규시즌'
+              -- 잘린 경기는 뺍니다. 네이버 PBP 가 도중에 끊긴 것이
+              -- 2008~2013 에 105경기 있습니다(다시 받아도 같습니다).
+              -- 그대로 두면 그 구장의 득점이 실제보다 적게 잡힙니다.
+              AND g.game_id NOT IN (SELECT game_id FROM truncated_games)
               AND CAST(p.game_date AS INT)/10000 IN ({ylist})
             GROUP BY p.gameID"""
     games = []

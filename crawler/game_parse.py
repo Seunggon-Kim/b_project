@@ -986,10 +986,42 @@ class game_status:
         self.handle_change_stack(change_stack)
 
 
+    # 중계에 구멍이 있어도 이만큼까지는 넘어가며 계속 읽습니다.
+    #
+    # 네이버 중계에 seqno 가 통째로 빠지는 구간이 있습니다. 2008-05-03
+    # 두산-LG 전은 114~117 이 없고, 그 자리에 '김현수 볼넷' 과
+    # '3번타자 고영민' 이 있어야 합니다. 타석 시작 없이 결과가 나오니
+    # 주자 추적이 깨집니다.
+    #
+    # 전에는 그 지점에서 `assert False` 로 죽었고, 죽기 전까지만
+    # 저장돼 20점짜리 경기가 2회 6점으로 남았습니다. 2008~2013 에
+    # 105경기가 그렇게 잘렸습니다.
+    #
+    # 이닝이 바뀔 때 주자·아웃·볼카운트를 어차피 초기화하므로, 넘어가면
+    # 그 다음 이닝부터는 다시 맞습니다. 한 타석을 잃는 편이 경기의
+    # 80%를 버리는 것보다 낫습니다.
+    #
+    # 너무 많이 어긋나면 그 경기는 믿을 수 없으니 버립니다.
+    MAX_RECOVER = 12
+
+    def _recover(self, why, debug_mode=False):
+        """구멍을 만났을 때 죽는 대신 세어 두고 넘어갑니다.
+
+        상한을 넘으면 False 를 돌려주어 부르는 쪽이 경기를 버립니다.
+        """
+        self.recovered += 1
+        self.recover_reasons.append('%s (%s회 %s)' % (
+            why, self.inn, '말' if self.top_bot == 1 else '초'))
+        if debug_mode:
+            print('  [넘어감 %d] %s' % (self.recovered, why))
+        return self.recovered <= self.MAX_RECOVER
+
     def parse_game(self, debug_mode=False):
         try:
             self.ind = 0
             self.inn = 0
+            self.recovered = 0
+            self.recover_reasons = []
             while self.ind < self.relay_array.shape[0]:
                 row = self.relay_array[self.ind]
                 cur_to = row[0]
@@ -1038,7 +1070,8 @@ class game_status:
                             print(f'=== text - {self.cur_text}')
                             print("-"*60)
                             print('투구 이후 3S 또는 4B가 됨')
-                        assert False
+                        if not self._recover('타석 시작이 없는 결과', debug_mode):
+                            assert False
                     self.ind = self.ind + 1
 
                 elif cur_type == 7:
@@ -1079,7 +1112,8 @@ class game_status:
                                     print(f'=== text - {row[2]}')
                                     print("-"*60)
                                     print('투구 이후 3S 또는 4B가 됨')
-                                assert False
+                                if not self._recover('타순과 맞지 않는 타자', debug_mode):
+                                    assert False
                         self.ind = self.ind + 1
 
                 elif cur_type == 8:
@@ -1107,7 +1141,8 @@ class game_status:
                                 print(f'=== text - {self.cur_text}')
                                 print("-"*60)
                                 print('이닝 텍스트 row 누락 의심')
-                            assert False
+                            if not self._recover('이닝 전환이 어긋남', debug_mode):
+                                assert False
                         if self.top_bot == 1:
                             self.inn += 1
                         self.top_bot = (1 - self.top_bot)
@@ -1338,7 +1373,8 @@ class game_status:
                             print(f'=== text - {self.cur_text}')
                             print("-"*60)
                             print('타자 주자 처리 결과 3아웃이 넘어감')
-                        assert False
+                        if not self._recover('주자를 찾을 수 없음', debug_mode):
+                            assert False
                 elif (cur_type == 14) or (cur_type == 24):
                     # 주자(비득점/득점)
                     # 주자 처리 텍스트 row를 쭉 text_stack에 쌓는다
@@ -1403,7 +1439,8 @@ class game_status:
                             print(f'=== text - {self.cur_text}')
                             print("-"*60)
                             print('주자 처리 결과 3아웃이 넘어감')
-                        assert False
+                        if not self._recover('주자 처리 뒤 3아웃 초과', debug_mode):
+                            assert False
                 elif cur_type == 0:
                     # 이닝 시작
                     self.ind = self.ind + 1
@@ -1418,7 +1455,8 @@ class game_status:
                             print(f'=== text - {self.cur_text}')
                             print("-"*60)
                             print('저번 이닝을 마쳤을 때 3아웃이 되지 않음')
-                        assert False
+                        if not self._recover('이닝을 마쳤는데 3아웃이 아님', debug_mode):
+                            assert False
                     if self.top_bot == 1:
                         self.inn += 1
                     self.top_bot = (1 - self.top_bot)

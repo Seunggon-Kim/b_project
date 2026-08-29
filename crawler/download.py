@@ -1,5 +1,5 @@
 import pandas as pd
-import sys, time, requests, json, datetime, pathlib, warnings
+import sys, time, requests, json, datetime, pathlib, warnings, re
 import numpy as np
 from dateutil.relativedelta import relativedelta
 from tqdm import tqdm, trange
@@ -224,6 +224,147 @@ def get_game_ids(start_date, end_date, playoff=False, with_year=False):
     return [gid for gid, _ in game_ids]
 
 
+NEW_RELAY_API = 'https://api-gw.sports.naver.com/schedule/games/%s/relay'
+NEW_GAME_API = 'https://api-gw.sports.naver.com/schedule/games/%s'
+# 연장 15회까지 봅니다.
+MAX_INNING = 15
+
+
+def new_api_headers(game_id):
+    return {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                      'AppleWebKit/537.36 (KHTML, like Gecko) '
+                      'Chrome/125.0.0.0 Safari/537.36',
+        'Referer': 'https://m.sports.naver.com/game/%s/relay' % game_id,
+    }
+
+
+def fetch_relay_new(game_id):
+    """새 API 로 문자중계를 받아 **옛 형식**으로 돌려줍니다.
+
+    ## 왜 바꾸는가
+
+    옛 엔드포인트(`m.sports.naver.com/ajax/.../relayText.nhn`)가 경기
+    도중까지만 주는 일이 있습니다. 2008~2013 에 105경기가 그렇게
+    잘려 들어왔습니다. 2008-05-03 두산-LG 전은 최종 20점인데 2회에서
+    끊기고 6점만 있었습니다.
+
+    새 API 는 같은 경기의 1~9회를 온전히 줍니다(624투구). 구조도 거의
+    같아 키 이름만 맞추면 뒤쪽 파싱이 그대로 돕니다.
+
+        옛 relayList[k]['textOptionList'] -> 새 textRelays[k]['textOptions']
+        옛 relayList[k]['ptsOptionList']  -> 새 textRelays[k]['ptsOptions']
+
+    잘린 경기를 그대로 두면 RE24 가 '그 뒤로 득점이 없었다' 고 배워
+    기대득점이 낮게 잡히고, 아웃의 손실이 작아져 wOBA 가중치의 장타
+    쪽이 부풀려집니다. 2012 wRC+ 가 스탯티즈와 5% 벌어진 원인입니다.
+
+    ## 돌려주는 값
+
+    `(relay_list, home_lineup, away_lineup, stadium)` 입니다. 실패하면
+    첫 값이 None 이라 부르는 쪽이 옛 방식으로 물러설 수 있습니다.
+    """
+    headers = new_api_headers(game_id)
+    relay_list = []
+    home_lineup = away_lineup = None
+    stadium = None
+    last = None
+
+    try:
+        g = requests.get(NEW_GAME_API % game_id, headers=headers, timeout=30)
+        if g.status_code != 200:
+            return None, None, None, None
+        game = g.json().get('result', {}).get('game', {})
+        stadium = game.get('stadium')
+        # 몇 회까지 있는지 알면 헛되이 두드리지 않습니다.
+        raw = game.get('currentInning')
+        if raw:
+            m = re.search(r'\d+', str(raw))
+            last = int(m.group()) if m else None
+    except Exception:
+        return None, None, None, None
+
+    upto = min(MAX_INNING, max(9, last or 9))
+    for inn in range(1, upto + 1):
+        try:
+            r = requests.get(NEW_RELAY_API % game_id, params={'inning': inn},
+                             headers=headers, timeout=30)
+            if r.status_code != 200:
+                break
+            d = r.json().get('result', {}).get('textRelayData', {})
+        except Exception:
+            break
+        rows = d.get('textRelays') or []
+        if not rows:
+            # 9회를 넘겨 빈 이닝이면 경기가 끝난 것입니다.
+            if inn > 9:
+                break
+            continue
+        if home_lineup is None:
+            home_lineup = d.get('homeLineup')
+            away_lineup = d.get('awayLineup')
+        for x in rows:
+            relay_list.append({
+                'no': x.get('no'),
+                'textOptionList': x.get('textOptions') or [],
+                'ptsOptionList': x.get('ptsOptions') or [],
+            })
+
+    if not relay_list or home_lineup is None:
+        return None, None, None, None
+    return relay_list, home_lineup, away_lineup, stadium
+
+
+def fetch_relay_old(game_id, relay_url, headers):
+    """옛 엔드포인트로 받습니다. 새 API 가 실패할 때만 씁니다.
+
+    형식은 `fetch_relay_new` 와 같습니다. 다섯 번째 자리에 오류 문구를
+    함께 돌려줍니다.
+    """
+    params = {'gameId': game_id, 'half': '1'}
+    relay_response = requests.get(relay_url, params=params, headers=headers)
+    if relay_response.status_code > 200:
+        relay_response.close()
+        return None, None, None, None, 'response error\n'
+
+    relay_json = relay_response.json()
+    try:
+        js = json.loads(relay_json)
+        relay_response.close()
+    except json.JSONDecodeError:
+        relay_response.close()
+        return None, None, None, None, 'got no valid data\n'
+
+    if js.get('gameId') is None:
+        return None, None, None, None, 'invalid game ID\n'
+
+    last_inning = js['currentInning']
+    if last_inning is None:
+        return None, None, None, None, 'no last inning\n'
+
+    relay_list = list(js['relayList'])
+    home_lineup = js['homeTeamLineUp']
+    away_lineup = js['awayTeamLineUp']
+    stadium = js['schedule']['stadium']
+
+    for inn in range(2, last_inning + 1):
+        r = requests.get(relay_url, params={'gameId': game_id,
+                                            'half': str(inn)},
+                         headers=headers)
+        if r.status_code > 200:
+            r.close()
+            return None, None, None, None, 'response error\n'
+        try:
+            js = json.loads(r.json())
+            r.close()
+        except json.JSONDecodeError:
+            r.close()
+            return None, None, None, None, 'got no valid data\n'
+        relay_list.extend(js['relayList'])
+
+    return relay_list, home_lineup, away_lineup, stadium, None
+
+
 def get_game_data(game_id):
     """
     KBO 경기 PBP 데이터를 가져온다.
@@ -257,62 +398,21 @@ def get_game_data(game_id):
         #####################################
         # 1. pitch by pitch 데이터 가져오기 #
         #####################################
-        relay_response = requests.get(relay_url,
-                                      params=params,
-                                      headers=headers)
-        if relay_response.status_code > 200:
-            relay_response.close()
-            return [None, None, 'response error\n']
+        # 새 API 를 먼저 씁니다. 옛 엔드포인트가 경기 도중까지만 주는
+        # 일이 있어 2008~2013 에 105경기가 잘려 들어왔습니다.
+        rl, hl, al, stad = fetch_relay_new(game_id)
+        if rl is None:
+            # 새 API 가 안 되면 옛 경로로 물러섭니다.
+            rl, hl, al, stad, err = fetch_relay_old(game_id, relay_url, headers)
+            if rl is None:
+                return [None, None, err]
 
-        relay_json = relay_response.json()
-        js = None
-        try:
-            js = json.loads(relay_json)
-            relay_response.close()
-        except json.JSONDecodeError:
-            relay_response.close()
-            return [None, None, 'got no valid data\n']
-
-        if js.get('gameId') is None:
-            return [None, None, 'invalid game ID\n']
-
-        last_inning = js['currentInning']
-
-        if last_inning is None:
-            return [None, None, 'no last inning\n']
-
-        game_data_set = {}
-        game_data_set['relayList'] = []
-        for x in js['relayList']:
-            game_data_set['relayList'].append(x)
-
-        # 라인업에 대한 기초 정보가 담겨 있음
-        game_data_set['homeTeamLineUp'] = js['homeTeamLineUp']
-        game_data_set['awayTeamLineUp'] = js['awayTeamLineUp']
-
-        game_data_set['stadium'] = js['schedule']['stadium']
-
-        for inn in range(2, last_inning + 1):
-            params = {
-                'gameId': game_id,
-                'half': str(inn)
-            }
-
-            relay_inn_response = requests.get(relay_url, params=params, headers=headers)
-            if relay_inn_response.status_code > 200:
-                relay_inn_response.close()
-                return [None, None, 'response error\n']
-
-            relay_json = relay_inn_response.json()
-            try:
-                js = json.loads(relay_json)
-                relay_response.close()
-            except json.JSONDecodeError:
-                relay_inn_response.close()
-                return [None, None, 'got no valid data\n']
-
-            for x in js['relayList']:
-                game_data_set['relayList'].append(x)
+        game_data_set = {
+            'relayList': rl,
+            'homeTeamLineUp': hl,
+            'awayTeamLineUp': al,
+            'stadium': stad,
+        }
 
         #########################
         # 2. 가져온 정보 다듬기 #
