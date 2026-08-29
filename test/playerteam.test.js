@@ -12,7 +12,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
-import { latestTeam, isActive } from '../src/routes/players.js';
+import { latestTeam, isActive, rosterDecides } from '../src/routes/players.js';
 
 test('선수 상세가 시즌 기록에서 소속을 채웁니다', () => {
   const src = readFileSync('src/routes/players.js', 'utf8');
@@ -153,4 +153,44 @@ test('현재 시즌을 모르면 등록 현황만으로도 현역입니다', () 
   // 등록돼 있으면 현역인 것은 분명합니다.
   assert.equal(isActive([{ season: 2026 }], [], null, { team: 'LG' }), true);
   assert.equal(isActive([{ season: 2026 }], [], null, null), false);
+});
+
+// --- 소속은 오늘 구단 명단으로 판정합니다 ---------------------------
+//
+// 기준이 화면마다 달랐습니다. 1군 화면은 "올 시즌 기록이 있나" 로 봐서
+// 방출된 선수도 현역으로 잡혔습니다. 타무라(56218)는 계약이 끝났는데
+// 올 시즌 1군 기록(17경기)이 있어 두산 소속으로 나왔습니다.
+//
+// 이제 `kbo_roster` 가 1군과 퓨처스 명단을 함께 담습니다(628명).
+// 거기 있으면 구단 소속이고, 없으면 무소속입니다.
+//
+// **명단을 못 받은 날을 대비합니다.** 수집이 실패해 표가 비면 전원이
+// 무소속이 됩니다. 그건 사고입니다. 명단이 너무 작으면 예전처럼
+// 기록으로 판정합니다.
+
+test('명단이 정상이면 명단으로 판정합니다', () => {
+  assert.equal(rosterDecides(628), true);
+  assert.equal(rosterDecides(300), true);
+});
+
+test('명단이 너무 작으면 기록으로 돌아갑니다', () => {
+  // 정상이면 600명대입니다. 수집이 반쯤 실패한 날을 거릅니다.
+  assert.equal(rosterDecides(0), false);
+  assert.equal(rosterDecides(50), false);
+  assert.equal(rosterDecides(null), false);
+  assert.equal(rosterDecides(undefined), false);
+});
+
+test('명단이 정상이면 기록이 있어도 명단에 없으면 비현역입니다', () => {
+  // 타무라의 경우입니다.
+  assert.equal(isActive([{ season: 2026 }], [], 2026, null, 628), false);
+});
+
+test('명단이 정상이면 기록이 없어도 명단에 있으면 현역입니다', () => {
+  assert.equal(isActive([], [], 2026, { team: '삼성' }, 628), true);
+});
+
+test('명단을 못 믿으면 예전처럼 기록으로 봅니다', () => {
+  assert.equal(isActive([{ season: 2026 }], [], 2026, null, 0), true);
+  assert.equal(isActive([{ season: 2020 }], [], 2026, null, 0), false);
 });

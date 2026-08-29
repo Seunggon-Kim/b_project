@@ -145,11 +145,16 @@ export async function playerDetail(request, env, ctx, params) {
   // 배지를 안 보여 줍니다. "말소" 로 단정하면 안 됩니다. 2군에
   // 있는 것과 표가 없는 것은 다릅니다.
   let roster = null;
+  let rosterSize = 0;
   try {
     roster = await db.prepare(
-      'SELECT team, back_number, role, as_of FROM kbo_roster '
+      'SELECT team, back_number, role, as_of, league FROM kbo_roster '
       + 'WHERE player_id = ? LIMIT 1',
     ).bind(dbPid).first();
+    // 명단을 믿어도 되는 날인지 봅니다. 한 행만 읽습니다.
+    const size = await db.prepare(
+      'SELECT COUNT(*) AS n FROM kbo_roster').first();
+    rosterSize = size ? Number(size.n) : 0;
   } catch {
     // 표가 아직 없는 환경입니다.
   }
@@ -161,9 +166,12 @@ export async function playerDetail(request, env, ctx, params) {
     team_id: (roster && roster.team)
       || latestTeam(batter.results, pitcher.results)
       || player.team_id,
-    is_active: isActive(batter.results, pitcher.results, cur, roster) ? 1 : 0,
+    is_active: isActive(batter.results, pitcher.results, cur, roster,
+                        rosterSize) ? 1 : 0,
     // 1군 등록 상태입니다. null 이면 "모름" 이지 "말소" 가 아닙니다.
-    first_team: roster ? {
+    // **1군 등록 배지는 1군 명단일 때만입니다.** 퓨처스 명단에 있는
+    // 선수에게 '1군 등록' 을 붙이면 틀린 말이 됩니다.
+    first_team: (roster && roster.league !== '퓨처스') ? {
       team: roster.team,
       back_number: roster.back_number,
       role: roster.role,
@@ -175,11 +183,28 @@ export async function playerDetail(request, env, ctx, params) {
 }
 
 /** 가장 최근 시즌에 기록이 있으면 현역으로 봅니다. */
-export function isActive(batterRows, pitcherRows, current, roster) {
-  // **1군 등록 현황에 있으면 그것이 가장 확실합니다.** 기록만 보면
-  // 올해 아직 한 경기도 안 뛴 선수가 비현역으로 잡힙니다. 그러면
-  // 화면이 소속을 '-' 로 쓰고 팀 색도 안 입히는데, 바로 옆에는
-  // '1군 등록' 배지가 붙어 있어 한 화면에서 두 값이 어긋납니다.
+export function rosterDecides(rosterSize) {
+  // 정상이면 1군 339 + 퓨처스 289 = 628명입니다. 수집이 실패해 표가
+  // 비면 전원이 무소속이 되는데 그건 사고입니다. 너무 작으면 예전처럼
+  // 기록으로 판정합니다.
+  return Number(rosterSize) >= 300;
+}
+
+/**
+ * 지금 어느 구단에 속해 있는지입니다.
+ *
+ * **오늘 KBO 구단 명단에 있는가** 로 봅니다. `kbo_roster` 가 1군과
+ * 퓨처스 명단을 함께 담습니다. daily 가 매일 새로 받습니다.
+ *
+ * 예전에는 "올 시즌 기록이 있나" 로 봤습니다. 그래서 방출된 선수도
+ * 현역으로 잡혔습니다. 타무라(56218)는 계약이 끝났는데 올 시즌 1군
+ * 기록(17경기)이 있어 두산 소속으로 나왔습니다. 기록은 그 시즌 사실
+ * 이라 지워지지 않습니다. 소속 판정에 쓸 값이 아닙니다.
+ */
+export function isActive(batterRows, pitcherRows, current, roster,
+                         rosterSize) {
+  if (rosterDecides(rosterSize)) return Boolean(roster);
+  // 명단을 못 믿는 날입니다. 예전 방식으로 돌아갑니다.
   if (roster) return true;
   if (current == null) return false;
   for (const r of [...(batterRows || []), ...(pitcherRows || [])]) {

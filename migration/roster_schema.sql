@@ -31,8 +31,13 @@ CREATE TABLE IF NOT EXISTS kbo_roster (
   role         TEXT NOT NULL,     -- 감독/코치/투수/포수/내야수/외야수
   player_id    INTEGER,           -- 못 찾으면 NULL
   as_of        TEXT NOT NULL,     -- YYYY-MM-DD (KST)
+  league       TEXT NOT NULL DEFAULT '1군',   -- 1군 | 퓨처스
   PRIMARY KEY (team, name, back_number)
 );
+
+-- 이미 만들어진 표에 컬럼을 더합니다. 두 번 돌려도 괜찮게 두려면
+-- 적재 스크립트가 오류를 삼켜야 합니다(roster_to_d1.py).
+-- ALTER TABLE kbo_roster ADD COLUMN league TEXT NOT NULL DEFAULT '1군';
 
 CREATE INDEX IF NOT EXISTS idx_roster_player ON kbo_roster(player_id);
 CREATE INDEX IF NOT EXISTS idx_roster_team   ON kbo_roster(team);

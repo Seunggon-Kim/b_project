@@ -40,9 +40,11 @@ ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 
 from d1_load import build_upserts, query, run_d1_file  # noqa: E402
+import futures_register
 from kbo_register import collect  # noqa: E402
 
-ROSTER_COLS = ["team", "name", "back_number", "role", "player_id", "as_of"]
+ROSTER_COLS = ["team", "name", "back_number", "role", "player_id",
+               "as_of", "league"]
 MOVE_COLS = ["move_date", "kind", "team", "name", "position", "player_id"]
 
 # 선수만 넣습니다. 감독·코치는 경기 기록이 없어 ID 를 못 붙이고,
@@ -128,9 +130,40 @@ def main():
             "player_id": resolve(by_team, nums, by_name, r["name"], r["team"],
                                  r["back_number"]),
             "as_of": as_of,
+            "league": "1군",
         })
     matched = sum(1 for x in rows if x["player_id"])
-    print("명단 %d명 (감독·코치 제외), ID 붙은 것 %d명" % (len(rows), matched))
+    print("1군 명단 %d명 (감독·코치 제외), ID 붙은 것 %d명"
+          % (len(rows), matched))
+
+    # 퓨처스 명단을 더합니다.
+    #
+    # **1군 명단만으로는 소속을 판정할 수 없습니다.** 2군에 있는 선수가
+    # 통째로 빠져 무소속으로 보입니다. 둘을 더해야 구단에 속한 선수
+    # 전체가 됩니다. 한화 기준으로 두 명단은 겹치지 않았습니다.
+    #
+    # 퓨처스 쪽은 선수 ID 가 링크에 있어 이름으로 짝지을 필요가 없습니다.
+    try:
+        fut = futures_register.fetch_all()
+    except Exception as e:                            # noqa: BLE001
+        print("퓨처스 명단 실패: %s" % e)
+        fut = []
+    seen = {(x["team"], x["name"], x["back_number"]) for x in rows}
+    added = 0
+    for r in fut:
+        key = (r["team"], r["name"], r["back_number"])
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append({
+            "team": r["team"], "name": r["name"],
+            "back_number": r["back_number"], "role": r["role"],
+            "player_id": r["player_id"], "as_of": as_of,
+            "league": "퓨처스",
+        })
+        added += 1
+    print("퓨처스 명단 %d명 더함 (받은 것 %d명), 합계 %d명"
+          % (added, len(fut), len(rows)))
 
     moves = []
     for m in d["moves"]:
