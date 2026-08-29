@@ -94,6 +94,31 @@ def boxscore_frame(players):
     return df.assign(pcode=pd.to_numeric(df.pcode, errors='coerce'))
 
 
+def defense_side(batter_pcode, away_batters, home_batters, home_or_away):
+    """그 타석의 수비측입니다. 'a'(원정) 또는 'h'(홈) 입니다.
+
+    relay 의 `homeOrAway` 가 경기 내내 한 값만 오는 경기가 있습니다
+    (2011년 정규시즌 5경기). 그러면 한쪽 수비 투수만 모여 라인업을
+    만들 수 없고 **경기가 통째로 버려졌습니다.**
+
+    타자가 어느 라인업에 있는지로 보면 확실합니다. 원정 타자가 치고
+    있으면 수비는 홈입니다. 정상 경기 세 개 166타석에서 `homeOrAway`
+    와 100% 일치했습니다.
+
+    타자를 못 가리면(교체 선수라 라인업 메타에 없거나, 양쪽에 다 있는
+    경우) `homeOrAway` 로 돌아갑니다.
+    """
+    b = str(batter_pcode) if batter_pcode is not None else ''
+    if b:
+        in_a = b in away_batters
+        in_h = b in home_batters
+        if in_a and not in_h:
+            return 'h'
+        if in_h and not in_a:
+            return 'a'
+    return 'h' if str(home_or_away) == '0' else 'a'
+
+
 def start_position(df, pos_dict):
     """선발 출장 선수의 포지션을 경기 시작 시점 값으로 고칩니다.
 
@@ -641,6 +666,9 @@ def get_game_data_renewed(game_id):
         #   homeOrAway=='1'(말, 홈 공격)     → 수비측 = away('a')
         recon_pcode_order = {'a': [], 'h': []}
         recon_sub_names = {'a': [], 'h': []}
+        # 수비측을 타자로 가리기 위한 라인업입니다. 첫 이닝에서 채웁니다.
+        away_batter_codes = set()
+        home_batter_codes = set()
 
         text_keys = ['seqno', 'text', 'type', 'stuff',
                      'ptsPitchId', 'speed', 'playerChange']
@@ -675,6 +703,13 @@ def get_game_data_renewed(game_id):
                     break
             last_pbp_data = pbp_data
 
+            if not away_batter_codes and not home_batter_codes:
+                for side, bucket in (('awayLineup', away_batter_codes),
+                                     ('homeLineup', home_batter_codes)):
+                    for b in ((pbp_data.get(side) or {}).get('batter') or []):
+                        if b.get('pcode') is not None:
+                            bucket.add(str(b.get('pcode')))
+
             for textSetList in pbp_data.get('textRelays')[::-1]:
                 textRow = {}
                 pitchTrackerRow = {}
@@ -702,8 +737,14 @@ def get_game_data_renewed(game_id):
                     game_data_set['pitchTextList'].append(textRow)
 
                     # 투수 라인업 복구용 수집(정상 시즌엔 미사용). 수비측 기준.
-                    def_side = 'h' if str(homeOrAway) == '0' else 'a'
+                    #
+                    # `homeOrAway` 만 보면 2011년 일부 경기처럼 값이 한쪽뿐일
+                    # 때 한쪽 투수만 모입니다. 타자로 가리면 그런 경기도
+                    # 제대로 갈립니다.
                     cgs = pitchTextData.get('currentGameState')
+                    def_side = defense_side(
+                        (cgs or {}).get('batter'),
+                        away_batter_codes, home_batter_codes, homeOrAway)
                     if cgs is not None:
                         pc = cgs.get('pitcher')
                         if pc is not None and str(pc) != '':

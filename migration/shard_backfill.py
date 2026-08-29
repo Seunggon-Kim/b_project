@@ -85,6 +85,18 @@ DEFAULT_BUDGET_ROWS = 22000
 MAX_STATEMENT_BYTES = 45000
 
 
+def cursor_name(job, first, last):
+    """작업 이름(= meta_backfill 의 키)입니다.
+
+    작업마다 커서가 따로 있어야 서로의 진행을 덮지 않습니다.
+    **기본값 `pbp_2008_2014` 는 이미 돌고 있는 커서라 이름을 바꾸면
+    지금까지 넣은 위치를 잃습니다.**
+    """
+    if job:
+        return job
+    return "pbp_%d_%d" % (int(first), int(last))
+
+
 def already_ran_today(updated_at, today_utc):
     """오늘 이미 밀어 넣었는지 봅니다.
 
@@ -113,13 +125,13 @@ def ensure_cursor_table():
            "rows_loaded INTEGER NOT NULL DEFAULT 0, updated_at TEXT);")
 
 
-def read_cursor():
+def read_cursor(name):
     """마지막으로 끝낸 날짜, 누적 행 수, 마지막 실행 시각입니다.
 
     시작 전이면 (0, 0, None) 입니다.
     """
     rows = query("SELECT last_date, rows_loaded, updated_at FROM meta_backfill "
-                 "WHERE name='pbp_2008_2014';")
+                 "WHERE name='%s';" % name)
     if not rows:
         return 0, 0, None
     return (int(rows[0]["last_date"] or 0),
@@ -127,21 +139,21 @@ def read_cursor():
             rows[0].get("updated_at"))
 
 
-def write_cursor(last_date, rows_loaded):
+def write_cursor(name, last_date, rows_loaded):
     run_d1("INSERT INTO meta_backfill (name, last_date, rows_loaded, updated_at) "
-           "VALUES ('pbp_2008_2014', %d, %d, datetime('now')) "
+           "VALUES ('%s', %d, %d, datetime('now')) "
            "ON CONFLICT(name) DO UPDATE SET last_date=excluded.last_date, "
            "rows_loaded=excluded.rows_loaded, updated_at=excluded.updated_at;"
-           % (int(last_date), int(rows_loaded)))
+           % (name, int(last_date), int(rows_loaded)))
 
 
-def pending_dates(cursor):
+def pending_dates(cursor, first, last):
     """아직 안 넣은 날짜와 그날 경기 수입니다."""
     return query(
         "SELECT game_date AS d, season, COUNT(*) AS games FROM games "
         "WHERE season BETWEEN %d AND %d AND game_date > %d "
         "GROUP BY game_date, season ORDER BY game_date;"
-        % (FIRST, LAST, int(cursor)))
+        % (int(first), int(last), int(cursor)))
 
 
 def pick_window(rows, budget):
@@ -241,11 +253,20 @@ def main():
     ap.add_argument("--force", action="store_true",
                     help="오늘 이미 돌았어도 한 번 더 넣습니다 "
                          "(D1 하루 한도를 넘길 수 있습니다)")
+    ap.add_argument("--first", type=int, default=FIRST,
+                    help="이 시즌부터 (기본 %d)" % FIRST)
+    ap.add_argument("--last", type=int, default=LAST,
+                    help="이 시즌까지 (기본 %d)" % LAST)
+    ap.add_argument("--job", default=None,
+                    help="커서 이름. 기본은 pbp_<first>_<last> 입니다")
     args = ap.parse_args()
 
     save_root = ROOT / args.save_dir
+    first, last = args.first, args.last
+    name = cursor_name(args.job, first, last)
     ensure_cursor_table()
-    cursor, done_rows, last_run = read_cursor()
+    cursor, done_rows, last_run = read_cursor(name)
+    print("작업 %s (%d~%d)" % (name, first, last))
 
     today_utc = datetime.datetime.now(
         datetime.timezone.utc).strftime("%Y-%m-%d")
@@ -257,9 +278,9 @@ def main():
         return 0
 
     left = query("SELECT COUNT(*) AS n FROM games WHERE season BETWEEN %d AND %d "
-                 "AND game_date > %d;" % (FIRST, LAST, cursor))[0]["n"]
+                 "AND game_date > %d;" % (first, last, cursor))[0]["n"]
     total = query("SELECT COUNT(*) AS n FROM games WHERE season BETWEEN %d AND %d;"
-                  % (FIRST, LAST))[0]["n"]
+                  % (first, last))[0]["n"]
     print("커서 %s  남은 경기 %s / %s  누적 %s행"
           % (cursor or "(시작 전)", format(left, ","), format(total, ","),
              format(done_rows, ",")))
@@ -267,7 +288,7 @@ def main():
         print("모두 끝났습니다.")
         return 0
 
-    dates = pending_dates(cursor)
+    dates = pending_dates(cursor, first, last)
     window, est = pick_window(dates, args.budget)
     if not window:
         print("넣을 날짜가 없습니다.")
@@ -335,7 +356,7 @@ def main():
 
     if not rows:
         print("넣을 행이 없습니다. 커서만 옮깁니다.")
-        write_cursor(hi, done_rows)
+        write_cursor(name, hi, done_rows)
         return 0
 
     stmts = build_inserts(cols, rows)
@@ -348,12 +369,12 @@ def main():
     run_d1_file(out, db_name=db_name)
     secs = (datetime.datetime.now() - t0).total_seconds()
 
-    write_cursor(hi, done_rows + len(rows))
+    write_cursor(name, hi, done_rows + len(rows))
     print("  적재 완료 %.0f초. 계상 쓰기 약 %s"
           % (secs, format(len(rows) * 4, ",")))
 
     after = query("SELECT COUNT(*) AS n FROM games WHERE season BETWEEN %d AND %d "
-                  "AND game_date > %d;" % (FIRST, LAST, hi))[0]["n"]
+                  "AND game_date > %d;" % (first, last, hi))[0]["n"]
     days = (after / max(games, 1))
     print("남은 경기 %s (이 속도면 약 %.0f회 더)" % (format(after, ","), days))
     return 0
