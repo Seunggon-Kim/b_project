@@ -71,6 +71,8 @@ ENTRYPOINTS = {
         "data_collection/player_info_scraper.py",
         "migration/sqlite_to_d1.py",
         "data_collection/record_job_run.py",
+        # 선수 사진 주소를 최신 연도로 맞춥니다.
+        "data_collection/heal_player_photos.py",
     ],
 }
 

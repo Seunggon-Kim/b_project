@@ -82,6 +82,21 @@ jobs:
         if: steps.scrape.outcome == 'success'
         run: python migration/sqlite_to_d1.py --db "$KBO_DB" --tables players
 
+      # 선수 사진 주소를 최신 연도로 맞춥니다.
+      #
+      # `players.image_url` 은 KBO 이미지 주소를 통째로 담는데 그 안에
+      # 연도 폴더가 있습니다. 위 수집이 그 값을 채우지만 1,749명 중
+      # 625명이 2025년 주소로 남아 있었습니다. 겨울에 이적한 선수는
+      # 전 소속팀 유니폼 사진이 나옵니다(최원준이 KT 인데 NC 사진).
+      #
+      # 이 단계는 현재 시즌 주소를 찔러 보고 있으면 바꿔 놓습니다.
+      # 선수 한 명에 요청 두 번을 넘기지 않습니다.
+      - name: 선수 사진 주소 보정
+        id: photos
+        continue-on-error: true
+        timeout-minutes: 20
+        run: python data_collection/heal_player_photos.py
+
       - name: 캐시 비우기
         id: purge
         if: steps.push.outcome == 'success'
@@ -125,5 +140,6 @@ jobs:
             echo "| players 내려받기 | ${{ steps.pull.outcome }} |"
             echo "| 프로필 수집 | ${{ steps.scrape.outcome }} |"
             echo "| D1 적재 | ${{ steps.push.outcome }} |"
+            echo "| 선수 사진 주소 보정 | ${{ steps.photos.outcome }} |"
             echo "| 캐시 비우기 | ${{ steps.purge.outcome }} |"
           } >> $GITHUB_STEP_SUMMARY
