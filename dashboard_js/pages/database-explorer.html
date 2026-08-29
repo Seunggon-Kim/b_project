@@ -509,7 +509,7 @@
                     <h3 class="card-title">
                         <span class="material-symbols-outlined h1-icon">schedule</span>자동 수집 스케줄 (Cron)
                     </h3>
-                    <span class="text-muted" style="font-size: 0.875rem;">총 7개 작업</span>
+                    <span class="text-muted" style="font-size: 0.875rem;">총 10개 작업</span>
                 </div>
                 <div class="card-body">
                     <p class="text-secondary mb-2" style="font-size: 0.9rem;">
@@ -578,8 +578,49 @@
                                 </tr>
                                 <tr>
                                     <td class="dbx-cron-mods">player_info_scraper.py</td>
-                                    <td class="dbx-cron-desc">기존 player_id 기준으로 선수 상세 프로필을 전체 재수집합니다.
-                                        (월 1회 전체 보정)</td>
+                                    <td class="dbx-cron-desc">선수 상세 프로필(소속·연봉·경력·사진)을 다시 받습니다.
+                                        예전에는 players에 이미 있는 선수를 건너뛰어 한 번 적재된 값이 영영
+                                        낡았습니다(2026-08 실행은 1,749명 중 4명만 처리). 이제 <code>--refresh</code>로
+                                        올 시즌 기록이 있는 선수를 전부 다시 봅니다.</td>
+                                    <td class="dbx-cron-kst" title="크론식(UTC): 13 4 1 * *">매월 1일 13:13</td>
+                                    <td class="dbx-cron-upd pending" data-job="player_info">-</td>
+                                </tr>
+                                <tr>
+                                    <td class="dbx-cron-mods">
+                                        roster_to_d1.py
+                                        <span class="sub">kbo_register.py + futures_register.py &rarr; D1</span>
+                                    </td>
+                                    <td class="dbx-cron-desc">1군 등록 현황과 퓨처스 등록 명단을 함께 받아 kbo_roster에
+                                        넣고, 그날 등록·말소를 kbo_roster_moves에 쌓습니다. KBO는 오늘 것만
+                                        보여 줘서 우리가 매일 받아야 하고 소급이 안 됩니다. 소속 판정은 이 명단
+                                        하나로 합니다(1군 339명 + 퓨처스 289명).</td>
+                                    <td class="dbx-cron-kst" title="크론식(UTC): 33 18 * * *">매일 03:33</td>
+                                    <td class="dbx-cron-upd pending" data-job="roster">-</td>
+                                </tr>
+                                <tr>
+                                    <td class="dbx-cron-mods">sync_players_from_roster.py</td>
+                                    <td class="dbx-cron-desc">등록 명단의 소속·등번호를 players에 반영합니다. 바뀐 행만
+                                        고칩니다.</td>
+                                    <td class="dbx-cron-kst" title="등록 현황 단계 직후">매일 03:33<br>(명단 직후)</td>
+                                    <td class="dbx-cron-upd pending" data-job="roster">-</td>
+                                </tr>
+                                <tr>
+                                    <td class="dbx-cron-mods">
+                                        shard_backfill.py
+                                        <span class="sub">2008~2011 / 2012~2014 두 번</span>
+                                    </td>
+                                    <td class="dbx-cron-desc">옛 시즌 PBP를 하루 예산만큼 밀어 넣습니다. D1 하루 쓰기
+                                        한도가 DB 단위로 걸려서 두 샤드를 같은 날 채웁니다.
+                                        <strong>2026-08-29에 3,870경기·120만 행이 모두 들어가 끝났습니다.</strong>
+                                        이제는 "모두 끝났습니다"만 찍고 넘어갑니다.</td>
+                                    <td class="dbx-cron-kst" title="크론식(UTC): 33 18 * * *">매일 03:33</td>
+                                    <td class="dbx-cron-upd pending" data-job="pbp_backfill">-</td>
+                                </tr>
+                                <tr>
+                                    <td class="dbx-cron-mods">heal_player_photos.py</td>
+                                    <td class="dbx-cron-desc">선수 사진 주소를 최신 연도로 맞춥니다. KBO 이미지 주소에
+                                        연도 폴더가 들어 있어서, 겨울에 이적한 선수는 그대로 두면 전 소속팀 유니폼
+                                        사진이 나옵니다. 선수 한 명에 요청 두 번을 넘기지 않습니다.</td>
                                     <td class="dbx-cron-kst" title="크론식(UTC): 13 4 1 * *">매월 1일 13:13</td>
                                     <td class="dbx-cron-upd pending" data-job="player_info">-</td>
                                 </tr>
@@ -587,7 +628,9 @@
                         </table>
                     </div>
                     <p class="text-secondary mt-2" style="font-size: 0.85rem;">
-                        아직 자동으로 돌지 않는 작업이 있습니다.
+                        손으로 돌리는 작업도 있습니다.
+                        <strong>futures_records.py</strong>(퓨처스 2010~2026 시즌 기록, 13,036행)는
+                        지난 시즌이 다시 바뀌지 않아 한 번만 받으면 됩니다.
                         <strong>daily_player_detector.py</strong>(이적·등번호 변경 감지),
                         <strong>daily_cleanup_orphan_stats.py</strong>(PBP 없는 통계 행 정리),
                         <strong>player_registry_sync.py</strong>(구단 등록 명단 대조)는
