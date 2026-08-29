@@ -298,6 +298,25 @@ def scrape_player_info(driver, player_id):
         return None
 
 
+def pick_targets(all_player_ids, existing_ids, refresh=False):
+    """이번에 볼 선수들입니다.
+
+    **기본은 `players` 에 없는 선수만 봅니다.** 그래서 한 번 적재된
+    선수의 프로필은 그 뒤로 갱신되지 않았습니다. 2026-08-28 monthly 는
+    1,749명 중 4명만 처리했습니다. 이적한 선수의 소속·연봉·경력이 옛
+    값으로 남습니다. 최원준이 KT 로 옮겼는데 경력이 `...-KIA-상무-KIA`
+    였습니다.
+
+    `refresh` 를 주면 이미 있는 선수도 다시 봅니다. 대상은 올 시즌
+    기록이 있는 선수라 30분쯤 걸립니다. monthly 가 이 값을 켭니다.
+
+    순서를 지킵니다. 중간에 끊겨도 이어 하기 좋습니다.
+    """
+    if refresh:
+        return list(all_player_ids)
+    return [pid for pid in all_player_ids if pid not in existing_ids]
+
+
 def get_existing_player_ids(all_seasons=False):
     """공식 기록에 등장한 player_id 목록을 가져옵니다.
 
@@ -423,6 +442,11 @@ def main():
     ap.add_argument('--all-seasons', action='store_true',
                     help='최신 시즌뿐 아니라 공식 기록에 있는 모든 시즌의 '
                          '선수를 대상으로 합니다 (지난 시즌 백필용)')
+    ap.add_argument('--refresh', action='store_true',
+                    help='이미 players 에 있는 선수도 다시 봅니다. '
+                         '이적·연봉·경력이 바뀐 것을 반영하려면 필요합니다')
+    ap.add_argument('--limit', type=int, default=0,
+                    help='이 수만큼만 처리합니다 (0 이면 전부)')
     args = ap.parse_args()
 
     logger.info("=" * 60)
@@ -445,14 +469,18 @@ def main():
     existing_ids = set(row[0] for row in cur.fetchall())
     conn.close()
     
-    remaining_ids = [pid for pid in all_player_ids if pid not in existing_ids]
-    
+    remaining_ids = pick_targets(all_player_ids, existing_ids,
+                                 refresh=args.refresh)
+    if args.limit:
+        remaining_ids = remaining_ids[:args.limit]
+
     if not remaining_ids:
         logger.info("✅ 모든 선수 정보가 이미 수집되었습니다!")
         return
-    
+
     logger.info(f"📝 이미 수집: {len(existing_ids)}명")
-    logger.info(f"🔄 수집 대상: {len(remaining_ids)}명")
+    logger.info(f"🔄 수집 대상: {len(remaining_ids)}명"
+                f"{' (다시 보기)' if args.refresh else ''}")
     
     # WebDriver 설정
     driver = setup_driver()

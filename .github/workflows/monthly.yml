@@ -73,9 +73,16 @@ jobs:
           python migration/d1_to_sqlite.py --out "$KBO_DB" \
             --tables players,kbo_official_batter_stats,kbo_official_pitcher_stats
 
+      # `--refresh` 가 없으면 이미 players 에 있는 선수를 통째로
+      # 건너뜁니다. 2026-08-28 실행은 1,749명 중 4명만 처리했습니다.
+      # 그래서 이적한 선수의 소속·연봉·경력이 옛 값으로 남았습니다
+      # (최원준이 KT 인데 경력이 '...-KIA-상무-KIA').
+      #
+      # 대상은 올 시즌 기록이 있는 선수 567명이라 30분쯤 걸립니다.
+      # 이 job 한도는 300분이고 저장소가 공개라 Actions 시간은 무료입니다.
       - name: 선수 프로필 수집
         id: scrape
-        run: python data_collection/player_info_scraper.py
+        run: python data_collection/player_info_scraper.py --refresh
 
       - name: players D1 적재
         id: push
