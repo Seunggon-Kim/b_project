@@ -54,7 +54,17 @@ DELAY_SEC = 0.4
 
 _HIDDEN = re.compile(
     r'<input type="hidden" name="([^"]+)"[^>]*value="([^"]*)"')
-_TABLE = re.compile(r'<table class="tData01 tt"[^>]*>(.*?)</table>', re.S)
+# 1군 기록실의 표입니다. 퓨처스는 클래스가 달라서(`tbl tt mb30`)
+# Session 에 넘겨 바꿉니다.
+TABLE_CLASS = "tData01 tt"
+
+
+def _table_re(cls):
+    return re.compile(r'<table class="%s[^"]*"[^>]*>(.*?)</table>'
+                      % re.escape(cls), re.S)
+
+
+_TABLE = _table_re(TABLE_CLASS)
 _TH = re.compile(r"<th[^>]*>(.*?)</th>", re.S)
 _TR = re.compile(r"<tr[^>]*>(.*?)</tr>", re.S)
 _TD = re.compile(r"<td[^>]*>(.*?)</td>", re.S)
@@ -70,12 +80,14 @@ def _text(s):
 class Session:
     """쿠키와 VIEWSTATE 를 들고 다니는 한 번의 수집 세션입니다."""
 
-    def __init__(self, delay=DELAY_SEC):
+    def __init__(self, delay=DELAY_SEC, table_class=TABLE_CLASS):
         self._op = urllib.request.build_opener(
             urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
         self.delay = delay
         self.html = ""
         self.url = ""
+        # 읽을 표입니다. 퓨처스 기록실은 `tbl tt mb30` 입니다.
+        self._table = _table_re(table_class)
 
     def _fetch(self, url, data=None):
         req = urllib.request.Request(url, data=data, headers={
@@ -110,12 +122,12 @@ class Session:
     # -------------------------------------------------- 표 읽기
 
     def header(self):
-        m = _TABLE.search(self.html)
+        m = self._table.search(self.html)
         return [_text(x) for x in _TH.findall(m.group(1))] if m else []
 
     def rows(self):
         """[(player_id, [셀 문자열...]), ...] 입니다."""
-        m = _TABLE.search(self.html)
+        m = self._table.search(self.html)
         if not m:
             return []
         out = []
