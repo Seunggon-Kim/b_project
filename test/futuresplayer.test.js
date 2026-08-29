@@ -201,3 +201,45 @@ test('없는 값은 숫자도 null 입니다', () => {
   assert.equal(p.throw, null);
   assert.equal(p.position_name, null);
 });
+
+// --- 안내 행을 기록으로 세지 않습니다 -------------------------------
+//
+// 기록이 없는 쪽 페이지에도 표는 있습니다. KBO 가 안내 문구를 한 칸
+// 짜리 행으로 넣습니다.
+//
+//     <tr><td colspan="16">기록이 없습니다.</td></tr>
+//
+// 이것을 기록으로 세는 바람에 **투수를 타자로 판정했습니다.** 화면에
+// 투수 기록 대신 값이 전부 '-' 인 타자 표가 나왔습니다(31048 등
+// 외국인 투수 셋). 타자·투수 두 페이지를 다 부르고 기록이 있는 쪽을
+// 고르는데, 없는 쪽이 먼저 잡혔습니다.
+const NO_RECORD = `
+<html><body>
+  <ul><li><strong>선수명: </strong><span id="x_ucPlayerProfile_lblName">외국인투수</span></li></ul>
+  <table>
+    <thead><tr>
+      <th>팀명</th><th>AVG</th><th>G</th><th>AB</th><th>R</th><th>H</th>
+      <th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>SB</th><th>BB</th>
+      <th>HBP</th><th>SO</th><th>SLG</th><th>OBP</th>
+    </tr></thead>
+    <tbody><tr><td colspan="16">기록이 없습니다.</td></tr></tbody>
+  </table>
+</body></html>`;
+
+test('안내 한 줄은 기록이 아닙니다', () => {
+  const s = parseSeasonRow(NO_RECORD);
+  assert.deepEqual(s.cells, []);
+  // 컬럼은 그대로 둡니다. 화면이 어떤 표인지 알 수 있어야 합니다.
+  assert.equal(s.columns.length, 16);
+});
+
+test('칸이 모자란 행도 기록이 아닙니다', () => {
+  // colspan 이 아니어도 칸 수가 안 맞으면 데이터가 아닙니다.
+  const short = NO_RECORD.replace('colspan="16"', '');
+  assert.deepEqual(parseSeasonRow(short).cells, []);
+});
+
+test('칸이 다 찬 행은 그대로 기록입니다', () => {
+  assert.equal(parseSeasonRow(HITTER).cells.length, 16);
+  assert.equal(parseSeasonRow(PITCHER).cells.length, 17);
+});

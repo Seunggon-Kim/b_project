@@ -156,8 +156,12 @@ export async function playerDetail(request, env, ctx, params) {
 
   return json({
     ...player,
-    team_id: latestTeam(batter.results, pitcher.results) || player.team_id,
-    is_active: isActive(batter.results, pitcher.results, cur) ? 1 : 0,
+    // 1군 등록 현황이 가장 최신 소속입니다. daily 가 매일 새로 받습니다.
+    // 기록의 소속은 그 시즌 것이라 시즌 중 이적이 늦게 반영됩니다.
+    team_id: (roster && roster.team)
+      || latestTeam(batter.results, pitcher.results)
+      || player.team_id,
+    is_active: isActive(batter.results, pitcher.results, cur, roster) ? 1 : 0,
     // 1군 등록 상태입니다. null 이면 "모름" 이지 "말소" 가 아닙니다.
     first_team: roster ? {
       team: roster.team,
@@ -171,7 +175,12 @@ export async function playerDetail(request, env, ctx, params) {
 }
 
 /** 가장 최근 시즌에 기록이 있으면 현역으로 봅니다. */
-export function isActive(batterRows, pitcherRows, current) {
+export function isActive(batterRows, pitcherRows, current, roster) {
+  // **1군 등록 현황에 있으면 그것이 가장 확실합니다.** 기록만 보면
+  // 올해 아직 한 경기도 안 뛴 선수가 비현역으로 잡힙니다. 그러면
+  // 화면이 소속을 '-' 로 쓰고 팀 색도 안 입히는데, 바로 옆에는
+  // '1군 등록' 배지가 붙어 있어 한 화면에서 두 값이 어긋납니다.
+  if (roster) return true;
   if (current == null) return false;
   for (const r of [...(batterRows || []), ...(pitcherRows || [])]) {
     if (r && Number(r.season) >= Number(current)) return true;

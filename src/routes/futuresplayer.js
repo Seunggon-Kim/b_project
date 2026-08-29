@@ -185,7 +185,19 @@ export function parseSeasonRow(page) {
   if (!tables.length) return { columns: [], cells: [] };
   const columns = headersOf(tables[0]);
   const rows = bodyRows(tables[0]);
-  return { columns, cells: rows.length ? rows[0] : [] };
+
+  // **안내 한 줄은 기록이 아닙니다.** 기록이 없는 쪽 페이지에도 표는
+  // 있고, KBO 가 그 자리에 문구를 한 칸으로 넣습니다.
+  //
+  //     <tr><td colspan="16">기록이 없습니다.</td></tr>
+  //
+  // 이것을 기록으로 세는 바람에 투수를 타자로 판정했습니다. 타자·투수
+  // 두 페이지를 다 부르고 기록이 있는 쪽을 고르는데, 없는 쪽이 먼저
+  // 잡혔습니다. 화면에는 값이 전부 '-' 인 타자 표가 나왔고 팀 이름
+  // 자리에 '기록이 없습니다.' 가 찍혔습니다.
+  const first = rows.length ? rows[0] : [];
+  const real = first.length >= columns.length;
+  return { columns, cells: real ? first : [] };
 }
 
 /**

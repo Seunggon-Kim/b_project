@@ -16,8 +16,21 @@ import { latestTeam, isActive } from '../src/routes/players.js';
 
 test('선수 상세가 시즌 기록에서 소속을 채웁니다', () => {
   const src = readFileSync('src/routes/players.js', 'utf8');
-  assert.match(src, /team_id:\s*latestTeam\(/,
+  // `team_id:` 다음에 latestTeam 이 와야 합니다. 그 앞에 1군 등록
+  // 현황(roster)이 먼저 올 수는 있습니다. 그쪽이 더 최신입니다.
+  assert.match(src, /team_id:[\s\S]{0,140}latestTeam\(/,
     '선수 상세가 players.team_id 를 그대로 내보내고 있습니다.');
+  // players.team_id 는 마지막 폴백으로만 남아야 합니다.
+  assert.doesNotMatch(src, /team_id:\s*player\.team_id/,
+    '선수 상세가 players.team_id 를 먼저 봅니다.');
+});
+
+test('소속은 1군 등록 현황을 가장 먼저 봅니다', () => {
+  // daily 가 매일 새로 받는 값이라 시즌 중 이적이 바로 반영됩니다.
+  // 기록의 소속은 그 시즌 것이라 한 박자 늦습니다.
+  const src = readFileSync('src/routes/players.js', 'utf8');
+  assert.match(src, /team_id:\s*\(roster && roster\.team\)/,
+    '소속이 아직 기록만 봅니다.');
 });
 
 test('선수 검색도 같은 규칙을 씁니다', () => {
@@ -107,4 +120,37 @@ test('상세와 검색 둘 다 is_active 를 내려줍니다', () => {
   const src = readFileSync('src/routes/players.js', 'utf8');
   assert.match(src, /is_active:\s*isActive\(/, '상세가 is_active 를 안 줍니다.');
   assert.ok(src.includes('AS is_active'), '검색이 is_active 를 안 줍니다.');
+});
+
+// --- 1군 등록 현황으로 현역 판정을 보완합니다 -----------------------
+//
+// `isActive` 는 "올 시즌 기록이 있나" 로만 봤습니다. 그래서 올해 아직
+// 한 경기도 안 뛴 선수가 비현역으로 잡혔습니다. 화면은 비현역이면
+// 소속을 '-' 로 쓰고 팀 색도 입히지 않습니다.
+//
+// 실제로 이재학(60263)이 그랬습니다. 1군 등록 배지는 붙어 있는데
+// 바로 옆 소속은 '-' 이고 배경이 기본 남색이었습니다. 한 화면에서
+// 두 값이 서로 어긋나 보입니다.
+//
+// `kbo_roster` 는 KBO 1군 등록 현황을 daily 가 매일 새로 받습니다.
+// **거기 있으면 지금 1군에 있는 선수입니다.** 기록보다 확실합니다.
+
+test('1군 등록 현황에 있으면 올 시즌 기록이 없어도 현역입니다', () => {
+  const roster = { team: 'NC', back_number: '39' };
+  assert.equal(isActive([{ season: 2024 }], [], 2026, roster), true);
+  assert.equal(isActive([], [], 2026, roster), true);
+});
+
+test('등록 현황이 없으면 예전과 같이 기록으로 봅니다', () => {
+  assert.equal(isActive([{ season: 2026 }], [], 2026, null), true);
+  assert.equal(isActive([{ season: 2021 }], [], 2026, null), false);
+  // 표가 아직 없는 환경에서는 undefined 로 옵니다.
+  assert.equal(isActive([{ season: 2021 }], [], 2026), false);
+});
+
+test('현재 시즌을 모르면 등록 현황만으로도 현역입니다', () => {
+  // current 가 null 이면 기록으로는 판정할 수 없습니다. 그래도 1군에
+  // 등록돼 있으면 현역인 것은 분명합니다.
+  assert.equal(isActive([{ season: 2026 }], [], null, { team: 'LG' }), true);
+  assert.equal(isActive([{ season: 2026 }], [], null, null), false);
 });
