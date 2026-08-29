@@ -85,6 +85,20 @@ DEFAULT_BUDGET_ROWS = 22000
 MAX_STATEMENT_BYTES = 45000
 
 
+def already_ran_today(updated_at, today_utc):
+    """오늘 이미 밀어 넣었는지 봅니다.
+
+    D1 쓰기 한도는 **UTC 자정**에 리셋되므로 UTC 날짜로 셉니다.
+
+    사람이 손으로 한 번 돌린 날 daily 가 또 돌면 하루 예산을 두 번
+    씁니다. 그러면 한도를 넘어 **백필만이 아니라 그날 경기 결과 적재도
+    같이 막힙니다.** 그쪽이 더 큰 손해라 겹치면 백필이 물러납니다.
+    """
+    if not updated_at:
+        return False
+    return str(updated_at)[:10] == str(today_utc)[:10]
+
+
 def shard_for(season):
     """그 시즌 PBP 가 들어갈 D1 이름입니다."""
     for s in PLAN["shards"]:
@@ -100,12 +114,17 @@ def ensure_cursor_table():
 
 
 def read_cursor():
-    """마지막으로 끝낸 날짜입니다. 시작 전이면 0 입니다."""
-    rows = query("SELECT last_date, rows_loaded FROM meta_backfill "
+    """마지막으로 끝낸 날짜, 누적 행 수, 마지막 실행 시각입니다.
+
+    시작 전이면 (0, 0, None) 입니다.
+    """
+    rows = query("SELECT last_date, rows_loaded, updated_at FROM meta_backfill "
                  "WHERE name='pbp_2008_2014';")
     if not rows:
-        return 0, 0
-    return int(rows[0]["last_date"] or 0), int(rows[0]["rows_loaded"] or 0)
+        return 0, 0, None
+    return (int(rows[0]["last_date"] or 0),
+            int(rows[0]["rows_loaded"] or 0),
+            rows[0].get("updated_at"))
 
 
 def write_cursor(last_date, rows_loaded):
@@ -219,11 +238,23 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--skip-crawl", action="store_true",
                     help="이미 받아 둔 CSV 만 씁니다")
+    ap.add_argument("--force", action="store_true",
+                    help="오늘 이미 돌았어도 한 번 더 넣습니다 "
+                         "(D1 하루 한도를 넘길 수 있습니다)")
     args = ap.parse_args()
 
     save_root = ROOT / args.save_dir
     ensure_cursor_table()
-    cursor, done_rows = read_cursor()
+    cursor, done_rows, last_run = read_cursor()
+
+    today_utc = datetime.datetime.now(
+        datetime.timezone.utc).strftime("%Y-%m-%d")
+    if already_ran_today(last_run, today_utc) and not args.force:
+        print("오늘(%s UTC) 이미 넣었습니다. 건너뜁니다. "
+              "마지막 실행 %s" % (today_utc, last_run))
+        print("정말 한 번 더 넣으려면 --force 를 주십시오. "
+              "D1 하루 한도를 넘기면 그날 다른 적재도 막힙니다.")
+        return 0
 
     left = query("SELECT COUNT(*) AS n FROM games WHERE season BETWEEN %d AND %d "
                  "AND game_date > %d;" % (FIRST, LAST, cursor))[0]["n"]
@@ -267,12 +298,15 @@ def main():
         print("CSV 가 없습니다: %s" % ydir)
         return 1
 
-    have = already_in(db_name, [f.stem for f in files])
-    files = [f for f in files if f.stem not in have]
-    if have:
-        print("  이미 들어간 경기 %d개는 건너뜁니다." % len(have))
-
-    rows, cols = [], None
+    # **파일명은 gameID 가 아닙니다.** 포스트시즌은 둘이 다릅니다.
+    #
+    #     파일명   20081008SSLT0.csv
+    #     gameID   33331008SSLT0
+    #
+    # 파일명으로 중복을 보면 D1 에는 원본 gameID 가 있어 절대 안 맞고,
+    # 같은 경기를 두 번 넣게 됩니다. CSV 를 먼저 읽어 안에 든 gameID 로
+    # 봅니다.
+    loaded, cols = [], None
     for f in files:
         rs = read_csv_rows(f)
         if not rs:
@@ -280,7 +314,24 @@ def main():
             continue
         if cols is None:
             cols = [c for c in rs[0] if c]
+        gid = str(rs[0].get("gameID") or "").strip() or f.stem
+        loaded.append((gid, rs))
+
+    have = already_in(db_name, [g for g, _ in loaded])
+    if have:
+        print("  이미 들어간 경기 %d개는 건너뜁니다." % len(have))
+
+    rows = []
+    for gid, rs in loaded:
+        if gid in have:
+            continue
         rows.extend(rs)
+
+    # 이 구간에 games 는 있는데 CSV 가 없는 경기입니다. 커서는 날짜로
+    # 넘어가므로 여기서 말하지 않으면 **영영 조용히 빠집니다.**
+    missing = games - len(loaded)
+    if missing > 0:
+        print("  경고: CSV 가 없어 %d경기를 넣지 못했습니다." % missing)
 
     if not rows:
         print("넣을 행이 없습니다. 커서만 옮깁니다.")

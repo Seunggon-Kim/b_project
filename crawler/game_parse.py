@@ -1,7 +1,29 @@
 import os, json, csv, sys, traceback, pathlib
 
+from gameid import game_id_year, save_stem
+
 import pandas as pd
 import numpy as np
+
+# 수비 아홉 자리입니다. 순서가 pos_1 ~ pos_9 에 그대로 대응합니다.
+FIELD_POSITIONS = ['투수', '포수', '1루수', '2루수', '3루수',
+                   '유격수', '좌익수', '중견수', '우익수']
+
+
+def field_player(fields_side, pos):
+    """그 수비 위치의 선수입니다. 없으면 빈 dict 입니다.
+
+    네이버 라인업 메타에 타순 하나가 통째로 빠진 경기가 있습니다.
+    55551019OBSS0 홈팀 9번 타순은 교체 선수만 있고 선발이 없어서,
+    선발 아홉 자리에 3루수가 아무도 없었습니다. 예전에는 여기서
+    KeyError 가 나 **경기 511행이 통째로 버려졌습니다.**
+
+    빠진 것은 수비수 이름 한 칸뿐이고 투구·타석·주자는 멀쩡합니다.
+    한 칸만 비우고 넘어갑니다. 원천이 불완전한 것이라 채울 방법도
+    없습니다.
+    """
+    return fields_side.get(pos) or {}
+
 
 header_row = ['pitch_type', 'pitcher', 'batter', 'pitcher_ID', 'batter_ID',
               'speed', 'pitch_result', 'pa_result', 'pa_result_detail',
@@ -417,24 +439,42 @@ class game_status:
                 save_row[f'on_{i}b_id'] = None
 
         if self.change_error is False:
-            save_row['pos_1'] = self.fields[self.top_bot]['투수'].get('name')
-            save_row['pos_2'] = self.fields[self.top_bot]['포수'].get('name')
-            save_row['pos_3'] = self.fields[self.top_bot]['1루수'].get('name')
-            save_row['pos_4'] = self.fields[self.top_bot]['2루수'].get('name')
-            save_row['pos_5'] = self.fields[self.top_bot]['3루수'].get('name')
-            save_row['pos_6'] = self.fields[self.top_bot]['유격수'].get('name')
-            save_row['pos_7'] = self.fields[self.top_bot]['좌익수'].get('name')
-            save_row['pos_8'] = self.fields[self.top_bot]['중견수'].get('name')
-            save_row['pos_9'] = self.fields[self.top_bot]['우익수'].get('name')
-            save_row['pos_1_id'] = self.fields[self.top_bot]['투수'].get('code')
-            save_row['pos_2_id'] = self.fields[self.top_bot]['포수'].get('code')
-            save_row['pos_3_id'] = self.fields[self.top_bot]['1루수'].get('code')
-            save_row['pos_4_id'] = self.fields[self.top_bot]['2루수'].get('code')
-            save_row['pos_5_id'] = self.fields[self.top_bot]['3루수'].get('code')
-            save_row['pos_6_id'] = self.fields[self.top_bot]['유격수'].get('code')
-            save_row['pos_7_id'] = self.fields[self.top_bot]['좌익수'].get('code')
-            save_row['pos_8_id'] = self.fields[self.top_bot]['중견수'].get('code')
-            save_row['pos_9_id'] = self.fields[self.top_bot]['우익수'].get('code')
+            save_row['pos_1'] = field_player(
+                self.fields[self.top_bot], '투수').get('name')
+            save_row['pos_2'] = field_player(
+                self.fields[self.top_bot], '포수').get('name')
+            save_row['pos_3'] = field_player(
+                self.fields[self.top_bot], '1루수').get('name')
+            save_row['pos_4'] = field_player(
+                self.fields[self.top_bot], '2루수').get('name')
+            save_row['pos_5'] = field_player(
+                self.fields[self.top_bot], '3루수').get('name')
+            save_row['pos_6'] = field_player(
+                self.fields[self.top_bot], '유격수').get('name')
+            save_row['pos_7'] = field_player(
+                self.fields[self.top_bot], '좌익수').get('name')
+            save_row['pos_8'] = field_player(
+                self.fields[self.top_bot], '중견수').get('name')
+            save_row['pos_9'] = field_player(
+                self.fields[self.top_bot], '우익수').get('name')
+            save_row['pos_1_id'] = field_player(
+                self.fields[self.top_bot], '투수').get('code')
+            save_row['pos_2_id'] = field_player(
+                self.fields[self.top_bot], '포수').get('code')
+            save_row['pos_3_id'] = field_player(
+                self.fields[self.top_bot], '1루수').get('code')
+            save_row['pos_4_id'] = field_player(
+                self.fields[self.top_bot], '2루수').get('code')
+            save_row['pos_5_id'] = field_player(
+                self.fields[self.top_bot], '3루수').get('code')
+            save_row['pos_6_id'] = field_player(
+                self.fields[self.top_bot], '유격수').get('code')
+            save_row['pos_7_id'] = field_player(
+                self.fields[self.top_bot], '좌익수').get('code')
+            save_row['pos_8_id'] = field_player(
+                self.fields[self.top_bot], '중견수').get('code')
+            save_row['pos_9_id'] = field_player(
+                self.fields[self.top_bot], '우익수').get('code')
         else:
             for i in range(1, 10):
                 save_row[f'pos_{i}'] = None
@@ -586,9 +626,13 @@ class game_status:
  
             # 투수, 야수(수비중) 교체
             if (after_pos != '대타') & (after_pos != '대주자'):
-                self.fields[self.top_bot][after_pos]['code'] = after_code
-                self.fields[self.top_bot][after_pos]['name'] = after_name
-                self.fields[self.top_bot][after_pos]['hitType'] = after_hittype
+                # 라인업 메타에 그 수비 자리가 아예 없던 경기가 있습니다.
+                # 교체로 처음 등장하면 자리를 만들어 줍니다. 예전에는
+                # KeyError 로 경기가 통째로 버려졌습니다.
+                slot = self.fields[self.top_bot].setdefault(after_pos, {})
+                slot['code'] = after_code
+                slot['name'] = after_name
+                slot['hitType'] = after_hittype
 
             # 타자 교체
             if order is not None:
@@ -1461,7 +1505,14 @@ class game_status:
               f'{self.cur_order}번타자 {self.batter_name}타석 '+
               f'{self.pitch_number}구')
 
-    def save_game(self, path=None):
+    def save_game(self, path=None, year=None):
+        """PBP 를 CSV 한 장으로 저장합니다.
+
+        `year` 는 시즌 연도입니다. 2015년까지의 포스트시즌 gameId
+        (`33331008SSLT0`)에는 연도가 없어서 부르는 쪽이 알려 줘야
+        합니다. 예전에는 `game_id[-4:]` 를 연도로 써서
+        `SLT01008SSLT0.csv` 같은 이름이 나왔습니다.
+        """
         if len(self.print_rows) > 0:
             row_df = pd.DataFrame(self.print_rows)
             try:
@@ -1481,10 +1532,14 @@ class game_status:
 
             if path is None:
                 path = pathlib.Path('.')
-            if int(self.game_id[:4]) < 3000:
-                save_path = str(path / f'{self.game_id}.csv')
+            y = year if year is not None else game_id_year(self.game_id)
+            if y is None:
+                # 연도를 끝내 모르면 gameId 를 그대로 씁니다. 엉뚱한
+                # 이름을 만드는 것보다 낫습니다.
+                stem = self.game_id
             else:
-                save_path = str(path / f'{self.game_id[-4:]}{self.game_id[4:]}.csv')
+                stem = save_stem(self.game_id, y)
+            save_path = str(path / f'{stem}.csv')
 
             row_df.to_csv(save_path,
                           encoding=enc,

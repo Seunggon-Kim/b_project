@@ -6,6 +6,7 @@ from tqdm import tqdm, trange
 from bs4 import BeautifulSoup
 
 from game_parse import game_status
+from gameid import game_id_year, save_stem
 
 # 경기 fetch 사이 대기(초). 대량 백필 시 Naver rate-limit 완화용.
 # 일별 단일 경기 경로에서는 사실상 영향 없음.
@@ -70,7 +71,49 @@ playoff_start = {
 }
 
 
-def get_game_ids(start_date, end_date, playoff=False):
+# 타자 박스스코어 표의 컬럼입니다. 순서를 바꾸지 마십시오.
+BOXSCORE_COLUMNS = ['name', 'pos', 'pcode', 'ab', 'run', 'hit',
+                    'rbi', 'hr', 'bb', 'k']
+
+
+def boxscore_frame(players):
+    """타자 박스스코어를 DataFrame 으로 만듭니다.
+
+    **비어 있어도 컬럼은 남깁니다.** 옛 포스트시즌 일부는 record API 의
+    `battersBoxscore` 가 비어 있습니다(`statusCode` 가 ENDED 인 경기).
+    그대로 `pd.DataFrame([])` 를 만들면 컬럼이 하나도 없는 표가 되고,
+    다음 줄 `ap.pcode` 에서 AttributeError 가 나 **경기 전체가
+    버려졌습니다.** 2008 플레이오프·한국시리즈 7경기가 그랬습니다.
+
+    없는 것은 타순별 집계값뿐입니다. 투구 하나하나는 relay 에 그대로
+    있어서 PBP 는 만들 수 있습니다. 그러니 표만 비워 두고 넘어갑니다.
+    """
+    df = pd.DataFrame(players or [], columns=BOXSCORE_COLUMNS)
+    # 빈 표에서도 pcode 를 숫자로 맞춰 둡니다. 라인업과 merge 할 때
+    # dtype 이 어긋나면 거기서 터집니다.
+    return df.assign(pcode=pd.to_numeric(df.pcode, errors='coerce'))
+
+
+def start_position(df, pos_dict):
+    """선발 출장 선수의 포지션을 경기 시작 시점 값으로 고칩니다.
+
+    `pos` 는 박스스코어에서 온 **경기 종료 시점** 포지션이고,
+    `posName` 은 라인업 메타에서 온 **경기 시작 시점** 포지션입니다.
+    선발로 나온 선수는 시작 시점 포지션이 맞습니다.
+
+    **`pos` 가 비면 손대지 않습니다.** 옛 포스트시즌은 박스스코어가
+    통째로 비어 pos 가 전부 NaN 입니다. 예전에는 그때도 덮어써서
+    `pos_dict.get(NaN)` 이 None 을 돌려줬고, posName 이 전부 지워졌습니다.
+    파싱이 '포수' 를 못 찾아 KeyError 를 내고 경기가 통째로 버려졌습니다.
+    2008 플레이오프 4경기, 한국시리즈 3경기가 그렇게 사라졌습니다.
+    """
+    keep = df.posName
+    mapped = df.pos.apply(lambda x: pos_dict.get(x))
+    return np.where(df.pos.isnull(), keep,
+                    np.where(df.pos != '교', mapped, keep))
+
+
+def get_game_ids(start_date, end_date, playoff=False, with_year=False):
     """
     KBO 경기 ID를 가져온다.
 
@@ -82,6 +125,14 @@ def get_game_ids(start_date, end_date, playoff=False):
 
     playoff : bool, default False
         True일 경우 플레이오프(포스트시즌) 경기 ID도 받는다.
+
+    with_year : bool, default False
+        True일 경우 (game_id, year) 튜플로 돌려준다.
+
+        2015년까지의 포스트시즌 gameId(`33331008SSLT0`)에는 연도가
+        없다. 연도를 아는 곳은 캘린더를 도는 이 함수뿐이라, 여기서
+        같이 들고 나오지 않으면 뒤에서 알 길이 없다. 실제로 그래서
+        2008~2014 포스트시즌 103경기가 조용히 빠졌었다.
     """
 
     calendar_api = 'https://api-gw.sports.naver.com/schedule/calendar?'\
@@ -138,12 +189,14 @@ def get_game_ids(start_date, end_date, playoff=False):
                         if start_date <= gid_date <= end_date:
                             if playoff == False:
                                 if year_regular_start_date <= gid_date < year_playoff_start_date:
-                                    game_ids.append(gid)
+                                    game_ids.append((gid, year))
                             else:
                                 if year_regular_start_date <= gid_date < year_last_date:
-                                    game_ids.append(gid)
+                                    game_ids.append((gid, year))
 
-    return game_ids
+    if with_year:
+        return game_ids
+    return [gid for gid, _ in game_ids]
 
 
 def get_game_data(game_id):
@@ -805,11 +858,8 @@ def get_game_data_renewed(game_id):
         home_lineup_df = home_lineup_df.assign(pcode = pd.to_numeric(home_lineup_df.pcode))
         home_pitcher_df = home_pitcher_df.assign(pcode = pd.to_numeric(home_pitcher_df.pcode))
 
-        ap = pd.DataFrame(away_players)
-        ap = ap.assign(pcode = pd.to_numeric(ap.pcode))
-
-        hp = pd.DataFrame(home_players)
-        hp = hp.assign(pcode = pd.to_numeric(hp.pcode))
+        ap = boxscore_frame(away_players)
+        hp = boxscore_frame(home_players)
         away_lineup_df = pd.merge(away_lineup_df, ap, on='pcode', how='outer')
         home_lineup_df = pd.merge(home_lineup_df, hp, on='pcode', how='outer')
 
@@ -826,16 +876,10 @@ def get_game_data_renewed(game_id):
         away_lineup_df = away_lineup_df[lineup_df_columns]
         home_lineup_df = home_lineup_df[lineup_df_columns]
 
-        away_lineup_df = away_lineup_df\
-                        .assign(posName = np.where(away_lineup_df.pos != '교',
-                                                   away_lineup_df.pos\
-                                                       .apply(lambda x: pos_dict.get(x)),
-                                                   away_lineup_df.posName))
-        home_lineup_df = home_lineup_df\
-                        .assign(posName = np.where(home_lineup_df.pos != '교',
-                                                   home_lineup_df.pos\
-                                                       .apply(lambda x: pos_dict.get(x)),
-                                                   home_lineup_df.posName))
+        away_lineup_df = away_lineup_df.assign(
+            posName=start_position(away_lineup_df, pos_dict))
+        home_lineup_df = home_lineup_df.assign(
+            posName=start_position(home_lineup_df, pos_dict))
 
         away_lineup_df = away_lineup_df.assign(homeaway = 'a', team_name = awayTeamName)
         home_lineup_df = home_lineup_df.assign(homeaway = 'h', team_name = homeTeamName)
@@ -1038,7 +1082,7 @@ def download_pbp_files(start_date, end_date, playoff=False,
         True일 경우 parsing 이전의 소스 데이터를 csv 형식으로 저장.
     """
     start_time = time.time()
-    game_ids = get_game_ids(start_date, end_date, playoff)
+    game_ids = get_game_ids(start_date, end_date, playoff, with_year=True)
     end_time = time.time()
     get_game_id_time = end_time - start_time
 
@@ -1060,13 +1104,21 @@ def download_pbp_files(start_date, end_date, playoff=False,
     get_data_time = 0
     gid = None
 
-    years = []
-    for gid in game_ids:
-        if len(gid) > 13:
-            years.append(gid[-4:])
-        else:
-            years.append(gid[:4])
-    years = list(set(years))
+    # (gameId, 시즌연도) 로 정리합니다. 연도를 모르는 경기(이벤트 8888,
+    # 올스타 9999)는 여기서 빠집니다. **몇 개가 빠졌는지 로그에 남깁니다.**
+    # 예전에는 조용히 사라져서 2008~2014 포스트시즌 103경기가 통째로
+    # 없는 줄도 몰랐습니다.
+    games = []
+    non_league = 0
+    for gid, cal_year in game_ids:
+        y = game_id_year(gid, cal_year)
+        if y is None:
+            non_league += 1
+            logfile.write(f'SKIP(non-league) gameID {gid}\n')
+            continue
+        games.append((gid, y))
+
+    years = list({str(y) for _, y in games})
 
     try:
         for y in years:
@@ -1082,18 +1134,11 @@ def download_pbp_files(start_date, end_date, playoff=False,
                     print(f'\tclean path and try again')
                     exit(1)
 
-        for gid in tqdm(game_ids):
+        for gid, gid_year in tqdm(games):
             now = datetime.datetime.now().date()
-            gid_year = int(gid[:4])
-            if gid_year > 3000:
-                if gid_year > 8000:
-                    continue
-                try:
-                    gid_year = int(gid[-4:])
-                except ValueError:
-                    # 13자 형식 등 시즌 suffix 누락 gameID skip (postseason edge case)
-                    continue
-            gid_for_save = f'{gid_year}{gid[4:]}'
+            # 저장 파일명은 앞 8자리가 늘 경기 날짜가 되게 맞춥니다.
+            # CSV 안의 gameID 컬럼은 네이버 원본 그대로라 **다릅니다.**
+            gid_for_save = save_stem(gid, gid_year)
             gid_to_date = datetime.date(gid_year,
                                         int(gid[4:6]),
                                         int(gid[6:8]))
@@ -1163,7 +1208,7 @@ def download_pbp_files(start_date, end_date, playoff=False,
                     gs = game_status()
                     gs.load(gid, game_data_dfs[0], game_data_dfs[1], game_data_dfs[2], log_file=logfile)
                     parse = gs.parse_game(debug_mode)
-                    gs.save_game(save_path / str(gid_year))
+                    gs.save_game(save_path / str(gid_year), year=gid_year)
                     if parse == True:
                         done += 1
                     else:
@@ -1188,16 +1233,18 @@ def download_pbp_files(start_date, end_date, playoff=False,
         logfile.write(f'Skipped games(already exists) : {skipped}\n')
         logfile.write(f'Broken games(bad data) : {broken}\n')
         logfile.write(f'Failed games(exception, skipped) : {failed}\n')
+        logfile.write(f'Non-league games(all-star etc, skipped) : {non_league}\n')
         logfile.write('====================================\n')
         if debug_mode == True:
             logfile.write(f'Elapsed {get_game_id_time:.2f} sec in get_game_ids\n')
             logfile.write(f'Elapsed {(get_data_time):.2f} sec in get_game_data\n')
             logfile.write(f'Elapsed {(parse_time):.2f} sec in parse_game\n')
-        logfile.write(f'Total {(parse_time+get_game_id_time+get_data_time):.2f} sec elapsed with {len(game_ids)} games\n')
+        logfile.write(f'Total {(parse_time+get_game_id_time+get_data_time):.2f} sec elapsed with {len(games)} games\n')
 
         # 콘솔 요약(대량 백필 모니터링용): 성공/스킵/불량/예외 카운트
         print(f'[download_pbp_files] done={done} skipped={skipped} '
-              f'broken={broken} failed={failed} total={len(game_ids)}')
+              f'broken={broken} failed={failed} non_league={non_league} '
+              f'total={len(games)}')
 
         if logfile.closed == False:
             logfile.close()
