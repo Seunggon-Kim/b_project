@@ -93,6 +93,16 @@
                     <div id="player-stats"></div>
                 </div>
 
+                <!-- 퓨처스 최근 경기입니다. 전체 폭을 씁니다.
+                     시즌별 성적 칸에 같이 넣었더니 표가 길어지면서
+                     옆의 상세 프로필까지 늘어났습니다(align-items:
+                     stretch). 프로필 3줄에 1,600px 짜리 빈 칸이
+                     생겼습니다. -->
+                <div id="futures-recent-section" class="detailed-stats-container fade-in hidden">
+                    <h3 class="card-title mb-3">최근 경기</h3>
+                    <div id="futures-recent-content"></div>
+                </div>
+
                 <!-- Standard Stats Table (Pitching) -->
                 <div id="detailed-stats-section" class="detailed-stats-container fade-in hidden">
                     <h3 class="card-title mb-3" id="detailed-stats-title">Standard</h3>
@@ -592,12 +602,22 @@
                 html += '<p class="text-muted mt-2">올 시즌 퓨처스 기록이 없습니다.</p>';
             }
 
-            const recent = f.recent || { columns: [], rows: [] };
-            if (recent.rows.length) {
-                html += '<h3 class="card-title mt-3 mb-2">최근 경기</h3>'
-                    + createTable(recent.columns, recent.rows);
-            }
             statsDiv.innerHTML = html;
+
+            // 최근 경기는 전체 폭 카드로 뺍니다. 시즌별 성적 칸에 같이
+            // 넣으면 표가 길어지면서 옆의 상세 프로필까지 늘어납니다.
+            const recent = f.recent || { columns: [], rows: [] };
+            const recentSection = document.getElementById('futures-recent-section');
+            const recentContent = document.getElementById('futures-recent-content');
+            if (recentSection && recentContent) {
+                if (recent.rows.length) {
+                    recentContent.innerHTML = createTable(recent.columns, recent.rows);
+                    recentSection.classList.remove('hidden');
+                } else {
+                    recentContent.innerHTML = '';
+                    recentSection.classList.add('hidden');
+                }
+            }
 
             applyTeamTheme(player.team_name || player.team_id || null);
         }
@@ -627,6 +647,9 @@
             headerBar.innerHTML = '';
             cardDiv.innerHTML = createLoadingSpinner();
             statsDiv.innerHTML = createLoadingSpinner();
+            // 퓨처스에서 넘어왔을 수 있습니다. 1군에는 없는 카드입니다.
+            const futuresRecent = document.getElementById('futures-recent-section');
+            if (futuresRecent) futuresRecent.classList.add('hidden');
 
             try {
                 const player = await API.getPlayerInfo(playerId);
