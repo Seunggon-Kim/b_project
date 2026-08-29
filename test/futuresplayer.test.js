@@ -304,3 +304,49 @@ test('빈 값은 null 입니다', () => {
 test('표가 없으면 빈 배열입니다', () => {
   assert.deepEqual(parseSearchRows('<html><body>없음</body></html>'), []);
 });
+
+// --- 등록되지 않은 선수는 소속을 감춥니다 ---------------------------
+//
+// KBO 는 등번호 자리로 현재 등록 여부를 알려 줍니다.
+//
+//     '29'  현재 등록된 선수        김광현(SSG)
+//     '#'   은퇴                    이대호, 유민상, 전상렬
+//     ''    등록 안 됨(계약 종료)   타무라(56218, 26 두산 아시아쿼터)
+//
+// 계약이 끝난 선수에게 옛 소속을 그대로 보여 주면 아직 그 팀에 있는
+// 것처럼 읽힙니다. 화면이 소속과 등번호를 감추도록 표시를 내려 줍니다.
+const RELEASED = `
+<html><body>
+  <ul>
+    <li><strong>선수명: </strong><span id="x_ucPlayerProfile_lblName">타무라</span></li>
+    <li><strong>등번호: </strong>No.<span id="x_ucPlayerProfile_lblBackNo"></span></li>
+    <li><strong>포지션: </strong><span id="x_ucPlayerProfile_lblPosition">투수(우투좌타)</span></li>
+  </ul>
+</body></html>`;
+
+const RETIRED = RELEASED.replace('lblBackNo"></span>', 'lblBackNo">#</span>');
+
+test('등번호가 있으면 등록된 선수입니다', () => {
+  assert.equal(parseProfile(HITTER).registered, true);
+});
+
+test('등번호가 비면 등록되지 않은 선수입니다', () => {
+  const p = parseProfile(RELEASED);
+  assert.equal(p.registered, false);
+  assert.equal(p.back_number, null);
+});
+
+test('등번호가 # 이면 은퇴 선수입니다', () => {
+  const p = parseProfile(RETIRED);
+  assert.equal(p.registered, false);
+  // '#' 을 등번호로 보여 주면 안 됩니다.
+  assert.equal(p.back_number, null);
+});
+
+test('등번호가 00 인 선수는 등록된 선수입니다', () => {
+  // 실제로 있는 등번호입니다. 숫자로 바꾸면 0 이 되어 사라집니다.
+  const zero = RELEASED.replace('lblBackNo"></span>', 'lblBackNo">00</span>');
+  const p = parseProfile(zero);
+  assert.equal(p.registered, true);
+  assert.equal(p.back_number, '00');
+});

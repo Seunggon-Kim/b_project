@@ -139,6 +139,21 @@ export function parseProfile(page) {
     out[key] = labelValue(page, id);
   }
   out.birthday_ymd = birthdayYmd(out.birthday);
+
+  // **등번호 자리가 현재 등록 여부를 알려 줍니다.**
+  //
+  //     '29'  등록된 선수            김광현(SSG)
+  //     '#'   은퇴                   이대호, 유민상, 전상렬
+  //     ''    등록 안 됨(계약 종료)  타무라(56218, 26 두산 아시아쿼터)
+  //
+  // 계약이 끝난 선수에게 옛 소속을 그대로 보여 주면 아직 그 팀에
+  // 있는 것처럼 읽힙니다. 화면이 소속과 등번호를 감춥니다.
+  //
+  // '00' 은 실제로 있는 등번호입니다. 숫자로 바꾸면 0 이 되어
+  // 사라지므로 문자열 그대로 둡니다.
+  if (out.back_number === '#') out.back_number = null;
+  out.registered = out.back_number != null;
+
   Object.assign(out, splitPosition(out.position));
   Object.assign(out, splitHeightWeight(out.height_weight));
   out.salary_won = salaryWon(out.salary);

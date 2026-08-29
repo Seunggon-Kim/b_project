@@ -485,6 +485,34 @@
         let modePlayerId = null;
 
         /**
+         * 지금 보고 있는 선수를 주소창에 반영합니다.
+         *
+         * 예전에는 검색으로 선수를 열어도 주소가 그대로였습니다. 그래서
+         * 링크를 복사해 보내면 엉뚱한 선수가 열리고, 새로고침하면 검색
+         * 화면으로 돌아갔습니다. 실제로 타무라를 보고 있는데 주소창에는
+         * 앞서 본 선수(52765)가 남아 있었습니다.
+         *
+         *     ?id=56218&mode=futures
+         *
+         * 이미 같은 주소면 아무것도 하지 않습니다. 뒤로 가기로 돌아온
+         * 직후에 다시 쌓으면 히스토리가 꼬입니다.
+         */
+        function syncUrl(playerId, mode) {
+            if (!playerId) return;
+            const url = new URL(window.location.href);
+            url.searchParams.set('id', playerId);
+            if (mode === 'futures') {
+                url.searchParams.set('mode', 'futures');
+            } else {
+                url.searchParams.delete('mode');
+            }
+            if (url.href !== window.location.href) {
+                history.pushState({ id: String(playerId), mode: mode || null },
+                                  '', url);
+            }
+        }
+
+        /**
          * 토글 상태를 맞춥니다.
          *
          * `firstTeamEmpty` 가 참이면 1군 단추를 끕니다. 그 선수는 1군
@@ -493,6 +521,7 @@
         function setPlayerMode(mode, playerId, hasFirstTeam) {
             playerMode = mode;
             modePlayerId = playerId;
+            syncUrl(playerId, mode);
             const tabs = document.getElementById('player-mode-tabs');
             if (!tabs) return;
             tabs.classList.remove('hidden');
@@ -528,8 +557,15 @@
                 team_name: f.team,
                 team_id: f.team_code,
                 image_url: f.photo,
-                // 퓨처스 기록이 있으면 올 시즌 뛰고 있는 선수입니다.
-                is_active: 1,
+                // **등번호가 있어야 지금 그 팀 선수입니다.**
+                //
+                // KBO 는 등번호 자리로 알려 줍니다. 비어 있으면 계약이
+                // 끝난 선수이고, '#' 이면 은퇴입니다. 옛 소속을 그대로
+                // 보여 주면 아직 그 팀에 있는 것처럼 읽힙니다.
+                //
+                // 화면은 is_active 가 0 이면 소속을 '-' 로 쓰고 등번호와
+                // 팀 색을 감춥니다. 1군 은퇴 선수와 같은 모양입니다.
+                is_active: f.registered ? 1 : 0,
                 // 1군 등록 배지는 퓨처스 화면에서 뜻이 없습니다.
                 first_team: null,
             };
@@ -1385,6 +1421,13 @@
                 });
             }
         }
+
+        // 뒤로 가기로 앞서 본 선수로 돌아갑니다.
+        window.addEventListener('popstate', () => {
+            const p = new URLSearchParams(window.location.search);
+            const id = p.get('id');
+            if (id) showPlayer(id, p.get('mode'));
+        });
 
         document.addEventListener('DOMContentLoaded', init);
     </script>
