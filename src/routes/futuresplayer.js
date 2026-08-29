@@ -275,6 +275,11 @@ export function parseSearchRows(page) {
       row.height = sz ? Number(sz[1]) : null;
       row.weight = sz ? Number(sz[2]) : null;
       delete row.size;
+      // 상세 페이지와 같은 규칙입니다. 등번호 자리가 비었거나 '#' 이면
+      // 지금 그 구단 선수가 아닙니다. 화면이 'No.?' 로 읽지 않도록
+      // 함께 내려 줍니다. '?' 는 모른다는 뜻이라 없는 것과 다릅니다.
+      if (row.back_number === '#') row.back_number = null;
+      row.registered = row.back_number != null;
       // 화면이 2군 화면으로 열도록 표시해 둡니다.
       row.futures = true;
       out.push(row);

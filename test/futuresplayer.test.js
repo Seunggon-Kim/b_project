@@ -394,3 +394,33 @@ test('등록되지 않은 선수는 소속을 채우지 않습니다', () => {
 test('등록된 선수는 예전처럼 채웁니다', () => {
   assert.equal(pickTeam(null, '삼성', 'KIA', true), '삼성');
 });
+
+// --- 검색 결과도 등록 여부를 함께 줍니다 ----------------------------
+//
+// 미야지(56415)가 검색 결과에 'No.?' 로 나왔습니다. 계약이 끝나 등번호가
+// 없는 선수인데 화면이 "모름" 으로 읽었습니다. '?' 는 모른다는 뜻이고
+// 없는 것과 다릅니다.
+//
+// KBO 검색도 상세 페이지와 같은 규칙입니다. 등번호 자리가 비었거나
+// '#' 이면 지금 그 구단 선수가 아닙니다.
+
+test('검색 결과에 등록 여부가 붙습니다', () => {
+  const rows = parseSearchRows(SEARCH);
+  assert.equal(rows[1].registered, true);   // 등번호 48
+  assert.equal(rows[0].registered, true);   // 등번호 16
+});
+
+test('등번호가 비면 등록되지 않은 선수입니다', () => {
+  const gone = SEARCH.replace('<td>48</td>', '<td></td>');
+  const rows = parseSearchRows(gone);
+  const r = rows.find(x => x.player_id === 31048);
+  assert.equal(r.registered, false);
+  assert.equal(r.back_number, null);
+});
+
+test('등번호가 # 이면 은퇴 선수입니다', () => {
+  const retired = SEARCH.replace('<td>48</td>', '<td>#</td>');
+  const r = parseSearchRows(retired).find(x => x.player_id === 31048);
+  assert.equal(r.registered, false);
+  assert.equal(r.back_number, null);
+});

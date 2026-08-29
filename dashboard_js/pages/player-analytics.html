@@ -358,7 +358,10 @@
                     ((fut && fut.players) ? fut.players : []).forEach(p => {
                         if (!seen.has(p.player_id)) {
                             seen.add(p.player_id);
-                            players.push({ ...p, is_active: 1 });
+                            // 등번호가 없으면 계약이 끝난 선수입니다.
+                            // is_active 0 이면 화면이 소속과 등번호를
+                            // 감춥니다. 'No.?' 로 읽히지 않습니다.
+                            players.push({ ...p, is_active: p.registered ? 1 : 0 });
                         }
                     });
                 }
@@ -709,7 +712,11 @@
                 }
             }
 
-            applyTeamTheme(player.team_name || player.team_id || null);
+            // 등록되지 않은 선수에게 팀 색을 입히면 아직 그 팀에
+            // 있는 것처럼 보입니다. 소속 이름은 이미 '-' 인데
+            // 배경만 삼성 파랑이면 한 화면에서 두 값이 어긋납니다.
+            applyTeamTheme(player.is_active
+                ? (player.team_name || player.team_id || null) : null);
         }
 
         /**
