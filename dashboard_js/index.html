@@ -750,7 +750,9 @@
                     ? `<img class="lr-emblem" src="assets/logos/${esc(code)}.png" alt="" loading="lazy" onerror="this.style.display='none'">`
                     : '';
                 const nameHtml = x.playerId
-                    ? `<a class="lr-name player-link" href="pages/player-analytics?id=${encodeURIComponent(x.playerId)}">${esc(x.name)}</a>`
+                    // 퓨처스 순위에서 넘어가는 링크라 `mode=futures` 를 붙입니다.
+                    // 1군 기록이 있는 선수도 여기서는 2군 화면으로 열립니다.
+                    ? `<a class="lr-name player-link" href="pages/player-analytics?id=${encodeURIComponent(x.playerId)}&mode=futures">${esc(x.name)}</a>`
                     : `<span class="lr-name">${esc(x.name)}</span>`;
                 return `<li class="lr-row">
                     <span class="lr-rank">${i + 1}</span>

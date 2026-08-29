@@ -19,6 +19,7 @@ import { jobsStatus } from './routes/jobs.js';
 import { games } from './routes/games.js';
 import { roster, rosterMoves } from './routes/roster.js';
 import { futuresStandings, futuresLeaders } from './routes/futuresrecord.js';
+import { futuresPlayer } from './routes/futuresplayer.js';
 import { logo } from './routes/logo.js';
 import { statsTeamRange } from './routes/teamrange.js';
 import {
@@ -41,6 +42,9 @@ router.add('GET', '/schedule/futures', futures);
 // `/schedule/futures` 보다 뒤에 둬도 경로가 겹치지 않습니다.
 router.add('GET', '/futures/standings', futuresStandings);
 router.add('GET', '/futures/leaders', futuresLeaders);
+// 퓨처스 선수 한 명입니다. 1군 기록이 한 번도 없는 선수는 players 표에
+// 아예 없어서 /players/:id 가 404 를 줍니다. 그때 화면이 이리로 옵니다.
+router.add('GET', '/futures/player/:id', futuresPlayer);
 // `/players/:id/news` 는 없앴습니다. 뉴스 수집을 그만두기로 했습니다.
 // 1982년까지 선수를 넣으면서 대상이 562명에서 1,745명으로 늘었고,
 // 구글 뉴스는 은퇴 선수에게 쓸 만한 결과를 주지 못합니다. 매일 25분을

@@ -51,15 +51,39 @@ class API {
 
     /**
      * Get player info
+     *
+     * **404 면 null 입니다.** 오류가 아니라 "1군 기록이 한 번도 없는
+     * 선수" 라는 뜻입니다. `players` 표는 1군 공식 기록에서 만들기
+     * 때문에 2군에만 있는 선수는 아예 들어 있지 않습니다. 부르는 쪽이
+     * 그때 퓨처스 기록으로 넘어갑니다.
      */
     static async getPlayerInfo(playerId) {
         try {
             const response = await fetch(`${API_BASE_URL}/players/${playerId}`);
+            if (response.status === 404) return null;
             if (!response.ok) throw new Error('Failed to fetch player info');
             return await response.json();
         } catch (error) {
             console.error('Error fetching player info:', error);
             throw error;
+        }
+    }
+
+    /**
+     * Get futures (2군) player profile and current-season record
+     *
+     * KBO 퓨처스 선수 페이지를 Worker 가 그때그때 읽어 돌려줍니다.
+     * 시즌별 기록은 없습니다. 올 시즌 요약과 최근 경기만 공개됩니다.
+     */
+    static async getFuturesPlayer(playerId) {
+        try {
+            const response = await fetch(`${API_BASE_URL}/futures/player/${playerId}`);
+            if (!response.ok) return null;
+            const data = await response.json();
+            return data && data.found ? data : null;
+        } catch (error) {
+            console.error('Error fetching futures player:', error);
+            return null;
         }
     }
 

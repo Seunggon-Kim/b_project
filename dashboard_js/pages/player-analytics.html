@@ -68,6 +68,13 @@
 
         <!-- Player Info Section -->
         <section id="player-info-section" class="hidden">
+            <!-- 1군 / 퓨처스 전환입니다. 홈 화면 토글과 같은 모양입니다.
+                 1군 기록이 한 번도 없는 선수는 1군 쪽이 꺼집니다. -->
+            <div id="player-mode-tabs" class="player-mode-tabs hidden">
+                <button type="button" class="leaders-tab active" data-pmode="first">1군</button>
+                <button type="button" class="leaders-tab" data-pmode="futures">퓨처스</button>
+            </div>
+
             <!-- Player Header Banner -->
             <div id="player-header-bar" class="player-header-bar fade-in">
                 <!-- Filled dynamically -->
@@ -340,7 +347,7 @@
                             ${players.map(player => `
                                 <button 
                                     class="btn btn-secondary" 
-                                    onclick="loadPlayerInfo('${player.player_id}')"
+                                    onclick="showPlayer('${player.player_id}')"
                                     style="text-align: left; justify-content: flex-start;"
                                 >
                                     ${player.player_name}${(player.is_active && player.team_id) ? ' (' + player.team_id + ')' : ''}${player.is_active ? (' - No.' + ((player.back_number !== null && player.back_number !== undefined) ? player.back_number : '?') + (player.position ? ' ' + player.position : '')) : (player.position ? ' - ' + player.position : '')}
@@ -378,52 +385,39 @@
                 + '1군 등록</span>';
         }
 
-        // Load player info
-        async function loadPlayerInfo(playerId) {
-            const section = document.getElementById('player-info-section');
-            const cardDiv = document.getElementById('player-card');
-            const statsDiv = document.getElementById('player-stats');
-            const headerBar = document.getElementById('player-header-bar');
+        /**
+         * 선수 머리 배너입니다.
+         *
+         * 1군과 퓨처스가 **같은 함수를 씁니다.** 퓨처스 응답은
+         * `futuresToPlayer` 가 1군과 같은 모양으로 바꿔 줍니다. 두
+         * 벌로 두면 한쪽만 고쳤을 때 조용히 어긋납니다.
+         */
+        function renderHeaderBar(player) {
+            const PHOTO_PLACEHOLDER = '../assets/player_no_image.png';  // KBO 공식 no-Image
+            const cdnImg = player.image_url || '';
+            const localImg = `../assets/player_photos/${player.player_id}.jpg`;  // 로컬 미러(CDN 404 폴백)
+            const imageUrl = cdnImg || localImg;  // CDN 우선, 없으면 로컬
+            const backNum = (player.back_number !== null && player.back_number !== undefined) ? player.back_number : '?';
 
-            section.classList.remove('hidden');
-            headerBar.innerHTML = '';
-            cardDiv.innerHTML = createLoadingSpinner();
-            statsDiv.innerHTML = createLoadingSpinner();
+            // 정확한 나이 계산 (YYYYMMDD 형식 대응)
+            let age = '-';
+            if (player.birthday) {
+                const bStr = player.birthday.toString();
+                const bYear = parseInt(bStr.substring(0, 4));
+                const bMonth = parseInt(bStr.substring(4, 6)) - 1; // 0-indexed
+                const bDay = parseInt(bStr.substring(6, 8));
 
-            try {
-                const player = await API.getPlayerInfo(playerId);
+                const today = new Date();
+                const birth = new Date(bYear, bMonth, bDay);
 
-                currentPlayer = player;
-
-                // 외국인 선수는 연봉/계약금이 달러, 국내 선수는 원 단위로 저장되어 통화 표기를 구분한다.
-                const isForeign = isForeignPlayer(player);
-
-                // Header Banner Bar
-                const PHOTO_PLACEHOLDER = '../assets/player_no_image.png';  // KBO 공식 no-Image
-                const cdnImg = player.image_url || '';
-                const localImg = `../assets/player_photos/${player.player_id}.jpg`;  // 로컬 미러(CDN 404 폴백)
-                const imageUrl = cdnImg || localImg;  // CDN 우선, 없으면 로컬
-                const backNum = (player.back_number !== null && player.back_number !== undefined) ? player.back_number : '?';
-
-                // 정확한 나이 계산 (YYYYMMDD 형식 대응)
-                let age = '-';
-                if (player.birthday) {
-                    const bStr = player.birthday.toString();
-                    const bYear = parseInt(bStr.substring(0, 4));
-                    const bMonth = parseInt(bStr.substring(4, 6)) - 1; // 0-indexed
-                    const bDay = parseInt(bStr.substring(6, 8));
-
-                    const today = new Date();
-                    const birth = new Date(bYear, bMonth, bDay);
-
-                    age = today.getFullYear() - birth.getFullYear();
-                    const monthDiff = today.getMonth() - birth.getMonth();
-                    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-                        age--;
-                    }
+                age = today.getFullYear() - birth.getFullYear();
+                const monthDiff = today.getMonth() - birth.getMonth();
+                if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+                    age--;
                 }
+            }
 
-                headerBar.innerHTML = `
+            return `
                     <div class="header-bar-photo">
                         <img src="${imageUrl}" alt="${player.player_name}" data-local="${localImg}"
                              onerror="var l=this.getAttribute('data-local'); if(l && this.src.indexOf('player_photos')===-1){this.src=l;} else {this.onerror=null; this.src='${PHOTO_PLACEHOLDER}';}">
@@ -452,6 +446,206 @@
                     </div>
                     <div class="header-bar-position">${player.position || '-'}</div>
                 `;
+        }
+
+        // --- 1군 / 퓨처스 전환 -------------------------------------
+        //
+        // 홈 화면 토글과 같은 방식입니다. 다른 점은 1군 기록이 한 번도
+        // 없는 선수가 있다는 것입니다. 그때는 1군 단추를 끕니다.
+
+        let playerMode = 'first';
+        let modePlayerId = null;
+
+        /**
+         * 토글 상태를 맞춥니다.
+         *
+         * `firstTeamEmpty` 가 참이면 1군 단추를 끕니다. 그 선수는 1군
+         * 기록이 없어서 보여 줄 것이 없습니다.
+         */
+        function setPlayerMode(mode, playerId, hasFirstTeam) {
+            playerMode = mode;
+            modePlayerId = playerId;
+            const tabs = document.getElementById('player-mode-tabs');
+            if (!tabs) return;
+            tabs.classList.remove('hidden');
+            tabs.querySelectorAll('.leaders-tab').forEach(btn => {
+                const on = btn.dataset.pmode === mode;
+                btn.classList.toggle('active', on);
+                const dead = btn.dataset.pmode === 'first' && !hasFirstTeam;
+                btn.disabled = dead;
+                btn.title = dead ? '1군 기록이 없는 선수입니다' : '';
+            });
+        }
+
+        /**
+         * 퓨처스 응답을 1군 `players` 행과 같은 모양으로 바꿉니다.
+         *
+         * 머리 배너와 프로필 카드를 1군과 같은 코드로 그리려는 것입니다.
+         * 값의 단위와 형식은 Worker 가 이미 맞춰서 보냅니다
+         * (`throw`/`bat` 은 R/L/S, `birthday` 는 YYYYMMDD, 연봉은 원).
+         */
+        function futuresToPlayer(f) {
+            return {
+                player_id: f.player_id,
+                player_name: f.name || '-',
+                back_number: f.back_number,
+                birthday: f.birthday_ymd,
+                position: f.position_name,
+                throw: f.throw,
+                bat: f.bat,
+                height: f.height,
+                weight: f.weight,
+                salary: f.salary_won,
+                signing_bonus: null,
+                team_name: f.team,
+                team_id: f.team_code,
+                image_url: f.photo,
+                // 퓨처스 기록이 있으면 올 시즌 뛰고 있는 선수입니다.
+                is_active: 1,
+                // 1군 등록 배지는 퓨처스 화면에서 뜻이 없습니다.
+                first_team: null,
+            };
+        }
+
+        /**
+         * play_by_play 로 만드는 카드들을 감춥니다.
+         *
+         * 구종 분석·투구 위치·wOBA 는 타석 단위 자료가 있어야 하는데
+         * 퓨처스는 그것이 공개되지 않습니다. 빈 카드를 남기면 자료가
+         * 없는 것인지 고장인지 구분되지 않습니다.
+         */
+        function hidePbpSections() {
+            ['detailed-stats-section', 'advanced-stats-section',
+             'pitch-arsenal-section', 'usage-movement-row'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.add('hidden');
+            });
+        }
+
+        /** 컬럼과 셀 한 줄을 세로 표로 만듭니다. 1군 시즌 표와 같은 모양입니다. */
+        function verticalTable(columns, cells) {
+            const rows = columns.map((c, i) => [c, cells[i] !== undefined ? cells[i] : '-']);
+            return createTable(['지표', '2군'], rows);
+        }
+
+        /**
+         * 퓨처스(2군) 화면입니다.
+         *
+         * KBO 퓨처스 선수 페이지를 Worker 가 그때그때 읽습니다. 시즌별
+         * 기록은 없습니다. 올 시즌 요약과 최근 경기만 공개됩니다.
+         */
+        async function loadFuturesPlayer(playerId, opts) {
+            const section = document.getElementById('player-info-section');
+            const cardDiv = document.getElementById('player-card');
+            const statsDiv = document.getElementById('player-stats');
+            const headerBar = document.getElementById('player-header-bar');
+
+            section.classList.remove('hidden');
+            headerBar.innerHTML = '';
+            cardDiv.innerHTML = createLoadingSpinner();
+            statsDiv.innerHTML = createLoadingSpinner();
+            hidePbpSections();
+
+            const f = await API.getFuturesPlayer(playerId);
+            if (!f) {
+                cardDiv.innerHTML = createErrorMessage('퓨처스 기록을 찾지 못했습니다.');
+                statsDiv.innerHTML = '';
+                return;
+            }
+
+            const player = futuresToPlayer(f);
+            currentPlayer = player;
+            setPlayerMode('futures', playerId,
+                          !(opts && opts.firstTeamEmpty));
+
+            headerBar.innerHTML = renderHeaderBar(player);
+
+            cardDiv.innerHTML = `
+                <div class="player-card fade-in">
+                    <h3 class="card-title mb-2">상세 프로필</h3>
+                    <div class="player-info-vertical">
+                        <div class="info-item">
+                            <span class="info-label">연봉</span>
+                            <span class="info-value">${formatMoney(player.salary, 'KRW')}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">지명순위</span>
+                            <span class="info-value">${f.draft || '-'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">출신교</span>
+                            <span class="info-value">${f.career || '-'}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // 올 시즌 기록입니다. 컬럼은 KBO 가 주는 그대로 씁니다.
+            const season = f.season || { columns: [], cells: [] };
+            let html = '<div class="futures-stat-head">'
+                + '<span class="futures-badge">퓨처스(2군)</span>'
+                + '<span class="futures-note">올 시즌 기록입니다. '
+                + '시즌별 기록은 KBO 가 공개하지 않습니다.</span></div>';
+            if (season.cells.length) {
+                html += verticalTable(season.columns, season.cells);
+            } else {
+                html += '<p class="text-muted mt-2">올 시즌 퓨처스 기록이 없습니다.</p>';
+            }
+
+            const recent = f.recent || { columns: [], rows: [] };
+            if (recent.rows.length) {
+                html += '<h3 class="card-title mt-3 mb-2">최근 경기</h3>'
+                    + createTable(recent.columns, recent.rows);
+            }
+            statsDiv.innerHTML = html;
+
+            applyTeamTheme(player.team_name || player.team_id || null);
+        }
+
+        /**
+         * 선수 화면 진입점입니다. 모드에 따라 갈립니다.
+         *
+         * 주소에 `?mode=futures` 가 있으면 바로 퓨처스로 엽니다. 홈
+         * 화면 퓨처스 개인 순위에서 넘어올 때 그렇게 옵니다.
+         */
+        async function showPlayer(playerId, mode) {
+            if (mode === 'futures') {
+                await loadFuturesPlayer(playerId);
+            } else {
+                await loadPlayerInfo(playerId);
+            }
+        }
+
+        // Load player info
+        async function loadPlayerInfo(playerId) {
+            const section = document.getElementById('player-info-section');
+            const cardDiv = document.getElementById('player-card');
+            const statsDiv = document.getElementById('player-stats');
+            const headerBar = document.getElementById('player-header-bar');
+
+            section.classList.remove('hidden');
+            headerBar.innerHTML = '';
+            cardDiv.innerHTML = createLoadingSpinner();
+            statsDiv.innerHTML = createLoadingSpinner();
+
+            try {
+                const player = await API.getPlayerInfo(playerId);
+
+                // 1군 기록이 한 번도 없는 선수입니다. `players` 표는 1군
+                // 공식 기록에서 만들기 때문에 2군에만 있는 선수는 아예
+                // 들어 있지 않습니다. 예전에는 화면이 통째로 비었습니다.
+                if (!player) {
+                    await loadFuturesPlayer(playerId, { firstTeamEmpty: true });
+                    return;
+                }
+
+                currentPlayer = player;
+                setPlayerMode('first', playerId, true);
+
+                // 외국인 선수는 연봉/계약금이 달러, 국내 선수는 원 단위로 저장되어 통화 표기를 구분한다.
+                const isForeign = isForeignPlayer(player);
+
+                headerBar.innerHTML = renderHeaderBar(player);
 
                 // Player Card (배너 중복 정보 제외)
                 cardDiv.innerHTML = `
@@ -1104,7 +1298,17 @@
             const urlParams = new URLSearchParams(window.location.search);
             const playerId = urlParams.get('id');
             if (playerId) {
-                loadPlayerInfo(playerId);
+                showPlayer(playerId, urlParams.get('mode'));
+            }
+
+            const tabs = document.getElementById('player-mode-tabs');
+            if (tabs) {
+                tabs.addEventListener('click', (e) => {
+                    const btn = e.target.closest('.leaders-tab');
+                    if (!btn || btn.disabled || btn.dataset.pmode === playerMode) return;
+                    if (!modePlayerId) return;
+                    showPlayer(modePlayerId, btn.dataset.pmode);
+                });
             }
         }
 

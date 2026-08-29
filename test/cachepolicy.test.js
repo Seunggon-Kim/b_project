@@ -82,3 +82,22 @@ test('본문을 그대로 넘깁니다', async () => {
   const res = withCache(new Response('hello', { status: 200 }), '/teams');
   assert.equal(await res.text(), 'hello');
 });
+
+test('퓨처스는 짧게 캐시합니다', () => {
+  // KBO 사이트를 그때그때 읽는 경로입니다. 기본값(엣지 1시간)이면
+  // 라우트 안의 5분 캐시가 무의미해집니다.
+  //
+  // prefix 를 '/futures/' 로 적으면 하나도 안 걸립니다. 비교가
+  // `pathname === prefix || pathname.startsWith(prefix + '/')` 라
+  // '/futures//standings' 를 찾게 됩니다. 실제로 그렇게 적었다가
+  // 이 테스트로 잡았습니다.
+  for (const p of ['/futures/standings', '/futures/leaders',
+                   '/futures/player/56443']) {
+    assert.equal(cacheControlFor(p), 'public, max-age=300', p);
+  }
+});
+
+test('퓨처스 경기 일정은 그대로입니다', () => {
+  // `/schedule/futures` 는 우리 D1 을 읽습니다. 위 규칙과 다릅니다.
+  assert.equal(cacheControlFor('/schedule/futures'), 'public, max-age=30');
+});
