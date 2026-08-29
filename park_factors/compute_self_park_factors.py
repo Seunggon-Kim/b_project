@@ -28,8 +28,14 @@ METRICS = ['run','b1','b2','b3','hr','slg']
 ALL_TEAMS = ['LG','OB','HT','KT','LT','SK','WO','NC','SS','HH']
 
 def team_park(team, season):
+    """그 시즌 주 구장의 정식 이름입니다.
+
+    KIA 는 2013년까지 무등야구장, 2014년부터 광주-KIA 챔피언스 필드를
+    씁니다. 전에는 연도와 무관하게 챔피언스 필드였습니다. 2014년에
+    지은 구장 이름이 2008년 기록에 붙어 있었습니다.
+    """
     if team in ('LG','OB'): return '서울종합운동장 야구장'
-    if team == 'HT': return '광주-KIA 챔피언스 필드'
+    if team == 'HT': return '광주-KIA 챔피언스 필드' if season >= 2014 else '무등야구장'
     if team == 'KT': return '케이티위즈파크'
     if team == 'LT': return '사직야구장'
     if team == 'SK': return '인천 SSG 랜더스필드'
@@ -39,8 +45,39 @@ def team_park(team, season):
     if team == 'HH': return '대전 한화생명 볼파크' if season >= 2025 else '대전 한밭야구장'
     return None
 
+def home_shorts(team, season):
+    """그 시즌 주 구장의 PBP 약칭입니다. 둘일 수도 있습니다.
+
+    한화는 같은 대전 구장을 시기에 따라 '한밭' 과 '대전' 두 이름으로
+    씁니다(2008~2016·2019·2024 는 '한밭', 2017~2018·2020~2023 은
+    '대전'). 2025년에 한화생명 볼파크로 옮겼고 그때도 '대전' 입니다.
+    """
+    if team in ('LG','OB'): return {'잠실'}
+    if team == 'HT': return {'광주'} if season >= 2014 else {'무등'}
+    if team == 'KT': return {'수원'}
+    if team == 'LT': return {'사직'}
+    if team == 'SK': return {'문학'}
+    if team == 'WO': return {'고척'} if season >= 2016 else {'목동'}
+    if team == 'NC': return {'창원'} if season >= 2019 else {'마산'}
+    if team == 'SS': return {'대구'} if season >= 2016 else {'시민'}
+    if team == 'HH': return {'대전'} if season >= 2025 else {'한밭', '대전'}
+    return set()
+
 def park_full(home_team, stadium_short, season):
-    return None if stadium_short in SECONDARY else team_park(home_team, season)
+    """홈 경기가 열린 구장의 정식 이름입니다. 보조 구장이면 None 입니다.
+
+    **주 구장 약칭과 맞는지로 가립니다.** 전에는 `SECONDARY` 목록에
+    적힌 세 곳(청주·울산·포항)만 걸렀습니다. 목록에 없던 군산(KIA
+    2009~2013, 10,717타석)과 제주(넥센 2008, 1,415타석), 그리고 롯데가
+    2008~2010 에 쓴 마산(5,240타석)이 주 구장 경기로 섞여 들어가
+    파크팩터를 흐렸습니다.
+
+    목록을 늘리는 대신 판정을 뒤집습니다. 주 구장이 아니면 전부
+    보조입니다. 새 보조 구장이 생겨도 저절로 걸러집니다.
+    """
+    if stadium_short not in home_shorts(home_team, season):
+        return None
+    return team_park(home_team, season)
 
 def load_games(years):
     # 시즌은 game_date 에서 뽑습니다. **gameID 앞 네 자리를 쓰면 안 됩니다.**

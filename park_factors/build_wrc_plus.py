@@ -22,12 +22,24 @@ YEARS=list(range(2008,2027)); YSTR=[str(y) for y in YEARS]; WRC_MIN_PA=50
 
 def stadium_full(short, season):
     if short in ('대전','한밭'): return '대전 한화생명 볼파크' if season>=2025 else '대전 한밭야구장'
-    return {'잠실':'서울종합운동장 야구장','사직':'사직야구장','광주':'광주-KIA 챔피언스 필드',
+    # PBP 구장 약칭을 정식 이름으로 바꿉니다.
+    #
+    # **빠진 이름이 있었습니다.** 한화 홈인 '한밭' 과 KIA 의 2013년까지
+    # 홈인 '무등' 이 없었습니다. 그래서 그 구장의 타석이 가중 파크팩터
+    # 계산에서 통째로 빠졌습니다. 군산·제주도 없었습니다.
+    #
+    # '광주' 는 2014년에 문을 연 챔피언스 필드입니다. 그 전 광주 경기는
+    # 무등야구장이고 PBP 약칭도 '무등' 으로 따로 있습니다.
+    return {'잠실':'서울종합운동장 야구장','사직':'사직야구장',
+            '광주':'광주-KIA 챔피언스 필드','무등':'무등야구장',
             '문학':'인천 SSG 랜더스필드','수원':'케이티위즈파크',
-            '고척':'고척스카이돔' if season>=2016 else '목동야구장','목동':'목동야구장',
-            '대구':'대구 삼성 라이온즈파크' if season>=2016 else '대구시민운동장 야구장','시민':'대구시민운동장 야구장',
-            '창원':'창원NC파크' if season>=2019 else '마산종합운동장 야구장','마산':'마산종합운동장 야구장',
-            '울산':'울산문수야구장','청주':'청주야구장','포항':'포항야구장'}.get(short, None)
+            '고척':'고척스카이돔','목동':'목동야구장',
+            '대구':'대구 삼성 라이온즈파크','시민':'대구시민운동장 야구장',
+            '창원':'창원NC파크','마산':'마산종합운동장 야구장',
+            '한밭':'대전 한밭야구장',
+            '대전':'대전 한화생명 볼파크' if season>=2025 else '대전 한밭야구장',
+            '울산':'울산문수야구장','청주':'청주야구장','포항':'포항야구장',
+            '군산':'군산월명야구장','제주':'제주야구장'}.get(short, None)
 
 self_pf={}
 for r in cur.execute("SELECT season,stadium,run_pf,hr_pf,slg_pf FROM self_park_factor"):
@@ -37,10 +49,50 @@ def pf_of(season,full,idx):
 
 W={r['season']:r for r in cur.execute("SELECT season,wOBA_scale,fg_w1B,fg_w2B,fg_w3B,fg_wHR,fg_wBB,fg_wHBP FROM kbo_woba_weights_by_season")}
 
+# 팀별 홈구장입니다.
+#
+# 전에는 `team_stadium_by_season` 표만 읽었습니다. 그 표에 **2015년
+# 이후만 있어서** 2008~2014 선수 918명 전원이 홈구장을 못 찾고 파크팩터
+# 1000(중립)으로 계산됐습니다. 그 기간 wRC+ 에 구장 보정이 아예 들어가지
+# 않았다는 뜻입니다.
+#
+# 이제 파크팩터 계산기와 같은 규칙(`team_park`)으로 정합니다. 판정이 한
+# 곳에만 있어야 두 값이 어긋나지 않습니다. 표에 있는 값은 그대로 두고
+# 빠진 시즌만 규칙으로 채웁니다.
+from importlib import import_module as _im
+_pf=_im('park_factors.compute_self_park_factors') if __package__ else None
+
+def _team_park(team, season):
+    """`compute_self_park_factors.team_park` 와 같은 규칙입니다."""
+    if team in ('LG','두산','OB'): return '서울종합운동장 야구장'
+    if team in ('KIA','HT'): return '광주-KIA 챔피언스 필드' if season>=2014 else '무등야구장'
+    if team in ('KT','kt'): return '케이티위즈파크'
+    if team in ('롯데','LT'): return '사직야구장'
+    if team in ('SSG','SK'): return '인천 SSG 랜더스필드'
+    if team in ('키움','넥센','히어로즈','우리','서울','WO'):
+        return '고척스카이돔' if season>=2016 else '목동야구장'
+    if team in ('NC',): return '창원NC파크' if season>=2019 else '마산종합운동장 야구장'
+    if team in ('삼성','SS'): return '대구 삼성 라이온즈파크' if season>=2016 else '대구시민운동장 야구장'
+    if team in ('한화','HH'): return '대전 한화생명 볼파크' if season>=2025 else '대전 한밭야구장'
+    return None
+
 latest=max(YEARS)
 src=cur.execute("SELECT MAX(season) FROM team_stadium_by_season WHERE season < ?", (latest,)).fetchone()[0]
 cur.execute("DELETE FROM team_stadium_by_season WHERE season=?", (latest,))
 cur.execute("INSERT INTO team_stadium_by_season (player_team,season,stadium) SELECT player_team,?,stadium FROM team_stadium_by_season WHERE season=?", (latest,src))
+
+# 표에 없는 (팀, 시즌)을 규칙으로 채웁니다.
+_have={(r['player_team'],r['season']) for r in cur.execute("SELECT player_team,season FROM team_stadium_by_season")}
+_add=[]
+for _r in cur.execute("SELECT DISTINCT player_team, season FROM kbo_official_batter_stats WHERE season BETWEEN ? AND ?", (min(YEARS), max(YEARS))):
+    _k=(_r['player_team'], _r['season'])
+    if _k in _have: continue
+    _p=_team_park(_r['player_team'], _r['season'])
+    if _p: _add.append((_r['player_team'], _r['season'], _p))
+if _add:
+    cur.executemany("INSERT INTO team_stadium_by_season (player_team,season,stadium) VALUES (?,?,?)", _add)
+    print(f"  team_stadium_by_season 에 {len(_add)}행 채움(규칙 기준)")
+
 TEAM_PARK={(r['player_team'],r['season']):r['stadium'] for r in cur.execute("SELECT player_team,season,stadium FROM team_stadium_by_season")}
 
 # 시즌 득점 상수 L 입니다. FanGraphs wRC+ 식의 리그 득점/타석입니다.
