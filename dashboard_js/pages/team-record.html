@@ -23,6 +23,7 @@
         .tr-picker {
             display: flex;
             align-items: center;
+            justify-content: flex-end;
             gap: 0.6rem;
             margin-bottom: 1.5rem;
         }
@@ -37,11 +38,24 @@
             padding: 1.25rem 1.5rem;
             border-radius: 12px;
             background: var(--team-color, #1e293b);
-            color: #fff;
+            /* 쌍방울(#FFC81E)이나 삼미(#88B7E1)처럼 밝은 구단색 위에는
+               흰 글자가 읽히지 않습니다. 밝기를 재서 정합니다. */
+            color: var(--team-ink, #fff);
             margin-bottom: 1.5rem;
         }
 
-        .tr-head img { width: 64px; height: 64px; object-fit: contain; }
+        /* 로고 뒤에 흰 바탕을 깝니다. KIA 로고는 빨강이고 구단색도
+           빨강(#EA0029)이라 그냥 올리면 묻혀서 안 보입니다. 한 팀만
+           예외를 두면 나중에 또 겹치므로 모든 팀에 같이 깝니다. */
+        .tr-head img {
+            width: 64px;
+            height: 64px;
+            object-fit: contain;
+            background: #fff;
+            border-radius: 10px;
+            padding: 6px;
+            box-sizing: border-box;
+        }
         .tr-name { font-size: 1.6rem; font-weight: 700; }
         .tr-sub { font-size: 0.9rem; opacity: .85; }
         .tr-headnums { margin-left: auto; text-align: right; }
@@ -102,6 +116,11 @@
         }
 
         .tr-pager button.nav { min-width: auto; }
+        .tr-pager .tr-gap {
+            align-self: center;
+            color: var(--text-muted);
+            padding: 0 0.15rem;
+        }
         .tr-pager button:disabled { opacity: .45; cursor: default; }
     </style>
     <script src="../js/config.js"></script>
@@ -159,7 +178,7 @@
 
             <div class="card">
                 <div class="card-body">
-                    <h3 class="card-title mb-2">시즌별 성적</h3>
+                    <h3 class="card-title mb-2" id="tr-seasons-title">시즌별 성적</h3>
                     <div id="tr-seasons"></div>
                     <div id="tr-pager" class="tr-pager"></div>
                     <p class="tr-note">순위·승패는 KBO 기록실, 팀 타율·ERA 는 공식 기록을 합친 값입니다.</p>
@@ -239,7 +258,7 @@
                 + ` alt="" loading="lazy" onerror="this.style.display='none'">`;
         }
 
-        function renderPicker(active) {
+        function renderPicker(active, name) {
             const sel = document.getElementById('team-select');
             sel.innerHTML = '<option value="">구단을 고르십시오</option>'
                 + TEAM_OPTIONS.map(g => {
@@ -253,15 +272,23 @@
                     }).join('');
                     return `<optgroup label="${esc(g.group)}">${opts}</optgroup>`;
                 }).join('');
-            if (active) {
-                // 주소에 id 만 있으면 그 구단의 첫 항목을 고릅니다.
+            // 고른 이름까지 주소에 실어야 새로고침해도 유지됩니다.
+            if (name) {
+                const exact = [...sel.options].find(
+                    o => o.value === `${active}|${name}`);
+                if (exact) sel.value = exact.value;
+            } else if (active) {
+                // 이름 없이 `?id=HT` 로 들어온 경우입니다. 그 구단의 첫
+                // 항목을 고른 것처럼 보이되 표는 계보 전체를 보입니다.
                 const match = [...sel.options].find(
                     o => o.value.split('|')[0] === active);
                 if (match) sel.value = match.value;
             }
             sel.addEventListener('change', () => {
-                const id = sel.value.split('|')[0];
-                if (id) window.location.href = `?id=${id}`;
+                const [id, picked] = sel.value.split('|');
+                if (!id) return;
+                window.location.href = `?id=${encodeURIComponent(id)}`
+                    + `&name=${encodeURIComponent(picked || '')}`;
             });
         }
 
@@ -314,10 +341,10 @@
             return stadiums[stadiums.length - 1].stadium || null;
         }
 
-        // 시즌별 표를 다섯 쪽으로 나눕니다. 45시즌을 한 번에 쏟으면
+        // 시즌별 표는 한 쪽에 다섯 시즌입니다. 45시즌을 한 번에 쏟으면
         // 화면이 스크롤로만 남습니다.
-        const SEASON_PAGES = 5;
-        let seasonState = { rows: [], page: 0, size: 0 };
+        const SEASONS_PER_PAGE = 5;
+        let seasonState = { rows: [], page: 0, size: SEASONS_PER_PAGE };
 
         function renderSeasonPage() {
             const { rows, page, size } = seasonState;
@@ -332,8 +359,18 @@
                     + `${off ? '' : ` data-page="${target}"`}`
                     + `${cls ? ` class="${cls}"` : ''}>${label}</button>`;
             };
+            // 45시즌이면 아홉 쪽입니다. 번호를 다 늘어놓으면 줄이
+            // 길어지므로 지금 쪽 둘레만 보이고 양 끝은 항상 둡니다.
+            const WINDOW = 2;
+            const show = new Set([0, pages - 1]);
+            for (let i = page - WINDOW; i <= page + WINDOW; i += 1) {
+                if (i >= 0 && i < pages) show.add(i);
+            }
             const btns = [btn('이전', page > 0 ? page - 1 : null, 'nav')];
+            let gap = false;
             for (let i = 0; i < pages; i += 1) {
+                if (!show.has(i)) { gap = true; continue; }
+                if (gap) { btns.push('<span class="tr-gap">...</span>'); gap = false; }
                 btns.push(btn(String(i + 1), i, i === page ? 'active' : ''));
             }
             btns.push(btn('다음', page < pages - 1 ? page + 1 : null, 'nav'));
@@ -342,11 +379,7 @@
         }
 
         function setSeasons(rows) {
-            seasonState = {
-                rows,
-                page: 0,
-                size: Math.max(1, Math.ceil(rows.length / SEASON_PAGES)),
-            };
+            seasonState = { rows, page: 0, size: SEASONS_PER_PAGE };
             renderSeasonPage();
         }
 
@@ -357,7 +390,7 @@
             renderSeasonPage();
         });
 
-        async function load(id) {
+        async function load(id, picked) {
             const body = document.getElementById('team-body');
             const empty = document.getElementById('tr-empty');
             const res = await fetch(`${API_BASE_URL}/teams/${encodeURIComponent(id)}`);
@@ -372,13 +405,6 @@
             const seasons = d.seasons || [];
             const career = d.career || {};
 
-            // 팀 색은 components.js 의 공통 표를 씁니다. 선수 분석과
-            // 같은 값이라야 두 화면이 어긋나 보이지 않습니다.
-            const color = window.teamColor
-                ? window.teamColor(f.current_name || f.franchise_id)
-                : '#1e293b';
-            const head = document.getElementById('tr-head');
-            head.style.setProperty('--team-color', color);
             const eras = (d.eras || []).map(e => {
                 const span = e.from === e.to ? `${e.from}` : `${e.from}~${e.to}`;
                 return `${esc(e.team_name)} ${span}`;
@@ -391,6 +417,19 @@
             const title = f.current_name
                 || (lastEra && lastEra.team_name)
                 || f.franchise_id;
+
+            // 팀 색은 components.js 의 공통 표를 씁니다. 선수 분석과
+            // 같은 값이라야 두 화면이 어긋나 보이지 않습니다.
+            //
+            // 고른 이름으로 찾습니다. 태평양을 고르면 태평양 색입니다.
+            // 프랜차이즈 코드로 찾으면 해체 구단은 `current_name` 이
+            // 없어 기본 남색으로 떨어졌습니다.
+            const head = document.getElementById('tr-head');
+            const color = window.teamColor
+                ? window.teamColor(picked || title) : '#1e293b';
+            head.style.setProperty('--team-color', color);
+            head.style.setProperty(
+                '--team-ink', window.textOn ? window.textOn(color) : '#fff');
             head.innerHTML = logoTag(f.franchise_id, '')
                 + '<div>'
                 + `<div class="tr-name">${esc(title)}</div>`
@@ -435,16 +474,26 @@
                 + `<span class="v">${esc(v)}</span></li>`).join('')
                 : '<li><span class="k">시즌 기록이 없습니다</span></li>';
 
-            setSeasons(seasons);
+            // 고른 이름이 있으면 그 이름으로 뛴 시즌만 보입니다.
+            // 태평양을 고르면 1988~1995 만 나옵니다. 이름 없이
+            // `?id=HD` 로 들어오면 계보 전체가 나옵니다.
+            const shown = picked
+                ? seasons.filter(r => r.team_name === picked) : seasons;
+            document.getElementById('tr-seasons-title').textContent =
+                picked ? `시즌별 성적 · ${picked}` : '시즌별 성적';
+            setSeasons(shown);
 
             body.classList.remove('hidden');
             empty.classList.add('hidden');
         }
 
         function init() {
-            const id = new URLSearchParams(window.location.search).get('id');
-            renderPicker(id);
-            if (id) load(id);
+            const q = new URLSearchParams(window.location.search);
+            const id = q.get('id');
+            // 고른 팀 이름입니다. 있으면 그 이름으로 뛴 시즌만 보입니다.
+            const name = q.get('name') || '';
+            renderPicker(id, name);
+            if (id) load(id, name);
         }
 
         document.addEventListener('DOMContentLoaded', init);
