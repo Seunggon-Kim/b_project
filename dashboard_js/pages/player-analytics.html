@@ -592,6 +592,36 @@
             return createTable(['지표', '2군'], rows);
         }
 
+        // 퓨처스 연도별 표에 넣을 지표입니다. 1군 시즌별 성적과 같은
+        // 항목으로 맞췄습니다. wOBA·wRC+ 는 2군에 타석 단위 자료가
+        // 없어 만들 수 없습니다.
+        const FUT_SEASON_METRICS = {
+            batter: ['G', 'PA', 'AB', 'R', 'H', 'HR', 'RBI', 'AVG', 'OBP', 'SLG'],
+            pitcher: ['W', 'L', 'ERA', 'G', 'SV', 'HLD', 'IP', 'H', 'BB', 'SO'],
+        };
+
+        /**
+         * 연도별 퓨처스 기록을 1군과 같은 전치 표로 만듭니다.
+         *
+         * 가로가 시즌, 세로가 지표입니다. 1군 '시즌별 성적' 과 같은
+         * 모양이라 두 화면을 오갈 때 눈이 헤매지 않습니다.
+         *
+         * 최근 세 시즌만 보여 줍니다. 1군도 그렇습니다. 더 필요하면
+         * 그때 늘립니다.
+         */
+        function futuresSeasonTable(seasons, kind) {
+            if (!seasons || !seasons.length) return '';
+            const use = seasons.slice(0, 3).reverse();
+            const years = use.map(s => String(s.season));
+            const metrics = FUT_SEASON_METRICS[kind] || FUT_SEASON_METRICS.batter;
+            const rows = [['팀', ...use.map(s => s.team || '-')]];
+            metrics.forEach(m => {
+                rows.push([m, ...use.map(s => (s[m] === null || s[m] === undefined || s[m] === '')
+                    ? '-' : s[m])]);
+            });
+            return createTable(['지표', ...years], rows);
+        }
+
         /**
          * 퓨처스(2군) 화면입니다.
          *
@@ -644,16 +674,22 @@
                 </div>
             `;
 
-            // 올 시즌 기록입니다. 컬럼은 KBO 가 주는 그대로 씁니다.
+            // 연도별 기록이 있으면 그것을 먼저 보여 줍니다. 1군 화면과
+            // 같은 전치 표입니다. 없으면 올 시즌 요약만 보여 줍니다.
+            const seasons = f.seasons || [];
             const season = f.season || { columns: [], cells: [] };
             let html = '<div class="futures-stat-head">'
                 + '<span class="futures-badge">퓨처스(2군)</span>'
-                + '<span class="futures-note">올 시즌 기록입니다. '
-                + '시즌별 기록은 KBO 가 공개하지 않습니다.</span></div>';
-            if (season.cells.length) {
+                + '<span class="futures-note">'
+                + (seasons.length ? '2010년부터의 기록입니다.'
+                                  : '올 시즌 기록입니다.')
+                + '</span></div>';
+            if (seasons.length) {
+                html += futuresSeasonTable(seasons, f.kind);
+            } else if (season.cells.length) {
                 html += verticalTable(season.columns, season.cells);
             } else {
-                html += '<p class="text-muted mt-2">올 시즌 퓨처스 기록이 없습니다.</p>';
+                html += '<p class="text-muted mt-2">퓨처스 기록이 없습니다.</p>';
             }
 
             statsDiv.innerHTML = html;

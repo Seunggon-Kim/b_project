@@ -416,6 +416,22 @@ export async function futuresPlayer(request, env, ctx, params) {
 
     const teamName = pickTeam(picked.season.cells[0], rosterTeam,
                               statsTeam, picked.profile.registered);
+
+    // 시즌별 기록입니다. KBO 선수 페이지는 올 시즌만 주는데, 기록실
+    // 쪽에는 2010년부터 있습니다. `futures_records.py` 가 미리 받아
+    // D1 에 넣어 둡니다(13,036행).
+    let seasons = [];
+    if (env && env.DB) {
+      try {
+        const { results } = await env.DB.prepare(
+          'SELECT * FROM futures_season_stats '
+          + 'WHERE player_id = ? AND kind = ? ORDER BY season DESC',
+        ).bind(id, kind).all();
+        seasons = results || [];
+      } catch {
+        // 표가 아직 없는 환경입니다.
+      }
+    }
     const result = {
       found: true,
       player_id: Number(id),
@@ -424,6 +440,8 @@ export async function futuresPlayer(request, env, ctx, params) {
       team: teamName,
       team_code: teamName ? (FUTURES_TEAM_CODE[teamName] ?? '') : '',
       season: picked.season,
+      // 연도별 기록입니다. 1군 화면의 시즌별 표에 해당합니다.
+      seasons,
       recent: picked.recent,
       source: 'koreabaseball.com',
     };
