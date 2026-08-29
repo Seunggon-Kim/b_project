@@ -28,6 +28,10 @@
             margin-bottom: 1.5rem;
         }
 
+        /* 설명 한 줄과 고르개 사이입니다. 공용 mb-3(24px)은 너무
+           벌어집니다. 고르개가 바로 아래 붙는 편이 낫습니다. */
+        .tr-lead { margin-bottom: 0.5rem; }
+
         .tr-pick-label { color: var(--text-muted); font-size: 0.9rem; }
         .tr-select { max-width: 320px; }
 
@@ -93,6 +97,7 @@
            스크롤로만 남습니다. */
         .tr-pager {
             display: flex;
+            justify-content: center;
             gap: 0.35rem;
             flex-wrap: wrap;
             margin-top: 0.75rem;
@@ -149,7 +154,7 @@
 
     <main class="container">
         <h1 class="fade-in">팀 기록실</h1>
-        <p class="text-secondary mb-3">구단별 시즌 성적과 역사입니다. 팀 이름이 바뀌어도 한 구단으로 이어 봅니다.</p>
+        <p class="text-secondary tr-lead">구단별 시즌 성적과 역사입니다. 팀 이름이 바뀌어도 한 구단으로 이어 봅니다.</p>
 
         <div class="tr-picker">
             <label class="tr-pick-label" for="team-select">구단</label>
