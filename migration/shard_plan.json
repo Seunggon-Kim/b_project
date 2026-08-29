@@ -12,40 +12,65 @@
       "binding": "DB_2008_2011",
       "database": "kbo-pbp-2008-2011",
       "database_id": "3d9dfeb0-63ff-4ced-b4f5-e852feb19961",
-      "seasons": [2008, 2009, 2010, 2011],
+      "seasons": [
+        2008,
+        2009,
+        2010,
+        2011
+      ],
       "note": "네 시즌입니다. 2008~2011 은 8개 구단 시절이라 시즌당 경기가 적어(504~532) 세 시즌 샤드보다 오히려 작습니다. 약 307MB 예상입니다."
     },
     {
       "binding": "DB_2012_2014",
       "database": "kbo-pbp-2012-2014",
       "database_id": "1d6444f3-5840-4d05-857e-85ecdc31876b",
-      "seasons": [2012, 2013, 2014]
+      "seasons": [
+        2012,
+        2013,
+        2014
+      ]
     },
     {
       "binding": "DB_2015_2017",
       "database": "kbo-pbp-2015-2017",
       "database_id": "92d5b1c7-7d35-4279-876e-c88caa3bccad",
-      "seasons": [2015, 2016, 2017]
+      "seasons": [
+        2015,
+        2016,
+        2017
+      ]
     },
     {
       "binding": "DB_2018_2020",
       "database": "kbo-pbp-2018-2020",
       "database_id": "f9420d0e-dce5-4bab-a210-298aba89d63d",
-      "seasons": [2018, 2019, 2020]
+      "seasons": [
+        2018,
+        2019,
+        2020
+      ]
     },
     {
       "binding": "DB_2021_2023",
       "database": "kbo-pbp-2021-2023",
       "database_id": "b6bf7d3e-dfef-480e-ae6f-a2c18278b77e",
-      "seasons": [2021, 2022, 2023]
+      "seasons": [
+        2021,
+        2022,
+        2023
+      ]
     },
     {
       "binding": "DB_2024_2026",
       "database": "kbo-pbp-2024-2026",
       "database_id": "0ee0dec0-eeac-47da-b31d-ee38426fbb92",
-      "seasons": [2024, 2025, 2026]
+      "seasons": [
+        2024,
+        2025,
+        2026
+      ]
     }
   ],
   "growth": "새 시즌(2027)이 생기면 마지막 샤드가 네 시즌이 됩니다. 그때 용량을 재고 필요하면 샤드를 하나 더 만드십시오. 계정 한도 10개 중 지금 7개를 씁니다.",
-  "backfill_2008_2014": "2008~2014 는 120만 행입니다. 인덱스 3개라 계상되는 쓰기가 480만이고, D1 무료는 하루 10만 행이라 한 번에 못 넣습니다. daily 워크플로가 매일 남는 예산만큼 밀어 넣습니다(migration/shard_backfill.py). 약 51일 걸립니다. 진행 상태는 migration/backfill_progress.json 에 남습니다."
+  "backfill_2008_2014": "2008~2014 는 120만 행입니다. 인덱스 3개라 계상되는 쓰기가 480만이고, D1 무료는 하루 10만 행이라 한 번에 못 넣습니다. 하루 한도는 계정 전체가 아니라 DB 단위로 걸립니다(2026-08-29 실측: 한 계정에서 두 DB 에 각각 8만 계상씩 같은 날 성공). 그래서 daily 워크플로가 두 샤드를 같은 날 채웁니다(migration/shard_backfill.py 를 --job pbp_2008_2014 --last 2011 과 --first 2012 --last 2014 로 두 번). 진행 상태는 D1 kbo-stats 의 meta_backfill 에 작업별로 남습니다. 러너는 매번 새로 시작해 로컬 파일이 안 남습니다."
 }
