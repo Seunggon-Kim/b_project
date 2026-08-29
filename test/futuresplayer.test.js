@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  parseProfile, parseSeasonRow, parseRecentGames, parseSearchRows,
+  parseProfile, parseSeasonRow, parseRecentGames, parseSearchRows, pickTeam,
 } from '../src/routes/futuresplayer.js';
 
 // KBO 퓨처스 선수 상세 페이지의 실제 모양입니다.
@@ -349,4 +349,48 @@ test('등번호가 00 인 선수는 등록된 선수입니다', () => {
   const p = parseProfile(zero);
   assert.equal(p.registered, true);
   assert.equal(p.back_number, '00');
+});
+
+// --- 퓨처스 기록이 없어도 소속은 압니다 -----------------------------
+//
+// KBO 10개 구단은 1군과 퓨처스가 같은 구단입니다(퓨처스 리그만 있는
+// 상무·울산·고양 제외). 그래서 2군 경기에 안 나온 1군 주전도 퓨처스
+// 화면에서 소속이 보여야 합니다.
+//
+// 소속을 시즌 기록의 팀 이름에서만 가져오다 보니, 기록이 없으면
+// 무소속으로 나왔습니다. 최형우(72443)는 등번호 34 를 달고 삼성에
+// 있는데 퓨처스 화면에서 소속이 '-' 였습니다.
+//
+// 순서가 중요합니다. **2군에서 뛴 팀이 먼저입니다.** 상무·울산 소속
+// 선수는 원 구단이 따로 있어서, 1군 소속을 먼저 보면 상무에서 뛰는
+// 선수가 원 구단 소속으로 보입니다.
+
+test('2군에서 뛴 팀이 가장 먼저입니다', () => {
+  assert.equal(pickTeam('상무', 'KT', '삼성'), '상무');
+});
+
+test('2군 기록이 없으면 1군 등록 현황을 봅니다', () => {
+  assert.equal(pickTeam(null, '삼성', 'KIA'), '삼성');
+});
+
+test('등록 현황에도 없으면 마지막 시즌 소속을 봅니다', () => {
+  // 은퇴 선수나 아직 등록 전인 선수입니다.
+  assert.equal(pickTeam(null, null, 'KIA'), 'KIA');
+});
+
+test('아무 데도 없으면 null 입니다', () => {
+  assert.equal(pickTeam(null, null, null), null);
+  assert.equal(pickTeam('', '', ''), null);
+});
+
+test('등록되지 않은 선수는 소속을 채우지 않습니다', () => {
+  // 계약이 끝난 선수에게 D1 의 옛 소속을 붙이면 아직 그 팀에 있는
+  // 것처럼 읽힙니다. 타무라(56218)에게 '두산' 이 붙었습니다.
+  assert.equal(pickTeam(null, '두산', '두산', false), null);
+  // 2군에서 뛴 기록이 있으면 그건 그대로 씁니다. 그 시즌 사실입니다.
+  assert.equal(pickTeam('한화', null, null, false), '한화');
+});
+
+test('등록된 선수는 예전처럼 채웁니다', () => {
+  assert.equal(pickTeam(null, '삼성', 'KIA', true), '삼성');
 });

@@ -316,6 +316,26 @@ export async function futuresSearch(request, env) {
 }
 
 /**
+ * 그 선수의 소속입니다. 없으면 null 입니다.
+ *
+ * KBO 10개 구단은 1군과 퓨처스가 같은 구단입니다(퓨처스 리그만 있는
+ * 상무·울산·고양 제외). 그래서 2군 경기에 안 나온 1군 주전도 퓨처스
+ * 화면에서 소속이 보여야 합니다. 최형우(72443)는 등번호 34 를 달고
+ * 삼성에 있는데 소속이 '-' 로 나왔습니다.
+ *
+ * **2군에서 뛴 팀이 가장 먼저입니다.** 상무·울산 소속 선수는 원 구단이
+ * 따로 있어서, 1군 소속을 먼저 보면 상무에서 뛰는 선수가 원 구단
+ * 소속으로 보입니다.
+ */
+export function pickTeam(seasonTeam, rosterTeam, statsTeam, registered = true) {
+  if (seasonTeam) return seasonTeam;
+  // 계약이 끝난 선수에게 옛 소속을 붙이면 아직 그 팀에 있는 것처럼
+  // 읽힙니다. 2군에서 뛴 기록은 그 시즌 사실이라 그대로 씁니다.
+  if (!registered) return null;
+  return rosterTeam || statsTeam || null;
+}
+
+/**
  * 퓨처스 선수 한 명입니다.
  *
  * 타자·투수 어느 쪽인지 모르니 두 경로를 나란히 부르고 기록이 있는
@@ -364,7 +384,38 @@ export async function futuresPlayer(request, env, ctx, params) {
     }
 
     const picked = parsed[kind];
-    const teamName = picked.season.cells[0] || null;
+
+    // 2군 경기에 안 나온 선수는 시즌 표에 팀 이름이 없습니다. 그때는
+    // 우리 D1 에서 1군 소속을 가져옵니다. 같은 구단이기 때문입니다.
+    // 기록이 있으면 D1 을 아예 두드리지 않습니다.
+    let rosterTeam = null;
+    let statsTeam = null;
+    if (!picked.season.cells.length && picked.profile.registered
+        && env && env.DB) {
+      try {
+        const row = await env.DB.prepare(
+          'SELECT (SELECT team FROM kbo_roster WHERE player_id = p.player_id'
+          + ' LIMIT 1) AS roster_team,'
+          + ' (SELECT player_team FROM ('
+          + '   SELECT season, player_team FROM kbo_official_batter_stats'
+          + '    WHERE player_id = p.player_id AND player_team IS NOT NULL'
+          + '   UNION ALL'
+          + '   SELECT season, player_team FROM kbo_official_pitcher_stats'
+          + '    WHERE player_id = p.player_id AND player_team IS NOT NULL'
+          + ' ) ORDER BY season DESC LIMIT 1) AS stats_team'
+          + ' FROM players p WHERE p.player_id = ? LIMIT 1',
+        ).bind(id).first();
+        if (row) {
+          rosterTeam = row.roster_team || null;
+          statsTeam = row.stats_team || null;
+        }
+      } catch {
+        // 표가 없는 환경입니다. 소속 없이 갑니다.
+      }
+    }
+
+    const teamName = pickTeam(picked.season.cells[0], rosterTeam,
+                              statsTeam, picked.profile.registered);
     const result = {
       found: true,
       player_id: Number(id),
