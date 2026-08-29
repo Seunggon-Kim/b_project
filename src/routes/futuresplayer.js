@@ -216,6 +216,90 @@ export function parseRecentGames(page) {
   return { columns, rows: bodyRows(tables[1]) };
 }
 
+// KBO 이름 검색 결과의 컬럼입니다. 순서가 고정입니다.
+//
+//     등번호 선수명 팀명 포지션 생년월일 체격 출신교
+const SEARCH_COLUMNS = ['back_number', 'player_name', 'team_id',
+                        'position', 'birthday', 'size', 'career'];
+
+/**
+ * KBO 이름 검색 결과를 읽습니다.
+ *
+ * `players` 표는 1군 공식 기록에서 만들어서 2군에만 있는 선수는 아예
+ * 없습니다. 이름을 쳐도 "검색 결과가 없습니다" 만 나왔습니다.
+ *
+ * 우리 표와 같은 필드 이름으로 맞춰 돌려줍니다. 화면이 1군 검색 결과와
+ * 같은 코드로 그릴 수 있습니다.
+ *
+ * 선수 ID 가 없는 줄은 버립니다. 눌러도 열 수가 없습니다.
+ */
+export function parseSearchRows(page) {
+  const out = [];
+  for (const tb of page.matchAll(/<table[^>]*>([\s\S]*?)<\/table>/g)) {
+    const tbody = /<tbody>([\s\S]*?)<\/tbody>/.exec(tb[1]);
+    const body = tbody ? tbody[1] : tb[1];
+    for (const tr of body.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)) {
+      const raw = [...tr[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((m) => m[1]);
+      if (raw.length < SEARCH_COLUMNS.length) continue;
+      const idm = /playerId=(\d+)/.exec(tr[1]);
+      if (!idm) continue;
+
+      const row = { player_id: Number.parseInt(idm[1], 10) };
+      raw.forEach((cell, i) => {
+        const key = SEARCH_COLUMNS[i];
+        if (!key) return;
+        const v = stripTags(cell).trim();
+        row[key] = v === '' ? null : v;
+      });
+
+      // 생년월일은 '1999-09-15' 로 옵니다. 1군 players.birthday 와 같은
+      // YYYYMMDD 로 맞춥니다.
+      row.birthday = birthdayYmd(row.birthday);
+      // 체격은 '188cm, 86kg' 입니다. 값이 없으면 'cm, kg' 만 옵니다.
+      const sz = /(\d+)\s*cm\s*,?\s*(\d+)\s*kg/.exec(row.size || '');
+      row.height = sz ? Number(sz[1]) : null;
+      row.weight = sz ? Number(sz[2]) : null;
+      delete row.size;
+      // 화면이 2군 화면으로 열도록 표시해 둡니다.
+      row.futures = true;
+      out.push(row);
+    }
+  }
+  return out;
+}
+
+/**
+ * 이름으로 선수를 찾습니다. 1군·2군을 모두 돌려줍니다.
+ *
+ * 화면은 우리 `players` 검색이 빈손일 때만 이리로 옵니다. 대부분의
+ * 검색은 D1 안에서 끝나고, 못 찾을 때만 KBO 를 한 번 더 봅니다.
+ */
+export async function futuresSearch(request, env) {
+  const q = (new URL(request.url).searchParams.get('q') || '').trim();
+  if (!q) return json({ players: [] });
+  try {
+    const key = `search:${q}`;
+    const hit = cache.get(key);
+    if (hit) return json(hit);
+
+    const res = await fetch(
+      'https://www.koreabaseball.com/Player/Search.aspx?searchWord='
+      + encodeURIComponent(q),
+      { headers: UA },
+    );
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const players = parseSearchRows(await res.text());
+    const result = { players, source: 'koreabaseball.com' };
+    if (players.length) cache.set(key, result);
+    return json(result);
+  } catch (err) {
+    return json({
+      players: [],
+      error: String(err && err.message ? err.message : err),
+    });
+  }
+}
+
 /**
  * 퓨처스 선수 한 명입니다.
  *

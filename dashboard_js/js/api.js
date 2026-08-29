@@ -70,6 +70,25 @@ class API {
     }
 
     /**
+     * Search players by name, including 2군 only players
+     *
+     * `players` 표는 1군 공식 기록에서 만들어서 2군에만 있는 선수가
+     * 없습니다. 이름을 쳐도 "검색 결과가 없습니다" 만 나왔습니다.
+     * KBO 선수 검색을 Worker 가 대신 읽습니다.
+     */
+    static async searchFuturesPlayers(query) {
+        try {
+            const response = await fetch(
+                `${API_BASE_URL}/futures/search?q=${encodeURIComponent(query)}`);
+            if (!response.ok) return { players: [] };
+            return await response.json();
+        } catch (error) {
+            console.error('Error searching futures players:', error);
+            return { players: [] };
+        }
+    }
+
+    /**
      * Get futures (2군) player profile and current-season record
      *
      * KBO 퓨처스 선수 페이지를 Worker 가 그때그때 읽어 돌려줍니다.

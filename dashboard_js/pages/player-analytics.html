@@ -345,6 +345,24 @@
                     });
                 });
 
+                // 우리 표에서 못 찾으면 2군까지 찾아봅니다.
+                //
+                // `players` 는 1군 공식 기록에서 만든 표라 2군에만 있는
+                // 선수가 없습니다. 그 선수들은 이름을 쳐도 "검색 결과가
+                // 없습니다" 만 나왔습니다.
+                //
+                // **빈손일 때만 부릅니다.** 타이핑마다 KBO 를 두드리면
+                // 느려집니다. 대부분의 검색은 D1 안에서 끝납니다.
+                if (players.length === 0) {
+                    const fut = await API.searchFuturesPlayers(query);
+                    ((fut && fut.players) ? fut.players : []).forEach(p => {
+                        if (!seen.has(p.player_id)) {
+                            seen.add(p.player_id);
+                            players.push({ ...p, is_active: 1 });
+                        }
+                    });
+                }
+
                 if (players.length === 0) {
                     resultsDiv.innerHTML = `<p class="text-muted mt-2">검색 결과가 없습니다.</p>`;
                     return;
@@ -357,7 +375,7 @@
                             ${players.map(player => `
                                 <button 
                                     class="btn btn-secondary" 
-                                    onclick="showPlayer('${player.player_id}')"
+                                    onclick="showPlayer('${player.player_id}', ${player.futures ? "'futures'" : 'null'})"
                                     style="text-align: left; justify-content: flex-start;"
                                 >
                                     ${player.player_name}${(player.is_active && player.team_id) ? ' (' + player.team_id + ')' : ''}${player.is_active ? (' - No.' + ((player.back_number !== null && player.back_number !== undefined) ? player.back_number : '?') + (player.position ? ' ' + player.position : '')) : (player.position ? ' - ' + player.position : '')}

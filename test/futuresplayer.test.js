@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  parseProfile, parseSeasonRow, parseRecentGames,
+  parseProfile, parseSeasonRow, parseRecentGames, parseSearchRows,
 } from '../src/routes/futuresplayer.js';
 
 // KBO 퓨처스 선수 상세 페이지의 실제 모양입니다.
@@ -242,4 +242,65 @@ test('칸이 모자란 행도 기록이 아닙니다', () => {
 test('칸이 다 찬 행은 그대로 기록입니다', () => {
   assert.equal(parseSeasonRow(HITTER).cells.length, 16);
   assert.equal(parseSeasonRow(PITCHER).cells.length, 17);
+});
+
+// --- 이름으로 2군 선수 찾기 -----------------------------------------
+//
+// `players` 표는 1군 공식 기록에서 만듭니다. 2군에만 있는 선수는 아예
+// 없어서 이름을 쳐도 "검색 결과가 없습니다" 만 나왔습니다.
+//
+// KBO 선수 검색이 GET 으로 됩니다. 1군·2군을 모두 돌려줍니다.
+//
+//     https://www.koreabaseball.com/Player/Search.aspx?searchWord=나가
+const SEARCH = `
+<html><body>
+<table>
+  <thead><tr>
+    <th>등번호</th><th>선수명</th><th>팀명</th><th>포지션</th>
+    <th>생년월일</th><th>체격</th><th>출신교</th>
+  </tr></thead>
+  <tbody>
+    <tr>
+      <td>16</td>
+      <td><a href="/Futures/Player/PitcherDetail.aspx?playerId=59319">나가</a></td>
+      <td>일본 독립</td><td>투수</td><td></td><td>cm, kg</td><td></td>
+    </tr>
+    <tr>
+      <td>48</td>
+      <td><a href="/Futures/Player/PitcherDetail.aspx?playerId=31048">나가</a></td>
+      <td>울산</td><td>투수</td><td>1999-09-15</td><td>188cm, 86kg</td>
+      <td>일본 홋카이도대</td>
+    </tr>
+  </tbody>
+</table>
+</body></html>`;
+
+test('이름 검색 결과를 읽습니다', () => {
+  const rows = parseSearchRows(SEARCH);
+  assert.equal(rows.length, 2);
+  const r = rows[1];
+  assert.equal(r.player_id, 31048);
+  assert.equal(r.player_name, '나가');
+  assert.equal(r.back_number, '48');
+  assert.equal(r.team_id, '울산');
+  assert.equal(r.position, '투수');
+  assert.equal(r.birthday, '19990915');
+  assert.equal(r.height, 188);
+  assert.equal(r.weight, 86);
+});
+
+test('선수 ID 가 없는 줄은 버립니다', () => {
+  // 링크가 없으면 우리 화면에서 열 수가 없습니다.
+  const noLink = SEARCH.replace(/<a href="[^"]*">([^<]*)<\/a>/g, '$1');
+  assert.deepEqual(parseSearchRows(noLink), []);
+});
+
+test('빈 값은 null 입니다', () => {
+  const rows = parseSearchRows(SEARCH);
+  assert.equal(rows[0].birthday, null);
+  assert.equal(rows[0].height, null);
+});
+
+test('표가 없으면 빈 배열입니다', () => {
+  assert.deepEqual(parseSearchRows('<html><body>없음</body></html>'), []);
 });
