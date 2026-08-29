@@ -2366,3 +2366,64 @@ h2 .material-symbols-outlined,
     font-size: 12px;
     color: var(--text-secondary, #5b6472);
 }
+
+/* 홈 상단 선수 빠른 검색입니다. 경기 카드 위에 둡니다. */
+.home-search {
+    position: relative;
+    margin-bottom: 16px;
+}
+
+.home-search .search-box {
+    max-width: 420px;
+}
+
+.home-search-results {
+    position: absolute;
+    z-index: 30;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    max-width: 420px;
+    margin-top: 4px;
+    background: var(--card-bg, #fff);
+    border: 1px solid var(--border-color, rgba(15, 23, 42, .08));
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, .10);
+    overflow: hidden;
+}
+
+.home-search-results.hidden {
+    display: none;
+}
+
+.hs-item {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 10px 14px;
+    text-decoration: none;
+    color: inherit;
+}
+
+.hs-item + .hs-item {
+    border-top: 1px solid var(--border-color, rgba(15, 23, 42, .06));
+}
+
+.hs-item:hover {
+    background: var(--surface-2, rgba(15, 23, 42, .04));
+}
+
+.hs-name {
+    font-weight: 600;
+}
+
+.hs-sub {
+    font-size: 12px;
+    color: var(--text-secondary, #5b6472);
+}
+
+.hs-empty {
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--text-secondary, #5b6472);
+}

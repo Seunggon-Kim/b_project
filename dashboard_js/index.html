@@ -47,6 +47,19 @@
 
     <!-- Main Content -->
     <main class="container">
+        <!-- 선수 빠른 검색입니다. 이름을 치면 선수 분석으로 바로
+             넘어갑니다. 정밀 검색(영타 자동 변환 등)은 선수 분석
+             화면에 있습니다. 여기는 이동만 합니다. -->
+        <section class="home-search">
+            <div class="search-box">
+                <span class="material-symbols-outlined search-icon">search</span>
+                <input type="text" id="home-player-search" class="input"
+                       placeholder="선수 이름으로 찾기 (예: 김현수)"
+                       autocomplete="off" aria-label="선수 검색">
+            </div>
+            <div id="home-search-results" class="home-search-results hidden"></div>
+        </section>
+
         <!-- Schedule / Results -->
         <section class="schedule-section">
             <div class="schedule-bar">
@@ -500,6 +513,85 @@
             if (scheduleMode === 'futures') renderFuturesLeaders();
             else renderLeaders();
         });
+
+        // ===== 선수 빠른 검색 =====
+        //
+        // 우리 `players` 를 먼저 보고, 빈손이면 2군까지 찾습니다. 선수
+        // 분석 화면과 같은 순서입니다. 타이핑마다 KBO 를 두드리지
+        // 않으려고 못 찾을 때만 한 번 더 봅니다.
+        let homeSearchTimer = null;
+        const homeSearchBox = document.getElementById('home-player-search');
+        const homeSearchOut = document.getElementById('home-search-results');
+
+        function homePlayerHref(p) {
+            const base = 'pages/player-analytics?id=' + encodeURIComponent(p.player_id);
+            return p.futures ? base + '&mode=futures' : base;
+        }
+
+        function renderHomeSearch(players, query) {
+            if (!players.length) {
+                homeSearchOut.innerHTML =
+                    '<div class="hs-empty">찾는 선수가 없습니다. '
+                    + '<a href="pages/player-analytics">선수 분석</a>에서 더 찾아보십시오.</div>';
+                homeSearchOut.classList.remove('hidden');
+                return;
+            }
+            homeSearchOut.innerHTML = players.slice(0, 8).map(p => {
+                // 등록되지 않은 선수는 소속을 쓰지 않습니다. 계약이
+                // 끝났는데 옛 팀이 보이면 아직 그 팀인 것처럼 읽힙니다.
+                const team = (p.is_active && p.team_id) ? p.team_id : '';
+                const num = (p.is_active && p.back_number != null)
+                    ? 'No.' + p.back_number : '';
+                const sub = [team, num, p.position || ''].filter(Boolean).join(' · ');
+                return `<a class="hs-item" href="${homePlayerHref(p)}">`
+                    + `<span class="hs-name">${esc(p.player_name)}</span>`
+                    + (sub ? `<span class="hs-sub">${esc(sub)}</span>` : '')
+                    + '</a>';
+            }).join('');
+            homeSearchOut.classList.remove('hidden');
+        }
+
+        async function homeSearch(query) {
+            try {
+                const first = await API.searchPlayers(query).catch(() => ({ players: [] }));
+                let players = (first && first.players) ? first.players.slice() : [];
+                if (!players.length) {
+                    const fut = await API.searchFuturesPlayers(query);
+                    players = ((fut && fut.players) ? fut.players : [])
+                        .map(p => ({ ...p, is_active: p.registered ? 1 : 0 }));
+                }
+                renderHomeSearch(players, query);
+            } catch (e) {
+                homeSearchOut.innerHTML =
+                    '<div class="hs-empty">검색 중 문제가 생겼습니다.</div>';
+                homeSearchOut.classList.remove('hidden');
+            }
+        }
+
+        if (homeSearchBox) {
+            homeSearchBox.addEventListener('input', (e) => {
+                const q = e.target.value.trim();
+                clearTimeout(homeSearchTimer);
+                if (q.length < 1) {
+                    homeSearchOut.innerHTML = '';
+                    homeSearchOut.classList.add('hidden');
+                    return;
+                }
+                homeSearchTimer = setTimeout(() => homeSearch(q), 300);
+            });
+            // 엔터를 치면 첫 결과로 갑니다.
+            homeSearchBox.addEventListener('keydown', (e) => {
+                if (e.key !== 'Enter') return;
+                const first = homeSearchOut.querySelector('.hs-item');
+                if (first) window.location.href = first.getAttribute('href');
+            });
+            // 바깥을 누르면 결과를 접습니다.
+            document.addEventListener('click', (e) => {
+                if (!homeSearchOut.contains(e.target) && e.target !== homeSearchBox) {
+                    homeSearchOut.classList.add('hidden');
+                }
+            });
+        }
 
         // ===== 1군 등록·말소 =====
         //
