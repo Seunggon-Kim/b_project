@@ -1891,6 +1891,16 @@ h2 .material-symbols-outlined,
     flex: 1 1 auto;
 }
 
+/* 두 칸의 아래 주석 높이를 맞춥니다.
+ *
+ * 주석 길이가 다르면 그만큼 위 상자가 짧아집니다. 퓨처스로 바꾸면
+ * 개인 순위 주석이 두 줄이 되어(상대타자수 어림 설명) 옆의 팀 순위와
+ * 상자 높이가 어긋났습니다. 두 줄 자리를 미리 잡아 둡니다. */
+.rank-row .schedule-note {
+    min-height: 2.6em;
+    margin-bottom: 0;
+}
+
 .leaders-wrap {
     display: flex;
     flex-direction: column;
