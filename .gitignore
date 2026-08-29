@@ -299,3 +299,7 @@ migration/*.log.err
 
 # 로고 원본입니다. 화면에는 지금 뛰는 열 구단 로고만 씁니다.
 team_logo/
+
+# 재수집 임시 폴더입니다. 잘린 경기를 다시 받을 때만 씁니다.
+crawler/save_redo/
+crawler/save_redo2/
