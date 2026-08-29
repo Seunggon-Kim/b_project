@@ -49,6 +49,42 @@
         }
 
         .ctrl-note:empty { display: none; }
+
+        /* 컬럼 고르개입니다. 지표가 서른 개를 넘어 한 줄에 못 넣습니다. */
+        .col-panel {
+            flex-basis: 100%;
+            border-top: 1px solid var(--border-color);
+            margin-top: 0.5rem;
+            padding-top: 0.75rem;
+        }
+
+        .col-panel.hidden { display: none; }
+
+        .col-panel-head {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            margin-bottom: 0.6rem;
+        }
+
+        .col-panel-btns { margin-left: auto; display: flex; gap: 0.35rem; }
+
+        .col-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+            gap: 0.35rem 0.9rem;
+        }
+
+        .col-list label {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.85rem;
+            cursor: pointer;
+            margin: 0;
+        }
+
+        .col-list label.off { color: var(--text-muted); }
         .ctrl-group { display: flex; align-items: center; gap: 0.6rem; flex-wrap: nowrap; flex-shrink: 0; }
         .ctrl-group label { white-space: nowrap; flex-shrink: 0; margin: 0; }
         .ctrl-divider { align-self: stretch; width: 1px; min-height: 1.8rem; background: var(--border-color); }
@@ -127,8 +163,21 @@
                     <input type="date" id="range-end" class="input" style="max-width:185px;">
                     <button type="button" id="range-go" class="tabbtn active">조회</button>
                     <a id="team-record-link" class="tabbtn" href="team-record">기록실</a>
+                    <button type="button" id="col-toggle" class="tabbtn">컬럼</button>
                 </div>
                 <span class="text-muted ctrl-note" id="range-note"></span>
+                <div id="col-panel" class="col-panel hidden">
+                    <div class="col-panel-head">
+                        <strong>보일 컬럼</strong>
+                        <span class="text-muted" id="col-count"></span>
+                        <span class="col-panel-btns">
+                            <button type="button" data-col-preset="basic" class="tabbtn">기본</button>
+                            <button type="button" data-col-preset="all" class="tabbtn">전체</button>
+                            <button type="button" id="col-close" class="tabbtn">닫기</button>
+                        </span>
+                    </div>
+                    <div id="col-list" class="col-list"></div>
+                </div>
             </div>
         </div>
 
@@ -258,30 +307,93 @@
             },
         };
 
+        // 컬럼 정의입니다. `on` 이 true 인 것이 처음에 보입니다.
+        // 나머지는 '컬럼' 창에서 켜면 나옵니다.
+        const num1 = v => (v === null || v === undefined) ? '-' : (+v).toFixed(1);
+        const num2 = v => (v === null || v === undefined) ? '-' : (+v).toFixed(2);
+
         const BAT_COLS = [
-            { key: '__rank', label: '순위' }, TEAM_COL,
-            { key: 'avg', label: 'AVG', type: 'num', fmt: v => avg3(v) },
-            { key: 'pa', label: 'PA', type: 'num' }, { key: 'ab', label: 'AB', type: 'num' },
-            { key: 'r', label: 'R', type: 'num' }, { key: 'h', label: 'H', type: 'num' },
-            { key: 'd2', label: '2B', type: 'num' }, { key: 'd3', label: '3B', type: 'num' },
-            { key: 'hr', label: 'HR', type: 'num' }, { key: 'tb', label: 'TB', type: 'num' },
-            { key: 'rbi', label: 'RBI', type: 'num' }, { key: 'bb', label: 'BB', type: 'num' },
-            { key: 'so', label: 'SO', type: 'num' },
-            { key: 'obp', label: 'OBP', type: 'num', fmt: v => avg3(v) },
-            { key: 'slg', label: 'SLG', type: 'num', fmt: v => avg3(v) },
-            { key: 'ops', label: 'OPS', type: 'num', fmt: v => avg3(v) }
+            { key: '__rank', label: '순위', fixed: true },
+            { ...TEAM_COL, fixed: true },
+            { key: 'g', label: 'G', type: 'num', tip: '팀이 치른 경기 수가 아니라 선수별 출장 경기의 합입니다' },
+            { key: 'avg', label: 'AVG', type: 'num', fmt: v => avg3(v), on: true },
+            { key: 'pa', label: 'PA', type: 'num', on: true },
+            { key: 'ab', label: 'AB', type: 'num', on: true },
+            { key: 'r', label: 'R', type: 'num', on: true },
+            { key: 'h', label: 'H', type: 'num', on: true },
+            { key: 'single', label: '1B', type: 'num', tip: '단타입니다. 안타에서 2·3루타와 홈런을 뺍니다' },
+            { key: 'd2', label: '2B', type: 'num', on: true },
+            { key: 'd3', label: '3B', type: 'num', on: true },
+            { key: 'hr', label: 'HR', type: 'num', on: true },
+            { key: 'tb', label: 'TB', type: 'num', on: true },
+            { key: 'xbh', label: 'XBH', type: 'num', tip: '장타입니다. 2루타·3루타·홈런의 합입니다' },
+            { key: 'rbi', label: 'RBI', type: 'num', on: true },
+            { key: 'gw', label: 'GW RBI', type: 'num', tip: '결승타점입니다' },
+            { key: 'bb', label: 'BB', type: 'num', on: true },
+            { key: 'ibb', label: 'IBB', type: 'num', tip: '고의4구입니다' },
+            { key: 'hbp', label: 'HBP', type: 'num', tip: '몸에 맞는 공입니다' },
+            { key: 'so', label: 'SO', type: 'num', on: true },
+            { key: 'sac', label: 'SAC', type: 'num', tip: '희생번트입니다' },
+            { key: 'sf', label: 'SF', type: 'num', tip: '희생플라이입니다' },
+            { key: 'gidp', label: 'GIDP', type: 'num', tip: '병살타입니다' },
+            { key: 'multi', label: '멀티히트', type: 'num', tip: '한 경기에 안타 두 개 이상을 친 횟수입니다' },
+            { key: 'obp', label: 'OBP', type: 'num', fmt: v => avg3(v), on: true },
+            { key: 'slg', label: 'SLG', type: 'num', fmt: v => avg3(v), on: true },
+            { key: 'ops', label: 'OPS', type: 'num', fmt: v => avg3(v), on: true },
+            { key: 'isop', label: 'IsoP', type: 'num', fmt: v => avg3(v), tip: '순수 장타력입니다. 장타율에서 타율을 뺍니다' },
+            { key: 'babip', label: 'BABIP', type: 'num', fmt: v => avg3(v), tip: '인플레이 타구의 타율입니다. 삼진·홈런을 뺀 타구만 셉니다' },
+            { key: 'kpct', label: 'K%', type: 'num', fmt: num1, tip: '타석 대비 삼진 비율입니다' },
+            { key: 'bbpct', label: 'BB%', type: 'num', fmt: num1, tip: '타석 대비 볼넷 비율입니다' },
+            { key: 'bbk', label: 'BB/K', type: 'num', fmt: num2, tip: '삼진 하나당 볼넷 개수입니다' },
+            { key: 'go', label: 'GO', type: 'num', tip: '땅볼 아웃입니다' },
+            { key: 'ao', label: 'AO', type: 'num', tip: '뜬공 아웃입니다' },
+            { key: 'goao', label: 'GO/AO', type: 'num', fmt: num2, tip: '뜬공 하나당 땅볼 개수입니다' },
         ];
         const PIT_COLS = [
-            { key: '__rank', label: '순위' }, TEAM_COL,
-            { key: 'era', label: 'ERA', type: 'num', fmt: v => f2(v) },
-            { key: 'w', label: 'W', type: 'num' }, { key: 'l', label: 'L', type: 'num' },
-            { key: 'sv', label: 'SV', type: 'num' }, { key: 'hld', label: 'HLD', type: 'num' },
-            { key: 'outs', label: 'IP', type: 'num', fmt: v => ipFmt(v) },
-            { key: 'h', label: 'H', type: 'num' }, { key: 'r', label: 'R', type: 'num' },
-            { key: 'er', label: 'ER', type: 'num' }, { key: 'bb', label: 'BB', type: 'num' },
-            { key: 'so', label: 'SO', type: 'num' }, { key: 'hr', label: 'HR', type: 'num' },
-            { key: 'whip', label: 'WHIP', type: 'num', fmt: v => f2(v) },
-            { key: 'k9', label: 'K/9', type: 'num', fmt: v => f2(v) }
+            { key: '__rank', label: '순위', fixed: true },
+            { ...TEAM_COL, fixed: true },
+            { key: 'era', label: 'ERA', type: 'num', fmt: v => f2(v), on: true },
+            { key: 'g', label: 'G', type: 'num', tip: '선수별 등판 경기의 합입니다' },
+            { key: 'gs', label: 'GS', type: 'num', tip: '선발 등판입니다' },
+            { key: 'gf', label: 'GF', type: 'num', tip: '경기를 마무리한 횟수입니다' },
+            { key: 'w', label: 'W', type: 'num', on: true },
+            { key: 'l', label: 'L', type: 'num', on: true },
+            { key: 'sv', label: 'SV', type: 'num', on: true },
+            { key: 'svo', label: 'SVO', type: 'num', tip: '세이브 기회입니다' },
+            { key: 'bs', label: 'BS', type: 'num', tip: '블론 세이브입니다' },
+            { key: 'hld', label: 'HLD', type: 'num', on: true },
+            { key: 'cg', label: 'CG', type: 'num', tip: '완투입니다' },
+            { key: 'sho', label: 'SHO', type: 'num', tip: '완봉입니다' },
+            { key: 'qs', label: 'QS', type: 'num', tip: '선발 6이닝 이상 자책 3점 이하입니다' },
+            { key: 'outs', label: 'IP', type: 'num', fmt: v => ipFmt(v), on: true },
+            { key: 'tbf', label: 'TBF', type: 'num', tip: '상대한 타자 수입니다' },
+            { key: 'np', label: 'NP', type: 'num', tip: '던진 공의 수입니다' },
+            { key: 'h', label: 'H', type: 'num', on: true },
+            { key: 'd2', label: '2B', type: 'num', tip: '내준 2루타입니다' },
+            { key: 'd3', label: '3B', type: 'num', tip: '내준 3루타입니다' },
+            { key: 'hr', label: 'HR', type: 'num', on: true },
+            { key: 'r', label: 'R', type: 'num', on: true },
+            { key: 'er', label: 'ER', type: 'num', on: true },
+            { key: 'bb', label: 'BB', type: 'num', on: true },
+            { key: 'ibb', label: 'IBB', type: 'num', tip: '고의4구입니다' },
+            { key: 'hbp', label: 'HBP', type: 'num', tip: '몸에 맞는 공입니다' },
+            { key: 'so', label: 'SO', type: 'num', on: true },
+            { key: 'wp', label: 'WP', type: 'num', tip: '폭투입니다' },
+            { key: 'bk', label: 'BK', type: 'num', tip: '보크입니다' },
+            { key: 'gidp', label: 'GIDP', type: 'num', tip: '유도한 병살입니다' },
+            { key: 'whip', label: 'WHIP', type: 'num', fmt: v => f2(v), on: true },
+            { key: 'k9', label: 'K/9', type: 'num', fmt: v => f2(v), on: true },
+            { key: 'bb9', label: 'BB/9', type: 'num', fmt: v => f2(v), tip: '9이닝당 볼넷입니다' },
+            { key: 'h9', label: 'H/9', type: 'num', fmt: v => f2(v), tip: '9이닝당 피안타입니다' },
+            { key: 'hr9', label: 'HR/9', type: 'num', fmt: v => f2(v), tip: '9이닝당 피홈런입니다' },
+            { key: 'kbb', label: 'K/BB', type: 'num', fmt: num2, tip: '볼넷 하나당 삼진 개수입니다' },
+            { key: 'kpct', label: 'K%', type: 'num', fmt: num1, tip: '상대 타자 대비 삼진 비율입니다' },
+            { key: 'bbpct', label: 'BB%', type: 'num', fmt: num1, tip: '상대 타자 대비 볼넷 비율입니다' },
+            { key: 'oavg', label: '피안타율', type: 'num', fmt: v => avg3(v), tip: '상대 타자에서 사사구를 뺀 값으로 나눈 근사입니다' },
+            { key: 'pip', label: 'P/IP', type: 'num', fmt: num1, tip: '1이닝당 투구 수입니다' },
+            { key: 'go', label: 'GO', type: 'num', tip: '유도한 땅볼 아웃입니다' },
+            { key: 'ao', label: 'AO', type: 'num', tip: '유도한 뜬공 아웃입니다' },
+            { key: 'goao', label: 'GO/AO', type: 'num', fmt: num2, tip: '뜬공 하나당 땅볼 개수입니다' },
         ];
         const RBAT_COLS = [
             { key: '__rank', label: '순위' }, TEAM_COL,
@@ -310,37 +422,91 @@
         ];
 
         // ===== 집계 (선수 기록 합산) =====
+        // 팀 합산은 두 갈래로 나뉩니다.
+        //
+        //   합계형   타석·안타·홈런처럼 그냥 더하면 되는 값
+        //   비율형   타율·출루율처럼 **성분에서 다시 계산**해야 하는 값
+        //
+        // 선수별 비율을 평균 내면 안 됩니다. 타석 10번인 선수와 500번인
+        // 선수가 같은 무게를 갖게 되어 틀립니다.
+        const BAT_SUM = {
+            pa: 'plate_appearance', ab: 'at_bat', r: 'run', h: 'single',
+            d2: 'double', d3: 'triple', hr: 'home_run', tb: 'total_bases',
+            rbi: 'run_batted_in', bb: 'base_on_balls', so: 'strikeout',
+            hbp: 'hit_by_pitch', sf: 'sacrifice_fly', sac: 'sacrifice_bunts',
+            ibb: 'intentional_base_on_balls', gidp: 'ground_into_double_play',
+            multi: 'multi_hits', xbh: 'extra_base_hits', go: 'ground_outs',
+            ao: 'air_outs', gw: 'gw_rbi', g: 'games',
+        };
+
         function aggBatting(rows) {
             const m = {};
             for (const r of rows) {
                 const t = r.player_team; if (!t) continue;
-                const a = m[t] || (m[t] = { team: t, pa: 0, ab: 0, r: 0, h: 0, d2: 0, d3: 0, hr: 0, tb: 0, rbi: 0, bb: 0, so: 0, hbp: 0, sf: 0 });
-                a.pa += num(r.plate_appearance); a.ab += num(r.at_bat); a.r += num(r.run);
-                a.h += num(r.single); a.d2 += num(r.double); a.d3 += num(r.triple); a.hr += num(r.home_run);
-                a.tb += num(r.total_bases); a.rbi += num(r.run_batted_in); a.bb += num(r.base_on_balls);
-                a.so += num(r.strikeout); a.hbp += num(r.hit_by_pitch); a.sf += num(r.sacrifice_fly);
+                const a = m[t] || (m[t] = { team: t });
+                for (const k of Object.keys(BAT_SUM)) {
+                    a[k] = (a[k] || 0) + num(r[BAT_SUM[k]]);
+                }
             }
             return Object.values(m).map(a => {
+                const single = a.h - a.d2 - a.d3 - a.hr;
                 a.avg = a.ab ? a.h / a.ab : 0;
                 const obpDen = a.ab + a.bb + a.hbp + a.sf;
                 a.obp = obpDen ? (a.h + a.bb + a.hbp) / obpDen : 0;
                 a.slg = a.ab ? a.tb / a.ab : 0;
                 a.ops = a.obp + a.slg;
+                // 순수 장타력입니다. 장타율에서 타율을 뺍니다.
+                a.isop = a.slg - a.avg;
+                a.kpct = a.pa ? a.so * 100 / a.pa : 0;
+                a.bbpct = a.pa ? a.bb * 100 / a.pa : 0;
+                a.bbk = a.so ? a.bb / a.so : 0;
+                // 인플레이 타구의 타율입니다. 삼진·홈런·희생플라이를 뺍니다.
+                const babipDen = a.ab - a.so - a.hr + a.sf;
+                a.babip = babipDen > 0 ? (a.h - a.hr) / babipDen : 0;
+                a.goao = a.ao ? a.go / a.ao : 0;
+                a.single = single;
                 return a;
             });
         }
+        const PIT_SUM = {
+            h: 'hits', r: 'run', er: 'earned_run', bb: 'base_on_balls',
+            so: 'strikeout', hr: 'home_run', w: 'wins', l: 'losses',
+            sv: 'save', hld: 'hold', hbp: 'hit_by_pitch',
+            ibb: 'intentional_base_on_balls', cg: 'complete_game',
+            sho: 'shutout', qs: 'quality_start', bs: 'blown_save',
+            tbf: 'total_batters_faced', np: 'number_of_pitchers',
+            d2: 'double', d3: 'triple', wp: 'wild_pitch', bk: 'balk',
+            gs: 'games_started', gf: 'games_finished',
+            svo: 'save_opportunity', gidp: 'ground_into_double_play',
+            go: 'ground_outs', ao: 'air_outs', g: 'games',
+        };
+
         function aggPitching(rows) {
             const m = {};
             for (const r of rows) {
                 const t = r.player_team; if (!t) continue;
-                const a = m[t] || (m[t] = { team: t, outs: 0, h: 0, r: 0, er: 0, bb: 0, so: 0, hr: 0, w: 0, l: 0, sv: 0, hld: 0 });
-                a.outs += ipOuts(r.innings_pitched); a.h += num(r.hits); a.r += num(r.run); a.er += num(r.earned_run);
-                a.bb += num(r.base_on_balls); a.so += num(r.strikeout); a.hr += num(r.home_run);
-                a.w += num(r.wins); a.l += num(r.losses); a.sv += num(r.save); a.hld += num(r.hold);
+                const a = m[t] || (m[t] = { team: t, outs: 0 });
+                a.outs += ipOuts(r.innings_pitched);
+                for (const k of Object.keys(PIT_SUM)) {
+                    a[k] = (a[k] || 0) + num(r[PIT_SUM[k]]);
+                }
             }
             return Object.values(m).map(a => {
                 a.era = a.outs ? a.er * 27 / a.outs : 0;
                 a.whip = a.outs ? (a.h + a.bb) * 3 / a.outs : 0;
+                a.bb9 = a.outs ? a.bb * 27 / a.outs : 0;
+                a.hr9 = a.outs ? a.hr * 27 / a.outs : 0;
+                a.h9 = a.outs ? a.h * 27 / a.outs : 0;
+                a.kbb = a.bb ? a.so / a.bb : 0;
+                a.kpct = a.tbf ? a.so * 100 / a.tbf : 0;
+                a.bbpct = a.tbf ? a.bb * 100 / a.tbf : 0;
+                a.pip = a.outs ? a.np * 3 / a.outs : 0;
+                // 피안타율입니다. 상대타자에서 사사구·희생타를 뺀 것이
+                // 분모라야 맞지만, 공식 기록에 그 성분이 다 없어서
+                // 상대타자에서 사사구만 뺀 근사입니다.
+                const abAgainst = a.tbf - a.bb - a.hbp;
+                a.oavg = abAgainst > 0 ? a.h / abAgainst : 0;
+                a.goao = a.ao ? a.go / a.ao : 0;
                 a.k9 = a.outs ? a.so * 27 / a.outs : 0;
                 return a;
             });
@@ -360,6 +526,79 @@
         }
 
         // ===== 시즌 누적(선수 기록 합산) 팀 성적 =====
+        // 지금 보이는 컬럼입니다. 탭(타격/투구)마다 따로 기억합니다.
+        //
+        // 지표가 타격 33개, 투구 43개라 한 번에 다 보이면 표가 옆으로
+        // 한참 흘러갑니다. 처음에는 자주 보는 것만 켜 둡니다.
+        const shownCols = { batting: null, pitching: null };
+
+        function colDefs(kind) {
+            return kind === 'batting' ? BAT_COLS : PIT_COLS;
+        }
+
+        /** 그 탭에서 보일 컬럼 키 집합입니다. 처음이면 기본값을 만듭니다. */
+        function visibleCols(kind) {
+            if (!shownCols[kind]) {
+                shownCols[kind] = new Set(
+                    colDefs(kind).filter(c => c.fixed || c.on).map(c => c.key));
+            }
+            return shownCols[kind];
+        }
+
+        /** 고른 컬럼만 남깁니다. 순위·팀은 늘 남습니다. */
+        function pickCols(cols, kind) {
+            const on = visibleCols(kind);
+            return cols.filter(c => c.fixed || on.has(c.key));
+        }
+
+        function renderColPanel() {
+            const kind = currentStat;
+            const defs = colDefs(kind).filter(c => !c.fixed);
+            const on = visibleCols(kind);
+            document.getElementById('col-list').innerHTML = defs.map(c =>
+                `<label class="${on.has(c.key) ? '' : 'off'}"`
+                + `${c.tip ? ` title="${esc(c.tip)}"` : ''}>`
+                + `<input type="checkbox" data-col="${c.key}"`
+                + `${on.has(c.key) ? ' checked' : ''}>${esc(c.label)}</label>`
+            ).join('');
+            document.getElementById('col-count').textContent =
+                `${on.size - 2}개 / ${defs.length}개`;
+        }
+
+        function applyColPreset(which) {
+            const kind = currentStat;
+            const defs = colDefs(kind);
+            shownCols[kind] = new Set(
+                defs.filter(c => c.fixed || (which === 'all' ? true : c.on))
+                    .map(c => c.key));
+            renderColPanel();
+            drawTables();
+        }
+
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'col-toggle' || e.target.id === 'col-close') {
+                document.getElementById('col-panel').classList.toggle('hidden');
+                if (!document.getElementById('col-panel').classList.contains('hidden')) {
+                    renderColPanel();
+                }
+                return;
+            }
+            const preset = e.target.getAttribute
+                && e.target.getAttribute('data-col-preset');
+            if (preset) applyColPreset(preset);
+        });
+
+        document.addEventListener('change', (e) => {
+            const key = e.target.getAttribute
+                && e.target.getAttribute('data-col');
+            if (!key) return;
+            const on = visibleCols(currentStat);
+            if (e.target.checked) on.add(key);
+            else on.delete(key);
+            renderColPanel();
+            drawTables();
+        });
+
         // 마지막으로 받은 표입니다. 팀 고르개만 바뀌었을 때 서버를 다시
         // 두드리지 않으려고 들고 있습니다. 열 팀짜리 표를 다시 받는 것은
         // 낭비입니다.
@@ -400,9 +639,11 @@
             const bat = keep(lastView.bat);
             const pit = keep(lastView.pit);
             if (!bat.length) batDiv.innerHTML = createEmptyState(lastView.batEmpty);
-            else makeSortable('team-batting', lastView.batCols, bat, lastView.batDef);
+            else makeSortable('team-batting',
+                pickCols(lastView.batCols, 'batting'), bat, lastView.batDef);
             if (!pit.length) pitDiv.innerHTML = createEmptyState(lastView.pitEmpty);
-            else makeSortable('team-pitching', lastView.pitCols, pit, lastView.pitDef);
+            else makeSortable('team-pitching',
+                pickCols(lastView.pitCols, 'pitching'), pit, lastView.pitDef);
         }
 
         /** 기록실 버튼을 고른 팀에 맞춥니다. */
@@ -502,8 +743,15 @@
         }
 
         // ===== 전역 타격/투구 탭 =====
+        // 지금 보고 있는 탭입니다. 컬럼 고르개가 탭마다 따로 기억합니다.
+        let currentStat = 'batting';
+
         function showStat(which) {
             const showBat = which !== 'pitching';
+            currentStat = showBat ? 'batting' : 'pitching';
+            if (!document.getElementById('col-panel').classList.contains('hidden')) {
+                renderColPanel();
+            }
             document.querySelectorAll('.stat-batting').forEach(el => { el.style.display = showBat ? '' : 'none'; });
             document.querySelectorAll('.stat-pitching').forEach(el => { el.style.display = showBat ? 'none' : ''; });
             document.getElementById('tab-batting').classList.toggle('active', showBat);
