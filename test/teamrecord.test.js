@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   inningsExpr, careerOf, championsOf, mergeSeasons,
+  scopeOf, scopeSeasons,
 } from '../src/routes/teamrecord.js';
 
 // 공식 기록의 이닝은 **텍스트**입니다.
@@ -104,4 +105,53 @@ test('championsOf 는 우승이 없어도 터지지 않습니다', () => {
   // 키움과 쌍방울은 우승이 없습니다.
   assert.deepEqual(championsOf([]), { count: 0, seasons: [], no_series: [] });
   assert.deepEqual(championsOf(null), { count: 0, seasons: [], no_series: [] });
+});
+
+
+// 옛 이름을 고르면 그 이름일 때의 기록만 보여야 합니다.
+//
+// 계보로 묶은 통산 전적은 '현대' 를 골랐을 때는 맞지만 '청보' 를
+// 골랐을 때는 틀립니다. 청보는 세 시즌만 뛰었는데 화면에 1466승이
+// 뜨면 삼미·태평양·현대의 성적까지 얹힌 값입니다.
+const HD = [
+  { season: 1987, team_name: '청보', wins: 41, losses: 65, draws: 2, rank: 7 },
+  { season: 1986, team_name: '청보', wins: 32, losses: 74, draws: 2, rank: 6 },
+  { season: 1985, team_name: '청보', wins: 39, losses: 70, draws: 1, rank: 6 },
+  { season: 1984, team_name: '삼미', wins: 38, losses: 58, draws: 4, rank: 5 },
+  { season: 1996, team_name: '현대', wins: 70, losses: 55, draws: 1, rank: 2 },
+];
+
+test('scopeSeasons 는 고른 이름의 시즌만 남깁니다', () => {
+  const got = scopeSeasons(HD, '청보');
+  assert.deepEqual(got.map((r) => r.season), [1987, 1986, 1985]);
+});
+
+test('scopeSeasons 는 이름이 없으면 전부 돌려줍니다', () => {
+  assert.equal(scopeSeasons(HD, '').length, HD.length);
+  assert.equal(scopeSeasons(HD, null).length, HD.length);
+});
+
+test('scopeOf 는 그 이름이 뛴 기간을 냅니다', () => {
+  assert.deepEqual(scopeOf(HD, '청보'),
+    { name: '청보', first_season: 1985, last_season: 1987 });
+});
+
+test('scopeOf 는 이름이 없거나 못 찾으면 null 입니다', () => {
+  assert.equal(scopeOf(HD, ''), null);
+  assert.equal(scopeOf(HD, '없는이름'), null);
+});
+
+test('좁힌 시즌으로 센 통산 전적은 그 이름 것만입니다', () => {
+  const got = careerOf(scopeSeasons(HD, '청보'));
+  assert.equal(got.wins, 112, '41 + 32 + 39');
+  assert.equal(got.losses, 209);
+  assert.equal(got.seasons, 3);
+});
+
+test('championsOf 는 준 시즌 안에서만 셉니다', () => {
+  // 현대는 1998·2000·2003·2004 에 우승했습니다. 청보는 없습니다.
+  const rows = [1998, 2000, 2003, 2004].map((season) => ({ season, note: '' }));
+  assert.equal(championsOf(rows).count, 4, '계보 전체');
+  assert.equal(championsOf(rows, [1985, 1986, 1987]).count, 0, '청보 때');
+  assert.equal(championsOf(rows, [1998, 1999, 2000]).count, 2);
 });

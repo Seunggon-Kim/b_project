@@ -296,3 +296,6 @@ migration/*.log.err
 
 # Claude Code 세션 설정입니다. 사람마다 다릅니다.
 .claude/
+
+# 로고 원본입니다. 화면에는 지금 뛰는 열 구단 로고만 씁니다.
+team_logo/

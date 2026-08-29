@@ -63,9 +63,14 @@ export function inningsExpr(col) {
  * 사실을 밝힐 수 있도록 따로 셉니다. 밝히지 않으면 삼성의 우승이
  * 8회인지 7회인지를 두고 헷갈립니다.
  */
-export function championsOf(rows) {
-  const list = (rows || []).map((r) => r.season).sort((a, b) => a - b);
-  const noSeries = (rows || []).filter((r) => r.note).map((r) => r.season);
+export function championsOf(rows, seasons) {
+  // `seasons` 를 주면 그 안에 든 해만 셉니다. 옛 이름을 골랐을 때
+  // 씁니다. 청보는 우승이 없고 현대는 네 번입니다. 계보로 세면
+  // 청보 화면에도 4회가 떠서 틀립니다.
+  const keep = seasons ? new Set(seasons) : null;
+  const kept = (rows || []).filter((r) => !keep || keep.has(r.season));
+  const list = kept.map((r) => r.season).sort((a, b) => a - b);
+  const noSeries = kept.filter((r) => r.note).map((r) => r.season);
   return { count: list.length, seasons: list, no_series: noSeries };
 }
 
@@ -87,6 +92,39 @@ export function careerOf(seasons) {
   a.pct = decided ? (a.wins / decided) : null;
   a.first_place = (seasons || []).filter((s) => s.rank === 1).length;
   return a;
+}
+
+/**
+ * 고른 이름으로 시즌을 좁힙니다.
+ *
+ * '청보' 를 고르면 1985~1987 만 남깁니다. 이름이 없으면 계보 전체를
+ * 그대로 돌려줍니다.
+ *
+ * 왜 필요한가. 계보로 묶은 통산 전적은 '현대' 를 골랐을 때는 맞지만
+ * '청보' 를 골랐을 때는 틀립니다. 청보는 세 시즌만 뛰었는데 화면에
+ * 1466승이 뜨면 삼미·태평양·현대의 성적까지 얹힌 값입니다.
+ */
+export function scopeSeasons(seasons, name) {
+  if (!name) return seasons || [];
+  return (seasons || []).filter((s) => s.team_name === name);
+}
+
+/**
+ * 고른 이름이 뛴 기간입니다. 없으면 null 입니다.
+ *
+ * **'창단 연도' 가 아니라 '활동 기간' 입니다.** 청보는 1985년에
+ * 창단한 것이 아니라 삼미를 인수해 이름을 바꾼 것입니다. 화면에서도
+ * 그렇게 밝혀야 합니다.
+ */
+export function scopeOf(seasons, name) {
+  const rows = scopeSeasons(seasons, name);
+  if (!name || !rows.length) return null;
+  const years = rows.map((r) => r.season);
+  return {
+    name,
+    first_season: Math.min(...years),
+    last_season: Math.max(...years),
+  };
 }
 
 /**
@@ -184,6 +222,11 @@ export async function teamRecord(request, env, ctx, params) {
   if (!/^[A-Z]{2,4}$/.test(id)) {
     return json({ error: 'bad franchise id' }, 400);
   }
+  // 고른 팀 이름입니다. 있으면 통산 성적과 우승을 그 이름일 때로
+  // 좁힙니다. 시즌 목록은 계보 전체를 그대로 돌려줍니다. 표를 어디까지
+  // 보일지는 화면이 정합니다.
+  const picked = String(
+    new URL(request.url).searchParams.get('name') || '').trim();
 
   const franchise = await db.prepare(
     'SELECT franchise_id, current_name, first_season, last_season, note '
@@ -234,6 +277,10 @@ export async function teamRecord(request, env, ctx, params) {
   // 우승 표에는 **그 시즌 표기명**이 들어 있습니다('OB' 이지 '두산' 이
   // 아닙니다). 프랜차이즈로 묶으려면 `team_seasons` 를 거쳐야 합니다.
   // 계보 판단이 한 곳에만 있도록 하기 위해서입니다.
+  const scope = scopeOf(seasons, picked);
+  const scoped = scopeSeasons(seasons, picked);
+  const scopedYears = picked ? scoped.map((r) => r.season) : null;
+
   let champions = { count: 0, seasons: [], no_series: [] };
   try {
     const { results } = await db.prepare(
@@ -242,16 +289,18 @@ export async function teamRecord(request, env, ctx, params) {
       + ' AND t.team_name = c.team_name '
       + 'WHERE t.franchise_id = ? ORDER BY c.season',
     ).bind(id).all();
-    champions = championsOf(results);
+    champions = championsOf(results, scopedYears);
   } catch {
     // 표가 아직 없는 환경입니다. 0회로 둡니다.
   }
 
-  const career = careerOf(seasons);
+  // 통산 성적은 고른 이름일 때만 셉니다. 이름이 없으면 계보 전체입니다.
+  const career = careerOf(scoped);
 
   return json({
     found: true,
     franchise,
+    scope,
     eras,
     stadiums,
     champions,

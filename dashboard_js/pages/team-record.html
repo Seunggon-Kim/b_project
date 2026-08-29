@@ -253,6 +253,26 @@
             return (v === null || v === undefined) ? '-' : Number(v).toFixed(2);
         }
 
+        /**
+         * 머리에 올릴 로고입니다. 없으면 빈 문자열입니다.
+         *
+         * **지금 뛰는 열 구단만 로고를 답니다.** 저장소에 있는 로고는
+         * 프랜차이즈 단위여서, 청보를 골랐는데 현대 로고를 보이면
+         * 틀린 그림이 됩니다. 옛 이름과 없어진 구단은 로고를 비웁니다.
+         *
+         * 판정은 두 가지입니다.
+         *
+         *     franchise.last_season 이 있다  ->  해체된 구단
+         *     고른 이름 != current_name      ->  옛 이름
+         *
+         * 둘 중 하나라도 걸리면 로고를 달지 않습니다.
+         */
+        function headLogo(f, picked) {
+            if (f.last_season) return '';
+            if (picked && picked !== f.current_name) return '';
+            return logoTag(f.franchise_id, '');
+        }
+
         function logoTag(id, cls) {
             return `<img class="${cls}" src="../assets/logos/${esc(id)}.png"`
                 + ` alt="" loading="lazy" onerror="this.style.display='none'">`;
@@ -335,6 +355,14 @@
             return `${n}회${tail}`;
         }
 
+        /** 고른 기간의 마지막 홈구장입니다. 없으면 null 입니다. */
+        function lastStadiumIn(stadiums, scope) {
+            const rows = (stadiums || []).filter(
+                s => s.season >= scope.first_season
+                    && s.season <= scope.last_season);
+            return rows.length ? rows[rows.length - 1].stadium : null;
+        }
+
         /** 가장 최근 홈구장입니다. 없으면 null 입니다. */
         function latestStadium(stadiums) {
             if (!stadiums || !stadiums.length) return null;
@@ -393,7 +421,11 @@
         async function load(id, picked) {
             const body = document.getElementById('team-body');
             const empty = document.getElementById('tr-empty');
-            const res = await fetch(`${API_BASE_URL}/teams/${encodeURIComponent(id)}`);
+            // 이름을 함께 보내면 통산 성적과 우승을 그 이름일 때로
+            // 좁혀서 돌려줍니다.
+            const q = picked ? `?name=${encodeURIComponent(picked)}` : '';
+            const res = await fetch(
+                `${API_BASE_URL}/teams/${encodeURIComponent(id)}${q}`);
             if (!res.ok) {
                 empty.querySelector('p').textContent = '그 구단을 찾지 못했습니다.';
                 body.classList.add('hidden');
@@ -409,12 +441,20 @@
                 const span = e.from === e.to ? `${e.from}` : `${e.from}~${e.to}`;
                 return `${esc(e.team_name)} ${span}`;
             }).join(' · ');
-            const latest = seasons[0];
+            // 고른 이름의 마지막 시즌입니다. 청보를 골랐으면 1987년이지
+            // 2007년이 아닙니다.
+            const scopedRows = picked
+                ? seasons.filter(r => r.team_name === picked) : seasons;
+            const latest = scopedRows[0];
             // 해체된 구단은 `current_name` 이 없습니다. '현재 이름' 이란
             // 것이 없으니 맞습니다. 그럴 때는 마지막으로 쓰던 이름을
             // 씁니다. 안 그러면 머리에 'SB' 같은 코드가 뜹니다.
             const lastEra = (d.eras || [])[(d.eras || []).length - 1];
-            const title = f.current_name
+            // 고른 이름이 있으면 그 이름을 머리에 씁니다. 청보를
+            // 골랐는데 '현대' 가 뜨면 안 됩니다.
+            const scope = d.scope || null;
+            const title = picked
+                || f.current_name
                 || (lastEra && lastEra.team_name)
                 || f.franchise_id;
 
@@ -430,7 +470,7 @@
             head.style.setProperty('--team-color', color);
             head.style.setProperty(
                 '--team-ink', window.textOn ? window.textOn(color) : '#fff');
-            head.innerHTML = logoTag(f.franchise_id, '')
+            head.innerHTML = headLogo(f, picked)
                 + '<div>'
                 + `<div class="tr-name">${esc(title)}</div>`
                 + `<div class="tr-sub">${eras}</div>`
@@ -447,9 +487,17 @@
             const founded = f.last_season
                 ? `${f.first_season}년 (${f.last_season} 해체)`
                 : `${f.first_season}년`;
-            const home = latestStadium(d.stadiums || []);
+            // 옛 이름을 골랐으면 '창단 연도' 가 아니라 '활동 기간'
+            // 입니다. 청보는 1985년에 창단한 것이 아니라 삼미를 인수해
+            // 이름을 바꾼 것입니다.
+            const spanRow = scope
+                ? ['활동 기간', `${scope.first_season}~${scope.last_season}`]
+                : ['창단 연도', founded];
+            const home = scope
+                ? lastStadiumIn(d.stadiums || [], scope)
+                : latestStadium(d.stadiums || []);
             document.getElementById('tr-facts').innerHTML = [
-                ['창단 연도', founded],
+                spanRow,
                 ...(home ? [['홈구장', home]] : []),
                 ['통산 전적', `${career.wins ?? 0}승 ${career.losses ?? 0}패 ${career.draws ?? 0}무`],
                 ['통산 승률', fmt3(career.pct)],
@@ -460,9 +508,10 @@
 
             // 오른쪽 칸은 올 시즌 기록입니다. 홈구장 변천은 구단 개요의
             // 한 줄로 줄였습니다. 45줄짜리 표가 될 자리는 아닙니다.
-            const cur = seasons[0];
+            const cur = scopedRows[0];
+            const cur2 = scopedRows[0];
             document.getElementById('tr-cur-title').textContent =
-                cur ? `${cur.season} 시즌` : '올 시즌';
+                cur2 ? `${cur2.season} 시즌` : '올 시즌';
             document.getElementById('tr-current').innerHTML = cur ? [
                 ['순위', cur.rank ? `${cur.rank}위` : '-'],
                 ['전적', `${cur.wins ?? 0}승 ${cur.losses ?? 0}패 ${cur.draws ?? 0}무`],
