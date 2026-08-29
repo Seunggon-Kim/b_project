@@ -218,7 +218,18 @@
         }
 
         // ===== 컬럼 정의 (팀 컬럼은 로고 없이 팀명만) =====
-        const TEAM_COL = { key: 'team', label: '팀', type: 'str', fmt: v => esc(v) };
+        // 팀 이름을 누르면 팀 기록실로 갑니다. 매핑은 components.js 에
+        // 있습니다(정본은 D1 team_seasons).
+        const TEAM_COL = {
+            key: 'team', label: '팀', type: 'str',
+            fmt: (v) => {
+                const href = window.teamRecordHref
+                    ? window.teamRecordHref(v, '') : null;
+                return href
+                    ? `<a class="player-link" href="${href}">${esc(v)}</a>`
+                    : esc(v);
+            },
+        };
 
         const BAT_COLS = [
             { key: '__rank', label: '순위' }, TEAM_COL,

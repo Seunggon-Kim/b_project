@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>팀 기록실 - Bstats</title>
+    <meta name="description" content="KBO 구단별 시즌 성적과 프랜차이즈 역사">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
+
+    <link rel="icon" href="../assets/favicon/diamond.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon/diamond.svg">
+    <link rel="apple-touch-icon" href="../assets/favicon/diamond-180.png">
+
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        /* 팀 고르개. 계보가 끊긴 구단도 함께 둡니다. */
+        .tr-picker {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .tr-pick {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.45rem 0.8rem;
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            background: var(--bg-card);
+            color: inherit;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        .tr-pick:hover { background: var(--bg-hover, rgba(15, 23, 42, .04)); }
+        .tr-pick.active { border-color: var(--team-color, #1e293b); font-weight: 700; }
+        .tr-pick img { width: 20px; height: 20px; object-fit: contain; }
+        /* 없어진 구단은 옅게 둡니다. 지금 리그에 없다는 표시입니다. */
+        .tr-pick.gone { opacity: .6; }
+
+        .tr-head {
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            padding: 1.25rem 1.5rem;
+            border-radius: 12px;
+            background: var(--team-color, #1e293b);
+            color: #fff;
+            margin-bottom: 1.5rem;
+        }
+
+        .tr-head img { width: 64px; height: 64px; object-fit: contain; }
+        .tr-name { font-size: 1.6rem; font-weight: 700; }
+        .tr-sub { font-size: 0.9rem; opacity: .85; }
+        .tr-headnums { margin-left: auto; text-align: right; }
+        .tr-headnums .big { font-size: 1.3rem; font-weight: 700; }
+
+        .tr-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        @media (max-width: 860px) {
+            .tr-grid { grid-template-columns: 1fr; }
+        }
+
+        .tr-facts { list-style: none; padding: 0; margin: 0; }
+        .tr-facts li {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.5rem 0;
+            border-top: 1px solid var(--border-color);
+        }
+        .tr-facts li:first-child { border-top: none; }
+        .tr-facts .k { color: var(--text-muted); }
+        .tr-facts .v { font-weight: 600; text-align: right; }
+
+        .tr-note { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem; }
+    </style>
+    <script src="../js/config.js"></script>
+    <script src="../js/theme-toggle.js"></script>
+    <script src="../js/nav.js"></script>
+</head>
+
+<body>
+    <header class="header">
+        <div class="header-content">
+            <a href="../" class="logo">
+                <img src="../assets/favicon/diamond.svg" alt="" class="logo-icon" width="26" height="26">
+                <span>Bstats</span>
+            </a>
+            <nav class="nav">
+                <a href="../" class="nav-link">홈</a>
+                <a href="team-stats" class="nav-link active">팀 통계</a>
+                <a href="player-stats" class="nav-link">선수 통계</a>
+                <a href="player-analytics" class="nav-link">선수 분석</a>
+                <a href="article" class="nav-link">아티클</a>
+                <a href="factor-stats" class="nav-link">요인 통계</a>
+                <a href="database-explorer" class="nav-link">데이터 탐색</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <h1 class="fade-in">팀 기록실</h1>
+        <p class="text-secondary mb-3">구단별 시즌 성적과 역사입니다. 팀 이름이 바뀌어도 한 구단으로 이어 봅니다.</p>
+
+        <div id="team-picker" class="tr-picker"></div>
+
+        <section id="team-body" class="hidden">
+            <div id="tr-head" class="tr-head"></div>
+
+            <div class="tr-grid">
+                <div class="card">
+                    <div class="card-body">
+                        <h3 class="card-title mb-2">구단 개요</h3>
+                        <ul id="tr-facts" class="tr-facts"></ul>
+                        <p class="tr-note">정규시즌 1위 횟수입니다. 한국시리즈 우승과 다릅니다.</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-body">
+                        <h3 class="card-title mb-2">홈구장</h3>
+                        <ul id="tr-stadiums" class="tr-facts"></ul>
+                        <p class="tr-note">기록에 남은 시즌만 나옵니다.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-body">
+                    <h3 class="card-title mb-2">시즌별 성적</h3>
+                    <div id="tr-seasons"></div>
+                    <p class="tr-note">순위·승패는 KBO 기록실, 팀 타율·ERA 는 공식 기록을 합친 값입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <div id="tr-empty" class="card"><div class="card-body">
+            <p class="text-muted">위에서 구단을 고르십시오.</p>
+        </div></div>
+    </main>
+
+    <script src="../js/api.js"></script>
+    <script src="../js/components.js"></script>
+    <script>
+        // 팀 기록실입니다.
+        //
+        // 주소는 `?id=HT` 입니다. franchise_id 를 씁니다. 팀 이름은
+        // 시대에 따라 바뀌므로(해태 -> KIA) 이름을 주소에 쓰면 옛
+        // 시즌으로 들어오는 길이 막힙니다.
+
+        // 구단 목록입니다. 화면에 보일 순서로 둡니다. 지금 리그에 있는
+        // 열 구단이 먼저, 없어진 구단이 뒤입니다.
+        const FRANCHISES = [
+            { id: 'HT', name: 'KIA' }, { id: 'SS', name: '삼성' },
+            { id: 'LG', name: 'LG' }, { id: 'OB', name: '두산' },
+            { id: 'LT', name: '롯데' }, { id: 'HH', name: '한화' },
+            { id: 'SK', name: 'SSG' }, { id: 'WO', name: '키움' },
+            { id: 'NC', name: 'NC' }, { id: 'KT', name: 'KT' },
+            // 없어진 구단입니다. 현대는 2007년에 해체됐고 이듬해
+            // 히어로즈가 창단했습니다. 선수단만 이어졌지 같은 구단이
+            // 아닙니다. 쌍방울과 SK 도 마찬가지입니다.
+            { id: 'HD', name: '현대', gone: true },
+            { id: 'SB', name: '쌍방울', gone: true },
+        ];
+
+        function esc(v) {
+            return String(v ?? '').replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;',
+                '"': '&quot;', "'": '&#39;',
+            }[c]));
+        }
+
+        function fmt3(v) {
+            return (v === null || v === undefined) ? '-' : Number(v).toFixed(3);
+        }
+
+        function fmt2(v) {
+            return (v === null || v === undefined) ? '-' : Number(v).toFixed(2);
+        }
+
+        function logoTag(id, cls) {
+            return `<img class="${cls}" src="../assets/logos/${esc(id)}.png"`
+                + ` alt="" loading="lazy" onerror="this.style.display='none'">`;
+        }
+
+        function renderPicker(active) {
+            document.getElementById('team-picker').innerHTML = FRANCHISES.map(f => {
+                const on = f.id === active ? ' active' : '';
+                const gone = f.gone ? ' gone' : '';
+                return `<a class="tr-pick${on}${gone}" href="?id=${f.id}">`
+                    + logoTag(f.id, '') + esc(f.name) + '</a>';
+            }).join('');
+        }
+
+        // 시즌별 표에 넣을 항목입니다. 순위·승패는 KBO 기록실에서,
+        // 타율·ERA 는 공식 기록을 합친 값입니다.
+        const SEASON_COLS = [
+            ['시즌', s => s.season],
+            ['팀명', s => s.team_name],
+            ['리그', s => (s.league && s.league !== '단일') ? s.league : '-'],
+            ['순위', s => s.rank ?? '-'],
+            ['경기', s => s.games ?? '-'],
+            ['승', s => s.wins ?? '-'],
+            ['패', s => s.losses ?? '-'],
+            ['무', s => s.draws ?? '-'],
+            ['승률', s => s.pct ?? '-'],
+            ['타율', s => fmt3(s.avg)],
+            ['홈런', s => s.home_run ?? '-'],
+            ['ERA', s => fmt2(s.era)],
+        ];
+
+        function renderSeasons(seasons) {
+            if (!seasons.length) {
+                return '<p class="text-muted">시즌 기록이 없습니다.</p>';
+            }
+            const head = SEASON_COLS.map(c => c[0]);
+            const rows = seasons.map(s => SEASON_COLS.map(c => c[1](s)));
+            return createTable(head, rows);
+        }
+
+        function renderStadiums(stadiums) {
+            if (!stadiums.length) return '<li><span class="k">기록 없음</span></li>';
+            // 같은 구장이 이어지는 구간을 하나로 묶습니다. 시즌마다
+            // 한 줄씩 쓰면 45줄이 됩니다.
+            const runs = [];
+            for (const s of stadiums) {
+                const last = runs[runs.length - 1];
+                if (last && last.stadium === s.stadium) last.to = s.season;
+                else runs.push({ stadium: s.stadium, from: s.season, to: s.season });
+            }
+            return runs.reverse().map(r => {
+                const span = r.from === r.to ? `${r.from}` : `${r.from}~${r.to}`;
+                return `<li><span class="k">${esc(span)}</span>`
+                    + `<span class="v">${esc(r.stadium)}</span></li>`;
+            }).join('');
+        }
+
+        async function load(id) {
+            const body = document.getElementById('team-body');
+            const empty = document.getElementById('tr-empty');
+            const res = await fetch(`${API_BASE_URL}/teams/${encodeURIComponent(id)}`);
+            if (!res.ok) {
+                empty.querySelector('p').textContent = '그 구단을 찾지 못했습니다.';
+                body.classList.add('hidden');
+                empty.classList.remove('hidden');
+                return;
+            }
+            const d = await res.json();
+            const f = d.franchise || {};
+            const seasons = d.seasons || [];
+            const career = d.career || {};
+
+            // 팀 색은 components.js 의 공통 표를 씁니다. 선수 분석과
+            // 같은 값이라야 두 화면이 어긋나 보이지 않습니다.
+            const color = window.teamColor
+                ? window.teamColor(f.current_name || f.franchise_id)
+                : '#1e293b';
+            const head = document.getElementById('tr-head');
+            head.style.setProperty('--team-color', color);
+            const eras = (d.eras || []).map(e => {
+                const span = e.from === e.to ? `${e.from}` : `${e.from}~${e.to}`;
+                return `${esc(e.team_name)} ${span}`;
+            }).join(' · ');
+            const latest = seasons[0];
+            head.innerHTML = logoTag(f.franchise_id, '')
+                + '<div>'
+                + `<div class="tr-name">${esc(f.current_name || f.franchise_id)}</div>`
+                + `<div class="tr-sub">${eras}</div>`
+                + '</div>'
+                + '<div class="tr-headnums">'
+                + (latest
+                    ? `<div class="big">${esc(latest.season)} ${latest.rank ?? '-'}위</div>`
+                      + `<div class="tr-sub">${latest.wins ?? '-'}승 ${latest.losses ?? '-'}패`
+                      + ` ${latest.draws ?? '-'}무</div>`
+                    : '<div class="tr-sub">시즌 기록 없음</div>')
+                + '</div>';
+
+            const gone = f.last_season
+                ? `${f.first_season}~${f.last_season} (해체)`
+                : `${f.first_season}~`;
+            document.getElementById('tr-facts').innerHTML = [
+                ['활동 기간', gone],
+                ['치른 시즌', `${career.seasons ?? 0}시즌`],
+                ['통산 전적', `${career.wins ?? 0}승 ${career.losses ?? 0}패 ${career.draws ?? 0}무`],
+                ['통산 승률', fmt3(career.pct)],
+                ['정규시즌 1위', `${career.first_place ?? 0}회`],
+                ...(f.note ? [['비고', f.note]] : []),
+            ].map(([k, v]) => `<li><span class="k">${esc(k)}</span>`
+                + `<span class="v">${esc(v)}</span></li>`).join('');
+
+            document.getElementById('tr-stadiums').innerHTML =
+                renderStadiums(d.stadiums || []);
+            document.getElementById('tr-seasons').innerHTML =
+                renderSeasons(seasons);
+
+            body.classList.remove('hidden');
+            empty.classList.add('hidden');
+        }
+
+        function init() {
+            const id = new URLSearchParams(window.location.search).get('id');
+            renderPicker(id);
+            if (id) load(id);
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+
+</html>

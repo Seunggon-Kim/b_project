@@ -1380,63 +1380,10 @@
          * Apply team-specific background colors (bgcolor1)
          */
         function applyTeamTheme(teamName) {
-            // 우리 자료에 실제로 있는 팀을 전부 넣습니다.
-            //
-            // 기록에 남은 소속을 전수조사하니 23개였습니다(1982~2026).
-            // 열 개가 빠져 있어서 옛 팀 선수는 배경이 기본 남색으로
-            // 나왔습니다. 퓨처스 전용 구단도 마찬가지였습니다.
-            //
-            // 없어진 구단은 **계보를 이은 구단 색**을 씁니다. 화면에서
-            // 같은 계보임이 바로 읽힙니다.
-            //
-            //     삼미 -> 청보 -> 태평양 -> 현대   (인천, 대가 끊김)
-            //     MBC -> LG          OB -> 두산
-            //     빙그레 -> 한화      해태 -> KIA
-            //     쌍방울 -> SK -> SSG
-            //     우리/히어로즈 -> 넥센 -> 키움
-            const TEAM_COLORS = {
-                // 현재 1군 구단
-                '키움': '#570514',
-                '두산': '#1A1748',
-                '롯데': '#041E42',
-                '삼성': '#074CA1',
-                '한화': '#FC4E00',
-                'KIA': '#EA0029',
-                'LG': '#C30452',
-                'SSG': '#CE0E2D',
-                'NC': '#315288',
-                'KT': '#000000',
+            // 색은 components.js 의 공통 표를 씁니다.
 
-                // 퓨처스 전용 구단
-                '고양': '#570514',   // 키움 2군
-                '울산': '#8B0000',   // 롯데 2군
-                '상무': '#EAB146',
-                '경찰': '#333336',
-
-                // 없어진 구단
-                'SK': '#CE0E2D',     // -> SSG
-                '넥센': '#570514',    // -> 키움
-                '히어로즈': '#570514',  // 2009년 한 해 이름
-                '우리': '#570514',    // 2008년 한 해 이름
-                '해태': '#EA0029',    // -> KIA
-                'OB': '#1A1748',     // -> 두산
-                '빙그레': '#FC4E00',   // -> 한화
-                'MBC': '#0B4EA2',    // -> LG (청룡은 파랑이었습니다)
-                '현대': '#003F87',
-                '쌍방울': '#005BAC',
-                '태평양': '#0067A3',
-                '청보': '#E4002B',
-                '삼미': '#003DA5'
-            };
-
-            // Find matching color
-            let teamColor = '#1e293b'; // dark default — fine for badges // Default color
-            for (const [name, color] of Object.entries(TEAM_COLORS)) {
-                if (teamName && teamName.includes(name)) {
-                    teamColor = color;
-                    break;
-                }
-            }
+            const teamColor = window.teamColor
+                ? window.teamColor(teamName) : '#1e293b';
 
             const headerBar = document.getElementById('player-header-bar');
 

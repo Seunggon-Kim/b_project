@@ -6,6 +6,7 @@ import { schedule } from './routes/schedule.js';
 import { futures } from './routes/futures.js';
 import { leaders } from './routes/leaders.js';
 import { teams } from './routes/teams.js';
+import { teamRecord } from './routes/teamrecord.js';
 import { dashboardStats } from './routes/dashboard.js';
 import {
   playersSearch, playerDetail, playerArsenal, playerUsage,
@@ -54,6 +55,9 @@ router.add('GET', '/futures/player/:id', futuresPlayer);
 // 쓰면서 러너 IP 가 걸려 자주 실패하기도 했습니다.
 router.add('GET', '/leaders', leaders);
 router.add('GET', '/teams', teams);
+// 팀 기록실입니다. :id 는 franchise_id 입니다(HT, OB, WO ...).
+// 팀 이름은 시대에 따라 바뀌므로 프랜차이즈를 단위로 씁니다.
+router.add('GET', '/teams/:id', teamRecord);
 router.add('GET', '/dashboard/stats', dashboardStats);
 router.add('GET', '/stats/seasons', statsSeasons);
 router.add('GET', '/stats/regulation', statsRegulation);
