@@ -2366,6 +2366,9 @@ h2 .material-symbols-outlined,
    홈 화면 토글(.leaders-tab)과 같은 단추를 씁니다. */
 .player-mode-tabs {
     display: flex;
+    /* 오른쪽에 붙입니다. 왼쪽에 두면 아래 선수 이름줄의 시작점과
+       겹쳐 보여 어느 쪽이 머리인지 헷갈립니다. */
+    justify-content: flex-end;
     gap: 4px;
     margin-bottom: 12px;
 }

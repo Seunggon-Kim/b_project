@@ -40,6 +40,15 @@
         /* 카드 자체 여백(32px)도 줄입니다. `card-body` 안쪽 여백과
            겹쳐 한 줄짜리 고르개가 137px 이 됩니다. */
         .ctrl-card { padding: 0 !important; margin-bottom: 2rem !important; }
+        /* 안내 문구는 제 줄을 씁니다. 고르개와 같은 줄에 두면 문구가
+           길어질 때 기간·조회·기록실이 아래로 밀려납니다. 비어 있을
+           때는 자리를 차지하지 않습니다. */
+        .ctrl-note {
+            flex-basis: 100%;
+            font-size: 0.85rem;
+        }
+
+        .ctrl-note:empty { display: none; }
         .ctrl-group { display: flex; align-items: center; gap: 0.6rem; flex-wrap: nowrap; flex-shrink: 0; }
         .ctrl-group label { white-space: nowrap; flex-shrink: 0; margin: 0; }
         .ctrl-divider { align-self: stretch; width: 1px; min-height: 1.8rem; background: var(--border-color); }
@@ -114,8 +123,8 @@
                     <input type="date" id="range-end" class="input" style="max-width:185px;">
                     <button type="button" id="range-go" class="tabbtn active">조회</button>
                     <a id="team-record-link" class="tabbtn" href="team-record">기록실</a>
-                    <span class="text-muted" id="range-note" style="font-size:0.85rem;white-space:nowrap;"></span>
                 </div>
+                <span class="text-muted ctrl-note" id="range-note"></span>
             </div>
         </div>
 
@@ -414,7 +423,9 @@
             document.getElementById('bat-title').textContent = season ? `팀 타격 (${season} 시즌 누적)` : '팀 타격 (시즌 누적)';
             document.getElementById('pit-title').textContent = season ? `팀 투구 (${season} 시즌 누적)` : '팀 투구 (시즌 누적)';
             document.getElementById('caveat-note').textContent = SEASON_CAVEAT;
-            document.getElementById('range-note').textContent = '';
+            // 기간 안내는 건드리지 않습니다. 경기 기록이 없는 시즌이라는
+            // 안내가 여기 들어 있는데, 시즌 누적을 그리면서 지우면
+            // 사용자는 왜 기간 조회가 꺼졌는지 알 수 없습니다.
             try {
                 const [bd, pd] = await Promise.all([
                     API.getBatterStats(season, 2000, 0, ''),
@@ -540,17 +551,82 @@
             return fill(list);
         }
 
-        // 기간 기본값: 최근 14일
-        (function () {
-            const end = new Date();
+        // 경기 기록(PBP)이 있는 시즌입니다. 기간별은 이 자료로만 셉니다.
+        //
+        // 공식 기록은 1982년부터지만 **경기 기록은 2008년부터**입니다.
+        // 두 범위가 다릅니다. 아래에서 실제 값으로 덮어씁니다.
+        let PBP_MIN = 2008;
+        let PBP_MAX = new Date().getFullYear();
+
+        /**
+         * 기간 입력을 고른 시즌에 묶습니다.
+         *
+         * 전에는 둘이 따로 놀았습니다. 시즌을 1982로 두고 기간을
+         * 2026-08-16~08-27 로 조회하면 2026년 표가 나왔습니다. 화면
+         * 머리에는 1982가 걸려 있는데 내용은 2026이니 읽는 사람이
+         * 속습니다.
+         *
+         * 이제 시즌을 고르면 기간도 그 해로 옮깁니다. 경기 기록이 없는
+         * 시즌이면 기간 조회를 아예 막습니다.
+         */
+        function syncRangeToSeason(season) {
+            const y = Number(season);
+            const startEl = document.getElementById('range-start');
+            const endEl = document.getElementById('range-end');
+            const goEl = document.getElementById('range-go');
+            const noteEl = document.getElementById('range-note');
+            if (!y) return;
+
+            const has = y >= PBP_MIN && y <= PBP_MAX;
+            for (const el of [startEl, endEl, goEl]) el.disabled = !has;
+            goEl.title = has ? '' : '이 시즌은 경기 기록이 없습니다';
+
+            if (!has) {
+                startEl.value = '';
+                endEl.value = '';
+                noteEl.textContent =
+                    `${y} 시즌은 경기 기록이 없어 기간별로 볼 수 없습니다`
+                    + ` (경기 기록은 ${PBP_MIN}년부터입니다)`;
+                return;
+            }
+
+            // 그 해 안으로만 고르게 막습니다.
+            const lo = `${y}-01-01`;
+            const hi = `${y}-12-31`;
+            for (const el of [startEl, endEl]) { el.min = lo; el.max = hi; }
+
+            // 기본값은 두 주입니다. 올해면 오늘까지, 지난 시즌이면 9월
+            // 말까지입니다. 10월 말로 두면 정규시즌이 이미 끝나 있어
+            // 조회해도 빈 표가 나옵니다.
+            const now = new Date();
+            const end = y === now.getFullYear() ? now : new Date(y, 8, 30);
             const start = new Date(end.getTime() - 13 * 86400000);
-            document.getElementById('range-start').value = fmtDate(start);
-            document.getElementById('range-end').value = fmtDate(end);
-        })();
+            startEl.value = fmtDate(start);
+            endEl.value = fmtDate(end);
+            noteEl.textContent = '';
+        }
+
+        /** 경기 기록이 있는 시즌 범위를 받아 둡니다. */
+        async function loadPbpRange() {
+            try {
+                const r = await fetch(`${API_BASE_URL}/dashboard/stats`);
+                if (!r.ok) return;
+                const d = await r.json();
+                // `seasons` 는 `games` 표 기준입니다('2008~2026').
+                const m = String((d && d.seasons) || '').match(/(\d{4})\D+(\d{4})/);
+                if (m) {
+                    PBP_MIN = Math.min(+m[1], +m[2]);
+                    PBP_MAX = Math.max(+m[1], +m[2]);
+                }
+            } catch (e) { /* 기본값을 씁니다 */ }
+        }
 
         // 이벤트 바인딩
         const sel = document.getElementById('season-select');
-        sel.addEventListener('change', () => loadTeamStats(sel.value));
+        sel.addEventListener('change', () => {
+            syncRangeToSeason(sel.value);
+            loadTeamStats(sel.value);
+        });
 
         // 팀 고르개는 **표에 실제로 있는 팀**으로 채웁니다.
         //
@@ -572,7 +648,10 @@
         (async function init() {
             document.getElementById('team-batting').innerHTML = createLoadingSpinner();
             document.getElementById('team-pitching').innerHTML = createLoadingSpinner();
-            await buildSeasonOptions();
+            // 시즌 목록과 경기 기록 범위를 함께 받습니다. 서로 다른
+            // 표를 보는 값이라 둘 다 필요합니다.
+            await Promise.all([buildSeasonOptions(), loadPbpRange()]);
+            syncRangeToSeason(sel.value);
             loadTeamStats(sel.value);
         })();
 
