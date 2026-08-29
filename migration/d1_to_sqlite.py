@@ -21,6 +21,7 @@ D1 질의로 수십 번 왕복하면 읽기 한도를 태웁니다.
     py migration/d1_to_sqlite.py --out /tmp/kbo.db --tables games,teams
 """
 import argparse
+import json
 import os
 import re
 import shutil
@@ -106,6 +107,75 @@ def idempotent_ddl(sql):
         lambda m: "%sCREATE %s IF NOT EXISTS " % (m.group(1), m.group(2)), sql)
 
 
+_PK_COL = re.compile(
+    r"^(\s*)(\w+)(\s+INTEGER)\s+PRIMARY\s+KEY(\s+AUTOINCREMENT)?",
+    re.IGNORECASE | re.MULTILINE)
+
+
+def drop_primary_key(sql, table):
+    """나뉜 표의 DDL 에서 PK 를 뗍니다. 컬럼과 값은 그대로 둡니다.
+
+    `play_by_play` 는 시즌별 D1 여섯 개에 나뉘어 있는데 `pbp_id` 가
+    샤드마다 1부터 다시 매겨져 겹칩니다.
+
+        2008-2011       51 ~   657,321
+        2012-2014        1 ~   547,194   <- 겹침
+        2024-2026        1 ~ 2,733,324   <- 거의 전부와 겹침
+
+    원래는 한 표를 갈라 담아 번호가 겹치지 않았습니다. 2026-08-29 에
+    2008~2014 를 새로 넣으면서 그 샤드들이 자기 최대값 다음 번호를
+    붙였고, 합칠 때 부딪히게 됐습니다.
+
+        sqlite3.IntegrityError: UNIQUE constraint failed: play_by_play.pbp_id
+
+    **번호를 다시 매기지 않습니다.** 파크팩터 계열이 `pbp_id` 를 한
+    시즌 안의 정렬 키로 씁니다(build_re24_run_values.py). 한 시즌은 한
+    샤드에 있어 그 안에서는 여전히 고유하고 순서도 맞습니다. 다시
+    매기면 그 순서가 깨질 위험이 있습니다.
+
+    PK 를 떼면 중복을 못 잡습니다. 그래서 부르는 쪽이 행 수를
+    확인합니다.
+    """
+    # 그 표의 CREATE 문만 봅니다. 다른 표의 PK 는 건드리지 않습니다.
+    head = re.search(r"CREATE\s+TABLE(\s+IF\s+NOT\s+EXISTS)?\s+"
+                     r'["\[]?%s["\]]?\s*\(' % re.escape(table),
+                     sql, re.IGNORECASE)
+    if not head:
+        return sql
+    # 여는 괄호부터 짝이 맞는 닫는 괄호까지가 컬럼 정의입니다.
+    start = head.end() - 1
+    depth = 0
+    end = start
+    for i in range(start, len(sql)):
+        if sql[i] == "(":
+            depth += 1
+        elif sql[i] == ")":
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    body = sql[start:end]
+    fixed = _PK_COL.sub(lambda m: m.group(1) + m.group(2) + m.group(3), body)
+    return sql[:start] + fixed + sql[end:]
+
+
+def shard_row_count(table, db_name):
+    """그 샤드에 실제로 있는 행 수입니다. 못 읽으면 None 입니다."""
+    try:
+        out = subprocess.run(
+            ["npx", "--yes", "wrangler@4", "d1", "execute", db_name,
+             "--remote", "--command",
+             'SELECT COUNT(*) AS n FROM "%s";' % table, "--json", "--yes"],
+            capture_output=True, text=True, shell=(os.name == "nt"),
+            encoding="utf-8", errors="replace")
+        if out.returncode != 0:
+            return None
+        body = out.stdout[out.stdout.find("["):]
+        return int(json.loads(body)[0]["results"][0]["n"])
+    except Exception:            # noqa: BLE001
+        return None
+
+
 def export_jobs(tables):
     """(표, D1 이름, 파일이름) 목록입니다. 나뉜 표는 샤드마다 하나씩.
 
@@ -148,6 +218,7 @@ def main():
     try:
         conn = sqlite3.connect(str(out))
         total_bytes = 0
+        prev_rows = {}
         jobs = export_jobs(tables)
         for i, (t, db, tag) in enumerate(jobs, start=1):
             path, secs = export_table(t, work, db_name=db, tag=tag)
@@ -155,6 +226,10 @@ def main():
             total_bytes += size
             sql = idempotent_ddl(
                 path.read_text(encoding="utf-8", errors="replace"))
+            if t in SHARDED_TABLES:
+                # 샤드끼리 pbp_id 가 겹칩니다. 합칠 때만 부딪히므로
+                # PK 만 뗍니다. 값과 순서는 그대로 둡니다.
+                sql = drop_primary_key(sql, t)
             # executescript 는 하나의 트랜잭션으로 돌립니다. 중간에
             # 실패하면 그 조각은 통째로 안 들어갑니다. 부분 적재보다
             # 낫습니다.
@@ -165,6 +240,18 @@ def main():
             print("[%2d/%d] %-38s %9s행(누적)  %6.1fMB  %.0f초"
                   % (i, len(jobs), label, format(n, ","),
                      size / 1e6, secs), flush=True)
+
+            # 나뉜 표는 PK 를 떼고 넣습니다(샤드끼리 pbp_id 가 겹칩니다).
+            # 그러면 중복이 조용히 들어와도 모릅니다. 조각마다 D1 쪽
+            # 행 수와 맞는지 확인합니다. 어긋나면 여기서 멈춥니다.
+            if t in SHARDED_TABLES:
+                want = shard_row_count(t, db)
+                got = n - prev_rows.get(t, 0)
+                if want is not None and want != got:
+                    raise SystemExit(
+                        "%s(%s) 행 수가 어긋납니다. D1 %s / 로컬 %s"
+                        % (t, db, format(want, ","), format(got, ",")))
+            prev_rows[t] = n
             if not args.keep_sql:
                 path.unlink()
         conn.close()

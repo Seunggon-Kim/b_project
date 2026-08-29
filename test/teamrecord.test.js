@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { inningsExpr, careerOf, mergeSeasons } from '../src/routes/teamrecord.js';
+import {
+  inningsExpr, careerOf, championsOf, mergeSeasons,
+} from '../src/routes/teamrecord.js';
 
 // 공식 기록의 이닝은 **텍스트**입니다.
 //
@@ -73,4 +75,33 @@ test('양대리그 해에는 두 행 모두 같은 팀 기록을 씁니다', () 
   const got = mergeSeasons(ranks, stats);
   assert.equal(got[0].avg, 0.268);
   assert.equal(got[1].avg, 0.268);
+});
+
+
+// 한국시리즈 우승입니다. 1985년에는 한국시리즈가 열리지 않았습니다.
+// 삼성이 전기·후기를 모두 1위로 끝내 통합우승했기 때문입니다.
+// 우승으로 세되 그 사실을 따로 남겨 화면에서 밝힐 수 있게 합니다.
+test('championsOf 는 우승 횟수와 연도를 셉니다', () => {
+  const got = championsOf([
+    { season: 2005, note: '' },
+    { season: 2002, note: '' },
+  ]);
+  assert.equal(got.count, 2);
+  assert.deepEqual(got.seasons, [2002, 2005]);
+  assert.deepEqual(got.no_series, []);
+});
+
+test('championsOf 는 한국시리즈가 없던 해를 따로 셉니다', () => {
+  const got = championsOf([
+    { season: 1985, note: '전·후기 통합우승으로 한국시리즈가 열리지 않았습니다' },
+    { season: 2002, note: '' },
+  ]);
+  assert.equal(got.count, 2, '통합우승도 우승으로 셉니다');
+  assert.deepEqual(got.no_series, [1985]);
+});
+
+test('championsOf 는 우승이 없어도 터지지 않습니다', () => {
+  // 키움과 쌍방울은 우승이 없습니다.
+  assert.deepEqual(championsOf([]), { count: 0, seasons: [], no_series: [] });
+  assert.deepEqual(championsOf(null), { count: 0, seasons: [], no_series: [] });
 });

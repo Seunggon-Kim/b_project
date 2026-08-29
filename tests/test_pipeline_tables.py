@@ -143,3 +143,77 @@ def test_주간_워크플로가_쓰기_권한을_가집니다():
     assert perms.get("contents") == "write", (
         "weekly.yml 에 contents: write 가 없습니다. "
         "Releases 업로드가 403 으로 실패합니다. 현재: %s" % perms)
+
+
+# --- 나뉜 표를 합칠 때 PK 가 부딪힙니다 ------------------------------
+#
+# `play_by_play` 는 시즌별 D1 여섯 개에 나뉘어 있습니다. 그것을 로컬
+# SQLite 한 표로 합치는데, `pbp_id` 가 샤드마다 1부터 다시 매겨져
+# 겹칩니다.
+#
+#     2008-2011       51 ~   657,321
+#     2012-2014        1 ~   547,194   <- 겹침
+#     2015-2017  405,417 ~ 1,106,465   <- 겹침
+#     2024-2026        1 ~ 2,733,324   <- 거의 전부와 겹침
+#
+# 원래는 한 표를 갈라 담아 번호가 겹치지 않았습니다. 2026-08-29 에
+# 2008~2014 를 새로 넣으면서 그 샤드들이 자기 최대값 다음 번호를
+# 붙였고, 그래서 겹치게 됐습니다.
+#
+#     sqlite3.IntegrityError: UNIQUE constraint failed: play_by_play.pbp_id
+#
+# ## 왜 PK 를 떼나
+#
+# 파크팩터 계열은 `pbp_id` 를 **한 시즌 안의 정렬 키**로만 씁니다
+# (build_re24_run_values.py). 한 시즌은 한 샤드에 있으므로 그 안에서는
+# 여전히 고유하고 순서도 맞습니다. 합칠 때만 부딪힙니다.
+#
+# 번호를 다시 매기면 그 순서가 깨질 위험이 있습니다. PK 만 떼고 값은
+# 그대로 둡니다. 행이 사라지지 않는지는 행 수로 확인합니다.
+
+def test_나뉜_표는_PK_를_떼고_합칩니다():
+    src = (ROOT / "migration" / "d1_to_sqlite.py").read_text(encoding="utf-8")
+    assert "def drop_primary_key" in src, (
+        "샤드를 합칠 때 pbp_id PK 가 부딪힙니다. DDL 에서 떼야 합니다.")
+
+
+def test_PK_제거가_컬럼_이름을_남깁니다():
+    import sys
+    sys.path.insert(0, str(ROOT))
+    from migration.d1_to_sqlite import drop_primary_key
+
+    ddl = ('CREATE TABLE IF NOT EXISTS play_by_play (\n'
+           '    pbp_id INTEGER PRIMARY KEY AUTOINCREMENT,\n'
+           '    pitch_type TEXT,\n'
+           '    speed REAL\n'
+           ');')
+    out = drop_primary_key(ddl, "play_by_play")
+    assert "PRIMARY KEY" not in out
+    assert "AUTOINCREMENT" not in out
+    # 컬럼은 그대로 남아야 합니다. 값도 그대로 씁니다.
+    assert "pbp_id INTEGER" in out
+    assert "pitch_type TEXT" in out
+    assert "speed REAL" in out
+
+
+def test_다른_표의_PK_는_건드리지_않습니다():
+    import sys
+    sys.path.insert(0, str(ROOT))
+    from migration.d1_to_sqlite import drop_primary_key
+
+    ddl = 'CREATE TABLE games (game_id TEXT PRIMARY KEY, season INTEGER);'
+    assert drop_primary_key(ddl, "play_by_play") == ddl
+
+
+def test_INSERT_문은_그대로_둡니다():
+    import sys
+    sys.path.insert(0, str(ROOT))
+    from migration.d1_to_sqlite import drop_primary_key
+
+    sql = ("CREATE TABLE IF NOT EXISTS play_by_play (\n"
+           "    pbp_id INTEGER PRIMARY KEY AUTOINCREMENT,\n"
+           "    speed REAL\n"
+           ");\n"
+           "INSERT INTO play_by_play VALUES(1,140.0);")
+    out = drop_primary_key(sql, "play_by_play")
+    assert "INSERT INTO play_by_play VALUES(1,140.0);" in out

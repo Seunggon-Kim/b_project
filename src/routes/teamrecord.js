@@ -53,6 +53,23 @@ export function inningsExpr(col) {
 }
 
 /**
+ * 한국시리즈 우승을 정리합니다.
+ *
+ * `rows` 는 `{ season, note }` 입니다. 우승 횟수와 우승 연도, 그리고
+ * 한국시리즈 없이 우승한 해가 몇 번인지 함께 돌려줍니다.
+ *
+ * **1985년은 한국시리즈가 열리지 않았습니다.** 삼성이 전기·후기를
+ * 모두 1위로 끝내 통합우승했습니다. 우승으로는 세되 화면에서 그
+ * 사실을 밝힐 수 있도록 따로 셉니다. 밝히지 않으면 삼성의 우승이
+ * 8회인지 7회인지를 두고 헷갈립니다.
+ */
+export function championsOf(rows) {
+  const list = (rows || []).map((r) => r.season).sort((a, b) => a - b);
+  const noSeries = (rows || []).filter((r) => r.note).map((r) => r.season);
+  return { count: list.length, seasons: list, no_series: noSeries };
+}
+
+/**
  * 통산 성적입니다. 승률은 무승부를 빼고 셉니다(KBO 방식).
  *
  * `first_place` 는 정규시즌 1위 횟수입니다. **한국시리즈 우승과
@@ -212,6 +229,24 @@ export async function teamRecord(request, env, ctx, params) {
     // 표가 없는 환경입니다.
   }
 
+  // 한국시리즈 우승입니다.
+  //
+  // 우승 표에는 **그 시즌 표기명**이 들어 있습니다('OB' 이지 '두산' 이
+  // 아닙니다). 프랜차이즈로 묶으려면 `team_seasons` 를 거쳐야 합니다.
+  // 계보 판단이 한 곳에만 있도록 하기 위해서입니다.
+  let champions = { count: 0, seasons: [], no_series: [] };
+  try {
+    const { results } = await db.prepare(
+      'SELECT c.season, c.note FROM korean_series_champion c '
+      + 'JOIN team_seasons t ON t.season = c.season '
+      + ' AND t.team_name = c.team_name '
+      + 'WHERE t.franchise_id = ? ORDER BY c.season',
+    ).bind(id).all();
+    champions = championsOf(results);
+  } catch {
+    // 표가 아직 없는 환경입니다. 0회로 둡니다.
+  }
+
   const career = careerOf(seasons);
 
   return json({
@@ -219,6 +254,7 @@ export async function teamRecord(request, env, ctx, params) {
     franchise,
     eras,
     stadiums,
+    champions,
     career,
     seasons,
   });

@@ -18,32 +18,17 @@
 
     <link rel="stylesheet" href="../css/style.css">
     <style>
-        /* 팀 고르개. 계보가 끊긴 구단도 함께 둡니다. */
+        /* 팀 고르개입니다. 팀 이름으로 고릅니다. 알약을 죽 늘어놓으면
+           옛 이름까지 넣었을 때 스물세 개가 되어 줄이 넘칩니다. */
         .tr-picker {
             display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
+            align-items: center;
+            gap: 0.6rem;
             margin-bottom: 1.5rem;
         }
 
-        .tr-pick {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-            padding: 0.45rem 0.8rem;
-            border: 1px solid var(--border-color);
-            border-radius: 999px;
-            background: var(--bg-card);
-            color: inherit;
-            text-decoration: none;
-            font-size: 0.9rem;
-        }
-
-        .tr-pick:hover { background: var(--bg-hover, rgba(15, 23, 42, .04)); }
-        .tr-pick.active { border-color: var(--team-color, #1e293b); font-weight: 700; }
-        .tr-pick img { width: 20px; height: 20px; object-fit: contain; }
-        /* 없어진 구단은 옅게 둡니다. 지금 리그에 없다는 표시입니다. */
-        .tr-pick.gone { opacity: .6; }
+        .tr-pick-label { color: var(--text-muted); font-size: 0.9rem; }
+        .tr-select { max-width: 320px; }
 
         .tr-head {
             display: flex;
@@ -86,6 +71,34 @@
         .tr-facts .v { font-weight: 600; text-align: right; }
 
         .tr-note { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem; }
+
+        /* 시즌별 표 쪽 넘김입니다. 45시즌을 한 번에 쏟으면 화면이
+           스크롤로만 남습니다. */
+        .tr-pager {
+            display: flex;
+            gap: 0.35rem;
+            flex-wrap: wrap;
+            margin-top: 0.75rem;
+        }
+
+        .tr-pager button {
+            min-width: 2.2rem;
+            padding: 0.35rem 0.6rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-card);
+            color: inherit;
+            cursor: pointer;
+            font: inherit;
+            font-size: 0.85rem;
+        }
+
+        .tr-pager button.active {
+            font-weight: 700;
+            border-color: var(--text-secondary);
+        }
+
+        .tr-pager button:disabled { opacity: .45; cursor: default; }
     </style>
     <script src="../js/config.js"></script>
     <script src="../js/theme-toggle.js"></script>
@@ -115,7 +128,10 @@
         <h1 class="fade-in">팀 기록실</h1>
         <p class="text-secondary mb-3">구단별 시즌 성적과 역사입니다. 팀 이름이 바뀌어도 한 구단으로 이어 봅니다.</p>
 
-        <div id="team-picker" class="tr-picker"></div>
+        <div class="tr-picker">
+            <label class="tr-pick-label" for="team-select">구단</label>
+            <select id="team-select" class="input tr-select"></select>
+        </div>
 
         <section id="team-body" class="hidden">
             <div id="tr-head" class="tr-head"></div>
@@ -125,14 +141,14 @@
                     <div class="card-body">
                         <h3 class="card-title mb-2">구단 개요</h3>
                         <ul id="tr-facts" class="tr-facts"></ul>
-                        <p class="tr-note">정규시즌 1위 횟수입니다. 한국시리즈 우승과 다릅니다.</p>
+                        <p class="tr-note">한국시리즈에서 우승한 횟수입니다. 정규시즌 1위와 다릅니다.</p>
                     </div>
                 </div>
                 <div class="card">
                     <div class="card-body">
-                        <h3 class="card-title mb-2">홈구장</h3>
-                        <ul id="tr-stadiums" class="tr-facts"></ul>
-                        <p class="tr-note">기록에 남은 시즌만 나옵니다.</p>
+                        <h3 class="card-title mb-2" id="tr-cur-title">올 시즌</h3>
+                        <ul id="tr-current" class="tr-facts"></ul>
+                        <p class="tr-note">순위·승패는 KBO 기록실, 타율·ERA 는 공식 기록을 합친 값입니다.</p>
                     </div>
                 </div>
             </div>
@@ -141,6 +157,7 @@
                 <div class="card-body">
                     <h3 class="card-title mb-2">시즌별 성적</h3>
                     <div id="tr-seasons"></div>
+                    <div id="tr-pager" class="tr-pager"></div>
                     <p class="tr-note">순위·승패는 KBO 기록실, 팀 타율·ERA 는 공식 기록을 합친 값입니다.</p>
                 </div>
             </div>
@@ -160,19 +177,42 @@
         // 시대에 따라 바뀌므로(해태 -> KIA) 이름을 주소에 쓰면 옛
         // 시즌으로 들어오는 길이 막힙니다.
 
-        // 구단 목록입니다. 화면에 보일 순서로 둡니다. 지금 리그에 있는
-        // 열 구단이 먼저, 없어진 구단이 뒤입니다.
-        const FRANCHISES = [
-            { id: 'HT', name: 'KIA' }, { id: 'SS', name: '삼성' },
-            { id: 'LG', name: 'LG' }, { id: 'OB', name: '두산' },
-            { id: 'LT', name: '롯데' }, { id: 'HH', name: '한화' },
-            { id: 'SK', name: 'SSG' }, { id: 'WO', name: '키움' },
-            { id: 'NC', name: 'NC' }, { id: 'KT', name: 'KT' },
-            // 없어진 구단입니다. 현대는 2007년에 해체됐고 이듬해
-            // 히어로즈가 창단했습니다. 선수단만 이어졌지 같은 구단이
-            // 아닙니다. 쌍방울과 SK 도 마찬가지입니다.
-            { id: 'HD', name: '현대', gone: true },
-            { id: 'SB', name: '쌍방울', gone: true },
+        // 고르개에 넣을 팀 이름입니다.
+        //
+        // **프랜차이즈가 아니라 팀 이름으로 고릅니다.** 'KIA' 하나만
+        // 두면 해태를 찾는 사람이 갈 곳이 없습니다. 옛 이름도 함께
+        // 늘어놓고, 고르면 그 팀이 속한 구단 페이지로 갑니다.
+        //
+        // 페이지는 계보 전체를 보여 줍니다. 해태를 고르든 KIA 를
+        // 고르든 같은 화면이고, 표에 그 해 이름이 그대로 나옵니다.
+        //
+        // 이어지지 않는 것에 주의하십시오. 현대(HD)와 키움(WO)은 다른
+        // 구단이고, 쌍방울(SB)과 SSG(SK)도 다릅니다.
+        const TEAM_OPTIONS = [
+            { group: '현재 구단', items: [
+                { id: 'HT', name: 'KIA' }, { id: 'SS', name: '삼성' },
+                { id: 'LG', name: 'LG' }, { id: 'OB', name: '두산' },
+                { id: 'LT', name: '롯데' }, { id: 'HH', name: '한화' },
+                { id: 'SK', name: 'SSG' }, { id: 'WO', name: '키움' },
+                { id: 'NC', name: 'NC' }, { id: 'KT', name: 'KT' },
+            ] },
+            { group: '옛 이름', items: [
+                { id: 'HT', name: '해태', span: '1982~2000' },
+                { id: 'LG', name: 'MBC', span: '1982~1989' },
+                { id: 'OB', name: 'OB', span: '1982~1998' },
+                { id: 'HH', name: '빙그레', span: '1986~1993' },
+                { id: 'SK', name: 'SK', span: '2000~2020' },
+                { id: 'WO', name: '넥센', span: '2010~2018' },
+                { id: 'WO', name: '히어로즈', span: '2009' },
+                { id: 'WO', name: '우리', span: '2008' },
+            ] },
+            { group: '없어진 구단', items: [
+                { id: 'HD', name: '현대', span: '1996~2007' },
+                { id: 'HD', name: '태평양', span: '1988~1995' },
+                { id: 'HD', name: '청보', span: '1985~1987' },
+                { id: 'HD', name: '삼미', span: '1982~1984' },
+                { id: 'SB', name: '쌍방울', span: '1991~1999' },
+            ] },
         ];
 
         function esc(v) {
@@ -196,12 +236,29 @@
         }
 
         function renderPicker(active) {
-            document.getElementById('team-picker').innerHTML = FRANCHISES.map(f => {
-                const on = f.id === active ? ' active' : '';
-                const gone = f.gone ? ' gone' : '';
-                return `<a class="tr-pick${on}${gone}" href="?id=${f.id}">`
-                    + logoTag(f.id, '') + esc(f.name) + '</a>';
-            }).join('');
+            const sel = document.getElementById('team-select');
+            sel.innerHTML = '<option value="">구단을 고르십시오</option>'
+                + TEAM_OPTIONS.map(g => {
+                    const opts = g.items.map(t => {
+                        const label = t.span
+                            ? `${t.name} (${t.span})` : t.name;
+                        // 같은 구단이 여러 이름으로 나오므로 value 에
+                        // 이름을 함께 둡니다. 그래야 고른 항목이 유지됩니다.
+                        const v = `${t.id}|${t.name}`;
+                        return `<option value="${v}">${esc(label)}</option>`;
+                    }).join('');
+                    return `<optgroup label="${esc(g.group)}">${opts}</optgroup>`;
+                }).join('');
+            if (active) {
+                // 주소에 id 만 있으면 그 구단의 첫 항목을 고릅니다.
+                const match = [...sel.options].find(
+                    o => o.value.split('|')[0] === active);
+                if (match) sel.value = match.value;
+            }
+            sel.addEventListener('change', () => {
+                const id = sel.value.split('|')[0];
+                if (id) window.location.href = `?id=${id}`;
+            });
         }
 
         // 시즌별 표에 넣을 항목입니다. 순위·승패는 KBO 기록실에서,
@@ -230,22 +287,72 @@
             return createTable(head, rows);
         }
 
-        function renderStadiums(stadiums) {
-            if (!stadiums.length) return '<li><span class="k">기록 없음</span></li>';
-            // 같은 구장이 이어지는 구간을 하나로 묶습니다. 시즌마다
-            // 한 줄씩 쓰면 45줄이 됩니다.
-            const runs = [];
-            for (const s of stadiums) {
-                const last = runs[runs.length - 1];
-                if (last && last.stadium === s.stadium) last.to = s.season;
-                else runs.push({ stadium: s.stadium, from: s.season, to: s.season });
-            }
-            return runs.reverse().map(r => {
-                const span = r.from === r.to ? `${r.from}` : `${r.from}~${r.to}`;
-                return `<li><span class="k">${esc(span)}</span>`
-                    + `<span class="v">${esc(r.stadium)}</span></li>`;
-            }).join('');
+        /**
+         * 한국시리즈 우승 문구입니다.
+         *
+         * 1985년은 한국시리즈가 열리지 않았습니다. 삼성이 전기·후기를
+         * 모두 1위로 끝내 통합우승했기 때문입니다. 우승으로 세되 그
+         * 사실을 괄호로 밝힙니다. 밝히지 않으면 삼성 우승이 8회인지
+         * 7회인지를 두고 헷갈립니다.
+         */
+        function championLine(c) {
+            const n = (c && c.count) || 0;
+            if (!n) return '없음';
+            const skipped = (c && c.no_series) || [];
+            const tail = skipped.length
+                ? ` (${skipped.join('·')} 통합우승 포함)` : '';
+            return `${n}회${tail}`;
         }
+
+        /** 가장 최근 홈구장입니다. 없으면 null 입니다. */
+        function latestStadium(stadiums) {
+            if (!stadiums || !stadiums.length) return null;
+            return stadiums[stadiums.length - 1].stadium || null;
+        }
+
+        // 시즌별 표를 다섯 쪽으로 나눕니다. 45시즌을 한 번에 쏟으면
+        // 화면이 스크롤로만 남습니다.
+        const SEASON_PAGES = 5;
+        let seasonState = { rows: [], page: 0, size: 0 };
+
+        function renderSeasonPage() {
+            const { rows, page, size } = seasonState;
+            const slice = rows.slice(page * size, (page + 1) * size);
+            document.getElementById('tr-seasons').innerHTML = renderSeasons(slice);
+
+            const pages = Math.ceil(rows.length / size) || 1;
+            const btns = [];
+            for (let i = 0; i < pages; i += 1) {
+                const from = rows[i * size];
+                const to = rows[Math.min((i + 1) * size, rows.length) - 1];
+                // 쪽 번호 대신 그 쪽이 담은 시즌 범위를 씁니다. 45시즌
+                // 표에서 '3쪽' 은 아무것도 알려 주지 않습니다.
+                const label = from && to
+                    ? (from.season === to.season
+                        ? `${from.season}` : `${to.season}~${from.season}`)
+                    : String(i + 1);
+                btns.push(`<button type="button" data-page="${i}"`
+                    + `${i === page ? ' class="active"' : ''}>${label}</button>`);
+            }
+            document.getElementById('tr-pager').innerHTML =
+                pages > 1 ? btns.join('') : '';
+        }
+
+        function setSeasons(rows) {
+            seasonState = {
+                rows,
+                page: 0,
+                size: Math.max(1, Math.ceil(rows.length / SEASON_PAGES)),
+            };
+            renderSeasonPage();
+        }
+
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('#tr-pager button');
+            if (!btn) return;
+            seasonState.page = Number(btn.dataset.page) || 0;
+            renderSeasonPage();
+        });
 
         async function load(id) {
             const body = document.getElementById('team-body');
@@ -287,23 +394,38 @@
                     : '<div class="tr-sub">시즌 기록 없음</div>')
                 + '</div>';
 
-            const gone = f.last_season
-                ? `${f.first_season}~${f.last_season} (해체)`
-                : `${f.first_season}~`;
+            // 해체된 구단은 마지막 해까지 함께 씁니다.
+            const founded = f.last_season
+                ? `${f.first_season}년 (${f.last_season} 해체)`
+                : `${f.first_season}년`;
+            const home = latestStadium(d.stadiums || []);
             document.getElementById('tr-facts').innerHTML = [
-                ['활동 기간', gone],
-                ['치른 시즌', `${career.seasons ?? 0}시즌`],
+                ['창단 연도', founded],
+                ...(home ? [['홈구장', home]] : []),
                 ['통산 전적', `${career.wins ?? 0}승 ${career.losses ?? 0}패 ${career.draws ?? 0}무`],
                 ['통산 승률', fmt3(career.pct)],
-                ['정규시즌 1위', `${career.first_place ?? 0}회`],
+                ['한국시리즈 우승', championLine(d.champions)],
                 ...(f.note ? [['비고', f.note]] : []),
             ].map(([k, v]) => `<li><span class="k">${esc(k)}</span>`
                 + `<span class="v">${esc(v)}</span></li>`).join('');
 
-            document.getElementById('tr-stadiums').innerHTML =
-                renderStadiums(d.stadiums || []);
-            document.getElementById('tr-seasons').innerHTML =
-                renderSeasons(seasons);
+            // 오른쪽 칸은 올 시즌 기록입니다. 홈구장 변천은 구단 개요의
+            // 한 줄로 줄였습니다. 45줄짜리 표가 될 자리는 아닙니다.
+            const cur = seasons[0];
+            document.getElementById('tr-cur-title').textContent =
+                cur ? `${cur.season} 시즌` : '올 시즌';
+            document.getElementById('tr-current').innerHTML = cur ? [
+                ['순위', cur.rank ? `${cur.rank}위` : '-'],
+                ['전적', `${cur.wins ?? 0}승 ${cur.losses ?? 0}패 ${cur.draws ?? 0}무`],
+                ['승률', cur.pct ?? '-'],
+                ['팀 타율', fmt3(cur.avg)],
+                ['팀 홈런', cur.home_run ?? '-'],
+                ['팀 ERA', fmt2(cur.era)],
+            ].map(([k, v]) => `<li><span class="k">${esc(k)}</span>`
+                + `<span class="v">${esc(v)}</span></li>`).join('')
+                : '<li><span class="k">시즌 기록이 없습니다</span></li>';
+
+            setSeasons(seasons);
 
             body.classList.remove('hidden');
             empty.classList.add('hidden');
