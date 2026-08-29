@@ -263,17 +263,20 @@
             if (g.final) {
                 const d = g.decisions || {};
                 const items = [];
-                if (d.win)  items.push(`<span class="pdec"><span class="pdec-tag win">승</span>${esc(d.win)}</span>`);
-                if (d.lose) items.push(`<span class="pdec"><span class="pdec-tag lose">패</span>${esc(d.lose)}</span>`);
-                if (d.save) items.push(`<span class="pdec"><span class="pdec-tag save">세</span>${esc(d.save)}</span>`);
+                // 1군 카드와 같이 이름을 누르면 선수 분석으로 갑니다.
+                // ID 를 못 찾은 선수는 링크 없이 이름만 나옵니다
+                // (동명이인을 팀으로도 못 가린 경우).
+                if (d.win)  items.push(`<span class="pdec"><span class="pdec-tag win">승</span>${playerLink(d.win, d.winId)}</span>`);
+                if (d.lose) items.push(`<span class="pdec"><span class="pdec-tag lose">패</span>${playerLink(d.lose, d.loseId)}</span>`);
+                if (d.save) items.push(`<span class="pdec"><span class="pdec-tag save">세</span>${playerLink(d.save, d.saveId)}</span>`);
                 if (!items.length) return '';
                 return `<div class="game-pitchers final">${items.join('')}</div>`;
             }
             if (g.live && (g.currentPitcher || g.currentBatter)) {
                 return `<div class="game-pitchers live">
-                    <span class="pp away">투수 ${esc(g.currentPitcher || '미정')}</span>
+                    <span class="pp away">투수 ${g.currentPitcher ? playerLink(g.currentPitcher, g.currentPitcherId) : '미정'}</span>
                     <span class="pp-label">vs</span>
-                    <span class="pp home">타자 ${esc(g.currentBatter || '미정')}</span>
+                    <span class="pp home">타자 ${g.currentBatter ? playerLink(g.currentBatter, g.currentBatterId) : '미정'}</span>
                 </div>`;
             }
             return '';

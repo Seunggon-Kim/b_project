@@ -85,6 +85,47 @@ function futuresInt(v) {
  * (미지정 시 KST 오늘). 30초 캐시. 실패 시 500 이 아니라 200 + error
  * 필드를 돌려줍니다.
  */
+/**
+ * 경기 목록에 나온 선수 이름을 모읍니다(중복·빈 값 제외).
+ *
+ * 퓨처스 카드의 선수 이름에 링크가 없었습니다. 1군 카드는 선발·승패
+ * 투수가 모두 링크인데 퓨처스만 그냥 글자였습니다. KBO 퓨처스 피드가
+ * 이름만 주고 선수 ID 를 주지 않기 때문입니다.
+ */
+export function collectNames(games) {
+  const out = [];
+  const seen = new Set();
+  for (const g of games || []) {
+    const d = g.decisions || {};
+    for (const v of [d.win, d.lose, d.save, g.currentPitcher, g.currentBatter]) {
+      const name = String(v || '').trim();
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      out.push(name);
+    }
+  }
+  return out;
+}
+
+/**
+ * 이름으로 선수 ID 를 고릅니다. 못 고르면 null 입니다.
+ *
+ * 이름이 겹치면 팀으로 좁힙니다. 팀으로도 못 좁히면 **링크를 걸지
+ * 않습니다.** 엉뚱한 선수로 보내느니 글자로 두는 편이 낫습니다.
+ */
+export function pickPlayerId(candidates, name, teamName) {
+  const key = String(name || '').trim();
+  if (!key) return null;
+  const hits = (candidates || []).filter(
+    (c) => String(c.player_name || '').trim() === key);
+  if (hits.length === 1) return hits[0].player_id;
+  if (!hits.length) return null;
+  const team = String(teamName || '').trim();
+  if (!team) return null;
+  const byTeam = hits.filter((c) => String(c.team || '').trim() === team);
+  return byTeam.length === 1 ? byTeam[0].player_id : null;
+}
+
 export async function futures(request, env) {
   let date = null;
   try {
@@ -178,6 +219,15 @@ export async function futures(request, env) {
       });
     }
 
+    // 선수 ID 를 붙입니다. 이름만으로는 화면에서 링크를 걸 수 없습니다.
+    //
+    // 원천은 `futures_season_stats`(올 시즌 2군 기록)입니다. 이름이
+    // 겹치면 팀으로 좁히고, 그래도 못 좁히면 링크를 걸지 않습니다.
+    //
+    // 이름을 한 번에 모아 한 번만 질의합니다. 경기마다 두드리면 하루
+    // 다섯 경기에 열 번이 넘습니다.
+    await attachPlayerIds(games, env);
+
     // 파이썬 튜플 정렬 (time, gameId) 그대로입니다. 둘 다 ASCII 라
     // 코드포인트 비교(<, >)로 결과가 같습니다.
     games.sort((a, b) => {
@@ -203,5 +253,42 @@ export async function futures(request, env) {
       games: [],
       error: String(err && err.message ? err.message : err),
     });
+  }
+}
+
+
+/**
+ * 경기 목록의 선수 이름에 ID 를 붙입니다.
+ *
+ * 실패해도 조용히 넘어갑니다. 링크가 없을 뿐 경기 카드는 그대로
+ * 보여야 합니다.
+ */
+async function attachPlayerIds(games, env) {
+  const names = collectNames(games);
+  if (!names.length || !env || !env.DB) return;
+  try {
+    const marks = names.map(() => '?').join(',');
+    const { results } = await env.DB.prepare(
+      'SELECT player_id, player_name, team FROM futures_season_stats '
+      + `WHERE season = (SELECT MAX(season) FROM futures_season_stats) `
+      + `AND player_name IN (${marks})`,
+    ).bind(...names).all();
+    const cands = results || [];
+    for (const g of games) {
+      const d = g.decisions || {};
+      // 승리투수는 이긴 팀, 패전투수는 진 팀입니다. 세이브는 이긴
+      // 팀입니다. 그 팀으로 동명이인을 가립니다.
+      const winTeam = g.winner === 'away' ? g.away?.name : g.home?.name;
+      const loseTeam = g.winner === 'away' ? g.home?.name : g.away?.name;
+      d.winId = pickPlayerId(cands, d.win, winTeam);
+      d.loseId = pickPlayerId(cands, d.lose, loseTeam);
+      d.saveId = pickPlayerId(cands, d.save, winTeam);
+      // 진행 중인 경기는 어느 팀인지 알 수 없어 이름만으로 찾습니다.
+      // 겹치면 링크가 안 걸립니다.
+      g.currentPitcherId = pickPlayerId(cands, g.currentPitcher, null);
+      g.currentBatterId = pickPlayerId(cands, g.currentBatter, null);
+    }
+  } catch {
+    // 표가 아직 없는 환경입니다. 링크 없이 갑니다.
   }
 }
