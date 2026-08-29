@@ -136,6 +136,17 @@
 
     <!-- Scripts -->
     <script src="js/api.js"></script>
+    <style>
+        /* 팀 기록실 링크입니다. 선수 링크와 같은 결로 둡니다. 밑줄을
+           깔아 두면 순위표가 시끄러워지므로 올렸을 때만 보입니다. */
+        .team-link {
+            color: inherit;
+            text-decoration: none;
+            border-bottom: 1px solid transparent;
+        }
+
+        .team-link:hover { border-bottom-color: currentColor; }
+    </style>
     <script src="js/components.js"></script>
     <script>
         // ===== KBO 경기 일정/결과 =====
@@ -160,6 +171,25 @@
             return `<a class="${klass}" href="pages/player-analytics?id=${encodeURIComponent(id)}">${text}</a>`;
         }
 
+        /**
+         * 팀 이름을 팀 기록실 링크로 감쌉니다.
+         *
+         * 기록실에 없는 팀은 글자 그대로 둡니다. 퓨처스에는 고양·울산·
+         * 상무·경찰처럼 1군 프랜차이즈가 아닌 팀이 있습니다. 그런 팀은
+         * 볼 기록실이 없습니다.
+         *
+         * 판정은 components.js 의 `teamRecordHref` 가 합니다. 팀 이름
+         * -> 프랜차이즈 표가 거기 한 곳에만 있어야 화면마다 어긋나지
+         * 않습니다.
+         */
+        function teamLink(name, cls) {
+            const text = esc(name);
+            const href = window.teamRecordHref
+                ? window.teamRecordHref(name, 'pages/') : null;
+            if (!href) return text;
+            return `<a class="${cls || 'team-link'}" href="${href}">${text}</a>`;
+        }
+
         // 로컬 공식 KBO 엠블럼 로드 실패 시 -> Naver 엠블럼 -> 팀코드 텍스트 순으로 폴백
         function emblemError(img) {
             const fb = img.getAttribute('data-fallback');
@@ -178,7 +208,7 @@
             const emblem = `<img class="team-emblem" src="assets/logos/${esc(code)}.png" data-fallback="${esc(t.emblem || '')}" data-code="${esc(code)}" alt="" loading="lazy" onerror="emblemError(this)">`;
             return `<div class="team ${side}${win ? ' win' : ''}">
                 ${emblem}
-                <span class="team-name">${esc(t.name || t.code)}</span>
+                <span class="team-name">${teamLink(t.name || t.code)}</span>
             </div>`;
         }
 
@@ -251,7 +281,7 @@
             const div = t.division ? `<span class="team-div">${esc(t.division)}</span>` : '';
             return `<div class="team ${side}${win ? ' win' : ''}">
                 ${emblem}
-                <span class="team-name">${esc(t.name || t.code)}</span>
+                <span class="team-name">${teamLink(t.name || t.code)}</span>
                 ${div}
             </div>`;
         }
@@ -405,7 +435,7 @@
                     : (t.rank === 4 || t.rank === 5) ? 'seed-wc' : '';
                 return `<tr class="${seed}">
                     <td class="rank-col"><span class="rank-badge rank-${t.rank}">${t.rank}</span></td>
-                    <td class="team-col"><div class="team-cell">${emblem}<span>${esc(t.team)}</span></div></td>
+                    <td class="team-col"><div class="team-cell">${emblem}<span>${teamLink(t.team)}</span></div></td>
                     <td>${esc(t.games)}</td>
                     <td>${esc(t.wins)}</td>
                     <td>${esc(t.losses)}</td>
@@ -793,7 +823,7 @@
                         : '';
                     return `<tr>
                         <td class="rank-col"><span class="rank-badge rank-${t.rank}">${t.rank}</span></td>
-                        <td class="team-col"><div class="team-cell">${emblem}<span>${esc(t.team)}</span></div></td>
+                        <td class="team-col"><div class="team-cell">${emblem}<span>${teamLink(t.team)}</span></div></td>
                         <td>${esc(t.games)}</td>
                         <td>${esc(t.wins)}</td>
                         <td>${esc(t.losses)}</td>

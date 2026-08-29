@@ -34,10 +34,14 @@
         .fs-tab:hover { color: var(--primary); }
         .fs-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
         /* 시즌·기간 통합 컨트롤 바 */
-        .ctrl-bar { display: flex; align-items: center; gap: 0.85rem 2rem; flex-wrap: wrap; padding: 1rem 1.25rem; }
+        /* 카드 기본 여백(32px)은 고르개 한 줄에 너무 큽니다.
+           `card-body` 보다 뒤에 두어 이 값이 이깁니다. */
+        .ctrl-bar { display: flex; align-items: center; gap: 0.7rem 1.5rem; flex-wrap: wrap; padding: 0.75rem 1rem !important; }
         .ctrl-group { display: flex; align-items: center; gap: 0.6rem; flex-wrap: nowrap; flex-shrink: 0; }
         .ctrl-group label { white-space: nowrap; flex-shrink: 0; margin: 0; }
         .ctrl-divider { align-self: stretch; width: 1px; min-height: 1.8rem; background: var(--border-color); }
+        /* `tabbtn` 은 button 용이라 a 에는 줄이 남습니다. */
+        a.tabbtn { text-decoration: none; display: inline-flex; align-items: center; }
         @media (max-width: 640px) { .ctrl-divider { display: none; } .ctrl-group { flex-wrap: wrap; } }
         /* 정렬 가능한 표 헤더 */
         .table th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
@@ -92,6 +96,13 @@
                     <select id="season-select" class="input" style="max-width:120px;">
                         <option value="">불러오는 중…</option>
                     </select>
+                </div>
+                <div class="ctrl-group">
+                    <label for="team-select"><strong>팀</strong></label>
+                    <select id="team-select" class="input" style="max-width:120px;">
+                        <option value="">전체</option>
+                    </select>
+                    <a id="team-record-link" class="tabbtn" href="team-record">기록실</a>
                 </div>
                 <div class="ctrl-divider" aria-hidden="true"></div>
                 <div class="ctrl-group">
@@ -333,6 +344,44 @@
         }
 
         // ===== 시즌 누적(선수 기록 합산) 팀 성적 =====
+        // 마지막으로 받은 표입니다. 팀 고르개만 바뀌었을 때 서버를 다시
+        // 두드리지 않으려고 들고 있습니다. 열 팀짜리 표를 다시 받는 것은
+        // 낭비입니다.
+        let lastView = null;
+
+        /** 고른 팀입니다. 빈 문자열이면 전체입니다. */
+        function pickedTeam() {
+            const el = document.getElementById('team-select');
+            return el ? el.value : '';
+        }
+
+        /** 보관한 표를 고른 팀으로 걸러 다시 그립니다. */
+        function drawTables() {
+            if (!lastView) return;
+            const t = pickedTeam();
+            const keep = rows => (t ? rows.filter(r => r.team === t) : rows);
+            const batDiv = document.getElementById('team-batting');
+            const pitDiv = document.getElementById('team-pitching');
+            const bat = keep(lastView.bat);
+            const pit = keep(lastView.pit);
+            if (!bat.length) batDiv.innerHTML = createEmptyState(lastView.batEmpty);
+            else makeSortable('team-batting', lastView.batCols, bat, lastView.batDef);
+            if (!pit.length) pitDiv.innerHTML = createEmptyState(lastView.pitEmpty);
+            else makeSortable('team-pitching', lastView.pitCols, pit, lastView.pitDef);
+        }
+
+        /** 기록실 버튼을 고른 팀에 맞춥니다. */
+        function syncRecordLink() {
+            const a = document.getElementById('team-record-link');
+            if (!a) return;
+            const t = pickedTeam();
+            const href = t && window.teamRecordHref
+                ? window.teamRecordHref(t, '') : null;
+            // 팀을 안 골랐으면 기록실 첫 화면으로 보냅니다.
+            a.href = href ? `${href}&name=${encodeURIComponent(t)}` : 'team-record';
+            a.textContent = t ? `${t} 기록실` : '기록실';
+        }
+
         async function loadTeamStats(season) {
             const seq = ++loadSeq;
             const batDiv = document.getElementById('team-batting');
@@ -353,11 +402,15 @@
                 const bagg = aggBatting((bd && bd.batters) || []);
                 const pagg = aggPitching((pd && pd.pitchers) || []);
 
-                if (!bagg.length) batDiv.innerHTML = createEmptyState('해당 시즌 타격 기록이 없습니다.');
-                else makeSortable('team-batting', BAT_COLS, bagg, { key: 'avg', dir: 'desc' });
-
-                if (!pagg.length) pitDiv.innerHTML = createEmptyState('해당 시즌 투구 기록이 없습니다.');
-                else makeSortable('team-pitching', PIT_COLS, pagg, { key: 'era', dir: 'asc' });
+                lastView = {
+                    bat: bagg, pit: pagg,
+                    batCols: BAT_COLS, pitCols: PIT_COLS,
+                    batDef: { key: 'avg', dir: 'desc' },
+                    pitDef: { key: 'era', dir: 'asc' },
+                    batEmpty: '해당 시즌 타격 기록이 없습니다.',
+                    pitEmpty: '해당 시즌 투구 기록이 없습니다.',
+                };
+                drawTables();
             } catch (e) {
                 if (seq !== loadSeq) return;
                 batDiv.innerHTML = createErrorMessage('팀 기록을 불러오는데 실패했습니다.');
@@ -373,11 +426,15 @@
             const batDiv = document.getElementById('team-batting');
             const pitDiv = document.getElementById('team-pitching');
             const b = (d && d.batting) || [], p = (d && d.pitching) || [];
-            if (!b.length) batDiv.innerHTML = createEmptyState('해당 기간 타격 기록이 없습니다.');
-            else makeSortable('team-batting', RBAT_COLS, b, { key: 'AVG', dir: 'desc' });
-
-            if (!p.length) pitDiv.innerHTML = createEmptyState('해당 기간 투구 기록이 없습니다.');
-            else makeSortable('team-pitching', RPIT_COLS, p, { key: 'IP_text', dir: 'desc' });
+            lastView = {
+                bat: b, pit: p,
+                batCols: RBAT_COLS, pitCols: RPIT_COLS,
+                batDef: { key: 'AVG', dir: 'desc' },
+                pitDef: { key: 'IP_text', dir: 'desc' },
+                batEmpty: '해당 기간 타격 기록이 없습니다.',
+                pitEmpty: '해당 기간 투구 기록이 없습니다.',
+            };
+            drawTables();
         }
 
         async function loadTeamRange(start, end) {
@@ -469,6 +526,20 @@
         // 이벤트 바인딩
         const sel = document.getElementById('season-select');
         sel.addEventListener('change', () => loadTeamStats(sel.value));
+
+        // 팀 고르개입니다. 지금 뛰는 열 구단만 둡니다. 표에 나오는 팀이
+        // 그 열이고, 옛 이름은 시즌 누적에도 기간별에도 안 나옵니다.
+        const TEAMS = ['KIA', '삼성', 'LG', '두산', '롯데',
+                       '한화', 'SSG', '키움', 'NC', 'KT'];
+        const teamSel = document.getElementById('team-select');
+        teamSel.innerHTML = '<option value="">전체</option>'
+            + TEAMS.map(t => `<option value="${t}">${t}</option>`).join('');
+        teamSel.addEventListener('change', () => {
+            // 서버를 다시 두드리지 않습니다. 이미 받은 표를 거릅니다.
+            drawTables();
+            syncRecordLink();
+        });
+        syncRecordLink();
         document.getElementById('range-go').addEventListener('click', () => loadTeamRange(document.getElementById('range-start').value, document.getElementById('range-end').value));
         document.getElementById('tab-batting').addEventListener('click', () => showStat('batting'));
         document.getElementById('tab-pitching').addEventListener('click', () => showStat('pitching'));
