@@ -2125,15 +2125,6 @@ h2 .material-symbols-outlined,
    작아 헤더가 낮은데, 같은 1rem 을 두면 아래 표까지 멀어 보입니다.
    좌우 두 칸에 함께 걸어야 등말소와 명단의 시작 위치가 어긋나지
    않습니다. */
-/* 등말소·1군 명단 줄만 높이를 내용에 맞춥니다.
- *
- * 위 줄(.rank-row)은 두 표 길이가 비슷해 stretch 가 보기 좋습니다.
- * 여기는 다릅니다. 등말소는 하루치라 짧고 명단은 60줄 가까이 됩니다.
- * 늘려 맞추면 등말소 칸 아래로 400px 넘는 빈 칸이 생깁니다. */
-.roster-row {
-    align-items: start;
-}
-
 .roster-row .schedule-bar {
     min-height: 2rem;
     margin-bottom: 0.5rem;
@@ -2145,9 +2136,31 @@ h2 .material-symbols-outlined,
     vertical-align: middle;
 }
 
+/* 등말소는 하루치라 줄 수가 적습니다(오늘 16건). 옆의 1군 명단은
+ * 60줄 가까이 되어 칸이 훨씬 깁니다. 그대로 두면 아래로 400px 넘는
+ * 빈 칸이 생깁니다.
+ *
+ * 높이는 옆 칸과 맞추되(두 표의 아랫줄이 어긋나면 어수선합니다),
+ * 남는 높이를 행들이 나눠 갖게 합니다. 글자도 한 단계 키웁니다.
+ * 줄이 많은 날에는 자연스럽게 촘촘해집니다. */
+#moves-wrap {
+    display: flex;
+    flex-direction: column;
+}
+
 .mv-day {
     padding: 1rem 1.25rem;
     border-bottom: 1px solid var(--border-color);
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.mv-day .mv-rows {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
 }
 
 .mv-day:last-child {
@@ -2173,10 +2186,10 @@ h2 .material-symbols-outlined,
    일이 있었나" 를 보려고 두 목록을 번갈아 훑어야 합니다. */
 .mv-row {
     display: grid;
-    grid-template-columns: 3rem 1fr 1fr;
+    grid-template-columns: 3.2rem 1fr 1fr;
     gap: 0.5rem;
     align-items: baseline;
-    padding: 0.35rem 0;
+    padding: 0.5rem 0;
     border-top: 1px solid var(--border-color);
 }
 
@@ -2185,7 +2198,7 @@ h2 .material-symbols-outlined,
 }
 
 .mv-team {
-    font-size: 0.8rem;
+    font-size: 0.88rem;
     font-weight: 700;
     color: var(--text-muted);
 }
@@ -2200,7 +2213,7 @@ h2 .material-symbols-outlined,
     display: inline-flex;
     align-items: baseline;
     gap: 0.3rem;
-    font-size: 0.88rem;
+    font-size: 0.95rem;
 }
 
 /* 색만으로 구분하지 않도록 '등록'·'말소' 글자를 함께 둡니다. */
