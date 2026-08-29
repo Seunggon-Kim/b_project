@@ -167,7 +167,7 @@ export async function playerDetail(request, env, ctx, params) {
       || latestTeam(batter.results, pitcher.results)
       || player.team_id,
     is_active: isActive(batter.results, pitcher.results, cur, roster,
-                        rosterSize) ? 1 : 0,
+                        rosterSize, player.back_number) ? 1 : 0,
     // 1군 등록 상태입니다. null 이면 "모름" 이지 "말소" 가 아닙니다.
     // **1군 등록 배지는 1군 명단일 때만입니다.** 퓨처스 명단에 있는
     // 선수에게 '1군 등록' 을 붙이면 틀린 말이 됩니다.
@@ -202,10 +202,25 @@ export function rosterDecides(rosterSize) {
  * 이라 지워지지 않습니다. 소속 판정에 쓸 값이 아닙니다.
  */
 export function isActive(batterRows, pitcherRows, current, roster,
-                         rosterSize) {
-  if (rosterDecides(rosterSize)) return Boolean(roster);
-  // 명단을 못 믿는 날입니다. 예전 방식으로 돌아갑니다.
+                         rosterSize, backNumber) {
+  // 오늘 명단에 있으면 두말할 것 없습니다.
   if (roster) return true;
+
+  // **명단에 없어도 등번호가 있으면 소속입니다.** 부상으로 1군에서
+  // 내려가고 2군 명단에도 안 오른 선수가 있습니다. 힐리어드(56034)가
+  // 그랬습니다. 명단만 보면 무소속이 되는데 KT 소속입니다.
+  //
+  // 계약 여부를 가르는 것은 등번호입니다. KBO 는 계약이 끝나면 그
+  // 자리를 비웁니다. 명단은 "오늘 어디에 있나", 등번호는 "계약이
+  // 있나" 입니다. 다른 질문입니다.
+  //
+  // 0 과 '00' 도 실제 등번호입니다. 값이 있는지만 봅니다.
+  if (backNumber !== null && backNumber !== undefined && backNumber !== '') {
+    return true;
+  }
+
+  if (rosterDecides(rosterSize)) return false;
+  // 명단을 못 믿는 날입니다. 예전 방식으로 돌아갑니다.
   if (current == null) return false;
   for (const r of [...(batterRows || []), ...(pitcherRows || [])]) {
     if (r && Number(r.season) >= Number(current)) return true;
