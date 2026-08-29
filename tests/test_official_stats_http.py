@@ -146,3 +146,34 @@ def test_표를_못_찾으면_빈_값을_줍니다():
 def test_문법이_성립합니다():
     for p in (SRC, HTTP):
         ast.parse(p.read_text(encoding="utf-8"))
+
+
+# --- 표를 찾을 때 class 가 첫 속성이 아닐 수 있습니다 ----------------
+#
+# 팀 순위 페이지는 이렇게 생겼습니다.
+#
+#     <table summary="순위, 팀명, 경기, ..." class="tData">
+#
+# 정규식이 `<table class="..."` 로 시작해서 이 표를 못 찾았습니다.
+# 조용히 0행이 나왔고, 오류도 없어서 "그 시즌은 자료가 없다" 로
+# 보였습니다. 1군 기록실(`<table class="tData01 tt">`)만 우연히
+# 맞았던 것입니다.
+
+def test_class_가_첫_속성이_아니어도_표를_찾습니다():
+    import kbo_http
+    s = kbo_http.Session(delay=0, table_class="tData")
+    s.html = ('<table summary="순위, 팀명" class="tData">'
+              '<tr><th>순위</th><th>팀명</th></tr>'
+              '<tr><td>1</td><td>KT</td></tr>'
+              '</table>')
+    assert s.header() == ["순위", "팀명"]
+    assert s.rows() == [("", ["1", "KT"])]
+
+
+def test_class_가_첫_속성이면_예전처럼_찾습니다():
+    import kbo_http
+    s = kbo_http.Session(delay=0)
+    s.html = ('<table class="tData01 tt">'
+              '<tr><th>선수</th></tr><tr><td>김현수</td></tr></table>')
+    assert s.header() == ["선수"]
+    assert s.rows() == [("", ["김현수"])]

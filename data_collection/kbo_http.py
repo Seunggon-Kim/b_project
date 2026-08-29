@@ -60,7 +60,14 @@ TABLE_CLASS = "tData01 tt"
 
 
 def _table_re(cls):
-    return re.compile(r'<table class="%s[^"]*"[^>]*>(.*?)</table>'
+    """그 클래스를 가진 표를 찾는 정규식입니다.
+
+    **class 가 첫 속성이라고 가정하면 안 됩니다.** 팀 순위 페이지는
+    `<table summary="순위, 팀명, ..." class="tData">` 입니다. 예전
+    정규식은 `<table class="` 로 시작해서 이 표를 못 찾았고, 오류 없이
+    0행이 나왔습니다. "그 시즌은 자료가 없다" 로 보였습니다.
+    """
+    return re.compile(r'<table[^>]*class="%s[^"]*"[^>]*>(.*?)</table>'
                       % re.escape(cls), re.S)
 
 
