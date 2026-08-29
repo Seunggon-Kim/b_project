@@ -37,6 +37,9 @@
         /* 카드 기본 여백(32px)은 고르개 한 줄에 너무 큽니다.
            `card-body` 보다 뒤에 두어 이 값이 이깁니다. */
         .ctrl-bar { display: flex; align-items: center; gap: 0.7rem 1.5rem; flex-wrap: wrap; padding: 0.75rem 1rem !important; }
+        /* 카드 자체 여백(32px)도 줄입니다. `card-body` 안쪽 여백과
+           겹쳐 한 줄짜리 고르개가 137px 이 됩니다. */
+        .ctrl-card { padding: 0 !important; margin-bottom: 2rem !important; }
         .ctrl-group { display: flex; align-items: center; gap: 0.6rem; flex-wrap: nowrap; flex-shrink: 0; }
         .ctrl-group label { white-space: nowrap; flex-shrink: 0; margin: 0; }
         .ctrl-divider { align-self: stretch; width: 1px; min-height: 1.8rem; background: var(--border-color); }
@@ -89,7 +92,7 @@
         </div>
 
         <!-- 시즌·기간 컨트롤 (나란히) -->
-        <div class="card mb-3">
+        <div class="card ctrl-card">
             <div class="card-body ctrl-bar">
                 <div class="ctrl-group">
                     <label for="season-select"><strong>시즌</strong></label>
@@ -102,7 +105,6 @@
                     <select id="team-select" class="input" style="max-width:120px;">
                         <option value="">전체</option>
                     </select>
-                    <a id="team-record-link" class="tabbtn" href="team-record">기록실</a>
                 </div>
                 <div class="ctrl-divider" aria-hidden="true"></div>
                 <div class="ctrl-group">
@@ -111,6 +113,7 @@
                     <span class="text-muted">~</span>
                     <input type="date" id="range-end" class="input" style="max-width:185px;">
                     <button type="button" id="range-go" class="tabbtn active">조회</button>
+                    <a id="team-record-link" class="tabbtn" href="team-record">기록실</a>
                     <span class="text-muted" id="range-note" style="font-size:0.85rem;white-space:nowrap;"></span>
                 </div>
             </div>
@@ -355,9 +358,28 @@
             return el ? el.value : '';
         }
 
+        /**
+         * 팀 고르개를 지금 표에 있는 팀으로 채웁니다.
+         *
+         * 고르고 있던 팀이 새 표에 없으면 '전체' 로 돌아갑니다. 1985년을
+         * 보다가 KT 를 고른 채 두면 표가 빈 채로 남습니다.
+         */
+        function fillTeams(rows) {
+            const el = document.getElementById('team-select');
+            if (!el) return;
+            const was = el.value;
+            const names = [...new Set((rows || []).map(r => r.team)
+                .filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'));
+            el.innerHTML = '<option value="">전체</option>'
+                + names.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+            el.value = names.includes(was) ? was : '';
+        }
+
         /** 보관한 표를 고른 팀으로 걸러 다시 그립니다. */
         function drawTables() {
             if (!lastView) return;
+            fillTeams(lastView.bat.length ? lastView.bat : lastView.pit);
+            syncRecordLink();
             const t = pickedTeam();
             const keep = rows => (t ? rows.filter(r => r.team === t) : rows);
             const batDiv = document.getElementById('team-batting');
@@ -478,41 +500,44 @@
         // 그 범위에서 각 연도를 프로브해 공식 기록이 있는 시즌만 채택, 세션 캐시로 재진입 시 재프로브 생략.
         async function buildSeasonOptions() {
             const sel = document.getElementById('season-select');
-            const CACHE_KEY = 'teamstats_seasons';
+            // 공식 기록이 있는 시즌입니다. `/stats/seasons` 가 타자·투수
+            // 기록의 시즌을 합쳐 내림차순으로 줍니다(1982~2026, 45개).
+            //
+            // 전에는 `/dashboard/stats` 의 범위를 읽고 연도마다 한 번씩
+            // 두드려 확인했습니다. 그 범위는 **`games` 표 기준**이라
+            // 2008년부터였고, 그래서 1982~2007 공식 기록이 있는데도
+            // 고르개에 안 나왔습니다. 프로브도 마흔다섯 번이 됩니다.
+            const CACHE_KEY = 'teamstats_seasons_v2';
+            const fill = (list) => {
+                sel.innerHTML = list
+                    .map(y => `<option value="${y}">${y}</option>`).join('');
+                return list;
+            };
             try {
-                const cached = JSON.parse(sessionStorage.getItem(CACHE_KEY) || 'null');
-                if (Array.isArray(cached) && cached.length) {
-                    sel.innerHTML = cached.map(y => `<option value="${y}">${y}</option>`).join('');
-                    return cached;
-                }
+                const cached = JSON.parse(
+                    sessionStorage.getItem(CACHE_KEY) || 'null');
+                if (Array.isArray(cached) && cached.length) return fill(cached);
             } catch (e) { /* 캐시 무시 */ }
 
-            let minY = 2015, maxY = new Date().getFullYear(); // 폴백 기본값
+            let list = [];
             try {
-                const r = await fetch(`${API_BASE_URL}/dashboard/stats`);
+                const r = await fetch(`${API_BASE_URL}/stats/seasons`);
                 if (r.ok) {
                     const d = await r.json();
-                    const m = String((d && d.seasons) || '').match(/(\d{4})\D+(\d{4})/);
-                    if (m) { minY = Math.min(+m[1], +m[2]); maxY = Math.max(+m[1], +m[2]); }
+                    list = Array.isArray(d && d.seasons) ? d.seasons : [];
                 }
-            } catch (e) { /* 폴백 범위 사용 */ }
+            } catch (e) { /* 아래 폴백 */ }
 
-            const years = [];
-            for (let y = maxY; y >= minY; y--) years.push(y);
-            let avail;
-            try {
-                const checks = await Promise.all(years.map(y =>
-                    API.getBatterStats(y, 1, 0, '')
-                        .then(r => (r && r.batters && r.batters.length) ? y : null)
-                        .catch(() => null)
-                ));
-                avail = checks.filter(v => v !== null);
-            } catch (e) { avail = []; }
-
-            const list = avail.length ? avail : years; // 프로브 전부 실패 시 후보 범위로 폴백
-            sel.innerHTML = list.map(y => `<option value="${y}">${y}</option>`).join('');
-            try { if (avail.length) sessionStorage.setItem(CACHE_KEY, JSON.stringify(list)); } catch (e) { /* 저장 무시 */ }
-            return list;
+            if (!list.length) {
+                // 엔드포인트가 죽었을 때입니다. 빈 고르개보다 낫습니다.
+                const maxY = new Date().getFullYear();
+                for (let y = maxY; y >= 1982; y--) list.push(y);
+            } else {
+                try {
+                    sessionStorage.setItem(CACHE_KEY, JSON.stringify(list));
+                } catch (e) { /* 저장 무시 */ }
+            }
+            return fill(list);
         }
 
         // 기간 기본값: 최근 14일
@@ -527,13 +552,12 @@
         const sel = document.getElementById('season-select');
         sel.addEventListener('change', () => loadTeamStats(sel.value));
 
-        // 팀 고르개입니다. 지금 뛰는 열 구단만 둡니다. 표에 나오는 팀이
-        // 그 열이고, 옛 이름은 시즌 누적에도 기간별에도 안 나옵니다.
-        const TEAMS = ['KIA', '삼성', 'LG', '두산', '롯데',
-                       '한화', 'SSG', '키움', 'NC', 'KT'];
+        // 팀 고르개는 **표에 실제로 있는 팀**으로 채웁니다.
+        //
+        // 열 구단을 박아 두면 옛 시즌에서 안 맞습니다. 1985년 표에는
+        // 삼성·해태·OB·롯데·청보·MBC 가 있지 지금 이름이 없습니다.
+        // `fillTeams` 를 표를 받을 때마다 부릅니다.
         const teamSel = document.getElementById('team-select');
-        teamSel.innerHTML = '<option value="">전체</option>'
-            + TEAMS.map(t => `<option value="${t}">${t}</option>`).join('');
         teamSel.addEventListener('change', () => {
             // 서버를 다시 두드리지 않습니다. 이미 받은 표를 거릅니다.
             drawTables();
