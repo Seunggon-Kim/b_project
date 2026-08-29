@@ -1,0 +1,129 @@
+name: roster
+
+# 오후에 오늘 명단을 받습니다.
+#
+# ## 왜 daily 로는 모자라나
+#
+# daily 는 03:33 KST 에 돕니다. 그 시각 KBO 등록 현황 페이지는 **전날
+# 것**을 보여 줍니다. 등말소는 경기 시작 2~4시간 전에 갱신되기 때문
+# 입니다. 그래서 화면이 늘 하루 늦은 명단을 보여 줬습니다.
+#
+#     2026-08-29 11:41 에 확인한 화면      기준일 2026-08-28
+#
+# 이 워크플로가 오후에 한 번 더 받아 그날 것을 채웁니다. daily 의 같은
+# 단계는 그대로 둡니다. 오후 실행이 실패한 날에도 전날 값이라도 남아
+# 있는 편이 낫습니다.
+#
+# ## 시각
+#
+# 07:07 UTC = 16:07 KST 입니다. 평일 경기는 보통 18:30 에 시작하므로
+# 2~4시간 전이면 14:30~16:30 입니다. 그 끝자락에 둡니다. 주말 경기는
+# 더 이르지만(14:00) 그날 명단도 오전에는 안 나옵니다.
+#
+# 정각을 피합니다. GitHub 문서가 매 시각 정각은 부하로 지연될 수 있다고
+# 안내합니다. 몇십 분 늦어도 경기 전이라 괜찮습니다.
+#
+# ## 필요한 시크릿
+#
+#   CLOUDFLARE_API_TOKEN   D1 적재
+#   CLOUDFLARE_ACCOUNT_ID  D1 적재
+#   ADMIN_TOKEN            적재 뒤 캐시 비우기
+
+on:
+  schedule:
+    - cron: '7 7 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: roster
+  cancel-in-progress: false
+
+env:
+  API_BASE: https://kbo-api.bstats-baseball.workers.dev
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+jobs:
+  roster:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - name: 의존성 설치
+        run: pip install requests
+
+      - name: 인증 확인
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "CLOUDFLARE_API_TOKEN 이 없습니다."
+            exit 1
+          fi
+
+      # 1군 등록 현황 + 퓨처스 등록 명단입니다. 소속 판정의 근거라
+      # 하루 두 번 받습니다.
+      - name: 등록 명단 적재
+        id: roster
+        run: python data_collection/roster_to_d1.py
+
+      - name: players 소속·등번호 갱신
+        id: sync
+        if: steps.roster.outcome == 'success'
+        run: python data_collection/sync_players_from_roster.py
+
+      # 퓨처스 올 시즌 기록입니다. 2군 경기는 매일 있으므로 그날 것만
+      # 다시 받습니다(12팀 x 타자·투수, 약 40초). 지난 시즌은 바뀌지
+      # 않아 손으로 한 번 받아 둔 것으로 충분합니다.
+      - name: 퓨처스 올 시즌 기록 갱신
+        id: futures
+        continue-on-error: true
+        run: python data_collection/futures_records.py --season 2026
+
+      - name: 결과 기록
+        if: always()
+        continue-on-error: true
+        run: |
+          python data_collection/record_job_run.py --job roster_pm \
+            --status ${{ steps.roster.outcome == 'success' && 'ok' || 'fail' }} \
+            --note "명단 ${{ steps.roster.outcome }} / players ${{ steps.sync.outcome }} / 퓨처스기록 ${{ steps.futures.outcome }}"
+
+      - name: 캐시 비우기
+        if: steps.roster.outcome == 'success'
+        env:
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+        run: |
+          if [ -z "$ADMIN_TOKEN" ]; then
+            echo "ADMIN_TOKEN 이 없어 캐시를 비우지 못합니다."
+            exit 1
+          fi
+          code=$(curl -s -o /tmp/purge.txt -w '%{http_code}' -X POST \
+            "$API_BASE/admin/purge-cache" -H "Authorization: Bearer $ADMIN_TOKEN")
+          cat /tmp/purge.txt; echo
+          test "$code" = "200"
+
+      - name: 요약
+        if: always()
+        run: |
+          {
+            echo "| 단계 | 결과 |"
+            echo "|---|---|"
+            echo "| 등록 명단 적재 | ${{ steps.roster.outcome }} |"
+            echo "| players 갱신 | ${{ steps.sync.outcome }} |"
+            echo "| 퓨처스 올 시즌 기록 | ${{ steps.futures.outcome }} |"
+          } >> $GITHUB_STEP_SUMMARY
+
+      # 실패를 초록색으로 덮지 않습니다. 조용히 멈춘 수집을 몇 주 뒤에
+      # 발견하는 것이 가장 큰 위험입니다.
+      - name: 실패 판정
+        if: steps.roster.outcome != 'success' || steps.sync.outcome != 'success'
+        run: |
+          echo "명단 갱신이 실패했습니다."
+          exit 1

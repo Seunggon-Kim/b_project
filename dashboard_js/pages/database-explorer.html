@@ -509,7 +509,7 @@
                     <h3 class="card-title">
                         <span class="material-symbols-outlined h1-icon">schedule</span>자동 수집 스케줄 (Cron)
                     </h3>
-                    <span class="text-muted" style="font-size: 0.875rem;">총 10개 작업</span>
+                    <span class="text-muted" style="font-size: 0.875rem;">총 11개 작업</span>
                 </div>
                 <div class="card-body">
                     <p class="text-secondary mb-2" style="font-size: 0.9rem;">
@@ -593,15 +593,18 @@
                                     <td class="dbx-cron-desc">1군 등록 현황과 퓨처스 등록 명단을 함께 받아 kbo_roster에
                                         넣고, 그날 등록·말소를 kbo_roster_moves에 쌓습니다. KBO는 오늘 것만
                                         보여 줘서 우리가 매일 받아야 하고 소급이 안 됩니다. 소속 판정은 이 명단
-                                        하나로 합니다(1군 339명 + 퓨처스 289명).</td>
-                                    <td class="dbx-cron-kst" title="크론식(UTC): 33 18 * * *">매일 03:33</td>
+                                        하나로 합니다(1군 339명 + 퓨처스 289명).
+                                        <strong>하루 두 번 받습니다.</strong> 등말소는 경기 2~4시간 전에
+                                        갱신되므로 새벽 실행은 전날 것만 봅니다. 오후에 한 번 더 받아
+                                        그날 것을 채웁니다.</td>
+                                    <td class="dbx-cron-kst" title="크론식(UTC): 33 18 * * * / 7 7 * * *">매일 03:33<br>· 16:07</td>
                                     <td class="dbx-cron-upd pending" data-job="roster">-</td>
                                 </tr>
                                 <tr>
                                     <td class="dbx-cron-mods">sync_players_from_roster.py</td>
                                     <td class="dbx-cron-desc">등록 명단의 소속·등번호를 players에 반영합니다. 바뀐 행만
                                         고칩니다.</td>
-                                    <td class="dbx-cron-kst" title="등록 현황 단계 직후">매일 03:33<br>(명단 직후)</td>
+                                    <td class="dbx-cron-kst" title="등록 현황 단계 직후">매일 03:33·16:07<br>(명단 직후)</td>
                                     <td class="dbx-cron-upd pending" data-job="roster">-</td>
                                 </tr>
                                 <tr>
@@ -617,6 +620,15 @@
                                     <td class="dbx-cron-upd pending" data-job="pbp_backfill">-</td>
                                 </tr>
                                 <tr>
+                                    <td class="dbx-cron-mods">futures_records.py</td>
+                                    <td class="dbx-cron-desc">퓨처스(2군) 시즌 기록을 KBO 기록실에서 받아
+                                        futures_season_stats에 넣습니다. 팀을 골라야 규정 미달 선수까지
+                                        나옵니다. 올 시즌만 매일 다시 받습니다. 지난 시즌은 바뀌지 않아
+                                        2010~2025는 한 번 받아 둔 것으로 충분합니다(전체 13,036행).</td>
+                                    <td class="dbx-cron-kst" title="크론식(UTC): 7 7 * * *">매일 16:07</td>
+                                    <td class="dbx-cron-upd pending" data-job="roster">-</td>
+                                </tr>
+                                <tr>
                                     <td class="dbx-cron-mods">heal_player_photos.py</td>
                                     <td class="dbx-cron-desc">선수 사진 주소를 최신 연도로 맞춥니다. KBO 이미지 주소에
                                         연도 폴더가 들어 있어서, 겨울에 이적한 선수는 그대로 두면 전 소속팀 유니폼
@@ -629,8 +641,6 @@
                     </div>
                     <p class="text-secondary mt-2" style="font-size: 0.85rem;">
                         손으로 돌리는 작업도 있습니다.
-                        <strong>futures_records.py</strong>(퓨처스 2010~2026 시즌 기록, 13,036행)는
-                        지난 시즌이 다시 바뀌지 않아 한 번만 받으면 됩니다.
                         <strong>daily_player_detector.py</strong>(이적·등번호 변경 감지),
                         <strong>daily_cleanup_orphan_stats.py</strong>(PBP 없는 통계 행 정리),
                         <strong>player_registry_sync.py</strong>(구단 등록 명단 대조)는

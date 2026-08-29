@@ -66,6 +66,14 @@ ENTRYPOINTS = {
         "migration/export_csv.py",
         "data_collection/record_job_run.py",
     ],
+    "roster.yml": [
+        # 오후에 오늘 명단을 다시 받습니다. daily 는 새벽이라 전날
+        # 것만 보입니다.
+        "data_collection/roster_to_d1.py",
+        "data_collection/sync_players_from_roster.py",
+        "data_collection/futures_records.py",
+        "data_collection/record_job_run.py",
+    ],
     "monthly.yml": [
         "migration/d1_to_sqlite.py",
         "data_collection/player_info_scraper.py",

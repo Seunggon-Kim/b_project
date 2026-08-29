@@ -36,7 +36,7 @@ HELPERS = {
 def workflow_scripts():
     """워크플로가 실제로 부르는 스크립트 파일 이름입니다."""
     names = set()
-    for wf in ("daily.yml", "weekly.yml", "monthly.yml"):
+    for wf in ("daily.yml", "weekly.yml", "monthly.yml", "roster.yml"):
         src = (WF / wf).read_text(encoding="utf-8")
         for path in re.findall(r"python\s+([A-Za-z0-9_/]+\.py)", src):
             names.add(path.split("/")[-1])
