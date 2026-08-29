@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Compute self KBO park factors (2015-2026) from play_by_play and load into self_park_factor.
+Compute self KBO park factors (2008-2026) from play_by_play and load into self_park_factor.
 - Engine: FanGraphs operational form PF = 1000 * 10H/(9R+H)  (T=10, un-halved), Statiz convention.
 - run_pf: per-game runs (home vs road). Components (1B/2B/3B/HR/SLG): per IN-PLAY PA.
 - 3-year trailing window per season (forward-filled for earliest cohort; park-opening years use 1-2y).
@@ -17,7 +17,9 @@ DB = os.environ.get("KBO_DB") or str(
 )
 con = sqlite3.connect(DB); con.row_factory = sqlite3.Row; cur = con.cursor()
 
-VALID_YEARS = list(range(2015, 2027))
+# 2008~2014 PBP 를 되채운 뒤로 여기까지 볼 수 있습니다(2026-08-29).
+FIRST_SEASON, LAST_SEASON = 2008, 2026
+VALID_YEARS = list(range(FIRST_SEASON, LAST_SEASON + 1))
 SECONDARY = {'청주','울산','포항'}
 # smoothing toward neutral 1000: Final = 1000 - (1000-raw)*X.  Calibrated once vs Statiz 2025 (run MAE~19).
 X = {'run': 1.0, 'b1': 0.44, 'b2': 0.60, 'b3': 0.62, 'hr': 0.72, 'slg': 0.40}
@@ -72,8 +74,22 @@ def load_games(years):
 ALLG = load_games(VALID_YEARS)
 
 def window_for(Y):
-    base = [y for y in (Y-2, Y-1, Y) if 2015 <= y <= 2026]
-    while len(base) < 3 and max(base) + 1 <= 2026: base.append(max(base) + 1)
+    """그 해 파크팩터를 계산할 때 함께 볼 세 시즌입니다.
+
+    앞이 모자라면 뒤로 채웁니다. 되채우기 전에는 2015년에 앞이 아예
+    없어서 **미래 두 해**로 채우고 있었습니다.
+
+        2015   [2015, 2016, 2017]   <- 미래를 봅니다
+        2016   [2015, 2016, 2017]
+
+    이제 2008년까지 있어서 그 해 이전 자료로 계산합니다.
+
+        2015   [2013, 2014, 2015]
+        2016   [2014, 2015, 2016]
+    """
+    base = [y for y in (Y-2, Y-1, Y) if FIRST_SEASON <= y <= LAST_SEASON]
+    while len(base) < 3 and max(base) + 1 <= LAST_SEASON:
+        base.append(max(base) + 1)
     return sorted(set(base))
 
 def rawpf(hn, hd, rn, rd):

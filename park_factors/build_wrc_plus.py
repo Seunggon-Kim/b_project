@@ -17,7 +17,8 @@ DB = os.environ.get("KBO_DB") or str(
     Path(__file__).resolve().parent.parent / "database" / "kbo_stats.db"
 )
 con=sqlite3.connect(DB); con.row_factory=sqlite3.Row; cur=con.cursor()
-YEARS=list(range(2015,2027)); YSTR=[str(y) for y in YEARS]; WRC_MIN_PA=50
+# 2008~2014 PBP 를 되채운 뒤로 2008년까지 봅니다(2026-08-29).
+YEARS=list(range(2008,2027)); YSTR=[str(y) for y in YEARS]; WRC_MIN_PA=50
 
 def stadium_full(short, season):
     if short in ('대전','한밭'): return '대전 한화생명 볼파크' if season>=2025 else '대전 한밭야구장'

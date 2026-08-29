@@ -84,3 +84,56 @@ def test_games_와_조인합니다(path):
     assert joined, (
         "%s 가 games 와 조인하지 않습니다. game_type 을 볼 방법이 "
         "없습니다." % path.name)
+
+
+# --- 시즌 범위는 2008년부터입니다 -----------------------------------
+#
+# 2008~2014 PBP 를 되채우기 전에는 2015년부터만 계산할 수 있었습니다.
+# 2026-08-29 에 3,870경기·120만 행이 모두 들어와 이제 2008년까지
+# 볼 수 있습니다.
+#
+# ## 파크팩터가 더 맞아집니다
+#
+# `compute_self_park_factors.py` 는 3년 창으로 계산합니다. 앞이 없으면
+# 뒤로 채우는데, 2015년에는 앞이 아예 없어서 **미래 두 해**로 채우고
+# 있었습니다.
+#
+#     2015   [2015, 2016, 2017]   <- 미래를 봅니다
+#     2016   [2015, 2016, 2017]
+#     2017   [2015, 2016, 2017]
+#
+# 되채운 뒤에는 이렇게 됩니다.
+#
+#     2015   [2013, 2014, 2015]
+#     2016   [2014, 2015, 2016]
+#     2017   [2015, 2016, 2017]   <- 그대로
+#
+# 2015·2016 수치가 바뀝니다. 그 해 파크팩터를 그 해 이전 자료로
+# 계산하게 되므로 방법론이 나아지는 쪽입니다.
+
+YEAR_SOURCES = [
+    ROOT / "park_factors" / "compute_self_park_factors.py",
+    ROOT / "park_factors" / "build_wrc_plus.py",
+    ROOT / "park_factors" / "build_re24_run_values.py",
+]
+
+
+@pytest.mark.parametrize("path", YEAR_SOURCES, ids=lambda p: p.name)
+def test_시즌_범위가_2008년부터입니다(path):
+    src = path.read_text(encoding="utf-8")
+    # 숫자를 그대로 쓰든 상수로 빼든 시작 해가 2008 이면 됩니다.
+    ok = "range(2008," in src or "FIRST_SEASON, LAST_SEASON = 2008" in src
+    assert ok, (
+        "%s 가 아직 2015년부터만 봅니다. 2008~2014 PBP 가 들어와 있습니다."
+        % path.name)
+
+
+@pytest.mark.parametrize("path", YEAR_SOURCES, ids=lambda p: p.name)
+def test_2015가_시즌_경계로_남아_있지_않습니다(path):
+    # 범위를 넓히면서 한 곳만 고치면 창 계산이 어긋납니다. 실제로
+    # window_for 안에 2015 가 따로 박혀 있었습니다.
+    src = path.read_text(encoding="utf-8")
+    # 주석은 뺍니다. 설명에는 2015 가 나올 수 있습니다.
+    code = "\n".join(ln.split("#")[0] for ln in src.splitlines())
+    assert "2015 <=" not in code and "<= 2015" not in code, (
+        "%s 에 2015 경계가 남아 있습니다." % path.name)

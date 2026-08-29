@@ -31,8 +31,9 @@ DB = os.environ.get("KBO_DB") or str(
 # Rolling 1-step backup (matches build_wrc_plus convention). The immutable
 # pre-rebuild snapshot is preserved separately as *_bak_20260606.
 BACKUP_SUFFIX='_bak'
-COMPLETE=list(range(2015,2026))   # 2015..2025 pooled into season=0
-ALLYEARS=list(range(2015,2027))   # 2015..2026 rebuilt
+# 2008~2014 PBP 를 되채운 뒤로 2008년까지 봅니다(2026-08-29).
+COMPLETE=list(range(2008,2026))   # 2008..2025 pooled into season=0
+ALLYEARS=list(range(2008,2027))   # 2008..2026 rebuilt
 
 MAP={
  '안타':'1B','내야안타':'1B','번트 안타':'1B','2루타':'2B','3루타':'3B','홈런':'HR',
