@@ -744,6 +744,11 @@ def get_game_data_renewed(game_id):
                 max_inning = max(max_inning, int(record_current_inning))
             except (ValueError, TypeError):
                 pass
+        # 정규 경기는 최소 9회입니다. 네이버 메타가 '1회초' 로 잘못 오는
+        # 경기가 2008~2013 에 많아 뒷이닝을 아예 요청하지 않았습니다.
+        # 콜드게임이면 빈 이닝이 와서 저절로 멈춥니다.
+        max_inning = max(max_inning, 9)
+
         away_batting_order = box_score_data.get('battersBoxscore').get('away')
         home_batting_order = box_score_data.get('battersBoxscore').get('home')
         away_pitcher_boxscore = box_score_data.get('pitchersBoxscore').get('away')
