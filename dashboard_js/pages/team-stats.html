@@ -75,7 +75,7 @@
 
     <!-- Main Content -->
     <main class="container">
-        <h1 class="fade-in"><span class="material-symbols-outlined">leaderboard</span> 팀 통계</h1>
+        <h1 class="fade-in">팀 통계</h1>
         <p class="text-secondary mb-3">KBO 팀별 기록입니다. 타격·투구는 탭으로 전환하고, 시즌 누적과 기간별을 한 화면에서 함께 봅니다. 표 머리글을 클릭하면 정렬됩니다.</p>
 
         <!-- 타격/투구 탭 -->
@@ -107,7 +107,7 @@
 
         <!-- ===== 표 영역 (시즌 누적 / 기간별 전환) ===== -->
         <section id="table-section">
-            <h2 class="section-head"><span class="material-symbols-outlined" id="view-icon">calendar_view_month</span> <span id="view-head">시즌 누적</span></h2>
+            <h2 class="section-head"><span id="view-head">시즌 누적</span></h2>
             <p class="text-secondary mb-2" style="font-size:0.9rem;" id="view-desc">선수 기록을 팀별로 합산한 시즌 누적 성적입니다.</p>
 
             <div class="card stat-batting">
@@ -314,7 +314,7 @@
         // 표 1개를 시즌 누적/기간별 모드로 전환할 때 헤더·설명을 갱신
         function setViewHeader(mode) {
             const isRange = mode === 'range';
-            document.getElementById('view-icon').textContent = isRange ? 'date_range' : 'calendar_view_month';
+            // 머리글 아이콘은 없앴습니다. 글자만 바꿉니다.
             document.getElementById('view-head').textContent = isRange ? '기간별' : '시즌 누적';
             document.getElementById('view-desc').textContent = isRange
                 ? '선택한 기간의 경기(PBP) 이벤트를 집계한 성적입니다.'
