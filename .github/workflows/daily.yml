@@ -197,13 +197,22 @@ jobs:
         continue-on-error: true
         run: python data_collection/sync_players_from_roster.py
 
+      # players 에 없는 새 선수를 KBO 선수 검색으로 찾아 넣습니다.
+      # 오늘·내일 선발도 봅니다. 선발은 전날 저녁 발표라 새벽에 돌면
+      # 첫 등판 전에 링크가 걸립니다.
+      - name: 새 선수 추가
+        id: new_players
+        if: steps.roster.outcome == 'success'
+        continue-on-error: true
+        run: python data_collection/add_new_players.py
+
       - name: 등록 현황 결과 기록
         if: always()
         continue-on-error: true
         run: |
           python data_collection/record_job_run.py --job roster \
             --status ${{ steps.roster.outcome == 'success' && 'ok' || 'fail' }} \
-            --note "players 갱신 ${{ steps.sync_players.outcome }}"
+            --note "players 갱신 ${{ steps.sync_players.outcome }} / 새 선수 ${{ steps.new_players.outcome }}"
 
       # --- 4. 옛 시즌 PBP 되채우기 (2008~2014) ------------------------
       # 하루 예산만큼만 밀어 넣습니다.

@@ -79,6 +79,16 @@ jobs:
         if: steps.roster.outcome == 'success'
         run: python data_collection/sync_players_from_roster.py
 
+      # players 에 없는 새 선수(시즌 중 영입·신인)를 KBO 선수 검색으로
+      # 찾아 넣습니다. 안 넣으면 첫 등판 날 선발 이름이 글자로만
+      # 나옵니다. monthly 는 기록이 있는 선수만 받기 때문입니다.
+      # 실패해도 명단 갱신은 이미 끝났으므로 작업을 빨갛게 만들지 않습니다.
+      - name: 새 선수 추가
+        id: newp
+        if: steps.roster.outcome == 'success'
+        continue-on-error: true
+        run: python data_collection/add_new_players.py
+
       # 퓨처스 올 시즌 기록입니다. 2군 경기는 매일 있으므로 그날 것만
       # 다시 받습니다(12팀 x 타자·투수, 약 40초). 지난 시즌은 바뀌지
       # 않아 손으로 한 번 받아 둔 것으로 충분합니다.
@@ -93,7 +103,7 @@ jobs:
         run: |
           python data_collection/record_job_run.py --job roster_pm \
             --status ${{ steps.roster.outcome == 'success' && 'ok' || 'fail' }} \
-            --note "명단 ${{ steps.roster.outcome }} / players ${{ steps.sync.outcome }} / 퓨처스기록 ${{ steps.futures.outcome }}"
+            --note "명단 ${{ steps.roster.outcome }} / players ${{ steps.sync.outcome }} / 새선수 ${{ steps.newp.outcome }} / 퓨처스기록 ${{ steps.futures.outcome }}"
 
       - name: 캐시 비우기
         if: steps.roster.outcome == 'success'
@@ -117,6 +127,7 @@ jobs:
             echo "|---|---|"
             echo "| 등록 명단 적재 | ${{ steps.roster.outcome }} |"
             echo "| players 갱신 | ${{ steps.sync.outcome }} |"
+            echo "| 새 선수 추가 | ${{ steps.newp.outcome }} |"
             echo "| 퓨처스 올 시즌 기록 | ${{ steps.futures.outcome }} |"
           } >> $GITHUB_STEP_SUMMARY
 
