@@ -634,6 +634,15 @@
         // 팀별로 묶어 보여 줍니다. 등록·말소로 나누면 "우리 팀에 무슨
         // 일이 있었나" 를 보려고 두 목록을 번갈아 훑어야 합니다.
         // 팀이 기준이면 한 줄에서 들어온 사람과 나간 사람이 같이 보입니다.
+        // 가장 최근 하루치만 보여 줍니다. 여러 날을 쌓아 두면 칸이
+        // 길어져 옆의 1군 명단보다 훨씬 내려갑니다. 빈 날은 건너뜁니다.
+        function latestMoveDay(dates) {
+            return dates
+                .filter((d) => (d.added || []).length + (d.removed || []).length)
+                .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+                .slice(0, 1);
+        }
+
         function renderMoves(dates) {
             if (!dates.length) {
                 return '<div class="schedule-msg">아직 쌓인 등록·말소가 없습니다.</div>';
@@ -676,11 +685,12 @@
             const wrap = document.getElementById('moves-wrap');
             wrap.innerHTML = '<div class="schedule-msg">불러오는 중…</div>';
             const data = await API.getRosterMoves(7);
-            wrap.innerHTML = renderMoves(data.dates || []);
+            const latest = latestMoveDay(data.dates || []);
+            wrap.innerHTML = renderMoves(latest);
             const note = document.getElementById('moves-note');
             if (note) {
-                note.textContent = data.count
-                    ? `최근 ${data.days}일 ${data.count}건 · 데이터 출처: KBO 등록 현황`
+                note.textContent = latest.length
+                    ? '가장 최근 변동일 기준 · 데이터 출처: KBO 등록 현황'
                     : 'KBO 는 당일 현황만 공개해 매일 모읍니다. 모으기 시작한 날부터 보입니다.';
             }
         }
