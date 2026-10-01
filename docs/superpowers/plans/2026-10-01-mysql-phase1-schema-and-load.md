@@ -1492,12 +1492,18 @@ with con.cursor() as cur:
         cur.execute(stmt)
     cur.execute("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='bstats'")
     print("만든 표", cur.fetchone()[0])
+    
+    # 인덱스와 외래키도 시험 적용합니다(크기 한도 오류를 조기에 잡습니다).
+    post_stmts = split_sql((OUT_DIR / "schema_post.sql").read_text(encoding="utf-8"))
+    for stmt in post_stmts:
+        cur.execute(stmt)
+    print("후처리 %d문 적용" % len(post_stmts))
 con.commit()
 con.close()
 EOF
 ```
 
-Expected: `만든 표 N`(Step 5 의 N 과 같음). 오류가 나면 그 문장을 고칠 규칙을 Task 4·5 에 테스트와 함께 더하고 Step 5 부터 다시 합니다. 빈 표는 Task 6 의 `--fresh` 가 지우고 다시 만듭니다.
+Expected: `만든 표 N`과 `후처리 M문 적용` 모두 나타나야 합니다(인덱스·외래키 오류를 배포 전에 잡습니다). 오류가 나면 그 문장을 고칠 규칙을 Task 4·5 에 테스트와 함께 더하고 Step 5 부터 다시 합니다. 빈 표는 Task 6 의 `--fresh` 가 지우고 다시 만듭니다.
 
 - [ ] **Step 7: evan 검토**
 
@@ -2030,3 +2036,12 @@ evan 에게 알립니다: 옮긴 표 수와 총 행 수, 값 정리 건수(빈 �
 - D1 쓰기, D1 메타 보정(로드맵 0단계, 별도 승인).
 - 스냅샷 이후 D1 에 생긴 변경분 반영(5단계 전환 때).
 - CHECK 제약 옮기기(원본이 SQLite 에서 이미 지켜 온 값이라 데이터는 맞습니다. 필요하면 2단계 이후에 더합니다).
+
+---
+
+## 실행 중 보완 (2026-10-02)
+
+Task 4 와 5 를 구현하면서 테스트로 다음을 확인했습니다(각 코드 블록의 원본은 실행 후 코드가 소스입니다):
+
+- **(Task 4) `typemap.py`**: 날짜는 달력 형식만 인정하고(`YYYY-MM-DD`), 정규식은 ASCII 숫자만 받습니다. 선수 ID 는 2^32-1 이하일 때만 INT UNSIGNED 로 옮기고, 정수가 BIGINT 범위를 넘으면 멈춥니다.
+- **(Task 5) `ddl.py`**: 후처리 문(인덱스·외래키)은 인덱스 전부를 먼저 보낸 뒤 외래키 전부를 보내므로, 외래키가 유니크 인덱스를 참조해도 순서 오류가 나지 않습니다(MySQL 오류 1822 방지). 기본키와 인덱스는 3072바이트 한도를, 행은 65,535바이트 한도를 넘지 않는지 생성 단계에서 검사합니다(내용을 넣기 전에 오류를 잡습니다). 새로 번호를 붙이는 열(`play_by_play.pbp_id`)은 프로필을 만들지 않으므로 4백만 행을 모두 훑는 일을 피합니다. 식 인덱스와 참조 열이 명시되지 않은 외래키는 스키마에서 뺀 뒤 메모를 남깁니다. Step 6 은 빈 표에 인덱스와 외래키까지 적용해 배포 전에 정의 오류를 조기에 잡습니다.
