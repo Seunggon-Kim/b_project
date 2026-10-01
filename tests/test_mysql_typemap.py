@@ -108,3 +108,47 @@ def test_normalize_rejects_non_numbers():
         tm.normalize("abc", "int")
     with pytest.raises(ValueError):
         tm.normalize(2.5, "int")
+
+
+def test_invalid_dates_stay_text():
+    """달력에 없는 날짜는 text로 남습니다."""
+    p = _profile(["2026-09-30", "2026-02-30"], column="move_date")
+    assert tm.column_kind("move_date", "TEXT", p) == "text"
+    p = _profile(["0000-00-00"], column="date_col")
+    assert tm.column_kind("date_col", "TEXT", p) == "text"
+
+
+def test_invalid_datetimes_stay_text():
+    """달력에 없는 시간은 text로 남습니다."""
+    p = _profile(["2026-09-30 25:00:00"], column="updated_at")
+    assert tm.column_kind("updated_at", "TEXT", p) == "text"
+
+
+def test_fullwidth_digits_stay_text():
+    """전각 숫자는 text로 남습니다."""
+    p = _profile(["２０２６-０９-３０"], column="date_col")
+    assert tm.column_kind("date_col", "TEXT", p) == "text"
+    p = _profile(["２０２６"], decl="INTEGER", column="n")
+    assert tm.column_kind("n", "INTEGER", p) == "text"
+
+
+def test_player_id_out_of_uint32_becomes_bigint():
+    """선수 ID가 UINT32 범위를 초과하면 BIGINT입니다."""
+    p = tm.new_profile()
+    p["int_min"], p["int_max"] = 0, 5_000_000_000
+    assert tm.mysql_type("int", p, column="batter_ID") == "BIGINT"
+
+
+def test_player_id_with_negative_stays_int():
+    """선수 ID가 음수를 포함하면 INT입니다."""
+    p = tm.new_profile()
+    p["int_min"], p["int_max"] = -1, 10
+    assert tm.mysql_type("int", p, column="batter_ID") == "INT"
+
+
+def test_integer_out_of_bigint64_raises():
+    """정수가 BIGINT 범위를 초과하면 ValueError입니다."""
+    p = tm.new_profile()
+    p["int_min"], p["int_max"] = 0, 2 ** 63
+    with pytest.raises(ValueError):
+        tm.mysql_type("int", p, column="n")

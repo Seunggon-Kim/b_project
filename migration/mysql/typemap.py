@@ -14,13 +14,14 @@ ID 일부는 '78513.0' 처럼 소수점이 붙은 글자입니다. MySQL 엄격 
   모두 YYYY-MM-DD 면 DATE, YYYY-MM-DD HH:MM:SS 면 DATETIME 입니다.
 - game_date 처럼 DATE 로 선언됐지만 YYYYMMDD 정수인 열은 INT 입니다.
 """
+import datetime
 import re
 
 EMPTY_TEXT = {"", "-"}
-INT_LIKE = re.compile(r"^[+-]?\d+(\.0+)?$")
-NUM_LIKE = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$")
-DATE_ONLY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-DATE_TIME = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$")
+INT_LIKE = re.compile(r"^[+-]?\d+(\.0+)?$", re.ASCII)
+NUM_LIKE = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$", re.ASCII)
+DATE_ONLY = re.compile(r"^\d{4}-\d{2}-\d{2}$", re.ASCII)
+DATE_TIME = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$", re.ASCII)
 PLAYER_ID = re.compile(
     r"^(player_id|batter_id|pitcher_id|on_[123]b_id|pos_[1-9]_id)$",
     re.IGNORECASE)
@@ -28,6 +29,8 @@ VARCHAR_STEPS = (16, 32, 64, 128, 255, 512, 1024)
 KEY_VARCHAR_MAX = 768          # utf8mb4 인덱스 한도 3072바이트 / 4바이트
 KEY_MAX_CHARS = 600            # 이보다 긴 키는 설계를 다시 봐야 하는 신호입니다
 INT32 = (-2 ** 31, 2 ** 31 - 1)
+UINT32_MAX = 2 ** 32 - 1
+INT64 = (-2 ** 63, 2 ** 63 - 1)
 BLOB_MEDIUM_MAX = 16 * 1024 * 1024 - 1
 TEXT_MAX_CHARS = 16000         # TEXT 65,535바이트 / utf8mb4 4바이트, 여유를 둠
 
@@ -58,10 +61,19 @@ def observe_text(p, s, n=1):
         p["num_texts"] += n
     else:
         p["texts"] += n
+        # MySQL 엄격 모드는 달력에 없는 날짜를 거부하므로 달력으로 확인합니다.
         if DATE_ONLY.match(t):
-            p["dates"] += n
+            try:
+                datetime.date.fromisoformat(t)
+                p["dates"] += n
+            except ValueError:
+                pass
         elif DATE_TIME.match(t):
-            p["datetimes"] += n
+            try:
+                datetime.datetime.strptime(t, "%Y-%m-%d %H:%M:%S")
+                p["datetimes"] += n
+            except ValueError:
+                pass
 
 
 def profile_column(con, table, column):
@@ -141,11 +153,15 @@ def mysql_type(kind, p, is_key=False, column=""):
     """값 종류와 프로파일로 MySQL 열 타입을 고릅니다."""
     if kind == "int":
         lo, hi = p["int_min"], p["int_max"]
-        if PLAYER_ID.match(column) and (lo is None or lo >= 0):
-            return "INT UNSIGNED"
+        if PLAYER_ID.match(column):
+            # 선수 ID는 음수가 없고 UINT32 범위 이내면 INT UNSIGNED입니다.
+            if (lo is None or lo >= 0) and (hi is None or hi <= UINT32_MAX):
+                return "INT UNSIGNED"
         if lo is None or (INT32[0] <= lo and hi <= INT32[1]):
             return "INT"
-        return "BIGINT"
+        if (INT64[0] <= lo and hi <= INT64[1]):
+            return "BIGINT"
+        raise ValueError("%s 의 정수가 BIGINT 범위를 넘습니다" % column)
     if kind == "double":
         return "DOUBLE"
     if kind == "date":
