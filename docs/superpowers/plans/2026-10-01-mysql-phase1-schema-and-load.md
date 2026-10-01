@@ -723,7 +723,10 @@ Expected: `play_by_play` 약 3,980,000행 이상, 최소 `game_date` 2008xxxx, �
 
 - [ ] **Step 3-2: 스냅샷 보정(알려진 데이터 오류)**
 
+Step 3 의 MAX(game_date) 는 이 보정 전에는 글자 값이 나옵니다. SQLite 는 글자를 숫자보다 크게 정렬하기 때문입니다.
+
 ```bash
+SNAP=$(ls -t ~/.bstats/snapshots/d1_*.db | head -1)
 py -m migration.mysql.repair --snapshot "$SNAP"
 ```
 
