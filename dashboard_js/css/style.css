@@ -2325,6 +2325,12 @@ h2 .material-symbols-outlined,
         grid-template-columns: 1fr;
         gap: 0.2rem;
     }
+
+    /* 변동 없는 팀은 '-' 하나뿐이라 팀 이름과 한 줄에 둡니다. 위아래로
+       나누면 빈 줄만 열 개 가까이 늘어납니다. */
+    .mv-row.mv-quiet {
+        grid-template-columns: 3.2rem 1fr;
+    }
 }
 
 /* 선수 상세의 1군 등록 배지입니다.

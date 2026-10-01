@@ -626,6 +626,10 @@
             });
         }
 
+        // 등록·말소와 팀별 명단이 함께 씁니다. 등록·말소가 먼저 그려지므로
+        // 그보다 위에 둡니다.
+        const ROSTER_TEAMS = ['KIA', 'KT', 'LG', 'NC', 'SSG', '두산', '롯데', '삼성', '키움', '한화'];
+
         // ===== 1군 등록·말소 =====
         //
         // KBO 는 **오늘 것만** 보여 줍니다. 어제 누가 등록됐는지 묻는
@@ -657,8 +661,14 @@
                 put(d.removed, 'removed');
                 if (!byTeam.size) return '';
 
+                // 열 팀을 전부 둡니다. 변동이 있는 팀만 두면 칸이 그 몇 줄에
+                // 맞춰 벌어지고, 어느 팀이 조용했는지도 보이지 않습니다.
+                // 변동이 있는 팀을 위에, 없는 팀은 '-' 하나만 적어 아래에 둡니다.
+                const byKo = (a, b) => a.localeCompare(b, 'ko');
+                const quiet = ROSTER_TEAMS.filter((t) => !byTeam.has(t)).sort(byKo);
+
                 const rows = [...byTeam.entries()].sort((a, b) =>
-                    a[0].localeCompare(b[0], 'ko')).map(([team, v]) => {
+                    byKo(a[0], b[0])).map(([team, v]) => {
                     const side = (list, cls, mark) => (list.length ? list.map((p) => `
                         <span class="mv-item">
                             <span class="mv-mark ${cls}">${mark}</span>
@@ -670,7 +680,10 @@
                         <div class="mv-side">${side(v.added, 'mv-in', '등록')}</div>
                         <div class="mv-side">${side(v.removed, 'mv-out', '말소')}</div>
                     </div>`;
-                }).join('');
+                }).join('') + quiet.map((team) => `<div class="mv-row mv-quiet">
+                        <div class="mv-team">${esc(team)}</div>
+                        <div class="mv-side"><span class="mv-none">-</span></div>
+                    </div>`).join('');
 
                 return `<div class="mv-day">
                     <div class="mv-date">${esc(d.date)}
@@ -697,7 +710,6 @@
         loadMoves();
 
         // ===== 팀별 1군 명단 =====
-        const ROSTER_TEAMS = ['KIA', 'KT', 'LG', 'NC', 'SSG', '두산', '롯데', '삼성', '키움', '한화'];
         // 야구 화면다운 순서입니다. 사전순으로 두면 내야수가 맨 앞에 옵니다.
         const ROLE_ORDER = ['투수', '포수', '내야수', '외야수'];
 
