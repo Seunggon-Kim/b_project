@@ -14,6 +14,7 @@
 """
 import argparse
 import json
+import re
 import sqlite3
 import sys
 from pathlib import Path
@@ -32,9 +33,16 @@ NAME_MAX = 64
 NOW_DEFAULTS = {"CURRENT_TIMESTAMP", "(CURRENT_TIMESTAMP)",
                 "DATETIME('NOW')", "(DATETIME('NOW'))"}
 
+INDEX_MAX_BYTES = 3072
+ROW_MAX_BYTES = 65535
+_FIXED_BYTES = {"INT": 4, "INT UNSIGNED": 4, "BIGINT": 8, "BIGINT UNSIGNED": 8,
+                "DOUBLE": 8, "DATE": 3, "DATETIME": 5}
+
 
 def q(name):
     """MySQL 식별자로 감쌉니다."""
+    if name is None:
+        raise ValueError("None cannot be quoted as identifier")
     return "`%s`" % name.replace("`", "``")
 
 
@@ -59,14 +67,19 @@ def read_table(con, table):
             fks.append({"column": rows[0][3], "ref_table": rows[0][2],
                         "ref_column": rows[0][4]})
     indexes = []
+    expr_indexes = []
     for r in con.execute('PRAGMA index_list("%s")' % table):
         name, unique, origin = r[1], bool(r[2]), r[3]
         if origin == "pk":
             continue
         icols = [x[2] for x in con.execute('PRAGMA index_info("%s")' % name)]
-        indexes.append({"name": name, "unique": unique, "columns": icols})
+        if any(c is None for c in icols):
+            expr_indexes.append(name)
+        else:
+            indexes.append({"name": name, "unique": unique, "columns": icols})
     return {"name": table, "columns": cols, "pk": pk, "fks": fks,
-            "indexes": indexes, "multi_fk": [k for k, v in groups.items() if len(v) > 1]}
+            "indexes": indexes, "expr_indexes": expr_indexes,
+            "multi_fk": [k for k, v in groups.items() if len(v) > 1]}
 
 
 def key_columns(tables):
@@ -76,7 +89,8 @@ def key_columns(tables):
         keys.update((t["name"], c) for c in t["pk"])
         for fk in t["fks"]:
             keys.add((t["name"], fk["column"]))
-            keys.add((fk["ref_table"], fk["ref_column"]))
+            if fk["ref_column"] is not None:
+                keys.add((fk["ref_table"], fk["ref_column"]))
         for ix in t["indexes"]:
             keys.update((t["name"], c) for c in ix["columns"])
     return keys
@@ -125,21 +139,82 @@ def _type_changed(decl, kind):
     return cat != kind
 
 
+def index_bytes(mtype):
+    """인덱스에 쓰이는 바이트 수입니다."""
+    m = re.match(r"VARCHAR\((\d+)\)", mtype)
+    if m:
+        return 4 * int(m.group(1))
+    if mtype in _FIXED_BYTES:
+        return _FIXED_BYTES[mtype]
+    return 8
+
+
+def row_bytes(mtype):
+    """행에 쓰이는 바이트 수입니다."""
+    m = re.match(r"VARCHAR\((\d+)\)", mtype)
+    if m:
+        return 4 * int(m.group(1)) + 2
+    if mtype in _FIXED_BYTES:
+        return _FIXED_BYTES[mtype]
+    if mtype in ("TEXT", "MEDIUMTEXT", "MEDIUMBLOB", "LONGBLOB"):
+        return 12
+    return 12
+
+
+def check_widths(tables, all_mtypes):
+    """인덱스·행 크기 한도를 검사합니다."""
+    problems = []
+    for name, t in tables.items():
+        mtypes = all_mtypes[name]
+        renumber = RENUMBER.get(name)
+        pk = [renumber] if renumber else t["pk"]
+
+        # 기본키 크기 확인
+        if pk:
+            pk_bytes = sum(index_bytes(mtypes[c]) for c in pk)
+            if pk_bytes > INDEX_MAX_BYTES:
+                problems.append("%s PRIMARY KEY: 인덱스 %d바이트가 한도 %d바이트를 넘습니다(%s)"
+                               % (name, pk_bytes, INDEX_MAX_BYTES, ", ".join(pk)))
+
+        # 다른 인덱스 크기 확인
+        for ix in t["indexes"]:
+            ix_bytes = sum(index_bytes(mtypes[c]) for c in ix["columns"])
+            if ix_bytes > INDEX_MAX_BYTES:
+                problems.append("%s %s: 인덱스 %d바이트가 한도 %d바이트를 넘습니다(%s)"
+                               % (name, ix["name"], ix_bytes, INDEX_MAX_BYTES,
+                                  ", ".join(ix["columns"])))
+
+        # 행 크기 확인
+        row_size = sum(row_bytes(mtypes[c]) for c in mtypes.keys())
+        if row_size > ROW_MAX_BYTES:
+            problems.append("%s: 행 %d바이트가 한도 %d바이트를 넘습니다"
+                           % (name, row_size, ROW_MAX_BYTES))
+
+    if problems:
+        raise ValueError("MySQL 크기 한도를 넘는 정의가 있습니다:\n" + "\n".join(problems))
+
+
 def plan_table(con, t, keys):
     """표 하나의 CREATE TABLE 과 열 종류, 보고 메모를 만듭니다."""
     name = t["name"]
     renumber = RENUMBER.get(name)
-    lines, columns, notes = [], [], []
+    lines, columns, notes, mtypes = [], [], [], {}
     for c in t["columns"]:
         col = c["name"]
-        p = tm.profile_column(con, name, col)
+
+        # 새로 매기는 열은 프로필을 만들지 않습니다.
         if col == renumber:
             kind = "int"
+            mtype = "BIGINT UNSIGNED"
             lines.append("  %s BIGINT UNSIGNED NOT NULL AUTO_INCREMENT" % q(col))
             columns.append([col, kind])
+            mtypes[col] = mtype
             continue
+
+        p = tm.profile_column(con, name, col)
         kind = tm.column_kind(col, c["decl"], p)
         mtype = tm.mysql_type(kind, p, is_key=(name, col) in keys, column=col)
+        mtypes[col] = mtype
         notnull = c["notnull"] or col in t["pk"]
         dflt, why = default_clause(c["default"], kind, mtype)
         if why:
@@ -167,28 +242,29 @@ def plan_table(con, t, keys):
         notes.append("%s: 여러 열 외래키(%s)는 옮기지 않았습니다" % (name, fid))
     create = ("CREATE TABLE %s (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 "
               "COLLATE=utf8mb4_0900_ai_ci;" % (q(name), ",\n".join(lines)))
-    return {"create": create, "columns": columns, "renumber": renumber, "notes": notes}
+    return {"create": create, "columns": columns, "renumber": renumber,
+            "notes": notes, "mtypes": mtypes}
 
 
 def post_statements(t):
-    """데이터를 넣은 뒤 만들 인덱스와 외래키입니다."""
+    """데이터를 넣은 뒤 만들 인덱스와 외래키입니다. (인덱스 목록, 외래키 목록) 를 반환합니다."""
     name = t["name"]
-    out = []
+    indexes, fks = [], []
     for i, ix in enumerate(t["indexes"], start=1):
         if name in RENUMBER and ix["columns"] == [RENUMBER[name]]:
             continue
         ixname = ix["name"]
         if ixname.startswith("sqlite_autoindex_"):
             ixname = "uq_%s_%d" % (name, i)
-        out.append("CREATE %s %s ON %s (%s);" % (
+        indexes.append("CREATE %s %s ON %s (%s);" % (
             "UNIQUE INDEX" if ix["unique"] else "INDEX", q(ixname[:NAME_MAX]),
             q(name), ", ".join(q(c) for c in ix["columns"])))
     for fk in t["fks"]:
         fname = ("fk_%s_%s" % (name, fk["column"]))[:NAME_MAX]
-        out.append("ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (%s) "
+        fks.append("ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (%s) "
                    "REFERENCES %s (%s);" % (q(name), q(fname), q(fk["column"]),
                                             q(fk["ref_table"]), q(fk["ref_column"])))
-    return out
+    return indexes, fks
 
 
 def build(snapshot):
@@ -199,24 +275,51 @@ def build(snapshot):
         if is_migrated(r[0])]
     tables = {n: read_table(con, n) for n in names}
     notes = []
+
+    # 식 인덱스 메모
+    for n in names:
+        for expr_ix in tables[n]["expr_indexes"]:
+            notes.append("%s: 식 인덱스 %s 는 옮기지 않았습니다" % (n, expr_ix))
+
+    # 외래키 정리
     for n in names:
         kept = []
         for fk in tables[n]["fks"]:
-            if fk["ref_table"] in tables:
-                kept.append(fk)
-            else:
+            if fk["ref_table"] not in tables:
                 notes.append("%s.%s: 참조 표 %s 를 옮기지 않아 외래키를 뺐습니다"
                              % (n, fk["column"], fk["ref_table"]))
+            elif fk["ref_column"] is None:
+                # 참조 열이 명시되지 않으면 부모의 기본키를 사용합니다.
+                parent = tables[fk["ref_table"]]
+                if len(parent["pk"]) == 1:
+                    fk["ref_column"] = parent["pk"][0]
+                    kept.append(fk)
+                else:
+                    notes.append("%s.%s: 참조 열을 알 수 없어 외래키를 뺐습니다"
+                                 % (n, fk["column"]))
+            else:
+                kept.append(fk)
         tables[n]["fks"] = kept
+
     keys = key_columns(tables)
-    creates, posts, types = [], [], {}
+    creates, posts_ix, posts_fk, types, all_mtypes = [], [], [], {}, {}
     for n in names:
         print("   스키마: %s" % n, flush=True)
         plan = plan_table(con, tables[n], keys)
         creates.append(plan["create"])
         types[n] = {"columns": plan["columns"], "renumber": plan["renumber"]}
+        all_mtypes[n] = plan["mtypes"]
         notes.extend(plan["notes"])
-        posts.extend(post_statements(tables[n]))
+        ix_stmts, fk_stmts = post_statements(tables[n])
+        posts_ix.extend(ix_stmts)
+        posts_fk.extend(fk_stmts)
+
+    # 크기 검사
+    check_widths(tables, all_mtypes)
+
+    # 후처리: 인덱스 전부 → 외래키 전부
+    posts = posts_ix + posts_fk
+
     con.close()
     return creates, posts, types, notes
 
