@@ -31,3 +31,6 @@ uvicorn>=0.24.0
 # 개발 도구 (선택사항)
 pytest>=7.4.0
 black>=23.0.0
+
+# DB (Cloud SQL MySQL 이전)
+PyMySQL>=1.1,<2
