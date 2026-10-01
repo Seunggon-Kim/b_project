@@ -37,7 +37,7 @@ RETRIES = 3        # 한 묶음이 처음 실패한 뒤 다시 시도하는 최�
 RETRY_WAIT = 5     # 다시 시도 전 기다리는 초(시도 번호를 곱합니다)
 RETRYABLE = (2003, 2006, 2013, 2055)   # MySQL 클라이언트의 연결 오류 번호
 _sleep = time.sleep                    # 테스트에서 바꿔 끼웁니다
-_FK =re.compile(r"ALTER TABLE `([^`]+)` ADD CONSTRAINT `[^`]+` FOREIGN KEY "
+_FK = re.compile(r"ALTER TABLE `([^`]+)` ADD CONSTRAINT `[^`]+` FOREIGN KEY "
                  r"\(`([^`]+)`\) REFERENCES `([^`]+)` \(`([^`]+)`\)")
 
 
@@ -122,13 +122,18 @@ def _insert_batch(my, cur, table, ins, rows, done):
 
 
 def load_table(sq, my, table, spec, fixes, batch=BATCH):
-    """스냅샷 표 하나를 rowid 순서대로 옮깁니다. 넣은 행 수를 돌려줍니다."""
+    """스냅샷 표 하나를 rowid 순서대로 옮깁니다. 넣은 행 수를 돌려줍니다.
+
+    새 번호 열(pbp_id)에는 스냅샷 줄 번호(rowid)를 그대로 넣습니다. 그래서
+    재시도해도 번호가 밀리지 않고, 같은 행이 두 번 들어가면 오류로 드러납니다.
+    """
     renumber = spec.get("renumber")
     names = [c for c, _ in spec["columns"] if c != renumber]
     kinds = [k for c, k in spec["columns"] if c != renumber]
-    src = sq.execute('SELECT %s FROM "%s" ORDER BY rowid'
-                     % (", ".join('"%s"' % c for c in names), table))
-    ins = insert_sql(table, names)
+    src = sq.execute('SELECT %s%s FROM "%s" ORDER BY rowid'
+                     % ("rowid, " if renumber else "",
+                        ", ".join('"%s"' % c for c in names), table))
+    ins = insert_sql(table, [renumber] + names if renumber else names)
     n = 0
     try:
         with my.cursor() as cur:
@@ -136,7 +141,11 @@ def load_table(sq, my, table, spec, fixes, batch=BATCH):
                 chunk = src.fetchmany(batch)
                 if not chunk:
                     break
-                rows = [convert_row(r, kinds, names, table, fixes) for r in chunk]
+                if renumber:
+                    rows = [(int(r[0]),) + convert_row(r[1:], kinds, names, table, fixes)
+                            for r in chunk]
+                else:
+                    rows = [convert_row(r, kinds, names, table, fixes) for r in chunk]
                 _insert_batch(my, cur, table, ins, rows, n)
                 n += len(chunk)
                 if n % 100000 < batch:

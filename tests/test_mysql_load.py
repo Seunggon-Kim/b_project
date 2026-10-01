@@ -81,7 +81,7 @@ def test_convert_row_counts_fixes_and_names_bad_cells():
         load.convert_row(("abc",), ["int"], ["batter_ID"], "pbp", fixes)
 
 
-def test_load_table_skips_renumbered_column_and_keeps_rowid_order():
+def test_load_table_writes_rowid_as_renumbered_id():
     sq = sqlite3.connect(":memory:")
     sq.execute('CREATE TABLE play_by_play (pbp_id INTEGER, batter_ID TEXT, px REAL)')
     sq.executemany("INSERT INTO play_by_play VALUES (?,?,?)",
@@ -93,9 +93,10 @@ def test_load_table_skips_renumbered_column_and_keeps_rowid_order():
     n = load.load_table(sq, my, "play_by_play", spec, fixes, batch=2)
     assert n == 3
     sql, first = my.log[0]
-    assert sql == "INSERT INTO `play_by_play` (`batter_ID`, `px`) VALUES (%s, %s)"
-    assert first == [(1, 0.5), (2, None)]
-    assert my.log[1][1] == [(3, 1.0)]
+    assert sql == ("INSERT INTO `play_by_play` (`pbp_id`, `batter_ID`, `px`) "
+                   "VALUES (%s, %s, %s)")
+    assert first == [(1, 1, 0.5), (2, 2, None)]
+    assert my.log[1][1] == [(3, 3, 1.0)]
     assert my.commits == 2
 
 
@@ -299,6 +300,20 @@ def test_reconnect_failure_counts_as_a_retry(sleeps):
     assert len(my.pings) == 2
     assert sleeps == [5, 10]
     assert _batches(my) == [[(1,), (2,)], [(3,)]]
+
+
+def test_retry_on_renumbered_table_reuses_same_ids(sleeps):
+    sq = sqlite3.connect(":memory:")
+    sq.execute('CREATE TABLE play_by_play (pbp_id INTEGER, batter_ID TEXT)')
+    sq.executemany("INSERT INTO play_by_play VALUES (?,?)",
+                   [(7, "10"), (7, "20"), (7, "30")])
+    spec = {"columns": [["pbp_id", "int"], ["batter_ID", "int"]], "renumber": "pbp_id"}
+    my = RetryConn(count=0, fail_calls={1})
+    n = load.load_table(sq, my, "play_by_play", spec, collections.Counter(), batch=2)
+    assert n == 3
+    assert my.pings == [True]
+    assert [[r[0] for r in rows] for rows in _batches(my)] == [[1, 2], [3]]
+    assert _batches(my) == [[(1, 10), (2, 20)], [(3, 30)]]
 
 
 def test_is_retryable():
