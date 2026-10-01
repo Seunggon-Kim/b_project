@@ -264,7 +264,10 @@ def verify_sample(sq, my, table, spec):
     snap_dict = {}
     my_sample_keys = []
     for row in snap_rows:
-        pk_vals = tuple(key_part(row[i], pk_kinds[pk_names[i]])
+        # 스냅샷 키는 적재 때와 같은 규칙(normalize)을 먼저 거칩니다.
+        # '78513.0' → 78513, ' 2026-09-30 ' → '2026-09-30' 로 저장된 값과 같아집니다.
+        pk_vals = tuple(key_part(tm.normalize(row[i], pk_kinds[pk_names[i]]),
+                                 pk_kinds[pk_names[i]])
                         for i in range(len(pk_names)))
         values = tuple(tm.normalize(row[len(pk_names) + i], value_kinds[i])
                        for i in range(len(value_names)))

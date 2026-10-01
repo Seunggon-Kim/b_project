@@ -195,6 +195,43 @@ def test_sample_date_key_matches_date_objects():
     assert not problems
 
 
+def test_sample_pk_float_style_id_matches():
+    # 스냅샷 기본키가 '78513.0' 같은 글자여도 적재 규칙(normalize)대로 78513 이 됩니다.
+    sq = sqlite3.connect(":memory:")
+    sq.execute('CREATE TABLE t ("player_id" TEXT PRIMARY KEY, "v" INTEGER)')
+    sq.executemany("INSERT INTO t VALUES (?,?)", [("78513.0", 1), ("62404", 2)])
+    spec = {"columns": [["player_id","int"], ["v","int"]], "renumber": None}
+
+    def handler(query):
+        if "information_schema" in query:
+            return [("player_id",)]
+        return [(78513, 1), (62404, 2)]
+
+    my = PyFakeConn(handler)
+    checked, problems, note = v.verify_sample(sq, my, "t", spec)
+    assert checked == 2
+    assert not problems
+    assert note is None
+
+
+def test_sample_date_key_with_spaces_matches():
+    # 적재 때 앞뒤 공백을 지우므로, 스냅샷 날짜 키도 공백을 지워서 만들어야 합니다.
+    sq = sqlite3.connect(":memory:")
+    sq.execute('CREATE TABLE t ("d" TEXT PRIMARY KEY, "v" INTEGER)')
+    sq.execute("INSERT INTO t VALUES (?,?)", (" 2026-09-30 ", 1))
+    spec = {"columns": [["d","date"], ["v","int"]]}
+
+    def handler(query):
+        if "information_schema" in query:
+            return [("d",)]
+        return [(dt.date(2026, 9, 30), 1)]
+
+    my = PyFakeConn(handler)
+    checked, problems, note = v.verify_sample(sq, my, "t", spec)
+    assert checked == 1
+    assert not problems
+
+
 def test_sample_notes_no_pk_and_empty():
     sq = sqlite3.connect(":memory:")
     sq.execute('CREATE TABLE t ("v" INTEGER)')
@@ -242,7 +279,10 @@ def test_sample_reports_difference():
     my = PyFakeConn(handler)
     checked, problems, note = v.verify_sample(sq, my, "play_by_play", spec)
     assert checked == 3
-    assert any("x" in p for p in problems)
+    # 문제 줄에 키와 열 이름, 예상값('b')과 실제값('z')이 모두 들어 있어야 합니다.
+    line = next(p for p in problems if "x" in p)
+    assert "(2,)" in line
+    assert "'b'" in line and "'z'" in line
 
 
 def test_verify_games_non_str_snapshot_keys():
