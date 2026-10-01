@@ -6,8 +6,9 @@
 
 --fresh 는 표를 지우고 schema.sql 로 새로 만든 뒤, 다 넣고 나서
 schema_post.sql(인덱스·외래키)을 적용합니다. --tables 는 --fresh 로 완료한
-뒤에 특정 표만 다시 넣을 때 씁니다(인덱스·외래키는 이미 있습니다). --fresh 가
-도중에 실패했을 땐 다시 --fresh 로 처음부터 넣으십시오.
+뒤에 특정 표만 다시 넣을 때 씁니다(인덱스·외래키는 이미 있습니다). 짧은 연결
+끊김은 묶음마다 최대 3번 다시 연결해 이어 넣으므로, 다시 시도를 다 쓰고도
+--fresh 가 도중에 실패했을 때만 다시 --fresh 로 처음부터 넣으십시오.
 
 외래키 검사는 넣는 동안 끕니다. 대신 끝나고 외래키마다 고아 행을 세어
 보고서에 남깁니다. 넣는 순서를 맞추는 것보다 확실합니다.
@@ -22,6 +23,8 @@ import sys
 import time
 from pathlib import Path
 
+import pymysql
+
 from migration.mysql import conn as myconn
 from migration.mysql import typemap as tm
 from migration.mysql.ddl import OUT_DIR, ROOT, q, split_sql
@@ -30,7 +33,11 @@ REPORT = ROOT / "docs" / "mysql-migration" / "load-report.md"
 BATCH = 2000
 SESSION_SETUP = ("SET FOREIGN_KEY_CHECKS=0",
                  "SET SESSION sql_mode = CONCAT(@@SESSION.sql_mode, ',NO_AUTO_VALUE_ON_ZERO')")
-_FK = re.compile(r"ALTER TABLE `([^`]+)` ADD CONSTRAINT `[^`]+` FOREIGN KEY "
+RETRIES = 3        # 한 묶음이 처음 실패한 뒤 다시 시도하는 최대 횟수
+RETRY_WAIT = 5     # 다시 시도 전 기다리는 초(시도 번호를 곱합니다)
+RETRYABLE = (2003, 2006, 2013, 2055)   # MySQL 클라이언트의 연결 오류 번호
+_sleep = time.sleep                    # 테스트에서 바꿔 끼웁니다
+_FK =re.compile(r"ALTER TABLE `([^`]+)` ADD CONSTRAINT `[^`]+` FOREIGN KEY "
                  r"\(`([^`]+)`\) REFERENCES `([^`]+)` \(`([^`]+)`\)")
 
 
@@ -55,6 +62,65 @@ def convert_row(row, kinds, names, table, fixes):
     return tuple(out)
 
 
+def is_retryable(exc):
+    """연결이 끊겨서 난 오류인지 봅니다. 값·제약 오류(IntegrityError, DataError,
+    변환 중 ValueError 등)는 다시 해도 같으므로 False 입니다."""
+    if isinstance(exc, (pymysql.err.OperationalError, pymysql.err.InterfaceError)):
+        return bool(exc.args) and exc.args[0] in RETRYABLE
+    return isinstance(exc, (ConnectionError, TimeoutError, OSError))
+
+
+def _reconnect_and_count(my, table):
+    """다시 연결하고 표의 행 수를 돌려줍니다. 세션 설정은 연결과 함께 사라지므로
+    SESSION_SETUP 을 다시 겁니다."""
+    my.ping(reconnect=True)
+    with my.cursor() as cur:
+        for stmt in SESSION_SETUP:
+            cur.execute(stmt)
+        cur.execute("SELECT COUNT(*) FROM %s" % q(table))
+        return cur.fetchone()[0]
+
+
+def _insert_batch(my, cur, table, ins, rows, done):
+    """한 묶음을 넣고 커밋합니다. 연결이 끊기면 최대 RETRIES번 다시 시도합니다.
+
+    done 은 이 묶음 앞까지 이미 들어간 행 수입니다. 커밋 응답을 받기 전에 끊겼을
+    수 있으므로, 다시 연결한 뒤 표의 행 수로 이 묶음이 들어갔는지 확인합니다.
+    행 수가 done 이면 안 들어간 것이라 다시 넣고, done + 묶음 크기면 이미 들어간
+    것이라 넘어갑니다. 그 밖이면 상태를 알 수 없으므로 멈춥니다.
+    """
+    last = None
+    for attempt in range(RETRIES + 1):
+        if attempt:
+            print("   %s: 연결이 끊겨 %d번째 다시 시도합니다(%s행까지 들어감)"
+                  % (table, attempt, format(done, ",")), flush=True)
+            _sleep(RETRY_WAIT * attempt)
+            try:
+                count = _reconnect_and_count(my, table)
+            except Exception as e:
+                if not is_retryable(e):
+                    raise
+                last = e
+                continue
+            if count == done + len(rows):
+                return
+            if count != done:
+                raise RuntimeError(
+                    "연결이 끊긴 뒤 표에 %s행이 있어, 이 묶음이 들어갔는지 알 수 없습니다"
+                    "(%s행 또는 %s행이어야 합니다)"
+                    % (format(count, ","), format(done, ","),
+                       format(done + len(rows), ","))) from last
+        try:
+            cur.executemany(ins, rows)
+            my.commit()
+            return
+        except Exception as e:
+            if not is_retryable(e):
+                raise
+            last = e
+    raise last
+
+
 def load_table(sq, my, table, spec, fixes, batch=BATCH):
     """스냅샷 표 하나를 rowid 순서대로 옮깁니다. 넣은 행 수를 돌려줍니다."""
     renumber = spec.get("renumber")
@@ -70,9 +136,8 @@ def load_table(sq, my, table, spec, fixes, batch=BATCH):
                 chunk = src.fetchmany(batch)
                 if not chunk:
                     break
-                cur.executemany(ins, [convert_row(r, kinds, names, table, fixes)
-                                      for r in chunk])
-                my.commit()
+                rows = [convert_row(r, kinds, names, table, fixes) for r in chunk]
+                _insert_batch(my, cur, table, ins, rows, n)
                 n += len(chunk)
                 if n % 100000 < batch:
                     print("   %s %s행" % (table, format(n, ",")), flush=True)
