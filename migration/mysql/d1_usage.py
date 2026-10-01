@@ -15,7 +15,9 @@ import datetime as dt
 import json
 import os
 import re
+import subprocess
 import sys
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -45,6 +47,13 @@ def read_token():
     raise SystemExit("wrangler 로그인 토큰이 없습니다. `npx wrangler login` 을 먼저 하십시오.")
 
 
+def refresh_login():
+    """만료된 OAuth 토큰은 wrangler 명령을 한 번 돌리면 새로 받습니다. D1 은 읽지 않습니다."""
+    subprocess.run(["npx", "--yes", "wrangler@4", "whoami"],
+                   capture_output=True, text=True, shell=(os.name == "nt"),
+                   encoding="utf-8", errors="replace")
+
+
 def summarize(groups, names):
     """GraphQL 결과 행을 (합계, {DB 이름: 행 수}) 로 줄입니다."""
     per = {}
@@ -64,15 +73,33 @@ def _call(tok, url, body=None):
         return json.load(r)
 
 
+def fetch_accounts(read=read_token, refresh=refresh_login, call=None):
+    """(토큰, 계정 목록) 을 돌려줍니다.
+
+    토큰이 만료돼 401·403 이 오면 로그인을 한 번 새로 받고 다시 시도합니다.
+    두 번째도 실패하면 그대로 예외를 올립니다.
+    """
+    call = call or _call
+    tok = read()
+    try:
+        return tok, call(tok, API + "/accounts")["result"]
+    except urllib.error.HTTPError as e:
+        if e.code not in (401, 403):
+            raise
+    refresh()
+    tok = read()
+    return tok, call(tok, API + "/accounts")["result"]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--max", type=int, default=None,
                     help="오늘 이보다 많이 읽었으면 종료 코드 2")
     args = ap.parse_args()
-    tok = read_token()
+    tok, accounts = fetch_accounts()
     today = dt.datetime.now(dt.timezone.utc).date().isoformat()
     total, per_all = 0, {}
-    for acc in _call(tok, API + "/accounts")["result"]:
+    for acc in accounts:
         names = {d["uuid"]: d["name"] for d in _call(
             tok, API + "/accounts/%s/d1/database?per_page=100" % acc["id"])["result"]}
         r = _call(tok, API + "/graphql",
