@@ -35,9 +35,9 @@ def sqlite_expr(col, kind):
                "THEN NULL ELSE %s END" % (c, c, WS, c))
     trimmed = "trim(%s, %s)" % (present, WS)
     if kind == "int":
-        return "COUNT(%s)" % present, "SUM(CAST(%s AS INTEGER))" % present
+        return "COUNT(%s)" % present, "SUM(CAST(%s AS INTEGER))" % trimmed
     if kind == "double":
-        return "COUNT(%s)" % present, "TOTAL(CAST(%s AS REAL))" % present
+        return "COUNT(%s)" % present, "TOTAL(CAST(%s AS REAL))" % trimmed
     if kind == "date":
         return ("COUNT(%s)" % present,
                 "SUM(CAST(replace(%s, '-', '') AS INTEGER))" % trimmed)
@@ -93,6 +93,21 @@ def same_value(expected, actual, kind):
     if kind == "blob":
         return bytes(expected) == bytes(actual)
     return expected == actual
+
+
+def key_part(value, kind):
+    """키 값을 양쪽 표현으로 맞춥니다."""
+    if value is None:
+        return None
+    if kind in ("date", "datetime"):
+        return str(value)
+    if kind == "int":
+        return int(value)
+    if kind == "double":
+        return float(value)
+    if kind == "blob":
+        return bytes(value)
+    return value if isinstance(value, str) else str(value)
 
 
 def compare_rows(expected, actual, names, kinds):
@@ -163,7 +178,7 @@ def verify_table(sq, my, table, spec):
 
 
 def verify_sample(sq, my, table, spec):
-    """표의 무작위 표본을 비교합니다. (확인한 행 수, 문제들)을 돌려줍니다."""
+    """표의 무작위 표본을 비교합니다. (확인한 행 수, 문제들, 사유)을 돌려줍니다."""
     cols = [(c, k) for c, k in spec["columns"] if c != spec.get("renumber")]
     names = [c for c, k in cols]
     kinds = [k for c, k in cols]
@@ -177,10 +192,15 @@ def verify_sample(sq, my, table, spec):
         with my.cursor() as cur:
             cur.execute("SELECT COUNT(*), MAX(`%s`) FROM `%s`" % (renumber, table))
             my_count, my_max = cur.fetchone()
+
+        # 두 쪽 다 비어있으면 건너뜁니다.
+        if snap_count == 0 and my_count == 0:
+            return 0, [], "빈 표"
+
         if snap_count != my_count or snap_max != my_max:
             return (0, [
                 "번호 대응이 맞지 않아 표본 비교를 못 했습니다"
-                "(스냅샷 %s/%s, MySQL %s/%s)" % (snap_count, snap_max, my_count, my_max)])
+                "(스냅샷 %s/%s, MySQL %s/%s)" % (snap_count, snap_max, my_count, my_max)], None)
 
         k = min(SAMPLE, snap_count)
         sample_ids = random.sample(range(1, snap_max + 1), k=k)
@@ -194,12 +214,12 @@ def verify_sample(sq, my, table, spec):
             sample_ids).fetchall()
         snap_dict = {}
         for row in snap_rows:
-            snap_id = row[0]
+            snap_id = int(row[0])
             values = tuple(tm.normalize(row[i+1], kinds[i]) for i in range(len(names)))
-            snap_dict[snap_id] = values
+            snap_dict[(snap_id,)] = values
 
         # MySQL 에서 표본을 읽습니다.
-        placeholders = ",".join("%s" * k)
+        placeholders = ", ".join(["%s"] * k)
         my_cols = [renumber] + names
         with my.cursor() as cur:
             cur.execute(
@@ -209,52 +229,65 @@ def verify_sample(sq, my, table, spec):
             my_rows = cur.fetchall()
         my_dict = {}
         for row in my_rows:
-            my_id = row[0]
+            my_id = int(row[0])
             values = row[1:]
-            my_dict[my_id] = values
+            my_dict[(my_id,)] = values
 
-        return k, compare_rows(snap_dict, my_dict, names, kinds)
+        return k, compare_rows(snap_dict, my_dict, names, kinds), None
 
     # 기본키가 있으면 키를 맞춰 비교합니다.
     pk_names = primary_key(my, table)
     if not pk_names:
-        return 0, []
+        return 0, [], "기본키 없음"
 
     pk_kinds = {c: k for c, k in spec["columns"] if c in pk_names}
+    # 비교할 열들은 PK가 아닌 열입니다.
+    value_cols = [(c, k) for c, k in spec["columns"]
+                  if c != spec.get("renumber") and c not in pk_names]
+    value_names = [c for c, k in value_cols]
+    value_kinds = [k for c, k in value_cols]
 
     # 스냅샷에서 무작위 표본을 읽습니다.
-    sq_cols = pk_names + names
+    sq_cols = pk_names + value_names
+    snap_count_row = sq.execute('SELECT COUNT(*) FROM "%s"' % table).fetchone()
+    snap_count = snap_count_row[0] if snap_count_row else 0
+
+    if snap_count == 0:
+        return 0, [], "빈 표"
+
     snap_rows = sq.execute(
         'SELECT %s FROM "%s" ORDER BY random() LIMIT ?' % (
             ", ".join('"%s"' % c for c in sq_cols), table),
-        (min(SAMPLE, sq.execute('SELECT COUNT(*) FROM "%s"' % table).fetchone()[0]),)
+        (min(SAMPLE, snap_count),)
     ).fetchall()
 
     snap_dict = {}
     my_sample_keys = []
     for row in snap_rows:
-        pk_vals = tuple(tm.normalize(row[i], pk_kinds[pk_names[i]])
+        pk_vals = tuple(key_part(row[i], pk_kinds[pk_names[i]])
                         for i in range(len(pk_names)))
-        values = tuple(tm.normalize(row[len(pk_names) + i], kinds[i])
-                       for i in range(len(names)))
+        values = tuple(tm.normalize(row[len(pk_names) + i], value_kinds[i])
+                       for i in range(len(value_names)))
         snap_dict[pk_vals] = values
         my_sample_keys.append(pk_vals)
 
     if not my_sample_keys:
-        return 0, []
+        return 0, [], "빈 표"
 
     # MySQL 에서 표본의 키를 가져옵니다.
     if len(pk_names) == 1:
-        placeholders = ",".join(["%s"] * len(my_sample_keys))
+        placeholders = ", ".join(["%s"] * len(my_sample_keys))
         query = "SELECT %s FROM `%s` WHERE `%s` IN (%s)" % (
             ", ".join("`%s`" % c for c in sq_cols), table, pk_names[0], placeholders)
         params = sum(my_sample_keys, ())
     else:
-        conditions = " OR ".join(
-            "(" + ", ".join(["`%s` = %%s" % pn for pn in pk_names]) + ")"
+        # 행 생성자 IN 을 씁니다: WHERE (k1, k2) IN ((v1, v2), (v3, v4), ...)
+        row_cond = "(" + ", ".join("`%s`" % pn for pn in pk_names) + ")"
+        value_rows = ", ".join(
+            "(" + ", ".join(["%s"] * len(pk_names)) + ")"
             for _ in range(len(my_sample_keys)))
-        query = "SELECT %s FROM `%s` WHERE %s" % (
-            ", ".join("`%s`" % c for c in sq_cols), table, conditions)
+        query = "SELECT %s FROM `%s` WHERE %s IN (%s)" % (
+            ", ".join("`%s`" % c for c in sq_cols), table, row_cond, value_rows)
         params = sum(my_sample_keys, ())
 
     with my.cursor() as cur:
@@ -263,11 +296,12 @@ def verify_sample(sq, my, table, spec):
 
     my_dict = {}
     for row in my_rows:
-        pk_vals = row[:len(pk_names)]
+        pk_vals = tuple(key_part(row[i], pk_kinds[pk_names[i]])
+                        for i in range(len(pk_names)))
         values = row[len(pk_names):]
         my_dict[pk_vals] = values
 
-    return len(my_sample_keys), compare_rows(snap_dict, my_dict, names, kinds)
+    return len(my_sample_keys), compare_rows(snap_dict, my_dict, value_names, value_kinds), None
 
 
 def verify_games(sq, my):
@@ -278,14 +312,14 @@ def verify_games(sq, my):
         m = {}
         for k, n in cur.fetchall():
             try:
-                key = k.decode('utf-8') if isinstance(k, bytes) else k
+                key = k.decode('utf-8') if isinstance(k, bytes) else (None if k is None else str(k))
             except (UnicodeDecodeError, AttributeError):
                 key = None if k is None else str(k)
             m[key] = int(n)
 
-    s_keys = {None if k is None else str(k) for k in s.keys()}
-    m_keys = {None if k is None else str(k) for k in m.keys()}
-    bad = sorted((g for g in s_keys | m_keys if s.get(g) != m.get(g)),
+    s_norm = {None if k is None else str(k): v for k, v in s.items()}
+    bad = sorted((g for g in set(s_norm.keys()) | set(m.keys())
+                  if s_norm.get(g) != m.get(g)),
                  key=lambda g: str(g))
     return len(s), bad
 
@@ -306,9 +340,28 @@ def main():
         failed = []
         for table, spec in types.items():
             srows, mrows, problems = verify_table(sq, my, table, spec)
-            sample_count, sample_problems = verify_sample(sq, my, table, spec)
-            problems.extend(sample_problems)
-            sample_str = "건너뜀" if sample_count == 0 else str(sample_count)
+
+            # 스냅샷에 열이 없으면 표본을 건너뜁니다.
+            if mrows is not None:
+                try:
+                    sample_checked, sample_problems, sample_note = verify_sample(sq, my, table, spec)
+                    problems.extend(sample_problems)
+                except Exception as e:
+                    problems.append("표본 비교 중 오류: %s" % e)
+                    sample_checked, sample_note = 0, None
+            else:
+                sample_checked, sample_note = 0, None
+
+            # 표본 열 포맷합니다.
+            if sample_note == "기본키 없음":
+                sample_str = "건너뜀(기본키 없음)"
+            elif sample_note == "빈 표":
+                sample_str = "건너뜀(빈 표)"
+            elif sample_checked == 0:
+                sample_str = "건너뜀"
+            else:
+                sample_str = str(sample_checked)
+
             mrows_str = "-" if mrows is None else format(mrows, ",")
             lines.append("| %s | %s | %s | %s | %s |" % (
                 table, format(srows, ","), mrows_str, sample_str,
@@ -317,6 +370,9 @@ def main():
                 failed.append(table)
             print("%-34s %s" % (table, "같음" if not problems else "; ".join(problems)),
                   flush=True)
+            if sample_note == "기본키 없음":
+                print("%s: 기본키가 없어 표본 비교를 건너뜁니다" % table, flush=True)
+
         if "play_by_play" in types:
             games, bad = verify_games(sq, my)
             lines += ["", "경기별 플레이 수: %s경기 중 다른 경기 %d개%s" % (
