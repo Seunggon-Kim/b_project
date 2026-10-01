@@ -1,5 +1,6 @@
 import collections
 import sqlite3
+import sys
 
 import pytest
 
@@ -27,6 +28,37 @@ class FakeConn:
 
     def cursor(self):
         return FakeCursor(self.log)
+
+    def commit(self):
+        self.commits += 1
+
+
+class FailingCursor:
+    def __init__(self, fail_on_call=2):
+        self.log = []
+        self.call_count = 0
+        self.fail_on_call = fail_on_call
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def executemany(self, sql, rows):
+        self.call_count += 1
+        if self.call_count == self.fail_on_call:
+            raise RuntimeError("boom")
+        self.log.append((sql, list(rows)))
+
+
+class FailingConn:
+    def __init__(self):
+        self.cursor_obj = FailingCursor()
+        self.commits = 0
+
+    def cursor(self):
+        return self.cursor_obj
 
     def commit(self):
         self.commits += 1
@@ -74,3 +106,36 @@ def test_orphan_queries_parse_post_sql():
     assert label == "players.team_id → teams.team_id"
     assert "LEFT JOIN `teams` p ON c.`team_id` = p.`team_id`" in sql
     assert "p.`team_id` IS NULL" in sql
+
+
+def test_session_setup_keeps_zero_ids():
+    assert "NO_AUTO_VALUE_ON_ZERO" in " ".join(load.SESSION_SETUP)
+    assert "SET FOREIGN_KEY_CHECKS=0" in load.SESSION_SETUP
+
+
+def test_load_table_names_table_and_rows_on_failure():
+    sq = sqlite3.connect(":memory:")
+    sq.execute('CREATE TABLE t (a INTEGER)')
+    sq.executemany("INSERT INTO t VALUES (?)", [(1,), (2,), (3,)])
+    spec = {"columns": [["a", "int"]], "renumber": None}
+    my = FailingConn()
+    fixes = collections.Counter()
+    try:
+        load.load_table(sq, my, "t", spec, fixes, batch=2)
+        assert False, "Expected RuntimeError"
+    except RuntimeError as e:
+        assert "t: 2행을 넣은 뒤 멈췄습니다" in str(e)
+        assert "boom" in str(e)
+
+
+def test_orphan_queries_rejects_unreadable_fk():
+    post = "ALTER TABLE t ADD FOREIGN KEY (a) REFERENCES p (b);\n"
+    with pytest.raises(ValueError, match="외래키"):
+        load.orphan_queries(post)
+
+
+def test_fresh_and_tables_cannot_be_combined(monkeypatch):
+    monkeypatch.setattr(sys, "argv",
+                        ["load", "--snapshot", "x.db", "--fresh", "--tables", "a"])
+    with pytest.raises(SystemExit):
+        load.main()
