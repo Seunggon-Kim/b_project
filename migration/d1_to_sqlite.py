@@ -35,6 +35,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from migration import shard_plan  # noqa: E402
+from migration.mysql.tables import migrated_tables  # noqa: E402
 
 DB_NAME = "kbo-stats"
 
@@ -176,8 +177,59 @@ def shard_row_count(table, db_name):
         return None
 
 
-def export_jobs(tables):
+def list_tables(db_name=DB_NAME):
+    """공용 D1 의 표 이름입니다. sqlite_master 몇 줄만 읽습니다."""
+    out = subprocess.run(
+        ["npx", "--yes", "wrangler@4", "d1", "execute", db_name, "--remote",
+         "--command",
+         "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;",
+         "--json", "--yes"],
+        capture_output=True, text=True, shell=USE_SHELL,
+        encoding="utf-8", errors="replace")
+    if out.returncode != 0:
+        raise RuntimeError("표 목록 실패: %s" % (out.stderr or out.stdout)[-400:])
+    body = out.stdout[out.stdout.find("["):]
+    return [r["name"] for r in json.loads(body)[0]["results"]]
+
+
+def meta_row_count(table, db_name):
+    """샤드의 meta_table_counts 에 적힌 행 수입니다. 없으면 None 입니다.
+
+    `shard_row_count` 는 COUNT(*) 라 표 전체를 한 번 더 읽습니다(샤드당
+    55만~70만 행). 이건 한 줄만 읽습니다.
+    """
+    try:
+        out = subprocess.run(
+            ["npx", "--yes", "wrangler@4", "d1", "execute", db_name,
+             "--remote", "--command",
+             "SELECT n FROM meta_table_counts WHERE name='%s';" % table,
+             "--json", "--yes"],
+            capture_output=True, text=True, shell=USE_SHELL,
+            encoding="utf-8", errors="replace")
+        if out.returncode != 0:
+            return None
+        rows = json.loads(out.stdout[out.stdout.find("["):])[0]["results"]
+        return int(rows[0]["n"]) if rows else None
+    except Exception:            # noqa: BLE001
+        return None
+
+
+def _has_rows(conn, table):
+    """로컬 SQLite 에 그 표가 있고 한 줄이라도 있으면 True 입니다."""
+    found = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (table,)).fetchone()
+    if not found:
+        return False
+    return conn.execute('SELECT 1 FROM "%s" LIMIT 1' % table).fetchone() is not None
+
+
+def export_jobs(tables, shards=None):
     """(표, D1 이름, 파일이름) 목록입니다. 나뉜 표는 샤드마다 하나씩.
+
+    shards 를 주면(바인딩 이름 집합) 나뉜 표는 그 샤드에서만 받습니다.
+    무료 요금제에서 하루 읽기 한도를 넘지 않게 이틀에 나눠 받을 때
+    씁니다.
 
     샤드는 하나의 원본 표를 시즌으로 갈라 담았고 `pbp_id` 를 그대로
     옮겼습니다. 그래서 샤드끼리 번호가 겹치지 않고, 합쳐도 PK 가
@@ -190,7 +242,8 @@ def export_jobs(tables):
     for t in tables:
         if t in SHARDED_TABLES:
             for s in shard_plan.shards():
-                jobs.append((t, s["database"], "%s__%s" % (t, s["binding"])))
+                if shards is None or s["binding"] in shards:
+                    jobs.append((t, s["database"], "%s__%s" % (t, s["binding"])))
         else:
             jobs.append((t, DB_NAME, t))
     return jobs
@@ -203,13 +256,30 @@ def main():
                     help="쉼표로 구분. 기본값은 파이프라인이 읽는 표 전부")
     ap.add_argument("--keep-sql", action="store_true",
                     help="내려받은 SQL 파일을 지우지 않습니다")
+    ap.add_argument("--all-tables", action="store_true",
+                    help="공용 D1 의 옮길 표 전부와 play_by_play 를 받습니다")
+    ap.add_argument("--shards", default=None,
+                    help="나뉜 표를 이 바인딩의 샤드에서만 받습니다. "
+                         "예: DB_2008_2011,DB_2012_2014")
+    ap.add_argument("--append", action="store_true",
+                    help="--out 을 지우지 않고 나뉜 표를 이어 붙입니다")
+    ap.add_argument("--count-check", choices=["d1", "meta", "none"],
+                    default="d1",
+                    help="샤드 행 수 확인: d1=COUNT(*)(표를 한 번 더 읽음), "
+                         "meta=meta_table_counts 한 줄, none=안 함")
     args = ap.parse_args()
 
-    tables = ([t.strip() for t in args.tables.split(",") if t.strip()]
-              if args.tables else PIPELINE_TABLES)
+    if args.all_tables:
+        tables = migrated_tables(list_tables())
+    elif args.tables:
+        tables = [t.strip() for t in args.tables.split(",") if t.strip()]
+    else:
+        tables = PIPELINE_TABLES
+    shards = ({s.strip() for s in args.shards.split(",") if s.strip()}
+              if args.shards else None)
 
     out = Path(args.out)
-    if out.exists():
+    if out.exists() and not args.append:
         # 이어붙이면 이전 실행의 행이 남아 계산이 어긋납니다.
         out.unlink()
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -219,8 +289,19 @@ def main():
         conn = sqlite3.connect(str(out))
         total_bytes = 0
         prev_rows = {}
-        jobs = export_jobs(tables)
+        if args.append:
+            # 이어 받을 때는 이미 있는 행 수부터 셉니다. 그래야 이번에
+            # 받은 조각만 D1 쪽 행 수와 견줍니다.
+            for t in SHARDED_TABLES:
+                if _has_rows(conn, t):
+                    prev_rows[t] = conn.execute(
+                        'SELECT COUNT(*) FROM "%s"' % t).fetchone()[0]
+        jobs = export_jobs(tables, shards)
         for i, (t, db, tag) in enumerate(jobs, start=1):
+            if args.append and t not in SHARDED_TABLES and _has_rows(conn, t):
+                raise SystemExit(
+                    "%s 는 이미 %s 에 있습니다. --append 는 나뉜 표를 더 받을 "
+                    "때만 씁니다." % (t, out))
             path, secs = export_table(t, work, db_name=db, tag=tag)
             size = path.stat().st_size
             total_bytes += size
@@ -244,10 +325,14 @@ def main():
             # 나뉜 표는 PK 를 떼고 넣습니다(샤드끼리 pbp_id 가 겹칩니다).
             # 그러면 중복이 조용히 들어와도 모릅니다. 조각마다 D1 쪽
             # 행 수와 맞는지 확인합니다. 어긋나면 여기서 멈춥니다.
-            if t in SHARDED_TABLES:
-                want = shard_row_count(t, db)
+            if t in SHARDED_TABLES and args.count_check != "none":
+                want = (shard_row_count(t, db) if args.count_check == "d1"
+                        else meta_row_count(t, db))
                 got = n - prev_rows.get(t, 0)
-                if want is not None and want != got:
+                if want is None:
+                    print("   %s(%s) 행 수를 확인하지 못했습니다(메타 없음)."
+                          % (t, db), flush=True)
+                elif want != got:
                     raise SystemExit(
                         "%s(%s) 행 수가 어긋납니다. D1 %s / 로컬 %s"
                         % (t, db, format(want, ","), format(got, ",")))
