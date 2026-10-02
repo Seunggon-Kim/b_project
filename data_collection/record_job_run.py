@@ -21,6 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from d1_load import run_d1, sql_literal  # noqa: E402
+from mysql_sink import mirror  # noqa: E402
 
 # 화면이 한국 시각을 보여 줍니다. 러너는 UTC 라 그대로 쓰면 아홉 시간
 # 어긋납니다.
@@ -37,6 +38,17 @@ KNOWN_JOBS = {
     # 1군 등록 현황·등말소. 놓친 날은 소급이 안 됩니다.
     "roster",
 }
+
+JOB_COLS = ["job", "last_run_at", "status", "note", "duration_sec"]
+
+
+def job_row(job, now, status, note, duration):
+    return {"job": job, "last_run_at": now, "status": status, "note": note,
+            "duration_sec": duration}
+
+
+def mysql_write_job(sink, row):
+    return sink.upsert("meta_job_runs", JOB_COLS, ["job"], [row])
 
 
 def main():
@@ -62,6 +74,8 @@ def main():
            sql_literal(args.note),
            "NULL" if args.duration is None else int(args.duration)))
     print("기록: %s  %s  %s" % (args.job, now, args.status))
+    row = job_row(args.job, now, args.status, args.note, args.duration)
+    mirror("job_runs", lambda s: mysql_write_job(s, row))
     return 0
 
 

@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from d1_load import build_upserts, query, refresh_count, run_d1_file  # noqa: E402
 from games_from_pbp import derive_games  # noqa: E402
+from mysql_sink import mirror  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -58,6 +59,13 @@ def memory_db(rows, teams):
         "INSERT INTO play_by_play VALUES (%s)" % ",".join("?" * len(NEEDED)),
         [tuple(r.get(c) for c in NEEDED) for r in rows])
     return con
+
+
+def mysql_write_games(sink, dicts):
+    """D1 과 같은 UPSERT 입니다. 관중·날씨처럼 여기서 못 만드는 열은 덮지 않습니다."""
+    n = sink.upsert("games", GAME_COLS, ["game_id"], dicts)
+    sink.refresh_count("games")
+    return n
 
 
 def main():
@@ -128,6 +136,7 @@ def main():
     run_d1_file(out)
     refresh_count("games")
     print("D1 적재 완료 (%d경기)" % len(dicts))
+    mirror("games", lambda s: mysql_write_games(s, dicts))
     return 0
 
 
