@@ -243,3 +243,14 @@ def test_extra_index_on_pbp_game_date(tmp_path):
     """, "INSERT INTO play_by_play VALUES (1, 'G1', 20261003)")
     _, posts, _, _ = ddl.build(p)
     assert "CREATE INDEX `idx_pbp_game_date` ON `play_by_play` (`game_date`);" in posts
+
+
+def test_unique_index_number_ignores_named_indexes(tmp_path):
+    """UNIQUE 제약 이름 번호는 UNIQUE 끼리만 셉니다(뒤에 만든 일반 인덱스가 번호를 밀면 안 됩니다)."""
+    p = _one_table(tmp_path, """
+        CREATE TABLE g (a TEXT, b TEXT, c TEXT, UNIQUE (a, b));
+        CREATE INDEX idx_g_c ON g(c);
+    """, "INSERT INTO g VALUES ('x', 'y', 'z')")
+    _, posts, _, _ = ddl.build(p)
+    assert "CREATE UNIQUE INDEX `uq_g_1` ON `g` (`a`, `b`);" in posts
+    assert "CREATE INDEX `idx_g_c` ON `g` (`c`);" in posts

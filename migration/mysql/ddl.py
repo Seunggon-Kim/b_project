@@ -262,12 +262,14 @@ def post_statements(t):
     """데이터를 넣은 뒤 만들 인덱스와 외래키입니다. (인덱스 목록, 외래키 목록) 를 반환합니다."""
     name = t["name"]
     indexes, fks = [], []
-    for i, ix in enumerate(t["indexes"], start=1):
+    uq_n = 0  # 이름이 바뀌면 이미 만든 MySQL 인덱스와 짝이 안 맞아 같은 UNIQUE 를 또 만듭니다
+    for ix in t["indexes"]:
         if name in RENUMBER and ix["columns"] == [RENUMBER[name]]:
             continue
         ixname = ix["name"]
         if ixname.startswith("sqlite_autoindex_"):
-            ixname = "uq_%s_%d" % (name, i)
+            uq_n += 1
+            ixname = "uq_%s_%d" % (name, uq_n)
         indexes.append("CREATE %s %s ON %s (%s);" % (
             "UNIQUE INDEX" if ix["unique"] else "INDEX", q(ixname[:NAME_MAX]),
             q(name), ", ".join(q(c) for c in ix["columns"])))
