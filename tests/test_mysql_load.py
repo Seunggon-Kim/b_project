@@ -576,3 +576,29 @@ def test_post_only_cleans_up_then_applies_missing(monkeypatch):
     first_post = next(i for i, s in enumerate(conn.log) if s.startswith("CREATE "))
     assert stale < first_post
     assert any(s.startswith("CREATE INDEX `idx_pbp_game`") for s in conn.log)
+
+
+class CollectorCursor(SetupCursor):
+    def fetchone(self):
+        return ("bstats_loader@cloudsqlproxy~%",)
+
+
+class CollectorConn(SetupConn):
+    def cursor(self):
+        return CollectorCursor(self.log)
+
+
+def test_post_only_refuses_collector_account(monkeypatch):
+    conn = CollectorConn()
+    monkeypatch.setattr(load.myconn, "connect", lambda: conn)
+    monkeypatch.setattr(sys, "argv", ["load", "--post-only"])
+    with pytest.raises(SystemExit):
+        load.main()
+    assert not any("PROCESSLIST" in s or "KILL" in s for s in conn.log)
+
+
+def test_refuse_collector_account_allows_migrator():
+    class Cur(SetupCursor):
+        def fetchone(self):
+            return ("bstats_migrator@cloudsqlproxy~%",)
+    load.refuse_collector_account(Cur([]))

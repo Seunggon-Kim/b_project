@@ -19,6 +19,7 @@ schema_post.sql(인덱스·외래키)을 적용합니다. --tables 는 --fresh �
 시작할 때와 다시 연결한 뒤, **같은 계정·같은 DB 의 다른 연결을 모두** 끊습니다.
 적재 중에 같은 계정으로 verify 나 다른 적재를 돌리지 마십시오(그 연결도 끊깁니다).
 수집 계정(bstats_loader)의 연결은 계정이 달라 건드리지 않습니다.
+수집 계정(bstats_loader)으로는 시작하지 않습니다. 같은 계정으로 돌리는 reconcile·daily_pbp --mysql-only·mysql_to_sqlite 도 적재 중에는 돌리지 마십시오.
 
     py -m migration.mysql.load --post-only     # 없는 인덱스·외래키만 만들기
 
@@ -49,6 +50,18 @@ SESSION_SETUP = ("SET FOREIGN_KEY_CHECKS=0",
 # 메타데이터 잠금(TRUNCATE·DDL) 대기 한도입니다. 기본값은 1년이라, 죽은 이전
 # 실행의 세션이 잠금을 쥐고 있으면 적재가 끝없이 멈춥니다(1단계에서 겪음).
 LOCK_WAIT_SEC = 120
+
+# 수집(GitHub Actions) 계정입니다. 적재기는 같은 계정의 다른 연결을 모두 끊으므로
+# 이 계정으로 돌리면 돌고 있는 수집을 끊습니다. 시작 전에 막습니다.
+COLLECTOR_USERS = ("bstats_loader",)
+
+
+def refuse_collector_account(cur):
+    """수집 계정으로 붙었으면 아무것도 끊기 전에 멈춥니다."""
+    cur.execute("SELECT CURRENT_USER()")
+    user = str(cur.fetchone()[0]).split("@", 1)[0]
+    if user in COLLECTOR_USERS:
+        raise SystemExit("%s 는 수집 계정입니다. 적재기는 이전 계정(bstats_migrator) 접속 파일로 돌리십시오." % user)
 
 
 def prepare_session(cur):
@@ -346,6 +359,7 @@ def main():
         try:
             with my.cursor() as cur:
                 prepare_session(cur)
+                refuse_collector_account(cur)
                 ids = kill_stale_sessions(cur)
                 if ids:
                     print("이전 연결 %d개를 끊었습니다(같은 계정·같은 DB)." % len(ids))
@@ -379,6 +393,7 @@ def main():
         with my.cursor() as cur:
             prepare_session(cur)
             # 죽은 이전 실행의 세션이 잠금을 쥐고 있을 수 있습니다. 시작할 때 정리합니다.
+            refuse_collector_account(cur)
             ids = kill_stale_sessions(cur)
             if ids:
                 print("이전 연결 %d개를 끊었습니다(같은 계정·같은 DB)." % len(ids), flush=True)
