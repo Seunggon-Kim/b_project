@@ -31,7 +31,8 @@ KST = timezone(timedelta(hours=9))
 KNOWN_JOBS = {
     "official_stats", "pbp", "games", "player_detector", "cleanup",
     "park_factors", "registry_sync", "futures", "player_info",
-    # 2008~2014 PBP 되채우기입니다. 약 55일 걸리고 끝나면 없앱니다.
+    # 2008~2014 PBP 되채우기입니다. 2026-08-29 에 끝나 daily 에서 뺐습니다.
+    # 화면(database-explorer.html)에서 항목을 지울 때 여기서도 지웁니다.
     "pbp_backfill",
     # 1군 등록 현황·등말소. 놓친 날은 소급이 안 됩니다.
     "roster",
