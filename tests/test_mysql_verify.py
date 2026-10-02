@@ -306,3 +306,21 @@ def test_sqlite_numeric_sum_trims_nbsp():
     count, total = con.execute(
         "SELECT %s, %s FROM t" % v.sqlite_expr("i", "int")).fetchone()
     assert (count, total) == (2, 26)
+
+class ExistsCursor:
+    def __init__(self, present):
+        self.present = present
+        self.last = None
+
+    def execute(self, sql, args=None):
+        self.last = args
+
+    def fetchone(self):
+        return (1 if self.last[1] in self.present else 0,)
+
+
+def test_missing_post_objects_lists_absent_only():
+    post = ("CREATE INDEX `idx_a` ON `t` (`a`);\n"
+            "ALTER TABLE `t` ADD CONSTRAINT `fk_t_b` FOREIGN KEY (`b`) "
+            "REFERENCES `u` (`b`);\n")
+    assert v.missing_post_objects(ExistsCursor({"idx_a"}), post) == [("fk", "t", "fk_t_b")]

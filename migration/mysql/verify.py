@@ -21,7 +21,8 @@ from pathlib import Path
 
 from migration.mysql import conn as myconn
 from migration.mysql import typemap as tm
-from migration.mysql.ddl import OUT_DIR, ROOT
+from migration.mysql.ddl import OUT_DIR, ROOT, split_sql
+from migration.mysql.load import _EXISTS, post_object
 
 REPORT = ROOT / "docs" / "mysql-migration" / "verify-report.md"
 SAMPLE = 200
@@ -307,6 +308,17 @@ def verify_sample(sq, my, table, spec):
     return len(my_sample_keys), compare_rows(snap_dict, my_dict, value_names, value_kinds), None
 
 
+def missing_post_objects(cur, post_sql):
+    """schema_post.sql 의 인덱스·외래키 중 MySQL 에 없는 것입니다."""
+    missing = []
+    for stmt in split_sql(post_sql):
+        kind, table, name = post_object(stmt)
+        cur.execute(_EXISTS[kind], (table, name))
+        if not cur.fetchone()[0]:
+            missing.append((kind, table, name))
+    return missing
+
+
 def verify_games(sq, my):
     """경기별 플레이 수를 대조합니다. (경기 수, 틀린 경기들)을 돌려줍니다."""
     s = dict(sq.execute('SELECT "gameID", COUNT(*) FROM play_by_play GROUP BY 1'))
@@ -330,8 +342,24 @@ def verify_games(sq, my):
 def main():
     """검증 보고서를 생성합니다. 모두 같으면 0, 차이가 있으면 1을 돌려줍니다."""
     ap = argparse.ArgumentParser()
-    ap.add_argument("--snapshot", required=True)
+    ap.add_argument("--snapshot", default=None)
+    ap.add_argument("--objects-only", action="store_true",
+                    help="스냅샷 대조 없이 schema_post.sql 개체가 모두 있는지만 봅니다")
     args = ap.parse_args()
+    post = (OUT_DIR / "schema_post.sql").read_text(encoding="utf-8")
+    if args.objects_only:
+        my = myconn.connect()
+        try:
+            with my.cursor() as cur:
+                missing = missing_post_objects(cur, post)
+        finally:
+            my.close()
+        for kind, table, name in missing:
+            print("없음: %s %s.%s" % (kind, table, name))
+        print("개체 모두 있음" if not missing else "개체 %d개 없음" % len(missing))
+        return 1 if missing else 0
+    if not args.snapshot:
+        ap.error("--snapshot 이 필요합니다.")
     types = json.loads((OUT_DIR / "schema_types.json").read_text(encoding="utf-8"))
     sq = sqlite3.connect(Path(args.snapshot).resolve().as_uri() + "?mode=ro", uri=True)
     my = myconn.connect()
@@ -383,6 +411,13 @@ def main():
                 "" if not bad else " (" + ", ".join(str(g) for g in bad[:20]) + ")")]
             if bad:
                 failed.append("play_by_play(경기별)")
+        with my.cursor() as cur:
+            missing = missing_post_objects(cur, post)
+        lines += ["", "인덱스·외래키: %s" % (
+            "모두 있음" if not missing else
+            "없음 " + ", ".join("%s.%s" % (t, n) for _, t, n in missing))]
+        if missing:
+            failed.append("인덱스·외래키")
         REPORT.parent.mkdir(parents=True, exist_ok=True)
         REPORT.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
         print("보고서: %s" % REPORT)

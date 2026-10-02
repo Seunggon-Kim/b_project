@@ -29,6 +29,13 @@ REPORT = ROOT / "docs" / "mysql-migration" / "schema-report.md"
 # 새로 번호를 매기는 표입니다. 샤드마다 따로 붙인 pbp_id 가 겹칠 수
 # 있습니다. 시즌 순 → 샤드 안 원래 번호 순으로 넣어 경기 안 순서를 지킵니다.
 RENUMBER = {"play_by_play": "pbp_id"}
+
+# D1 에는 없지만 MySQL 에 더 두는 인덱스입니다. D1 은 시즌별 샤드라
+# 날짜로 고를 일이 적었지만, MySQL 은 400만 행이 한 표라 하루치를
+# 지우고 다시 넣는 `DELETE … WHERE game_date = ?` 가 인덱스 없이는
+# 표 전체를 훑습니다(2단계 이중 적재).
+EXTRA_INDEXES = {"play_by_play": [("idx_pbp_game_date", ["game_date"])]}
+
 NAME_MAX = 64
 NOW_DEFAULTS = {"CURRENT_TIMESTAMP", "(CURRENT_TIMESTAMP)",
                 "DATETIME('NOW')", "(DATETIME('NOW'))"}
@@ -68,17 +75,22 @@ def read_table(con, table):
                         "ref_column": rows[0][4]})
     indexes = []
     expr_indexes = []
+    partial_unique = []
     for r in con.execute('PRAGMA index_list("%s")' % table):
-        name, unique, origin = r[1], bool(r[2]), r[3]
+        name, unique, origin, partial = r[1], bool(r[2]), r[3], bool(r[4])
         if origin == "pk":
             continue
         icols = [x[2] for x in con.execute('PRAGMA index_info("%s")' % name)]
         if any(c is None for c in icols):
             expr_indexes.append(name)
+        elif partial and unique:
+            partial_unique.append(name)
         else:
-            indexes.append({"name": name, "unique": unique, "columns": icols})
+            indexes.append({"name": name, "unique": unique, "columns": icols,
+                            "partial": partial})
     return {"name": table, "columns": cols, "pk": pk, "fks": fks,
             "indexes": indexes, "expr_indexes": expr_indexes,
+            "partial_unique": partial_unique,
             "multi_fk": [k for k, v in groups.items() if len(v) > 1]}
 
 
@@ -250,15 +262,24 @@ def post_statements(t):
     """데이터를 넣은 뒤 만들 인덱스와 외래키입니다. (인덱스 목록, 외래키 목록) 를 반환합니다."""
     name = t["name"]
     indexes, fks = [], []
-    for i, ix in enumerate(t["indexes"], start=1):
+    uq_n = 0  # 이름이 바뀌면 이미 만든 MySQL 인덱스와 짝이 안 맞아 같은 UNIQUE 를 또 만듭니다
+    for ix in t["indexes"]:
         if name in RENUMBER and ix["columns"] == [RENUMBER[name]]:
             continue
         ixname = ix["name"]
         if ixname.startswith("sqlite_autoindex_"):
-            ixname = "uq_%s_%d" % (name, i)
+            uq_n += 1
+            ixname = "uq_%s_%d" % (name, uq_n)
         indexes.append("CREATE %s %s ON %s (%s);" % (
             "UNIQUE INDEX" if ix["unique"] else "INDEX", q(ixname[:NAME_MAX]),
             q(name), ", ".join(q(c) for c in ix["columns"])))
+    have = {tuple(ix["columns"]) for ix in t["indexes"]}
+    colnames = {c["name"] for c in t["columns"]}
+    for ixname, icols in EXTRA_INDEXES.get(name, []):
+        if tuple(icols) in have or not set(icols) <= colnames:
+            continue
+        indexes.append("CREATE INDEX %s ON %s (%s);" % (
+            q(ixname), q(name), ", ".join(q(c) for c in icols)))
     for fk in t["fks"]:
         fname = ("fk_%s_%s" % (name, fk["column"]))[:NAME_MAX]
         fks.append("ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (%s) "
@@ -276,10 +297,17 @@ def build(snapshot):
     tables = {n: read_table(con, n) for n in names}
     notes = []
 
-    # 식 인덱스 메모
+    # 식 인덱스·부분 인덱스 메모
     for n in names:
         for expr_ix in tables[n]["expr_indexes"]:
             notes.append("%s: 식 인덱스 %s 는 옮기지 않았습니다" % (n, expr_ix))
+        for pu in tables[n]["partial_unique"]:
+            notes.append("%s: 부분 UNIQUE 인덱스 %s 는 MySQL 에 같은 뜻이 없어 "
+                         "옮기지 않았습니다" % (n, pu))
+        for ix in tables[n]["indexes"]:
+            if ix["partial"]:
+                notes.append("%s: 부분 인덱스 %s 를 전체 인덱스로 옮겼습니다"
+                             % (n, ix["name"]))
 
     # 외래키 정리
     for n in names:

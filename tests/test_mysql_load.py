@@ -511,3 +511,94 @@ def test_apply_post_skipping_existing_runs_only_missing():
                    "REFERENCES `b` (`y`)"]
     checks = [e for e in my.executed if e[0].startswith("SELECT")]
     assert len(checks) == 4 and checks[0][1] == ("a", "i1")
+
+
+class SetupCursor:
+    def __init__(self, log):
+        self.log = log
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def execute(self, sql, args=None):
+        self.log.append(sql)
+
+    def fetchall(self):
+        return []
+
+    def fetchone(self):
+        return (0,)        # 개체가 없다고 답하고, 고아 행도 0
+
+
+class SetupConn:
+    def __init__(self):
+        self.log = []
+
+    def cursor(self):
+        return SetupCursor(self.log)
+
+    def commit(self):
+        pass
+
+    def close(self):
+        pass
+
+
+def test_prepare_session_sets_lock_wait_timeout():
+    conn = SetupConn()
+    with conn.cursor() as cur:
+        load.prepare_session(cur)
+    assert "SET FOREIGN_KEY_CHECKS=0" in conn.log
+    assert "SET SESSION lock_wait_timeout = 120" in conn.log
+
+
+def test_snapshot_required_without_post_only(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["load", "--tables", "teams"])
+    with pytest.raises(SystemExit):
+        load.main()
+
+
+def test_post_only_cannot_combine(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["load", "--post-only", "--fresh"])
+    with pytest.raises(SystemExit):
+        load.main()
+
+
+def test_post_only_cleans_up_then_applies_missing(monkeypatch):
+    conn = SetupConn()
+    monkeypatch.setattr(load.myconn, "connect", lambda: conn)
+    monkeypatch.setattr(sys, "argv", ["load", "--post-only"])
+    assert load.main() == 0
+    stale = next(i for i, s in enumerate(conn.log) if "PROCESSLIST" in s)
+    first_post = next(i for i, s in enumerate(conn.log) if s.startswith("CREATE "))
+    assert stale < first_post
+    assert any(s.startswith("CREATE INDEX `idx_pbp_game`") for s in conn.log)
+
+
+class CollectorCursor(SetupCursor):
+    def fetchone(self):
+        return ("bstats_loader@cloudsqlproxy~%",)
+
+
+class CollectorConn(SetupConn):
+    def cursor(self):
+        return CollectorCursor(self.log)
+
+
+def test_post_only_refuses_collector_account(monkeypatch):
+    conn = CollectorConn()
+    monkeypatch.setattr(load.myconn, "connect", lambda: conn)
+    monkeypatch.setattr(sys, "argv", ["load", "--post-only"])
+    with pytest.raises(SystemExit):
+        load.main()
+    assert not any("PROCESSLIST" in s or "KILL" in s for s in conn.log)
+
+
+def test_refuse_collector_account_allows_migrator():
+    class Cur(SetupCursor):
+        def fetchone(self):
+            return ("bstats_migrator@cloudsqlproxy~%",)
+    load.refuse_collector_account(Cur([]))

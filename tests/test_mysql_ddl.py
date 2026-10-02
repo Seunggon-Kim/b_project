@@ -202,3 +202,55 @@ def test_renumber_column_not_profiled(tmp_path, monkeypatch):
     monkeypatch.setattr(ddl.tm, "profile_column", mock_profile)
     ddl.build(_snapshot(tmp_path))
     assert ("play_by_play", "pbp_id") not in profiled, "pbp_id should not be profiled"
+
+
+def _one_table(tmp_path, ddl_sql, insert_sql):
+    p = tmp_path / "snap.db"
+    con = sqlite3.connect(str(p))
+    con.executescript(ddl_sql)
+    con.execute(insert_sql)
+    con.commit()
+    con.close()
+    return p
+
+
+def test_partial_unique_index_skipped(tmp_path):
+    """부분 UNIQUE 는 MySQL 에 같은 뜻이 없어 옮기지 않고 메모를 남깁니다."""
+    p = _one_table(tmp_path, """
+        CREATE TABLE u (a TEXT, b INTEGER);
+        CREATE UNIQUE INDEX ux_part ON u(a) WHERE b = 1;
+    """, "INSERT INTO u VALUES ('X', 1)")
+    _, posts, _, notes = ddl.build(p)
+    assert not any("ux_part" in s for s in posts)
+    assert any("ux_part" in n and "부분 UNIQUE" in n for n in notes)
+
+
+def test_partial_plain_index_kept_as_full(tmp_path):
+    """부분 일반 인덱스는 전체 인덱스로 옮겨도 결과가 같습니다(크기만 큽니다)."""
+    p = _one_table(tmp_path, """
+        CREATE TABLE u (a TEXT, b INTEGER);
+        CREATE INDEX ix_part ON u(a) WHERE b = 1;
+    """, "INSERT INTO u VALUES ('X', 1)")
+    _, posts, _, notes = ddl.build(p)
+    assert "CREATE INDEX `ix_part` ON `u` (`a`);" in posts
+    assert any("ix_part" in n and "전체 인덱스" in n for n in notes)
+
+
+def test_extra_index_on_pbp_game_date(tmp_path):
+    """MySQL 에서 한 표가 된 play_by_play 는 game_date 인덱스를 더 둡니다."""
+    p = _one_table(tmp_path, """
+        CREATE TABLE play_by_play (pbp_id INTEGER, gameID TEXT, game_date INTEGER);
+    """, "INSERT INTO play_by_play VALUES (1, 'G1', 20261003)")
+    _, posts, _, _ = ddl.build(p)
+    assert "CREATE INDEX `idx_pbp_game_date` ON `play_by_play` (`game_date`);" in posts
+
+
+def test_unique_index_number_ignores_named_indexes(tmp_path):
+    """UNIQUE 제약 이름 번호는 UNIQUE 끼리만 셉니다(뒤에 만든 일반 인덱스가 번호를 밀면 안 됩니다)."""
+    p = _one_table(tmp_path, """
+        CREATE TABLE g (a TEXT, b TEXT, c TEXT, UNIQUE (a, b));
+        CREATE INDEX idx_g_c ON g(c);
+    """, "INSERT INTO g VALUES ('x', 'y', 'z')")
+    _, posts, _, _ = ddl.build(p)
+    assert "CREATE UNIQUE INDEX `uq_g_1` ON `g` (`a`, `b`);" in posts
+    assert "CREATE INDEX `idx_g_c` ON `g` (`c`);" in posts

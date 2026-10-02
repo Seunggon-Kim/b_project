@@ -16,8 +16,12 @@ schema_post.sql(인덱스·외래키)을 적용합니다. --tables 는 --fresh �
 있으면 이어 넣을 수 없으므로 --fresh 로 다시 넣으십시오. 끝나면 없는
 인덱스·외래키만 만듭니다.
 
-다시 연결한 뒤에는 이 적재가 남긴 끊긴 이전 연결을 서버에서 스스로 끊으므로,
-적재는 한 번에 하나만 돌리십시오.
+시작할 때와 다시 연결한 뒤, **같은 계정·같은 DB 의 다른 연결을 모두** 끊습니다.
+적재 중에 같은 계정으로 verify 나 다른 적재를 돌리지 마십시오(그 연결도 끊깁니다).
+수집 계정(bstats_loader)의 연결은 계정이 달라 건드리지 않습니다.
+수집 계정(bstats_loader)으로는 시작하지 않습니다. 같은 계정으로 돌리는 reconcile·daily_pbp --mysql-only·mysql_to_sqlite 도 적재 중에는 돌리지 마십시오.
+
+    py -m migration.mysql.load --post-only     # 없는 인덱스·외래키만 만들기
 
 외래키 검사는 넣는 동안 끕니다. 대신 끝나고 외래키마다 고아 행을 세어
 보고서에 남깁니다. 넣는 순서를 맞추는 것보다 확실합니다.
@@ -42,6 +46,31 @@ REPORT = ROOT / "docs" / "mysql-migration" / "load-report.md"
 BATCH = 2000
 SESSION_SETUP = ("SET FOREIGN_KEY_CHECKS=0",
                  "SET SESSION sql_mode = CONCAT(@@SESSION.sql_mode, ',NO_AUTO_VALUE_ON_ZERO')")
+
+# 메타데이터 잠금(TRUNCATE·DDL) 대기 한도입니다. 기본값은 1년이라, 죽은 이전
+# 실행의 세션이 잠금을 쥐고 있으면 적재가 끝없이 멈춥니다(1단계에서 겪음).
+LOCK_WAIT_SEC = 120
+
+# 수집(GitHub Actions) 계정입니다. 적재기는 같은 계정의 다른 연결을 모두 끊으므로
+# 이 계정으로 돌리면 돌고 있는 수집을 끊습니다. 시작 전에 막습니다.
+COLLECTOR_USERS = ("bstats_loader",)
+
+
+def refuse_collector_account(cur):
+    """수집 계정으로 붙었으면 아무것도 끊기 전에 멈춥니다."""
+    cur.execute("SELECT CURRENT_USER()")
+    user = str(cur.fetchone()[0]).split("@", 1)[0]
+    if user in COLLECTOR_USERS:
+        raise SystemExit("%s 는 수집 계정입니다. 적재기는 이전 계정(bstats_migrator) 접속 파일로 돌리십시오." % user)
+
+
+def prepare_session(cur):
+    """연결마다 거는 세션 설정입니다. 다시 연결하면 사라지므로 그때도 다시 겁니다."""
+    for stmt in SESSION_SETUP:
+        cur.execute(stmt)
+    cur.execute("SET SESSION lock_wait_timeout = %d" % LOCK_WAIT_SEC)
+
+
 RETRIES = 8        # 한 묶음이 처음 실패한 뒤 다시 시도하는 최대 횟수
 RETRYABLE = (2003, 2006, 2013, 2055,   # MySQL 클라이언트의 연결 오류 번호
              1205, 1213)              # 잠금 대기 초과·교착: 끊긴 이전 연결이 잠금을 쥔 경우
@@ -122,8 +151,7 @@ def _reconnect_and_count(my, table):
     SESSION_SETUP 을 다시 겁니다. 행 수를 세기 전에 끊긴 이전 연결을 정리합니다."""
     my.ping(reconnect=True)
     with my.cursor() as cur:
-        for stmt in SESSION_SETUP:
-            cur.execute(stmt)
+        prepare_session(cur)
         # 끊긴 연결의 서버 세션이 끝나지 않은 묶음의 잠금을 몇 시간씩 쥘 수 있습니다.
         # 그 세션은 이 적재의 것이므로 끊어서 묶음을 되돌리고, 그 뒤에 행 수를 셉니다.
         ids = kill_stale_sessions(cur)
@@ -304,20 +332,52 @@ def render_report(snapshot, counts, fixes, orphans, secs, resumed=False):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--snapshot", required=True)
+    ap.add_argument("--snapshot", default=None)
     ap.add_argument("--fresh", action="store_true",
                     help="표를 지우고 schema.sql 로 새로 만듭니다")
     ap.add_argument("--tables", default=None,
                     help="쉼표로 구분. 이 표만 비우고 다시 넣습니다")
     ap.add_argument("--resume", action="store_true",
                     help="멈춘 --fresh 를 이어서 넣습니다(--fresh·--tables 와 함께 쓸 수 없습니다)")
+    ap.add_argument("--post-only", action="store_true",
+                    help="넣지 않고 schema_post.sql 중 없는 인덱스·외래키만 만듭니다")
     args = ap.parse_args()
 
+    if args.post_only and (args.fresh or args.tables or args.resume):
+        ap.error("--post-only 는 --fresh·--tables·--resume 과 함께 쓸 수 없습니다.")
+    if not args.post_only and not args.snapshot:
+        ap.error("--snapshot 이 필요합니다.")
     if args.fresh and args.tables:
         ap.error("--fresh 와 --tables 는 함께 쓸 수 없습니다. --fresh 는 모든 표를 지우고 새로 만듭니다.")
     if args.resume and (args.fresh or args.tables):
         ap.error("--resume 은 --fresh·--tables 와 함께 쓸 수 없습니다. "
                  "멈춘 --fresh 를 이어서 넣을 때만 씁니다.")
+
+    if args.post_only:
+        post = (OUT_DIR / "schema_post.sql").read_text(encoding="utf-8")
+        my = myconn.connect()
+        try:
+            with my.cursor() as cur:
+                prepare_session(cur)
+                refuse_collector_account(cur)
+                ids = kill_stale_sessions(cur)
+                if ids:
+                    print("이전 연결 %d개를 끊었습니다(같은 계정·같은 DB)." % len(ids))
+                apply_post_skipping_existing(cur, post)
+                bad = []
+                for label, sql in orphan_queries(post):
+                    cur.execute(sql)
+                    n = cur.fetchone()[0]
+                    if n:
+                        bad.append((label, n))
+                cur.execute("SET FOREIGN_KEY_CHECKS=1")
+            my.commit()
+        finally:
+            my.close()
+        for label, n in bad:
+            print("고아 행 %s: %s" % (label, format(n, ",")))
+        print("후처리 완료" if not bad else "후처리는 했지만 고아 행이 있습니다")
+        return 1 if bad else 0
 
     types = json.loads((OUT_DIR / "schema_types.json").read_text(encoding="utf-8"))
     table_list = ([t.strip() for t in args.tables.split(",") if t.strip()]
@@ -331,8 +391,12 @@ def main():
     my = myconn.connect()
     try:
         with my.cursor() as cur:
-            for stmt in SESSION_SETUP:
-                cur.execute(stmt)
+            prepare_session(cur)
+            # 죽은 이전 실행의 세션이 잠금을 쥐고 있을 수 있습니다. 시작할 때 정리합니다.
+            refuse_collector_account(cur)
+            ids = kill_stale_sessions(cur)
+            if ids:
+                print("이전 연결 %d개를 끊었습니다(같은 계정·같은 DB)." % len(ids), flush=True)
             if args.fresh:
                 for t in types:
                     cur.execute("DROP TABLE IF EXISTS %s" % q(t))

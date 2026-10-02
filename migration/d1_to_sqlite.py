@@ -192,6 +192,57 @@ def list_tables(db_name=DB_NAME):
     return [r["name"] for r in json.loads(body)[0]["results"]]
 
 
+_CREATE_INDEX = re.compile(r"^(\s*CREATE\s+(?:UNIQUE\s+)?INDEX\s+)(?!IF\s+NOT\s+EXISTS)",
+                           re.IGNORECASE)
+
+
+def index_sql(db_name=DB_NAME):
+    """그 D1 의 인덱스 정의입니다. [(표 이름, CREATE INDEX 문)].
+
+    `wrangler d1 export --table` 은 인덱스를 내리지 않습니다. 그래서 1단계
+    스냅샷에 공용 인덱스 13개가 빠졌고 MySQL 에도 안 생겼습니다.
+    sqlite_master 몇십 행만 읽습니다. sql 이 NULL 인 것은 UNIQUE 제약이
+    만든 자동 인덱스라 표 정의에 이미 들어 있습니다.
+    """
+    out = subprocess.run(
+        ["npx", "--yes", "wrangler@4", "d1", "execute", db_name, "--remote",
+         "--command",
+         "SELECT tbl_name, sql FROM sqlite_master "
+         "WHERE type='index' AND sql IS NOT NULL ORDER BY tbl_name, name;",
+         "--json", "--yes"],
+        capture_output=True, text=True, shell=USE_SHELL,
+        encoding="utf-8", errors="replace")
+    if out.returncode != 0:
+        raise RuntimeError("인덱스 목록 실패(%s): %s"
+                           % (db_name, (out.stderr or out.stdout)[-400:]))
+    body = out.stdout[out.stdout.find("["):]
+    return [(r["tbl_name"], r["sql"]) for r in json.loads(body)[0]["results"]]
+
+
+def idempotent_index(sql):
+    """CREATE INDEX 에 IF NOT EXISTS 를 붙입니다. 이미 있으면 그대로 둡니다."""
+    return _CREATE_INDEX.sub(r"\1IF NOT EXISTS ", sql, count=1)
+
+
+def copy_indexes(conn, db_names, fetch=index_sql):
+    """D1 의 인덱스를 로컬 스냅샷에 만듭니다. 로컬에 있는 표만 합니다.
+
+    같은 이름이 여러 D1 에 있으면(샤드마다 games 사본) 한 번만 생깁니다.
+    돌려주는 값은 실행한 문 수입니다.
+    """
+    have = {r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'")}
+    n = 0
+    for db in db_names:
+        for table, sql in fetch(db):
+            if table not in have:
+                continue
+            conn.execute(idempotent_index(sql))
+            n += 1
+    conn.commit()
+    return n
+
+
 def meta_row_count(table, db_name):
     """샤드의 meta_table_counts 에 적힌 행 수입니다. 없으면 None 입니다.
 
@@ -267,7 +318,20 @@ def main():
                     default="d1",
                     help="샤드 행 수 확인: d1=COUNT(*)(표를 한 번 더 읽음), "
                          "meta=meta_table_counts 한 줄, none=안 함")
+    ap.add_argument("--indexes-only", action="store_true",
+                    help="내려받지 않고, 이미 있는 --out 스냅샷에 D1 인덱스만 만듭니다")
     args = ap.parse_args()
+
+    if args.indexes_only:
+        out = Path(args.out)
+        if not out.exists():
+            raise SystemExit("%s 가 없습니다. --indexes-only 는 있는 스냅샷에만 씁니다." % out)
+        conn = sqlite3.connect(str(out))
+        dbs = [DB_NAME] + [s["database"] for s in shard_plan.shards()]
+        n = copy_indexes(conn, dbs)
+        conn.close()
+        print("인덱스 %d문을 적용했습니다(이미 있던 것 포함): %s" % (n, out))
+        return 0
 
     if args.all_tables:
         tables = migrated_tables(list_tables())
@@ -339,6 +403,12 @@ def main():
             prev_rows[t] = n
             if not args.keep_sql:
                 path.unlink()
+        if args.all_tables:
+            # 공용 DB 를 먼저 둡니다. 샤드에도 games 사본이 있어, 같은 이름이면 먼저 적용한 정의가 남습니다.
+            # --indexes-only 와 같은 순서입니다.
+            dbs = [DB_NAME] + sorted({db for _, db, _ in jobs} - {DB_NAME})
+            n = copy_indexes(conn, dbs)
+            print("D1 인덱스 %d문을 스냅샷에 적용했습니다." % n, flush=True)
         conn.close()
     finally:
         if not args.keep_sql:
