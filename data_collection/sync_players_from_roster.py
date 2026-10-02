@@ -83,6 +83,19 @@ def diffs():
     return out
 
 
+def split_known(rows, known):
+    """teams 에 있는 소속만 남깁니다. (반영할 것, 건너뛴 것) 입니다.
+
+    퓨처스 명단에는 상무·울산처럼 teams 에 없는 팀이 있습니다.
+    players.team_id 는 teams 를 가리키는 외래키라, 그런 행이 하나라도
+    섞이면 파일 전체가 실패합니다. 2026-08-29 부터 roster 작업이 매번
+    빨간 이유였습니다.
+    """
+    keep = [r for r in rows if r["rt"] in known]
+    skip = [r for r in rows if r["rt"] not in known]
+    return keep, skip
+
+
 def sql_str(v):
     return "'" + str(v).replace("'", "''") + "'"
 
@@ -95,6 +108,16 @@ def main():
     rows = diffs()
     if not rows:
         print("바꿀 것이 없습니다. players 가 최신입니다.")
+        return 0
+
+    known = {r["team_id"] for r in query("SELECT team_id FROM teams;")}
+    rows, skipped = split_known(rows, known)
+    if skipped:
+        print("teams 에 없는 소속이라 건너뛴 선수 %d명: %s"
+              % (len(skipped), ", ".join("%s(%s)" % (r["nm"], r["rt"])
+                                         for r in skipped[:10])))
+    if not rows:
+        print("반영할 것이 없습니다.")
         return 0
 
     team = sum(1 for r in rows if (r["pt"] or "") != r["rt"])
@@ -123,7 +146,7 @@ def main():
     run_d1_file(out)
     print("반영 완료 (%d문)" % len(lines))
 
-    left = diffs()
+    left = [r for r in diffs() if r["rt"] in known]
     print("남은 불일치 %d명" % len(left))
     return 0
 

@@ -85,7 +85,7 @@ jobs:
       # 실패해도 명단 갱신은 이미 끝났으므로 작업을 빨갛게 만들지 않습니다.
       - name: 새 선수 추가
         id: newp
-        if: steps.roster.outcome == 'success'
+        if: ${{ !cancelled() && steps.roster.outcome == 'success' }}
         continue-on-error: true
         run: python data_collection/add_new_players.py
 
@@ -94,6 +94,7 @@ jobs:
       # 않아 손으로 한 번 받아 둔 것으로 충분합니다.
       - name: 퓨처스 올 시즌 기록 갱신
         id: futures
+        if: ${{ !cancelled() }}
         continue-on-error: true
         run: python data_collection/futures_records.py --season 2026
 
@@ -106,7 +107,7 @@ jobs:
             --note "명단 ${{ steps.roster.outcome }} / players ${{ steps.sync.outcome }} / 새선수 ${{ steps.newp.outcome }} / 퓨처스기록 ${{ steps.futures.outcome }}"
 
       - name: 캐시 비우기
-        if: steps.roster.outcome == 'success'
+        if: ${{ !cancelled() && steps.roster.outcome == 'success' }}
         env:
           ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
         run: |
