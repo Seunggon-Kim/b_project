@@ -176,13 +176,14 @@ D1 의 깨진 포스트시즌 행은 고치지 않음, 키 대신 WIF, 보강 4�
 - 1단계 뒤 /32 허용 네트워크를 삭제했습니다(2026-10-02, 프록시 경유 접속 확인).
 - 5단계 뒤 migrator 비밀번호를 교체하고 서비스 계정 키를 삭제합니다.
 - migrator 계정은 앱에 쓰지 않습니다.
+- 5단계 뒤 WIF 공급자 조건(저장소 ID·main)과 bstats-loader 권한(Cloud SQL 클라이언트만)을 다시 확인합니다.
 
 ## 접속 설계
 
 | 누가 | 방법 | 계정 | 단계 |
 |---|---|---|---|
 | 이전 작업(evan PC) | Cloud SQL Auth Proxy(서비스 계정 `bstats-migrator`). 직접 TLS 경로(공인 IP `/32` 허용 + 서버 CA 검증)는 보조 | `bstats_migrator` (bstats.* 전체) | 1 |
-| 수집(GitHub Actions) | Cloud SQL Auth Proxy + 서비스 계정 키 | `bstats_loader` (bstats.* 읽기·쓰기) | 2 |
+| 수집(GitHub Actions) | Cloud SQL Auth Proxy + Workload Identity Federation(키 없음, 이 저장소 main 에서만) | `bstats_loader` (bstats.* SELECT·INSERT·UPDATE·DELETE) | 2 |
 | API(Cloudflare Worker) | Hyperdrive | `bstats_api` (bstats.* 읽기 전용) | 3 |
 | 분석(BigQuery) | Cloud SQL 연결 | `bstats_bq` (읽기 전용) | 4 |
 
