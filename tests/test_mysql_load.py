@@ -151,6 +151,7 @@ class RetryCursor:
     def __init__(self, conn):
         self.conn = conn
         self.row = None
+        self.rows = []
 
     def __enter__(self):
         return self
@@ -162,9 +163,17 @@ class RetryCursor:
         self.conn.executed.append(sql)
         if sql.startswith("SELECT COUNT(*)"):
             self.row = (self.conn.count,)
+        elif "information_schema.PROCESSLIST" in sql:
+            c = self.conn
+            self.rows = c.processlists.pop(0) if c.processlists else []
+        elif sql.startswith("KILL ") and self.conn.kill_error:
+            raise self.conn.kill_error
 
     def fetchone(self):
         return self.row
+
+    def fetchall(self):
+        return self.rows
 
     def executemany(self, sql, rows):
         c = self.conn
@@ -183,7 +192,8 @@ class RetryConn:
     """
 
     def __init__(self, count=0, fail_calls=(), fail_always=False,
-                 commit_fail_on=(), error=None, ping_errors=()):
+                 commit_fail_on=(), error=None, ping_errors=(),
+                 processlists=(), kill_error=None):
         self.log = []
         self.executed = []
         self.pings = []
@@ -195,6 +205,8 @@ class RetryConn:
         self.commit_fail_on = set(commit_fail_on)
         self.error = error or pymysql.err.OperationalError(2006, "gone away")
         self.ping_errors = list(ping_errors)
+        self.processlists = [list(p) for p in processlists]   # PROCESSLIST 질의마다 차례로 답합니다
+        self.kill_error = kill_error
 
     def cursor(self):
         return RetryCursor(self)
@@ -316,10 +328,41 @@ def test_retry_on_renumbered_table_reuses_same_ids(sleeps):
     assert _batches(my) == [[(1, 10), (2, 20)], [(3, 30)]]
 
 
+def test_retry_kills_stale_sessions_before_count(sleeps, capsys):
+    sq, spec = _three_rows()
+    my = RetryConn(count=0, fail_calls={1}, processlists=[[(77,)], []])
+    n = load.load_table(sq, my, "t", spec, collections.Counter(), batch=2)
+    assert n == 3
+    assert "KILL 77" in my.executed
+    assert my.executed.index("KILL 77") < my.executed.index("SELECT COUNT(*) FROM `t`")
+    assert _batches(my) == [[(1,), (2,)], [(3,)]]
+    assert "   t: 끊긴 이전 연결 1개를 정리했습니다\n" in capsys.readouterr().out
+
+
+def test_lock_wait_timeout_is_retryable(sleeps):
+    sq, spec = _three_rows()
+    my = RetryConn(count=0, fail_calls={1},
+                   error=pymysql.err.OperationalError(1205, "Lock wait timeout exceeded"))
+    n = load.load_table(sq, my, "t", spec, collections.Counter(), batch=2)
+    assert n == 3
+    assert my.pings == [True]
+    assert _batches(my) == [[(1,), (2,)], [(3,)]]
+
+
+def test_kill_ignores_unknown_thread(sleeps):
+    sq, spec = _three_rows()
+    my = RetryConn(count=0, fail_calls={1}, processlists=[[(77,)], []],
+                   kill_error=pymysql.err.OperationalError(1094, "Unknown thread id: 77"))
+    n = load.load_table(sq, my, "t", spec, collections.Counter(), batch=2)
+    assert n == 3
+    assert _batches(my) == [[(1,), (2,)], [(3,)]]
+
+
 def test_is_retryable():
     assert load.is_retryable(pymysql.err.OperationalError(2006, "gone away"))
     assert load.is_retryable(pymysql.err.InterfaceError(2013, "lost"))
-    assert not load.is_retryable(pymysql.err.OperationalError(1205, "lock wait"))
+    assert load.is_retryable(pymysql.err.OperationalError(1205, "lock wait"))
+    assert load.is_retryable(pymysql.err.OperationalError(1213, "deadlock"))
     assert not load.is_retryable(pymysql.err.IntegrityError(1062, "dup"))
     assert not load.is_retryable(pymysql.err.DataError(1264, "out of range"))
     assert load.is_retryable(ConnectionResetError())

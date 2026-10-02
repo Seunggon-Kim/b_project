@@ -16,6 +16,9 @@ schema_post.sql(인덱스·외래키)을 적용합니다. --tables 는 --fresh �
 있으면 이어 넣을 수 없으므로 --fresh 로 다시 넣으십시오. 끝나면 없는
 인덱스·외래키만 만듭니다.
 
+다시 연결한 뒤에는 이 적재가 남긴 끊긴 이전 연결을 서버에서 스스로 끊으므로,
+적재는 한 번에 하나만 돌리십시오.
+
 외래키 검사는 넣는 동안 끕니다. 대신 끝나고 외래키마다 고아 행을 세어
 보고서에 남깁니다. 넣는 순서를 맞추는 것보다 확실합니다.
 """
@@ -40,7 +43,8 @@ BATCH = 2000
 SESSION_SETUP = ("SET FOREIGN_KEY_CHECKS=0",
                  "SET SESSION sql_mode = CONCAT(@@SESSION.sql_mode, ',NO_AUTO_VALUE_ON_ZERO')")
 RETRIES = 8        # 한 묶음이 처음 실패한 뒤 다시 시도하는 최대 횟수
-RETRYABLE = (2003, 2006, 2013, 2055)   # MySQL 클라이언트의 연결 오류 번호
+RETRYABLE = (2003, 2006, 2013, 2055,   # MySQL 클라이언트의 연결 오류 번호
+             1205, 1213)              # 잠금 대기 초과·교착: 끊긴 이전 연결이 잠금을 쥔 경우
 _sleep = time.sleep                    # 테스트에서 바꿔 끼웁니다
 _POST_INDEX = re.compile(r"CREATE (?:UNIQUE )?INDEX `([^`]+)` ON `([^`]+)`")
 _POST_FK = re.compile(r"ALTER TABLE `([^`]+)` ADD CONSTRAINT `([^`]+)` FOREIGN KEY")
@@ -82,13 +86,49 @@ def is_retryable(exc):
     return isinstance(exc, (ConnectionError, TimeoutError, OSError))
 
 
+_STALE = ("SELECT ID FROM information_schema.PROCESSLIST "
+          "WHERE USER = SUBSTRING_INDEX(CURRENT_USER(), '@', 1) "
+          "AND ID <> CONNECTION_ID() AND DB = DATABASE()")
+UNKNOWN_THREAD = 1094
+
+
+def kill_stale_sessions(cur):
+    """같은 계정·같은 데이터베이스의 다른 연결을 모두 끊고, 끊은 번호를 돌려줍니다.
+
+    끊긴 연결의 서버 쪽 세션은 한참(wait_timeout, 몇 시간) 남아 미확정 묶음의 잠금을
+    쥘 수 있습니다. 그 세션은 이 적재의 것이므로 끊으면 묶음이 되돌려지고 잠금이
+    풀려, 이어지는 행 수 확인도 정확해집니다. 이미 사라진 번호(1094)는 무시합니다.
+    """
+    cur.execute(_STALE)
+    ids = [int(r[0]) for r in cur.fetchall()]
+    for sid in ids:
+        try:
+            cur.execute("KILL %d" % sid)
+        except (pymysql.err.OperationalError, pymysql.err.InternalError) as e:
+            if not (e.args and e.args[0] == UNKNOWN_THREAD):
+                raise
+    for _ in range(30):
+        if not ids:
+            break
+        cur.execute(_STALE)
+        if not cur.fetchall():
+            break
+        _sleep(1)
+    return ids
+
+
 def _reconnect_and_count(my, table):
     """다시 연결하고 표의 행 수를 돌려줍니다. 세션 설정은 연결과 함께 사라지므로
-    SESSION_SETUP 을 다시 겁니다."""
+    SESSION_SETUP 을 다시 겁니다. 행 수를 세기 전에 끊긴 이전 연결을 정리합니다."""
     my.ping(reconnect=True)
     with my.cursor() as cur:
         for stmt in SESSION_SETUP:
             cur.execute(stmt)
+        # 끊긴 연결의 서버 세션이 끝나지 않은 묶음의 잠금을 몇 시간씩 쥘 수 있습니다.
+        # 그 세션은 이 적재의 것이므로 끊어서 묶음을 되돌리고, 그 뒤에 행 수를 셉니다.
+        ids = kill_stale_sessions(cur)
+        if ids:
+            print("   %s: 끊긴 이전 연결 %d개를 정리했습니다" % (table, len(ids)), flush=True)
         cur.execute("SELECT COUNT(*) FROM %s" % q(table))
         return cur.fetchone()[0]
 
