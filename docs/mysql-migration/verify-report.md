@@ -37,3 +37,13 @@
 | wrc_plus_comparison | 3,218 | 3,218 | 건너뜀(기본키 없음) | 같음 |
 
 경기별 플레이 수: 12,491경기 중 다른 경기 0개
+
+## 경기 안 순서 확인 (2026-10-02)
+
+```sql
+LAG(pbp_id) OVER (PARTITION BY gameID ORDER BY rowid)
+```
+
+스냅샷에서 위 식으로 앞 줄보다 번호가 작아 순서가 뒤바뀐 곳을 찾았습니다. 결과는 0건입니다(12,491경기).
+
+RE24 계산이 시즌 안 `ORDER BY pbp_id` 에 기대므로(`park_factors/build_re24_run_values.py`) 이 확인이 중요합니다.

@@ -34,7 +34,7 @@
 | gcloud 설정 | `bstats` (기본값 아님. 명령마다 `--configuration=bstats`) |
 | 예산 알림 | 월 30,000원, 50·90·100% |
 | 인스턴스 | `bstats-mysql`, asia-northeast3, MYSQL_8_4, db-f1-micro, SSD 10GB 자동 증가 |
-| 보안 | `ENCRYPTED_ONLY`, 삭제 방지, 허용 네트워크 없음 |
+| 보안 | `ENCRYPTED_ONLY`, 삭제 방지, 허용 네트워크: 이전 작업 PC 주소 하나(/32). 프록시 경로를 쓰므로 1단계 뒤 지울 예정 |
 | 백업 | 매일 17:00 UTC(02:00 KST), 7개 보관 |
 | 점검 | 일요일 19:00 UTC(월 04:00 KST) |
 | 데이터베이스 | `bstats` utf8mb4 / utf8mb4_0900_ai_ci |
@@ -63,7 +63,7 @@
 | # | 할 일 | 효과 | 상태 |
 |---|---|---|---|
 | 0-1 | D1 유료 전환(월 5달러) | 하루 한도 문제 즉시 해소 | evan 결정 대기 |
-| 0-2 | `kbo-pbp-2008-2011`·`kbo-pbp-2012-2014` 의 `meta_table_counts` 에 `play_by_play` 행 수(668,325 / 547,226) 기록 | `/dashboard/stats` 캐시 미스당 120만 행 읽기 제거 | 승인 대기(D1 쓰기 2행) |
+| 0-2 | `kbo-pbp-2008-2011`·`kbo-pbp-2012-2014` 의 `meta_table_counts` 에 `play_by_play` 행 수(668,325 / 547,226) 기록 | `/dashboard/stats` 캐시 미스당 120만 행 읽기 제거 | 완료(2026-10-02) |
 | 0-3 | `sync_players_from_roster.py` 가 `teams` 에 없는 팀(상무·울산)을 건너뛰게 수정, `roster.yml` 뒤 단계 조건을 `!cancelled() &&` 로 | 8/29 이후 33번 연속 실패 해소, 퓨처스 기록·캐시 비우기 정상화 | 승인 대기 |
 | 0-4 | 오류 응답에 `cache-control: no-store`(Worker 11개 라우트), 화면은 `error` 필드를 보고 "불러오지 못했습니다" 표시(화면 세션) | 한 번의 D1 실패가 10분~1시간 굳는 것 방지 | 승인 대기 |
 | 0-5 | 이전이 끝날 때까지 주 1회 파크팩터 작업의 확인용 COUNT 를 끄거나 작업을 멈춤 | 주 1회 한도 초과 방지 | 승인 대기 |
@@ -92,6 +92,13 @@ D1 을 로컬 SQLite 스냅샷으로 한 번 내려받고, 그 스냅샷에서 M
   `back_number` 처럼 `'00'` 과 `'0'` 이 다른 열은 글자로 남습니다.
 - `_bak` 표, `sqlite_*`·`_cf_*`·`d1_migrations` 는 옮기지 않습니다.
 
+### 1단계 결과
+
+- 2026-10-02 에 실행을 마쳤습니다. 30개 표, play_by_play 3,983,367행, 외래키 고아 행 0 입니다.
+- 대조는 모두 같습니다(표별 행 수, 경기별 12,491경기, 표본 200행, 경기 안 순서 0건 뒤바뀜).
+- 스냅샷은 혼합본입니다(공용 표·2008-2014·2024-2026 은 새로, 2015-2023 은 8/29 사본). 상세는 1단계 계획서 `실제 실행 기록`.
+- 남은 보강은 아래 2단계 앞 목록입니다.
+
 ### 2단계: 수집 스크립트를 MySQL 로 (상세 계획서는 1단계 뒤)
 
 - `data_collection/d1_load.py` 에 모인 적재 함수(`run_d1`, `run_d1_file`,
@@ -108,6 +115,12 @@ D1 을 로컬 SQLite 스냅샷으로 한 번 내려받고, 그 스냅샷에서 M
 - 이중 적재 기간: 한동안 D1 과 MySQL 에 같이 씁니다. 매일 행 수를 대조합니다.
 - GitHub Actions 접속: Cloud SQL Auth Proxy + 수집 전용 서비스 계정 키
   (GitHub 시크릿). 러너 IP 가 매번 바뀌어 IP 허용 방식은 쓰지 않습니다.
+- 다음 스냅샷·전환 전에 고칠 1단계 도구 보강(최종 검토 결과):
+  1. 인덱스 이월: D1 의 `sqlite_master` 에서 인덱스 DDL(공용·샤드)을 읽어 스냅샷에 적용하는 단계를 코드로 만듭니다(`--all-tables` 일 때만). verify 가 schema_post 개체가 모두 있는지 확인합니다. 부분 UNIQUE 인덱스가 전체 UNIQUE 로 바뀌는 문제도 함께 처리합니다.
+  2. `d1_to_sqlite --append` 보호: 행 수가 맞지 않으면 이번에 붙인 행을 지우고 멈춥니다. 받은 샤드 이름을 기록해 같은 샤드 재부착을 거부합니다. `--shards` 이름을 검증합니다. 쓰는 중인 샤드는 `--count-check d1` 로 확인합니다. 계획 Step 3 기대값을 샤드별 합계와 정확히 비교합니다.
+  3. 적재기: 시작할 때 같은 계정의 이전 연결을 정리합니다. `SET SESSION lock_wait_timeout=120` 을 둡니다. 가능하면 이 프로세스가 쓴 연결 번호만 끊습니다. KILL 범위 문구를 실제와 맞춥니다(같은 계정·같은 DB 의 다른 연결을 모두 끊습니다. 적재 중 verify 등 동시 실행 금지).
+  4. 스냅샷 지문: `--fresh` 때 스냅샷 이름·크기·표별 행 수·schema_types.json 해시를 MySQL 작은 표에 남기고 `--resume`·verify 가 확인합니다. 스냅샷의 옮길 표·열이 schema_types.json 에 없으면 load·verify 가 실패합니다.
+- `shard_backfill` 이 meta_table_counts 를 갱신하지 않습니다(옛 샤드 meta 가 다시 낡을 수 있습니다).
 - 수집기 버그: 포스트시즌 일부 경기(경기 코드 3333/5555/7777)의 play_by_play.game_date 에 경기 코드 일부(예: TOB00929)가 들어갑니다. 2026 포스트시즌 전에 고칩니다(1단계 리허설에서 발견, 2026-10-02).
 
 ### 3단계: API 를 MySQL 로 (상세 계획서는 2단계 뒤)
@@ -131,6 +144,15 @@ D1 을 로컬 SQLite 스냅샷으로 한 번 내려받고, 그 스냅샷에서 M
 - Hyperdrive 의 접속 경로(공인 IP 허용 목록 또는 Cloudflare Tunnel)는
   이 단계에서 정합니다.
 
+3단계 확인 목록(최종 검토 결과):
+
+- player_id 등 TEXT 가 INT UNSIGNED 로 바뀌어 JSON 타입이 문자열에서 숫자로 바뀝니다. 응답 모양 원칙과 충돌하므로 CAST 로 유지합니다.
+- `''` 를 NULL 로 정리해 AVG/SUM 의미가 바뀔 수 있습니다(speed 12,103행, pitch_number 11,283행).
+- 포스트시즌 26,450행이 날짜 범위 안으로 들어옵니다. 시즌 집계 포함 여부를 정해야 합니다.
+- 정렬 규칙이 utf8mb4_0900_ai_ci 라 SQLite BINARY 와 다릅니다(ID·코드 열은 utf8mb4_bin 검토).
+- 외래키가 생긴 표에 `INSERT OR REPLACE` 를 `REPLACE` 로 옮기면 실패하므로 `ON DUPLICATE KEY UPDATE` 를 씁니다.
+- 자유 글자 열 VARCHAR 가 관측 최대의 2배라 빠듯합니다(수집기 이전 때 넓히기 검토).
+
 ### 4단계: 빅쿼리 연결 (상세 계획서는 3단계 뒤)
 
 - BigQuery Connection API 로 Cloud SQL 연결을 만들고, 데이터셋은 같은
@@ -144,11 +166,17 @@ D1 을 로컬 SQLite 스냅샷으로 한 번 내려받고, 그 스냅샷에서 M
 - D1 은 2주 동안 읽기 전용으로 두고, 이상 없으면 지웁니다. D1 유료였다면
   해지합니다.
 
+## 보안 정리
+
+- 1단계 뒤 /32 허용 네트워크를 삭제합니다(프록시만 사용, evan 확인 후).
+- 5단계 뒤 migrator 비밀번호를 교체하고 서비스 계정 키를 삭제합니다.
+- migrator 계정은 앱에 쓰지 않습니다.
+
 ## 접속 설계
 
 | 누가 | 방법 | 계정 | 단계 |
 |---|---|---|---|
-| 이전 작업(evan PC) | 공인 IP `/32` 허용 + TLS + 서버 CA 검증 | `bstats_migrator` (bstats.* 전체) | 1 |
+| 이전 작업(evan PC) | Cloud SQL Auth Proxy(서비스 계정 `bstats-migrator`). 직접 TLS 경로(공인 IP `/32` 허용 + 서버 CA 검증)는 보조 | `bstats_migrator` (bstats.* 전체) | 1 |
 | 수집(GitHub Actions) | Cloud SQL Auth Proxy + 서비스 계정 키 | `bstats_loader` (bstats.* 읽기·쓰기) | 2 |
 | API(Cloudflare Worker) | Hyperdrive | `bstats_api` (bstats.* 읽기 전용) | 3 |
 | 분석(BigQuery) | Cloud SQL 연결 | `bstats_bq` (읽기 전용) | 4 |
@@ -162,4 +190,5 @@ D1 을 로컬 SQLite 스냅샷으로 한 번 내려받고, 그 스냅샷에서 M
 ## 결정 대기
 
 1. 0단계 항목별 승인(특히 0-1 D1 유료, 0-2 메타 2행 쓰기).
-2. 1단계 스냅샷을 하루에 받을지(유료) 이틀에 나눠 받을지(무료).
+2. 결정됨: 혼합 스냅샷으로 2026-10-02 에 실행했습니다.
+3. 1단계 브랜치 병합(evan 결정).
