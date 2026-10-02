@@ -41,6 +41,21 @@ def uses_tls(settings):
     return settings.get("ssl_ca") is not None
 
 
+def _open(kwargs):
+    """연결을 엽니다. PyMySQL 의 첫 로그인 버그면 한 번 더 붙습니다.
+
+    PyMySQL 2.2 는 caching_sha2 전체 인증(RSA) 뒤 결과 패킷을 돌려주지 않아
+    AttributeError 를 냅니다. 서버는 이미 로그인을 받아 두었으므로 다시 붙으면
+    빠른 경로로 지나갑니다. 새 계정이거나 서버가 재시작한 뒤 첫 로그인에서 납니다.
+    """
+    try:
+        return pymysql.connect(**kwargs)
+    except AttributeError as e:
+        if "is_auth_switch_request" not in str(e):
+            raise
+        return pymysql.connect(**kwargs)
+
+
 def load_settings(path=None):
     """접속 정보를 읽습니다. 빠진 항목이 있으면 이름을 적어 ValueError."""
     path = path or settings_path()
@@ -69,7 +84,7 @@ def connect(settings=None, database=True):
                       ssl_verify_identity=False)
     elif s.get("server_public_key_file"):
         kwargs["server_public_key"] = Path(s["server_public_key_file"]).read_bytes()
-    return pymysql.connect(**kwargs)
+    return _open(kwargs)
 
 
 def main():
