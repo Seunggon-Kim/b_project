@@ -42,6 +42,7 @@ sys.path.insert(0, str(HERE))
 from d1_load import build_upserts, query, run_d1_file  # noqa: E402
 import futures_register
 from kbo_register import collect  # noqa: E402
+from mysql_sink import mirror  # noqa: E402
 
 ROSTER_COLS = ["team", "name", "back_number", "role", "player_id",
                "as_of", "league"]
@@ -109,6 +110,20 @@ def resolve(by_team, nums, by_name, name, team, back_number):
     # 은퇴 선수가 섞였을 수 있어 포기합니다.
     only = by_name.get(name) or set()
     return next(iter(only)) if len(only) == 1 else None
+
+
+def mysql_write_roster(sink, rows, moves):
+    """D1 과 같은 순서입니다. 명단·등말소를 덮어쓰고, 명단에서 빠진 선수를 지웁니다."""
+    n = sink.upsert("kbo_roster", ROSTER_COLS, ["team", "name", "back_number"], rows)
+    if moves:
+        sink.upsert("kbo_roster_moves", MOVE_COLS, ["move_date", "kind", "team", "name"], moves)
+    if rows:
+        keys = [(x["team"], x["name"], x["back_number"]) for x in rows]
+        sink.execute(
+            "DELETE FROM `kbo_roster` WHERE (`team`, `name`, `back_number`) NOT IN (%s)"
+            % ", ".join(["(%s, %s, %s)"] * len(keys)),
+            [v for k in keys for v in k])
+    return n
 
 
 def main():
@@ -216,6 +231,7 @@ def main():
     run_d1_file(gone)
     left = query("SELECT COUNT(*) AS n FROM kbo_roster;")[0]["n"]
     print("현재 명단 %s명" % left)
+    mirror("roster", lambda s: mysql_write_roster(s, rows, moves))
     return 0
 
 

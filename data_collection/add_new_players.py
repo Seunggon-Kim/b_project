@@ -58,6 +58,7 @@ ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 
 from d1_load import query, run_d1_file  # noqa: E402
+from mysql_sink import mirror  # noqa: E402
 
 SEARCH_URL = "https://www.koreabaseball.com/Player/Search.aspx"
 API_BASE = "https://kbo-api.bstats-baseball.workers.dev"
@@ -207,6 +208,54 @@ def player_row(r):
     }
 
 
+NEW_PLAYER_COLS = ["player_id", "player_name", "team_id", "back_number", "position",
+                   "birthday", "height", "weight", "career", "image_url"]
+
+
+def id_fill_targets(found):
+    """빈 player_id 를 채울 (표, ID, [(열, 값), …]) 목록입니다.
+
+    이름+팀만으로 안 갈렸던 선수는 가를 때 쓴 조건(포지션·등번호)을 똑같이
+    붙입니다. 그래야 같은 팀 동명이인의 다른 한 명에게 ID 가 잘못 붙지
+    않습니다. 등말소 표에는 등번호가 없어, 등번호로만 갈린 선수는 둘 중
+    누구인지 모르니 건드리지 않습니다.
+    """
+    out, done = [], set()
+    for name, team, hit, used in found:
+        pid = int(hit["player_id"])
+        base = [("name", name), ("team", team)]
+        roster = base + ([("role", hit["position"])] if "pos" in used else [])
+        if "bn" in used:
+            roster = roster + [("back_number", hit["back_number"])]
+        targets = [("kbo_roster", pid, roster)]
+        if "bn" not in used:
+            targets.append(("kbo_roster_moves", pid,
+                            base + ([("position", hit["position"])] if "pos" in used else [])))
+        for t in targets:
+            key = (t[0], t[1], tuple(t[2]))
+            if key not in done:
+                done.add(key)
+                out.append(t)
+    return out
+
+
+def d1_update_sql(table, pid, conds):
+    where = " AND ".join("%s=%s" % (c, sql_val(v)) for c, v in conds)
+    return "UPDATE %s SET player_id=%d WHERE player_id IS NULL AND %s;" % (table, pid, where)
+
+
+def mysql_write_new_players(sink, new_rows, targets):
+    """새 선수는 없을 때만 넣고(created_at·updated_at 은 MySQL 기본값), 빈 ID 를 채웁니다."""
+    if new_rows:
+        sink.insert_missing("players", NEW_PLAYER_COLS, ["player_id"], new_rows)
+    for table, pid, conds in targets:
+        sink.execute(
+            "UPDATE `%s` SET `player_id`=%%s WHERE `player_id` IS NULL AND %s"
+            % (table, " AND ".join("`%s`=%%s" % c for c, _ in conds)),
+            [pid] + [sink.value(table, c, v) for c, v in conds])
+    return len(new_rows)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
@@ -254,46 +303,20 @@ def main():
             print("\n[미리보기] 반영하지 않았습니다.")
         return 0
 
-    cols = ["player_id", "player_name", "team_id", "back_number", "position",
-            "birthday", "height", "weight", "career", "image_url"]
     lines = []
     for p in new_rows:
         lines.append(
             "INSERT OR IGNORE INTO players (%s, created_at, updated_at) "
             "VALUES (%s, datetime('now'), datetime('now'));"
-            % (", ".join(cols), ", ".join(sql_val(p[c]) for c in cols)))
-    # 명단·등말소의 빈 ID 를 채웁니다. 이름+팀만으로 안 갈렸던 선수는
-    # 가를 때 쓴 조건(포지션·등번호)을 WHERE 에 똑같이 붙입니다. 그래야
-    # 같은 팀 동명이인의 다른 한 명에게 ID 가 잘못 붙지 않습니다.
-    done = set()
-    for name, team, hit, used in found:
-        pid = int(hit["player_id"])
-        base = "player_id IS NULL AND name=%s AND team=%s" % (
-            sql_val(name), sql_val(team))
-        def pos(col):
-            if "pos" not in used:
-                return ""
-            return " AND %s=%s" % (col, sql_val(hit["position"]))
-
-        roster = base + pos("role")
-        if "bn" in used:
-            roster += " AND back_number=%s" % sql_val(hit["back_number"])
-        for stmt in (
-            "UPDATE kbo_roster SET player_id=%d WHERE %s;" % (pid, roster),
-            # 등말소 표에는 등번호가 없습니다. 등번호로만 갈린 선수는
-            # 둘 중 누구인지 모르니 건드리지 않습니다.
-            None if "bn" in used else
-            "UPDATE kbo_roster_moves SET player_id=%d WHERE %s;"
-            % (pid, base + pos("position")),
-        ):
-            if stmt and stmt not in done:
-                done.add(stmt)
-                lines.append(stmt)
+            % (", ".join(NEW_PLAYER_COLS), ", ".join(sql_val(p[c]) for c in NEW_PLAYER_COLS)))
+    targets = id_fill_targets(found)
+    lines += [d1_update_sql(*t) for t in targets]
 
     out = ROOT / "migration" / "players_add_new.sql"
     out.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     run_d1_file(out)
     print("반영 완료 (새 선수 %d명, 문 %d개)" % (len(new_rows), len(lines)))
+    mirror("players_new", lambda s: mysql_write_new_players(s, new_rows, targets))
     return 0
 
 

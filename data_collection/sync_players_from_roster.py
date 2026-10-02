@@ -41,6 +41,7 @@ ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 
 from d1_load import query, run_d1_file  # noqa: E402
+from mysql_sink import mirror  # noqa: E402
 
 
 def same_number(db_value, kbo_value):
@@ -69,18 +70,24 @@ def same_number(db_value, kbo_value):
         return str(db_value) == str(kbo_value)
 
 
-def diffs():
-    """(player_id, 이름, 새 소속, 새 등번호, 옛 소속, 옛 등번호) 목록."""
-    rows = query(
-        "SELECT r.player_id AS pid, r.name AS nm, r.team AS rt, "
-        "r.back_number AS rb, p.team_id AS pt, p.back_number AS pb "
-        "FROM kbo_roster r JOIN players p ON p.player_id = r.player_id;")
+DIFF_SQL = ("SELECT r.player_id AS pid, r.name AS nm, r.team AS rt, "
+            "r.back_number AS rb, p.team_id AS pt, p.back_number AS pb "
+            "FROM kbo_roster r JOIN players p ON p.player_id = r.player_id")
+
+
+def pick_diffs(rows):
+    """소속이나 등번호가 다른 행만 고릅니다."""
     out = []
     for r in rows:
         same_team = (r["pt"] or "") == r["rt"]
         if not (same_team and same_number(r["pb"], r["rb"])):
             out.append(r)
     return out
+
+
+def diffs():
+    """(player_id, 이름, 새 소속, 새 등번호, 옛 소속, 옛 등번호) 목록."""
+    return pick_diffs(query(DIFF_SQL + ";"))
 
 
 def split_known(rows, known):
@@ -100,11 +107,23 @@ def sql_str(v):
     return "'" + str(v).replace("'", "''") + "'"
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--dry-run", action="store_true")
-    args = ap.parse_args()
+def mysql_write_sync(sink):
+    """MySQL 의 명단·선수 표로 같은 판단을 다시 해 반영합니다.
 
+    D1 의 결과를 옮기지 않고 MySQL 안에서 다시 계산합니다. 두 DB 가 같으면
+    결과도 같고, 다르면 매일 대조(reconcile)가 잡아냅니다.
+    """
+    known = {r["team_id"] for r in sink.query("SELECT team_id FROM teams")}
+    rows, _ = split_known(pick_diffs(sink.query(DIFF_SQL)), known)
+    for r in rows:
+        sink.execute(
+            "UPDATE `players` SET `team_id`=%s, `back_number`=%s, "
+            "`updated_at`=UTC_TIMESTAMP() WHERE `player_id`=%s",
+            [r["rt"], sink.value("players", "back_number", r["rb"]), int(r["pid"])])
+    return len(rows)
+
+
+def sync_d1(args):
     rows = diffs()
     if not rows:
         print("바꿀 것이 없습니다. players 가 최신입니다.")
@@ -149,6 +168,16 @@ def main():
     left = [r for r in diffs() if r["rt"] in known]
     print("남은 불일치 %d명" % len(left))
     return 0
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--dry-run", action="store_true")
+    args = ap.parse_args()
+    rc = sync_d1(args)
+    if not args.dry_run:
+        mirror("players_sync", mysql_write_sync)
+    return rc
 
 
 if __name__ == "__main__":

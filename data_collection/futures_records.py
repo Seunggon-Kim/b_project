@@ -40,6 +40,7 @@ sys.path.insert(0, str(ROOT / "data_collection"))
 
 from d1_load import run_d1_file, sql_literal  # noqa: E402
 from kbo_http import Session  # noqa: E402
+from mysql_sink import mirror  # noqa: E402
 
 BASE = "https://www.koreabaseball.com/Futures/Player/"
 TABLE_CLASS = "tbl tt"
@@ -153,6 +154,18 @@ def insert_sql(records, columns):
     return out
 
 
+KEY = ["player_id", "season", "kind"]
+
+
+def mysql_write_futures_stats(sink, rows, columns):
+    """D1 과 같이 같은 열쇠는 덮어씁니다. 표는 1단계에서 만들어 두었습니다.
+
+    사이트가 새 열을 내기 시작하면 D1 쪽 INSERT 가 먼저 실패하고, 여기서도
+    없는 열이라 실패합니다. 둘 다 빨간색으로 드러납니다.
+    """
+    return sink.upsert("futures_season_stats", columns, KEY, rows)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--from", dest="year_from", type=int, default=None)
@@ -225,6 +238,7 @@ def main():
                        encoding="utf-8", newline="\n")
     run_d1_file(SQL_TMP)
     print("적재 완료 %s행" % format(len(rows), ","))
+    mirror("futures_records", lambda s: mysql_write_futures_stats(s, rows, columns))
     return 0
 
 
