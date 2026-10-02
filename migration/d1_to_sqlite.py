@@ -404,7 +404,9 @@ def main():
             if not args.keep_sql:
                 path.unlink()
         if args.all_tables:
-            dbs = sorted({db for _, db, _ in jobs})
+            # 공용 DB 를 먼저 둡니다. 샤드에도 games 사본이 있어, 같은 이름이면 먼저 적용한 정의가 남습니다.
+            # --indexes-only 와 같은 순서입니다.
+            dbs = [DB_NAME] + sorted({db for _, db, _ in jobs} - {DB_NAME})
             n = copy_indexes(conn, dbs)
             print("D1 인덱스 %d문을 스냅샷에 적용했습니다." % n, flush=True)
         conn.close()
