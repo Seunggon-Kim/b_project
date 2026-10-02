@@ -121,10 +121,10 @@ D1 의 깨진 포스트시즌 행은 고치지 않음, 키 대신 WIF, 보강 4�
 - GitHub Actions 접속: Cloud SQL Auth Proxy + 수집 전용 서비스 계정 키
   (GitHub 시크릿). 러너 IP 가 매번 바뀌어 IP 허용 방식은 쓰지 않습니다.
 - 다음 스냅샷·전환 전에 고칠 1단계 도구 보강(최종 검토 결과):
-  1. 인덱스 이월: D1 의 `sqlite_master` 에서 인덱스 DDL(공용·샤드)을 읽어 스냅샷에 적용하는 단계를 코드로 만듭니다(`--all-tables` 일 때만). verify 가 schema_post 개체가 모두 있는지 확인합니다. 부분 UNIQUE 인덱스가 전체 UNIQUE 로 바뀌는 문제도 함께 처리합니다.
-  2. `d1_to_sqlite --append` 보호: 행 수가 맞지 않으면 이번에 붙인 행을 지우고 멈춥니다. 받은 샤드 이름을 기록해 같은 샤드 재부착을 거부합니다. `--shards` 이름을 검증합니다. 쓰는 중인 샤드는 `--count-check d1` 로 확인합니다. 계획 Step 3 기대값을 샤드별 합계와 정확히 비교합니다.
-  3. 적재기: 시작할 때 같은 계정의 이전 연결을 정리합니다. `SET SESSION lock_wait_timeout=120` 을 둡니다. 가능하면 이 프로세스가 쓴 연결 번호만 끊습니다. KILL 범위 문구를 실제와 맞춥니다(같은 계정·같은 DB 의 다른 연결을 모두 끊습니다. 적재 중 verify 등 동시 실행 금지).
-  4. 스냅샷 지문: `--fresh` 때 스냅샷 이름·크기·표별 행 수·schema_types.json 해시를 MySQL 작은 표에 남기고 `--resume`·verify 가 확인합니다. 스냅샷의 옮길 표·열이 schema_types.json 에 없으면 load·verify 가 실패합니다.
+  1. 인덱스 이월: D1 의 `sqlite_master` 에서 인덱스 DDL(공용·샤드)을 읽어 스냅샷에 적용하는 단계를 코드로 만듭니다(`--all-tables` 일 때만). verify 가 schema_post 개체가 모두 있는지 확인합니다. 부분 UNIQUE 인덱스가 전체 UNIQUE 로 바뀌는 문제도 함께 처리합니다. **완료(2026-10-02, 2C):** 스냅샷이 D1 인덱스를 따라오고(`--indexes-only`), 부분 UNIQUE 는 옮기지 않으며, MySQL 에 공용 인덱스 13개와 `idx_pbp_game_date` 를 만들었습니다. verify `--objects-only` 로 확인합니다.
+  2. `d1_to_sqlite --append` 보호: 행 수가 맞지 않으면 이번에 붙인 행을 지우고 멈춥니다. 받은 샤드 이름을 기록해 같은 샤드 재부착을 거부합니다. `--shards` 이름을 검증합니다. 쓰는 중인 샤드는 `--count-check d1` 로 확인합니다. 계획 Step 3 기대값을 샤드별 합계와 정확히 비교합니다. **보류(2026-10-02):** 2B 따라잡기는 공용 표 다시 넣기와 PBP 다시 받기라 이 기능을 쓰지 않습니다. 전체 재이전 때 합니다.
+  3. 적재기: 시작할 때 같은 계정의 이전 연결을 정리합니다. `SET SESSION lock_wait_timeout=120` 을 둡니다. 가능하면 이 프로세스가 쓴 연결 번호만 끊습니다. KILL 범위 문구를 실제와 맞춥니다(같은 계정·같은 DB 의 다른 연결을 모두 끊습니다. 적재 중 verify 등 동시 실행 금지). **완료(2026-10-02, 2C):** 시작 때 정리, `lock_wait_timeout` 120초, `--post-only`.
+  4. 스냅샷 지문: `--fresh` 때 스냅샷 이름·크기·표별 행 수·schema_types.json 해시를 MySQL 작은 표에 남기고 `--resume`·verify 가 확인합니다. 스냅샷의 옮길 표·열이 schema_types.json 에 없으면 load·verify 가 실패합니다. **보류(2026-10-02):** 2번과 같은 이유입니다.
 - `shard_backfill` 이 meta_table_counts 를 갱신하지 않습니다(옛 샤드 meta 가 다시 낡을 수 있습니다).
 - 수집기 버그: 포스트시즌 일부 경기(경기 코드 3333/5555/7777)의 play_by_play.game_date 에 경기 코드 일부(예: TOB00929)가 들어갑니다. 2026 포스트시즌 전에 고칩니다(1단계 리허설에서 발견, 2026-10-02).
 
