@@ -238,7 +238,7 @@ def test_retry_after_drop_reinserts_uncommitted_batch(sleeps):
     assert [s for s in my.executed if s in load.SESSION_SETUP] == list(load.SESSION_SETUP)
     assert "SELECT COUNT(*) FROM `t`" in my.executed
     assert _batches(my) == [[(1,), (2,)], [(3,)]]
-    assert sleeps == [load.RETRY_WAIT]
+    assert sleeps == [5]
 
 
 def test_retry_skips_batch_already_committed(sleeps):
@@ -251,14 +251,14 @@ def test_retry_skips_batch_already_committed(sleeps):
     assert _batches(my) == [[(1,), (2,)], [(3,)]]
 
 
-def test_retry_gives_up_after_three(sleeps):
+def test_retry_gives_up_after_eight_with_backoff(sleeps):
     sq, spec = _three_rows()
     my = RetryConn(count=0, fail_always=True)
     with pytest.raises(RuntimeError, match="t: 0행을 넣은 뒤 멈췄습니다") as ei:
         load.load_table(sq, my, "t", spec, collections.Counter(), batch=2)
-    assert len(my.pings) == 3
-    assert my.calls == 4
-    assert sleeps == [5, 10, 15]
+    assert len(my.pings) == 8
+    assert my.calls == 9
+    assert sleeps == [5, 10, 20, 40, 60, 60, 60, 60]
     assert isinstance(ei.value.__cause__, pymysql.err.OperationalError)
 
 
@@ -326,3 +326,145 @@ def test_is_retryable():
     assert load.is_retryable(TimeoutError())
     assert load.is_retryable(OSError())
     assert not load.is_retryable(ValueError())
+
+
+# --- 이어서 넣기(--resume) -------------------------------------------------
+
+class ResumeCursor:
+    def __init__(self, conn):
+        self.conn = conn
+        self.row = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def execute(self, sql, args=None):
+        c = self.conn
+        c.executed.append((sql, args))
+        if sql.startswith("SELECT COALESCE(MAX("):
+            self.row = (c.max, c.count)
+        elif sql.startswith("SELECT COUNT(*) FROM `"):
+            self.row = (c.count,)
+        elif "information_schema.STATISTICS" in sql:
+            self.row = (1 if ("index",) + tuple(args) in c.existing else 0,)
+        elif "information_schema.TABLE_CONSTRAINTS" in sql:
+            self.row = (1 if ("fk",) + tuple(args) in c.existing else 0,)
+
+    def fetchone(self):
+        return self.row
+
+    def executemany(self, sql, rows):
+        self.conn.inserts.append((sql, list(rows)))
+
+
+class ResumeConn:
+    def __init__(self, max_id=0, count=0, existing=()):
+        self.max = max_id
+        self.count = count
+        self.existing = set(existing)
+        self.executed = []
+        self.inserts = []
+        self.commits = 0
+
+    def cursor(self):
+        return ResumeCursor(self)
+
+    def commit(self):
+        self.commits += 1
+
+
+def _pbp(n):
+    sq = sqlite3.connect(":memory:")
+    sq.execute('CREATE TABLE play_by_play (pbp_id INTEGER, batter_ID TEXT)')
+    sq.executemany("INSERT INTO play_by_play VALUES (?,?)",
+                   [(9, str(i * 10)) for i in range(1, n + 1)])
+    return sq, {"columns": [["pbp_id", "int"], ["batter_ID", "int"]],
+                "renumber": "pbp_id"}
+
+
+def test_resume_cannot_combine_with_fresh_or_tables(monkeypatch):
+    def boom():
+        raise AssertionError("연결하면 안 됩니다")
+    monkeypatch.setattr(load.myconn, "connect", boom)
+    for extra in (["--fresh"], ["--tables", "a"]):
+        monkeypatch.setattr(sys, "argv",
+                            ["load", "--snapshot", "없는파일.db", "--resume"] + extra)
+        with pytest.raises(SystemExit) as ei:
+            load.main()
+        assert ei.value.code == 2
+
+
+def test_resume_renumbered_loads_only_rows_after_max(sleeps):
+    sq, spec = _pbp(5)
+    my = ResumeConn(max_id=3, count=3)
+    n = load.resume_table(sq, my, "play_by_play", spec, collections.Counter(), batch=10)
+    assert n == 5
+    (sql, rows), = my.inserts
+    assert rows == [(4, 40), (5, 50)]
+    assert "TRUNCATE" not in " ".join(e[0] for e in my.executed)
+
+
+def test_resume_renumbered_batches_keep_counter(sleeps, capsys):
+    sq, spec = _pbp(5)
+    my = ResumeConn(max_id=3, count=3)
+    load.resume_table(sq, my, "play_by_play", spec, collections.Counter(), batch=1)
+    assert [rows for _, rows in my.inserts] == [[(4, 40)], [(5, 50)]]
+
+
+def test_resume_refuses_gaps(sleeps):
+    sq, spec = _pbp(5)
+    my = ResumeConn(max_id=4, count=3)
+    with pytest.raises(SystemExit, match="이어서 넣을 수 없습니다"):
+        load.resume_table(sq, my, "play_by_play", spec, collections.Counter())
+    assert my.inserts == []
+
+
+def test_resume_small_table_equal_counts_is_skipped(capsys):
+    sq, spec = _three_rows()
+    my = ResumeConn(count=3)
+    n = load.resume_table(sq, my, "t", spec, collections.Counter())
+    assert n == 3
+    assert my.inserts == []
+    assert not any("TRUNCATE" in e[0] for e in my.executed)
+    assert "t: 이미 다 들어 있어 건너뜁니다" in capsys.readouterr().out
+
+
+def test_resume_small_table_different_counts_truncates_and_reloads():
+    sq, spec = _three_rows()
+    my = ResumeConn(count=1)
+    n = load.resume_table(sq, my, "t", spec, collections.Counter(), batch=10)
+    assert n == 3
+    assert any(e[0] == "TRUNCATE TABLE `t`" for e in my.executed)
+    assert my.inserts[0][1] == [(1,), (2,), (3,)]
+
+
+def test_post_object_parses_both_kinds():
+    assert load.post_object(
+        "CREATE INDEX `idx_players_team` ON `players` (`team_id`)") == \
+        ("index", "players", "idx_players_team")
+    assert load.post_object(
+        "CREATE UNIQUE INDEX `uq_x_1` ON `x` (`a`, `b`)") == ("index", "x", "uq_x_1")
+    assert load.post_object(
+        "ALTER TABLE `p` ADD CONSTRAINT `fk_p_t` FOREIGN KEY (`t`) "
+        "REFERENCES `teams` (`team_id`)") == ("fk", "p", "fk_p_t")
+    with pytest.raises(ValueError):
+        load.post_object("DROP TABLE `x`")
+
+
+def test_apply_post_skipping_existing_runs_only_missing():
+    post = ("CREATE INDEX `i1` ON `a` (`x`);\n"
+            "CREATE INDEX `i2` ON `a` (`y`);\n"
+            "ALTER TABLE `a` ADD CONSTRAINT `f1` FOREIGN KEY (`x`) REFERENCES `b` (`x`);\n"
+            "ALTER TABLE `a` ADD CONSTRAINT `f2` FOREIGN KEY (`y`) REFERENCES `b` (`y`);\n")
+    my = ResumeConn(existing={("index", "a", "i1"), ("fk", "a", "f1")})
+    with my.cursor() as cur:
+        load.apply_post_skipping_existing(cur, post)
+    ran = [e[0] for e in my.executed if not e[0].startswith("SELECT")]
+    assert ran == ["CREATE INDEX `i2` ON `a` (`y`)",
+                   "ALTER TABLE `a` ADD CONSTRAINT `f2` FOREIGN KEY (`y`) "
+                   "REFERENCES `b` (`y`)"]
+    checks = [e for e in my.executed if e[0].startswith("SELECT")]
+    assert len(checks) == 4 and checks[0][1] == ("a", "i1")
