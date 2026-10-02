@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from data_collection.d1_load import (  # noqa: E402
     build_inserts, query, refresh_count, run_d1, run_d1_file,
 )
+from data_collection.mysql_sink import mirror  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -45,6 +46,19 @@ def d1_has(table):
     return bool(rows)
 
 
+def mysql_replace_tables(sink, tables):
+    """D1 에 올린 표를 MySQL 에서도 통째로 바꿉니다.
+
+    한 트랜잭션이라 중간에 실패하면 모두 되돌아가 옛 값이 그대로 남습니다.
+    MySQL 에서 players 를 가리키는 외래키는 없어 지우고 넣어도 됩니다.
+    """
+    for table, cols, rows in tables:
+        sink.execute("DELETE FROM `%s`" % table)
+        sink.insert(table, cols, rows)
+        sink.refresh_count(table)
+    return len(tables)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", required=True)
@@ -62,7 +76,7 @@ def main():
     out_dir = ROOT / args.out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    pushed, skipped = [], []
+    pushed, skipped, mirrored = [], [], []
     for table in tables:
         if table.endswith(SKIP_SUFFIXES):
             skipped.append((table, "백업 표"))
@@ -100,8 +114,12 @@ def main():
         refresh_count(table)
         print("  올림 %.0f초" % (time.time() - t0))
         pushed.append((table, len(rows)))
+        mirrored.append((table, cols, rows))
 
     conn.close()
+
+    if mirrored and not args.dry_run:
+        mirror("sqlite_push", lambda s: mysql_replace_tables(s, mirrored))
 
     print()
     if args.dry_run:
