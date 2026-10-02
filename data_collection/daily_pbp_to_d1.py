@@ -79,20 +79,35 @@ def mysql_write_pbp(sink, day, rows):
     return n
 
 
+# 포스트시즌·순위결정전 시리즈 코드입니다(gameID 앞 4자리가 연도 대신 들어갑니다).
+SERIES_CODES = ("3333", "4444", "5555", "6666", "7777")
+
+
 def d1_day_rows(day, pbp_db):
     """D1 에 이미 들어간 그날 행입니다. 따라잡기(--mysql-only)용입니다.
 
-    D1 샤드의 game_date 에는 인덱스가 없어 날짜로 고르면 샤드 전체(약 70만
-    행)를 읽습니다. 날짜 인덱스가 있는 games 에서 그날 경기를 찾고, gameID
-    인덱스로 고릅니다. 읽는 양은 그날 행 수와 같습니다.
+    games 표를 거치지 않습니다. D1 일일 한도가 바닥난 날(2026-09-29, 10-01)
+    에는 play_by_play 는 들어갔는데 games 단계가 건너뛰어져 games 에 그날
+    행이 없습니다. games 로 경기를 찾으면 따라잡기가 바로 그런 날을 놓칩니다.
+
+    대신 샤드의 play_by_play 를 gameID 접두어 범위로 직접 읽습니다. 정규시즌
+    gameID 는 날짜(YYYYMMDD)로, 포스트시즌은 시리즈 코드+MMDD 로 시작합니다.
+    접두어마다 gameID 인덱스 범위 읽기라 샤드 전체를 훑지 않고, 읽는 양은
+    그날 행 수와 같습니다. 다른 해의 같은 MMDD 포스트시즌 행은 파이썬에서
+    걸러 냅니다.
     """
-    games = [r["g"] for r in query(
-        "SELECT game_id AS g FROM games WHERE game_date = %d;" % int(day))]
-    if not games:
-        return []
-    ids = ",".join("'%s'" % str(g).replace("'", "''") for g in games)
-    return query("SELECT * FROM play_by_play WHERE gameID IN (%s) ORDER BY pbp_id;" % ids,
+    prefixes = [day] + [code + day[4:8] for code in SERIES_CODES]
+    where = " OR ".join("(gameID >= '%s' AND gameID < '%s~')" % (p, p) for p in prefixes)
+    rows = query("SELECT * FROM play_by_play WHERE %s ORDER BY pbp_id;" % where,
                  db_name=pbp_db)
+    out = []
+    for r in rows:
+        gid = str(r.get("gameID") or "")
+        if (gid.startswith(day)
+                or (len(gid) > 13 and gid[-4:] == day[:4])
+                or (len(gid) == 13 and int(day[:4]) <= 2015)):
+            out.append(r)
+    return out
 
 
 def main():

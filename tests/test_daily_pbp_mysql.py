@@ -26,8 +26,6 @@ def test_mysql_only_copies_day_from_d1(monkeypatch):
 
     def fake_query(sql, db_name="kbo-stats"):
         calls.append((sql, db_name))
-        if "FROM games" in sql:
-            return [{"g": "20261003LGOB02026"}]
         return [{"pbp_id": 7, "gameID": "20261003LGOB02026", "game_date": 20261003}]
 
     seen = {}
@@ -43,17 +41,24 @@ def test_mysql_only_copies_day_from_d1(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["x", "--date", "20261003", "--mysql-only"])
     assert m.main() == 0
     assert seen == {"job": "pbp", "required": True}
-    assert calls[0][1] == "kbo-stats" and "game_date = 20261003" in calls[0][0]
-    assert calls[1][1] == "kbo-pbp-2024-2026" and "ORDER BY pbp_id" in calls[1][0]
+    assert len(calls) == 1
+    sql, db = calls[0]
+    assert db == "kbo-pbp-2024-2026"
+    assert "gameID >= '20261003'" in sql and "gameID >= '44441003'" in sql
+    assert "ORDER BY pbp_id" in sql and "games" not in sql
+
+
+def test_d1_day_rows_filters_other_years(monkeypatch):
+    rows = [{"gameID": "20261003LGOB0"}, {"gameID": "44441003NCSS02026"},
+            {"gameID": "44441003NCSS02025"}, {"gameID": "33331003SSLT0"}]
+    monkeypatch.setattr(m, "query", lambda sql, db_name="kbo-stats": rows)
+    got = m.d1_day_rows("20261003", "kbo-pbp-2024-2026")
+    assert [r["gameID"] for r in got] == ["20261003LGOB0", "44441003NCSS02026"]
 
 
 def test_mysql_only_stops_on_wrong_dates(monkeypatch):
-    def fake_query(sql, db_name="kbo-stats"):
-        if "FROM games" in sql:
-            return [{"g": "33330929LTOB0"}]
-        return [{"gameID": "33330929LTOB0", "game_date": "TOB00929"}]
-
-    monkeypatch.setattr(m, "query", fake_query)
+    monkeypatch.setattr(m, "query", lambda sql, db_name="kbo-stats":
+                        [{"gameID": "20091029SKOB0", "game_date": "TOB00929"}])
     monkeypatch.setattr(m, "mirror", lambda *a, **k: pytest.fail("넣으면 안 됩니다"))
     monkeypatch.setattr(sys, "argv", ["x", "--date", "20091029", "--mysql-only"])
     assert m.main() == 1
