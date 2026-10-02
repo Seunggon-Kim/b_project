@@ -86,3 +86,26 @@ def save_stem(game_id, year):
     """
     gid = str(game_id)
     return '%d%s' % (int(year), gid[4:])
+
+
+def game_date_of(game_id, year=None):
+    """경기 날짜(YYYYMMDD 글자)입니다. 알 수 없으면 None 입니다.
+
+    gameId 의 5~8번째 자리는 형식과 상관없이 늘 MMDD 입니다. 연도만
+    형식마다 자리가 다릅니다(game_id_year 참고).
+
+        20250315HHSS0         -> 20250315
+        44441006NCSS02026     -> 20261006
+        33330929LTOB0, 2009   -> 20090929   (13자는 연도를 넘겨받아야 합니다)
+
+    예전 파서는 포스트시즌이면 뒤 네 자리를 연도로 썼습니다. 13자에서는
+    'TOB0' 같은 팀 코드가 나와 game_date 가 'TOB00929' 가 됐습니다.
+    2008~2015 포스트시즌 26,450행이 그렇게 D1 에 들어갔습니다.
+    """
+    y = game_id_year(game_id, year)
+    if y is None:
+        return None
+    mmdd = str(game_id)[4:8]
+    if not mmdd.isdigit():
+        return None
+    return '%04d%s' % (y, mmdd)

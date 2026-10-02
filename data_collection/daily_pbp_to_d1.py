@@ -18,6 +18,7 @@ import argparse
 import csv
 import datetime
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -42,6 +43,24 @@ def read_csv_rows(path):
         except UnicodeDecodeError:
             continue
     raise RuntimeError("인코딩을 알 수 없습니다: %s" % path)
+
+
+DATE_LIKE = re.compile(r"\d{8}(\.0+)?")
+
+
+def wrong_dates(rows, day):
+    """그날(day)이 아닌 game_date 값들입니다(정렬, 중복 없음).
+
+    날짜가 틀린 행이 들어가면 다음 재실행의 `DELETE … WHERE game_date =
+    그날` 이 그 행을 못 지워 같은 경기가 두 번 쌓입니다. 포스트시즌 날짜
+    버그(game_date='TOB00929')가 실제로 그런 행을 만들었습니다.
+    """
+    bad = set()
+    for r in rows:
+        s = str(r.get("game_date") or "").strip()
+        if not (DATE_LIKE.fullmatch(s) and s[:8] == day):
+            bad.add(s)
+    return sorted(bad)
 
 
 def main():
@@ -100,6 +119,13 @@ def main():
     for f in csvs:
         rows.extend(read_csv_rows(f))
     print("행 %s개" % format(len(rows), ","))
+
+    bad = wrong_dates(rows, day)
+    if bad:
+        # 넣으면 재실행 때 지워지지 않는 행이 생깁니다. 아무것도 쓰지 않고 멈춥니다.
+        print("game_date 가 %s 이 아닌 행이 있습니다: %s" % (day, ", ".join(bad[:5])))
+        print("crawler/gameid.py 의 game_date_of 와 CSV 를 확인하십시오.")
+        return 1
 
     columns = d1_columns("play_by_play", db_name=pbp_db)
     # pbp_id 는 넣지 않습니다. 샤드가 이미 70만 행 안팎을 갖고 있어 CSV 의

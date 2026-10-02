@@ -47,11 +47,11 @@ ENTRYPOINTS = {
         "data_collection/official_stats_http.py",
         "data_collection/csv_to_d1.py",
         "data_collection/record_job_run.py",
-        # 2008~2014 PBP 되채우기. 끝나면 워크플로에서 빼십시오.
-        "migration/shard_backfill.py",
         # 1군 등록 현황·등말소.
         "data_collection/roster_to_d1.py",
         "data_collection/sync_players_from_roster.py",
+        # 명단에 있는데 players 에 없는 새 선수를 찾아 넣습니다.
+        "data_collection/add_new_players.py",
         # subprocess 로 부릅니다. import 로는 안 보입니다.
         "crawler/pbp.py",
         "crawler/download.py",
@@ -71,6 +71,8 @@ ENTRYPOINTS = {
         # 것만 보입니다.
         "data_collection/roster_to_d1.py",
         "data_collection/sync_players_from_roster.py",
+        # 명단에 있는데 players 에 없는 새 선수를 찾아 넣습니다.
+        "data_collection/add_new_players.py",
         "data_collection/futures_records.py",
         "data_collection/record_job_run.py",
     ],

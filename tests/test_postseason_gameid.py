@@ -28,7 +28,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "crawler"))
 
-from gameid import game_id_year, save_stem  # noqa: E402
+from gameid import game_date_of, game_id_year, save_stem  # noqa: E402
 
 
 class TestGameIdYear:
@@ -103,3 +103,43 @@ class TestDownloadKeepsOldPostseason:
                 dropped.append(gid)
         # 올스타 하나만 빠져야 합니다.
         assert dropped == ['99991012ABCD0']
+
+
+class TestGameDateOf:
+    """경기 날짜(YYYYMMDD)입니다. play_by_play.game_date 에 그대로 들어갑니다."""
+
+    def test_정규시즌은_앞_여덟_자리(self):
+        assert game_date_of('20250315HHSS0') == '20250315'
+
+    def test_2016년_이후_포스트시즌은_뒤_연도와_가운데_월일(self):
+        assert game_date_of('44441006NCSS02026') == '20261006'
+        # gameId 안의 연도가 넘겨받은 값보다 우선합니다.
+        assert game_date_of('33331013LGWO02016', 2099) == '20161013'
+
+    def test_2015년_이전_포스트시즌은_넘겨받은_연도(self):
+        assert game_date_of('33330929LTOB0', 2009) == '20090929'
+        assert game_date_of('77771026OBSK0', 2008) == '20081026'
+
+    def test_팀_코드가_날짜에_섞이지_않습니다(self):
+        # 예전 파서는 여기서 'TOB00929' 를 만들었습니다.
+        d = game_date_of('33330929LTOB0', 2009)
+        assert d.isdigit() and len(d) == 8
+
+    def test_연도를_모르면_None(self):
+        assert game_date_of('33330929LTOB0') is None
+
+    def test_올스타는_None(self):
+        assert game_date_of('99991012ABCD0', 2011) is None
+
+
+class TestParserGetsYear:
+    """파서가 날짜를 game_date_of 로 만들고, 크롤러가 연도를 넘기는지 봅니다."""
+
+    def test_파서는_뒤_네_자리로_날짜를_만들지_않습니다(self):
+        src = (ROOT / 'crawler' / 'game_parse.py').read_text(encoding='utf-8')
+        assert "f'{game_id[-4:]}" not in src
+        assert 'game_date_of(' in src
+
+    def test_크롤러가_연도를_넘깁니다(self):
+        src = (ROOT / 'crawler' / 'download.py').read_text(encoding='utf-8')
+        assert 'log_file=logfile, year=gid_year)' in src

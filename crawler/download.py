@@ -1352,7 +1352,7 @@ def download_pbp_files(start_date, end_date, playoff=False,
                 get_data_time += time.time() - ptime
                 if game_data_dfs is not None:
                     gs = game_status()
-                    gs.load(gid, game_data_dfs[0], game_data_dfs[1], game_data_dfs[2], log_file=logfile)
+                    gs.load(gid, game_data_dfs[0], game_data_dfs[1], game_data_dfs[2], log_file=logfile, year=gid_year)
                     parse = gs.parse_game(debug_mode)
                     gs.save_game(save_path / str(gid_year), year=gid_year)
                     if parse == True:

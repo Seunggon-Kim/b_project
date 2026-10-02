@@ -1,6 +1,6 @@
 import os, json, csv, sys, traceback, pathlib
 
-from gameid import game_id_year, save_stem
+from gameid import game_date_of, game_id_year, save_stem
 
 import pandas as pd
 import numpy as np
@@ -278,15 +278,18 @@ class game_status:
         self.cur_text = ''
         self.text_stack = None
 
-    def load(self, game_id, pdf, bdf, rdf, log_file=None):
+    def load(self, game_id, pdf, bdf, rdf, log_file=None, year=None):
         self.pitching_df = pdf
         self.batting_df = bdf
         self.game_id = game_id
         self.log_file = log_file
 
-        self.game_date = game_id[:8]
-        if int(game_id[:4]) > 3000:
-            self.game_date = f'{game_id[-4:]}{game_id[4:8]}'
+        # 13자 포스트시즌(2015년까지)은 gameId 에 연도가 없습니다. 크롤러가
+        # 캘린더에서 알아 둔 연도를 year 로 받아야 날짜가 맞습니다.
+        self.game_date = game_date_of(game_id, year)
+        if self.game_date is None:
+            raise ValueError('경기 날짜를 알 수 없습니다: %s (13자 포스트시즌은 year 를 넘기십시오)'
+                             % game_id)
         self.away = game_id[8:10]
         self.home = game_id[10:12]
         self.stadium = rdf.stadium.unique()[0]
