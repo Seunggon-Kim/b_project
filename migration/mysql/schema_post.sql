@@ -1,0 +1,10 @@
+CREATE UNIQUE INDEX `uq_game_team_stats_1` ON `game_team_stats` (`game_id`, `team_id`);
+CREATE INDEX `idx_pbp_pitcher` ON `play_by_play` (`pitcher_ID`);
+CREATE INDEX `idx_pbp_game` ON `play_by_play` (`gameID`);
+CREATE INDEX `idx_pbp_batter` ON `play_by_play` (`batter_ID`);
+CREATE UNIQUE INDEX `uq_stadium_dim_1` ON `stadium_dim` (`full_name`);
+ALTER TABLE `game_team_stats` ADD CONSTRAINT `fk_game_team_stats_team_id` FOREIGN KEY (`team_id`) REFERENCES `teams` (`team_id`);
+ALTER TABLE `game_team_stats` ADD CONSTRAINT `fk_game_team_stats_game_id` FOREIGN KEY (`game_id`) REFERENCES `games` (`game_id`);
+ALTER TABLE `games` ADD CONSTRAINT `fk_games_away_team_id` FOREIGN KEY (`away_team_id`) REFERENCES `teams` (`team_id`);
+ALTER TABLE `games` ADD CONSTRAINT `fk_games_home_team_id` FOREIGN KEY (`home_team_id`) REFERENCES `teams` (`team_id`);
+ALTER TABLE `players` ADD CONSTRAINT `fk_players_team_id` FOREIGN KEY (`team_id`) REFERENCES `teams` (`team_id`);
