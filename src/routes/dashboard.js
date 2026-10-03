@@ -1,4 +1,4 @@
-import { json } from '../lib/respond.js';
+import { json, dbError } from '../lib/respond.js';
 import { shardedCountOf } from '../lib/counts.js';
 import { SHARDS } from '../lib/shard.js';
 
@@ -87,7 +87,8 @@ export async function dashboardStats(request, env) {
   } catch (err) {
     // 원본은 예외 시 error 와 traceback 을 돌려줍니다. JS 에는 파이썬식
     // traceback 이 없어 스택을 그 자리에 넣습니다.
-    return json({
+    // 실패가 캐시에 굳지 않게 503 으로 바꿨습니다(본문은 같음).
+    return dbError(err, {
       error: String(err && err.message ? err.message : err),
       traceback: String((err && err.stack) || ''),
     });

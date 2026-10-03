@@ -1,4 +1,4 @@
-import { json } from '../lib/respond.js';
+import { json, dbError } from '../lib/respond.js';
 import { queryInt } from '../lib/router.js';
 import { shardOf, seasonDateRange } from '../lib/shard.js';
 
@@ -282,7 +282,8 @@ export async function playerArsenal(request, env, ctx, params) {
     // 아닙니다. 문자열과 정수가 섞여 있어 값이 다를 수 있습니다.
     return json({ player_id: playerId, arsenal: results, count: results.length });
   } catch (err) {
-    return json({
+    // 실패가 캐시에 굳지 않게 503 으로 바꿨습니다(본문은 같음).
+    return dbError(err, {
       error: String(err && err.message ? err.message : err),
       traceback: String((err && err.stack) || ''),
     });
@@ -407,7 +408,8 @@ export async function playerUsage(request, env, ctx, params) {
       usage: result,
     });
   } catch (err) {
-    return json({
+    // 실패가 캐시에 굳지 않게 503 으로 바꿨습니다(본문은 같음).
+    return dbError(err, {
       error: String(err && err.message ? err.message : err),
       traceback: String((err && err.stack) || ''),
     });

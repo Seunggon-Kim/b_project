@@ -1,4 +1,4 @@
-import { json } from '../lib/respond.js';
+import { json, dbError } from '../lib/respond.js';
 import { ttlCache } from '../lib/cache.js';
 import { KBO_TEAM_CODE } from './standings.js';
 
@@ -322,10 +322,11 @@ export async function leaders(request, env) {
     cache.set(ckey, result);
     return json(result);
   } catch (err) {
-    // 원본은 예외 시 200 과 함께 error 필드를 돌려줍니다. 500 이 아닙니다.
+    // 원본은 예외 시 200 과 함께 error 필드를 돌려줬습니다. 실패가 캐시에
+    // 굳지 않게 503 으로 바꿨습니다(본문은 같음).
     // qual_pa/qual_ip/wrc_pf_season 은 원본 except 분기에도 없으므로 뺍니다.
     // season 은 그 시점까지 확정된 값(기본값 해석 전이면 null)입니다.
-    return json({
+    return dbError(err, {
       season,
       batter: { avg: [], obp: [], slg: [], ops: [], woba: [], wrc: [] },
       pitcher: { ip: [], k: [], era: [], kpct: [], bbpct: [], kbb: [] },

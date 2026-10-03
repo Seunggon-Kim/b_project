@@ -23,3 +23,16 @@ export function json(data, status = 200) {
 export function serverError(err) {
   return json({ detail: String(err && err.message ? err.message : err) }, 500);
 }
+
+/**
+ * DB 를 못 읽은 경우입니다. 503 으로 돌려주고 캐시하지 않습니다.
+ *
+ * 200 으로 내보내면 엣지가 한 시간(+하루 stale) 동안 이 실패를 보여 줍니다.
+ * 본문은 라우트가 원래 내던 모양을 그대로 넘길 수 있습니다(화면이 error
+ * 필드를 읽는 곳이 있습니다).
+ */
+export function dbError(err, body = null) {
+  const res = json(body || { detail: String(err && err.message ? err.message : err) }, 503);
+  res.headers.set('cache-control', 'no-store');
+  return res;
+}
