@@ -73,3 +73,42 @@ def test_스크립트가_자기가_쓰는_표를_읽는다고_적지_않습니�
     bad = sorted("%s: %s" % (p, t) for p, s in HAND["scripts"].items()
                  for t in set(s.get("reads", [])) & set(s.get("writes", [])))
     assert not bad, "reads 에는 계산에 들어가는 다른 표만 적습니다: %s" % bad
+
+
+import build_lineage as bl  # noqa: E402
+
+OUT = ROOT / "dashboard_js" / "data" / "table_lineage.json"
+
+
+def test_결과_파일이_지금_코드로_만든_것과_같습니다():
+    want = bl.build(ROOT)
+    got = json.loads(OUT.read_text(encoding="utf-8"))
+    assert got == want, "py scripts/build_lineage.py 로 다시 만드십시오."
+
+
+def test_결과_모양():
+    d = bl.build(ROOT)
+    assert d["version"] == 1
+    assert [j["id"] for j in d["jobs"]] == ["daily", "monthly", "roster", "weekly"]
+    daily = next(j for j in d["jobs"] if j["id"] == "daily")
+    assert daily["schedule_kst"] == "매일 03:33" and daily["stale_hours"] == 36
+    tr = next(t for t in d["tables"] if t["name"] == "team_season_rank")
+    assert tr["kind"] == "collected" and tr["written_by"] == ["data_collection/team_ranks.py"]
+    for name in ("games", "players", "play_by_play"):
+        assert next(t for t in d["tables"] if t["name"] == name)["kind"] == "collected", name
+    wrc = next(t for t in d["tables"] if t["name"] == "wrc_plus_comparison")
+    assert wrc["kind"] == "derived" and "play_by_play" in wrc["derived_from"]
+    assert {"from": "job:daily", "to": "table:team_season_rank"} in d["edges"]
+    assert {"from": "table:play_by_play", "to": "table:wrc_plus_comparison"} in d["edges"]
+    # api.js 를 싣기만 하고 부르지 않는 주소가 페이지에 붙지 않습니다.
+    stats = next(p for p in d["pages"] if p["path"] == "pages/player-stats.html")
+    assert "/db/tables" not in stats["routes"] and "/jobs/status" not in stats["routes"]
+    explorer = next(p for p in d["pages"] if p["path"] == "pages/database-explorer.html")
+    assert explorer["explorer"] is True
+    assert not any(e["to"] == "page:pages/database-explorer.html" for e in d["edges"])
+    assert all(t["kind"] == "meta" for t in d["tables"] if t["name"].startswith("meta_"))
+    assert not any(e["to"].startswith("table:meta_") or e["from"].startswith("table:meta_")
+                   for e in d["edges"])
+    # 정렬·결정성
+    assert d["edges"] == sorted(d["edges"], key=lambda e: (e["from"], e["to"]))
+    assert bl.build(ROOT) == d

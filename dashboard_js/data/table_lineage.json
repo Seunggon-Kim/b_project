@@ -1,0 +1,2395 @@
+{
+ "edges": [
+  {
+   "from": "job:daily",
+   "to": "table:futures_games"
+  },
+  {
+   "from": "job:daily",
+   "to": "table:games"
+  },
+  {
+   "from": "job:daily",
+   "to": "table:kbo_official_batter_stats"
+  },
+  {
+   "from": "job:daily",
+   "to": "table:kbo_official_pitcher_stats"
+  },
+  {
+   "from": "job:daily",
+   "to": "table:kbo_roster"
+  },
+  {
+   "from": "job:daily",
+   "to": "table:kbo_roster_moves"
+  },
+  {
+   "from": "job:daily",
+   "to": "table:play_by_play"
+  },
+  {
+   "from": "job:daily",
+   "to": "table:players"
+  },
+  {
+   "from": "job:daily",
+   "to": "table:team_season_rank"
+  },
+  {
+   "from": "job:monthly",
+   "to": "table:players"
+  },
+  {
+   "from": "job:roster",
+   "to": "table:futures_season_stats"
+  },
+  {
+   "from": "job:roster",
+   "to": "table:kbo_roster"
+  },
+  {
+   "from": "job:roster",
+   "to": "table:kbo_roster_moves"
+  },
+  {
+   "from": "job:roster",
+   "to": "table:players"
+  },
+  {
+   "from": "job:weekly",
+   "to": "table:kbo_run_values_by_season"
+  },
+  {
+   "from": "job:weekly",
+   "to": "table:kbo_woba_weights_by_season"
+  },
+  {
+   "from": "job:weekly",
+   "to": "table:re24_matrix_by_season"
+  },
+  {
+   "from": "job:weekly",
+   "to": "table:self_park_factor"
+  },
+  {
+   "from": "job:weekly",
+   "to": "table:weighted_pf_by_batter_season"
+  },
+  {
+   "from": "job:weekly",
+   "to": "table:wrc_plus_comparison"
+  },
+  {
+   "from": "source:kbo_futures",
+   "to": "job:daily"
+  },
+  {
+   "from": "source:kbo_futures",
+   "to": "job:roster"
+  },
+  {
+   "from": "source:kbo_live",
+   "to": "page:index.html"
+  },
+  {
+   "from": "source:kbo_live",
+   "to": "page:pages/player-analytics.html"
+  },
+  {
+   "from": "source:kbo_live",
+   "to": "page:pages/team-stats.html"
+  },
+  {
+   "from": "source:kbo_player_detail",
+   "to": "job:monthly"
+  },
+  {
+   "from": "source:kbo_player_search",
+   "to": "job:daily"
+  },
+  {
+   "from": "source:kbo_player_search",
+   "to": "job:roster"
+  },
+  {
+   "from": "source:kbo_record",
+   "to": "job:daily"
+  },
+  {
+   "from": "source:kbo_roster",
+   "to": "job:daily"
+  },
+  {
+   "from": "source:kbo_roster",
+   "to": "job:roster"
+  },
+  {
+   "from": "source:naver_relay",
+   "to": "job:daily"
+  },
+  {
+   "from": "table:franchises",
+   "to": "page:pages/player-stats.html"
+  },
+  {
+   "from": "table:franchises",
+   "to": "page:pages/team-record.html"
+  },
+  {
+   "from": "table:futures_season_stats",
+   "to": "page:index.html"
+  },
+  {
+   "from": "table:futures_season_stats",
+   "to": "page:pages/player-analytics.html"
+  },
+  {
+   "from": "table:futures_teams",
+   "to": "page:index.html"
+  },
+  {
+   "from": "table:games",
+   "to": "page:pages/article.html"
+  },
+  {
+   "from": "table:games",
+   "to": "page:pages/team-stats.html"
+  },
+  {
+   "from": "table:games",
+   "to": "table:kbo_run_values_by_season"
+  },
+  {
+   "from": "table:games",
+   "to": "table:kbo_woba_weights_by_season"
+  },
+  {
+   "from": "table:games",
+   "to": "table:re24_matrix_by_season"
+  },
+  {
+   "from": "table:games",
+   "to": "table:self_park_factor"
+  },
+  {
+   "from": "table:games",
+   "to": "table:weighted_pf_by_batter_season"
+  },
+  {
+   "from": "table:games",
+   "to": "table:wrc_plus_comparison"
+  },
+  {
+   "from": "table:kbo_official_batter_stats",
+   "to": "page:index.html"
+  },
+  {
+   "from": "table:kbo_official_batter_stats",
+   "to": "page:pages/article.html"
+  },
+  {
+   "from": "table:kbo_official_batter_stats",
+   "to": "page:pages/player-analytics.html"
+  },
+  {
+   "from": "table:kbo_official_batter_stats",
+   "to": "page:pages/player-stats.html"
+  },
+  {
+   "from": "table:kbo_official_batter_stats",
+   "to": "page:pages/team-record.html"
+  },
+  {
+   "from": "table:kbo_official_batter_stats",
+   "to": "page:pages/team-stats.html"
+  },
+  {
+   "from": "table:kbo_official_batter_stats",
+   "to": "table:kbo_woba_weights_by_season"
+  },
+  {
+   "from": "table:kbo_official_batter_stats",
+   "to": "table:weighted_pf_by_batter_season"
+  },
+  {
+   "from": "table:kbo_official_batter_stats",
+   "to": "table:wrc_plus_comparison"
+  },
+  {
+   "from": "table:kbo_official_pitcher_stats",
+   "to": "page:index.html"
+  },
+  {
+   "from": "table:kbo_official_pitcher_stats",
+   "to": "page:pages/player-analytics.html"
+  },
+  {
+   "from": "table:kbo_official_pitcher_stats",
+   "to": "page:pages/player-stats.html"
+  },
+  {
+   "from": "table:kbo_official_pitcher_stats",
+   "to": "page:pages/team-record.html"
+  },
+  {
+   "from": "table:kbo_official_pitcher_stats",
+   "to": "page:pages/team-stats.html"
+  },
+  {
+   "from": "table:kbo_roster",
+   "to": "page:index.html"
+  },
+  {
+   "from": "table:kbo_roster",
+   "to": "page:pages/player-analytics.html"
+  },
+  {
+   "from": "table:kbo_roster",
+   "to": "table:players"
+  },
+  {
+   "from": "table:kbo_roster_moves",
+   "to": "page:index.html"
+  },
+  {
+   "from": "table:kbo_woba_weights_by_season",
+   "to": "page:pages/team-stats.html"
+  },
+  {
+   "from": "table:kbo_woba_weights_by_season",
+   "to": "table:weighted_pf_by_batter_season"
+  },
+  {
+   "from": "table:kbo_woba_weights_by_season",
+   "to": "table:wrc_plus_comparison"
+  },
+  {
+   "from": "table:korean_series_champion",
+   "to": "page:pages/team-record.html"
+  },
+  {
+   "from": "table:play_by_play",
+   "to": "page:index.html"
+  },
+  {
+   "from": "table:play_by_play",
+   "to": "page:pages/article.html"
+  },
+  {
+   "from": "table:play_by_play",
+   "to": "page:pages/player-analytics.html"
+  },
+  {
+   "from": "table:play_by_play",
+   "to": "page:pages/team-stats.html"
+  },
+  {
+   "from": "table:play_by_play",
+   "to": "table:kbo_run_values_by_season"
+  },
+  {
+   "from": "table:play_by_play",
+   "to": "table:kbo_woba_weights_by_season"
+  },
+  {
+   "from": "table:play_by_play",
+   "to": "table:re24_matrix_by_season"
+  },
+  {
+   "from": "table:play_by_play",
+   "to": "table:self_park_factor"
+  },
+  {
+   "from": "table:play_by_play",
+   "to": "table:weighted_pf_by_batter_season"
+  },
+  {
+   "from": "table:play_by_play",
+   "to": "table:wrc_plus_comparison"
+  },
+  {
+   "from": "table:players",
+   "to": "page:index.html"
+  },
+  {
+   "from": "table:players",
+   "to": "page:pages/player-analytics.html"
+  },
+  {
+   "from": "table:players",
+   "to": "page:pages/player-stats.html"
+  },
+  {
+   "from": "table:players",
+   "to": "page:pages/team-stats.html"
+  },
+  {
+   "from": "table:re24_matrix_by_season",
+   "to": "page:pages/factor-stats.html"
+  },
+  {
+   "from": "table:self_park_factor",
+   "to": "page:pages/factor-stats.html"
+  },
+  {
+   "from": "table:self_park_factor",
+   "to": "page:pages/team-stats.html"
+  },
+  {
+   "from": "table:self_park_factor",
+   "to": "table:weighted_pf_by_batter_season"
+  },
+  {
+   "from": "table:self_park_factor",
+   "to": "table:wrc_plus_comparison"
+  },
+  {
+   "from": "table:stadium_dim",
+   "to": "page:pages/article.html"
+  },
+  {
+   "from": "table:stadium_dim",
+   "to": "table:weighted_pf_by_batter_season"
+  },
+  {
+   "from": "table:stadium_dim",
+   "to": "table:wrc_plus_comparison"
+  },
+  {
+   "from": "table:team_logos",
+   "to": "page:index.html"
+  },
+  {
+   "from": "table:team_season_rank",
+   "to": "page:pages/team-record.html"
+  },
+  {
+   "from": "table:team_season_rank",
+   "to": "page:pages/team-stats.html"
+  },
+  {
+   "from": "table:team_seasons",
+   "to": "page:pages/player-stats.html"
+  },
+  {
+   "from": "table:team_seasons",
+   "to": "page:pages/team-record.html"
+  },
+  {
+   "from": "table:team_stadium_by_season",
+   "to": "page:pages/team-record.html"
+  },
+  {
+   "from": "table:team_stadium_by_season",
+   "to": "page:pages/team-stats.html"
+  },
+  {
+   "from": "table:team_stadium_by_season",
+   "to": "table:weighted_pf_by_batter_season"
+  },
+  {
+   "from": "table:team_stadium_by_season",
+   "to": "table:wrc_plus_comparison"
+  },
+  {
+   "from": "table:teams",
+   "to": "page:pages/player-stats.html"
+  },
+  {
+   "from": "table:teams",
+   "to": "page:pages/team-stats.html"
+  },
+  {
+   "from": "table:weighted_pf_by_batter_season",
+   "to": "page:pages/article.html"
+  },
+  {
+   "from": "table:wrc_plus_comparison",
+   "to": "page:index.html"
+  },
+  {
+   "from": "table:wrc_plus_comparison",
+   "to": "page:pages/article.html"
+  },
+  {
+   "from": "table:wrc_plus_comparison",
+   "to": "page:pages/player-stats.html"
+  },
+  {
+   "from": "table:wrc_plus_comparison",
+   "to": "page:pages/team-stats.html"
+  }
+ ],
+ "jobs": [
+  {
+   "cron_utc": "33 18 * * *",
+   "id": "daily",
+   "schedule_kst": "매일 03:33",
+   "stale_hours": 36,
+   "steps": [
+    {
+     "name": "PBP 수집·적재",
+     "script": "data_collection/daily_pbp_to_d1.py",
+     "status_key": "pbp"
+    },
+    {
+     "name": "PBP 결과 기록",
+     "script": "data_collection/record_job_run.py",
+     "status_key": null
+    },
+    {
+     "name": "games 적재",
+     "script": "data_collection/daily_games_to_d1.py",
+     "status_key": "games"
+    },
+    {
+     "name": "games 결과 기록",
+     "script": "data_collection/record_job_run.py",
+     "status_key": null
+    },
+    {
+     "name": "퓨처스 일정 적재",
+     "script": "data_collection/futures_to_d1.py",
+     "status_key": "futures"
+    },
+    {
+     "name": "퓨처스 결과 기록",
+     "script": "data_collection/record_job_run.py",
+     "status_key": null
+    },
+    {
+     "name": "올 시즌 팀 순위 적재",
+     "script": "data_collection/team_ranks.py",
+     "status_key": "team_ranks"
+    },
+    {
+     "name": "팀 순위 결과 기록",
+     "script": "data_collection/record_job_run.py",
+     "status_key": null
+    },
+    {
+     "name": "타자 기록 수집",
+     "script": "data_collection/official_stats_http.py",
+     "status_key": null
+    },
+    {
+     "name": "타자 기록 D1 적재",
+     "script": "data_collection/csv_to_d1.py",
+     "status_key": "official_stats"
+    },
+    {
+     "name": "투수 기록 수집",
+     "script": "data_collection/official_stats_http.py",
+     "status_key": null
+    },
+    {
+     "name": "투수 기록 D1 적재",
+     "script": "data_collection/csv_to_d1.py",
+     "status_key": "official_stats"
+    },
+    {
+     "name": "공식 통계 결과 기록",
+     "script": "data_collection/record_job_run.py",
+     "status_key": null
+    },
+    {
+     "name": "1군 등록 현황 적재",
+     "script": "data_collection/roster_to_d1.py",
+     "status_key": "roster"
+    },
+    {
+     "name": "players 소속·등번호 갱신",
+     "script": "data_collection/sync_players_from_roster.py",
+     "status_key": null
+    },
+    {
+     "name": "새 선수 추가",
+     "script": "data_collection/add_new_players.py",
+     "status_key": "add_new_players"
+    },
+    {
+     "name": "새 선수 추가 결과 기록",
+     "script": "data_collection/record_job_run.py",
+     "status_key": null
+    },
+    {
+     "name": "등록 현황 결과 기록",
+     "script": "data_collection/record_job_run.py",
+     "status_key": null
+    },
+    {
+     "name": "D1·MySQL 대조",
+     "script": "migration/mysql/reconcile.py",
+     "status_key": "reconcile"
+    },
+    {
+     "name": "대조 결과 기록",
+     "script": "data_collection/record_job_run.py",
+     "status_key": null
+    }
+   ],
+   "workflow": "daily.yml"
+  },
+  {
+   "cron_utc": "13 4 1 * *",
+   "id": "monthly",
+   "schedule_kst": "매월 1일 13:13",
+   "stale_hours": 840,
+   "steps": [
+    {
+     "name": "players·공식기록 내려받기",
+     "script": "migration/d1_to_sqlite.py",
+     "status_key": null
+    },
+    {
+     "name": "선수 프로필 수집",
+     "script": "data_collection/player_info_scraper.py",
+     "status_key": "player_info"
+    },
+    {
+     "name": "players D1 적재",
+     "script": "migration/sqlite_to_d1.py",
+     "status_key": null
+    },
+    {
+     "name": "선수 사진 주소 보정",
+     "script": "data_collection/heal_player_photos.py",
+     "status_key": null
+    },
+    {
+     "name": "결과 기록",
+     "script": "data_collection/record_job_run.py",
+     "status_key": null
+    }
+   ],
+   "workflow": "monthly.yml"
+  },
+  {
+   "cron_utc": "7 7 * * *",
+   "id": "roster",
+   "schedule_kst": "매일 16:07",
+   "stale_hours": 36,
+   "steps": [
+    {
+     "name": "등록 명단 적재",
+     "script": "data_collection/roster_to_d1.py",
+     "status_key": "roster_pm"
+    },
+    {
+     "name": "players 소속·등번호 갱신",
+     "script": "data_collection/sync_players_from_roster.py",
+     "status_key": null
+    },
+    {
+     "name": "새 선수 추가",
+     "script": "data_collection/add_new_players.py",
+     "status_key": "add_new_players"
+    },
+    {
+     "name": "새 선수 추가 결과 기록",
+     "script": "data_collection/record_job_run.py",
+     "status_key": null
+    },
+    {
+     "name": "퓨처스 올 시즌 기록 갱신",
+     "script": "data_collection/futures_records.py",
+     "status_key": null
+    },
+    {
+     "name": "결과 기록",
+     "script": "data_collection/record_job_run.py",
+     "status_key": null
+    }
+   ],
+   "workflow": "roster.yml"
+  },
+  {
+   "cron_utc": "47 20 * * 1",
+   "id": "weekly",
+   "schedule_kst": "매주 화 05:47",
+   "stale_hours": 192,
+   "steps": [
+    {
+     "name": "MySQL 내려받기",
+     "script": "migration/mysql/mysql_to_sqlite.py",
+     "status_key": null
+    },
+    {
+     "name": "잘린 경기 표 만들기",
+     "script": "park_factors/truncated.py",
+     "status_key": null
+    },
+    {
+     "name": "파크팩터 계산",
+     "script": "park_factors/compute_self_park_factors.py",
+     "status_key": "park_factors"
+    },
+    {
+     "name": "wOBA 가중치 계산",
+     "script": "park_factors/build_woba_weights.py",
+     "status_key": "park_factors"
+    },
+    {
+     "name": "wRC+ 계산",
+     "script": "park_factors/build_wrc_plus.py",
+     "status_key": "park_factors"
+    },
+    {
+     "name": "RE24·득점가치 계산",
+     "script": "park_factors/build_re24_run_values.py",
+     "status_key": "park_factors"
+    },
+    {
+     "name": "결과 표 D1 적재",
+     "script": "migration/sqlite_to_d1.py",
+     "status_key": null
+    },
+    {
+     "name": "CSV 만들기",
+     "script": "migration/export_csv.py",
+     "status_key": null
+    },
+    {
+     "name": "결과 기록",
+     "script": "data_collection/record_job_run.py",
+     "status_key": null
+    }
+   ],
+   "workflow": "weekly.yml"
+  }
+ ],
+ "pages": [
+  {
+   "explorer": false,
+   "path": "index.html",
+   "routes": [
+    "/futures/leaders",
+    "/futures/search",
+    "/futures/standings",
+    "/leaders",
+    "/logo/:code",
+    "/players/search",
+    "/roster",
+    "/roster/moves",
+    "/schedule",
+    "/schedule/futures",
+    "/standings"
+   ],
+   "title": "KBO 야구 데이터 대시보드"
+  },
+  {
+   "explorer": false,
+   "path": "pages/article.html",
+   "routes": [
+    "/wrc/by-stadium",
+    "/wrc/distribution",
+    "/wrc/leaderboard",
+    "/wrc/seasons",
+    "/wrc/top-changes"
+   ],
+   "title": "아티클 - Bstats"
+  },
+  {
+   "explorer": true,
+   "path": "pages/database-explorer.html",
+   "routes": [
+    "/dashboard/stats",
+    "/db/table/:name",
+    "/db/table/:name/csv",
+    "/db/tables",
+    "/jobs/status"
+   ],
+   "title": "데이터 탐색 - Bstats"
+  },
+  {
+   "explorer": false,
+   "path": "pages/factor-stats.html",
+   "routes": [
+    "/db/table/:name"
+   ],
+   "title": "요인 통계 - Bstats"
+  },
+  {
+   "explorer": false,
+   "path": "pages/player-analytics.html",
+   "routes": [
+    "/futures/player/:id",
+    "/futures/search",
+    "/players/:id",
+    "/players/:id/arsenal",
+    "/players/:id/usage",
+    "/players/search"
+   ],
+   "title": "선수 분석 - Bstats"
+  },
+  {
+   "explorer": false,
+   "path": "pages/player-stats.html",
+   "routes": [
+    "/stats/batters",
+    "/stats/pitchers",
+    "/stats/regulation",
+    "/stats/seasons",
+    "/teams"
+   ],
+   "title": "선수 통계 - Bstats"
+  },
+  {
+   "explorer": false,
+   "path": "pages/team-record.html",
+   "routes": [
+    "/teams/:id"
+   ],
+   "title": "팀 기록실 - Bstats"
+  },
+  {
+   "explorer": false,
+   "path": "pages/team-stats.html",
+   "routes": [
+    "/db/table/:name",
+    "/games",
+    "/standings",
+    "/stats/batters",
+    "/stats/pitchers",
+    "/stats/seasons",
+    "/stats/team_range"
+   ],
+   "title": "팀 통계 - Bstats"
+  }
+ ],
+ "routes": [
+  {
+   "file": "src/routes/dashboard.js",
+   "live": false,
+   "pages": [
+    "pages/database-explorer.html"
+   ],
+   "path": "/dashboard/stats",
+   "reads_all_tables": false,
+   "tables": [
+    "franchises",
+    "games",
+    "kbo_official_batter_stats",
+    "kbo_official_pitcher_stats",
+    "players",
+    "teams"
+   ]
+  },
+  {
+   "file": "src/routes/dbexplorer.js",
+   "live": false,
+   "pages": [
+    "pages/database-explorer.html",
+    "pages/factor-stats.html",
+    "pages/team-stats.html"
+   ],
+   "path": "/db/table/:name",
+   "reads_all_tables": true,
+   "tables": [
+    "franchises",
+    "futures_games",
+    "futures_season_stats",
+    "futures_teams",
+    "game_team_stats",
+    "games",
+    "kbo_official_batter_stats",
+    "kbo_official_pitcher_stats",
+    "kbo_roster",
+    "kbo_roster_moves",
+    "kbo_run_values_by_season",
+    "kbo_woba_weights_by_season",
+    "korean_series_champion",
+    "play_by_play",
+    "players",
+    "re24_matrix_by_season",
+    "self_park_factor",
+    "stadium_dim",
+    "statiz_park_factor",
+    "statiz_yearly_constants",
+    "team_logos",
+    "team_season_rank",
+    "team_seasons",
+    "team_stadium_by_season",
+    "teams",
+    "weighted_pf_by_batter_season",
+    "wrc_plus_comparison"
+   ]
+  },
+  {
+   "file": "src/routes/dbexplorer.js",
+   "live": false,
+   "pages": [
+    "pages/database-explorer.html"
+   ],
+   "path": "/db/table/:name/csv",
+   "reads_all_tables": true,
+   "tables": [
+    "franchises",
+    "futures_games",
+    "futures_season_stats",
+    "futures_teams",
+    "game_team_stats",
+    "games",
+    "kbo_official_batter_stats",
+    "kbo_official_pitcher_stats",
+    "kbo_roster",
+    "kbo_roster_moves",
+    "kbo_run_values_by_season",
+    "kbo_woba_weights_by_season",
+    "korean_series_champion",
+    "play_by_play",
+    "players",
+    "re24_matrix_by_season",
+    "self_park_factor",
+    "stadium_dim",
+    "statiz_park_factor",
+    "statiz_yearly_constants",
+    "team_logos",
+    "team_season_rank",
+    "team_seasons",
+    "team_stadium_by_season",
+    "teams",
+    "weighted_pf_by_batter_season",
+    "wrc_plus_comparison"
+   ]
+  },
+  {
+   "file": "src/routes/dbexplorer.js",
+   "live": false,
+   "pages": [
+    "pages/database-explorer.html"
+   ],
+   "path": "/db/tables",
+   "reads_all_tables": true,
+   "tables": [
+    "franchises",
+    "futures_games",
+    "futures_season_stats",
+    "futures_teams",
+    "game_team_stats",
+    "games",
+    "kbo_official_batter_stats",
+    "kbo_official_pitcher_stats",
+    "kbo_roster",
+    "kbo_roster_moves",
+    "kbo_run_values_by_season",
+    "kbo_woba_weights_by_season",
+    "korean_series_champion",
+    "play_by_play",
+    "players",
+    "re24_matrix_by_season",
+    "self_park_factor",
+    "stadium_dim",
+    "statiz_park_factor",
+    "statiz_yearly_constants",
+    "team_logos",
+    "team_season_rank",
+    "team_seasons",
+    "team_stadium_by_season",
+    "teams",
+    "weighted_pf_by_batter_season",
+    "wrc_plus_comparison"
+   ]
+  },
+  {
+   "file": "src/routes/futuresrecord.js",
+   "live": true,
+   "pages": [
+    "index.html"
+   ],
+   "path": "/futures/leaders",
+   "reads_all_tables": false,
+   "tables": []
+  },
+  {
+   "file": "src/routes/futuresplayer.js",
+   "live": true,
+   "pages": [
+    "pages/player-analytics.html"
+   ],
+   "path": "/futures/player/:id",
+   "reads_all_tables": false,
+   "tables": [
+    "futures_season_stats",
+    "kbo_official_batter_stats",
+    "kbo_official_pitcher_stats",
+    "kbo_roster",
+    "players"
+   ]
+  },
+  {
+   "file": "src/routes/futuresplayer.js",
+   "live": true,
+   "pages": [
+    "index.html",
+    "pages/player-analytics.html"
+   ],
+   "path": "/futures/search",
+   "reads_all_tables": false,
+   "tables": [
+    "futures_season_stats",
+    "kbo_official_batter_stats",
+    "kbo_official_pitcher_stats",
+    "kbo_roster",
+    "players"
+   ]
+  },
+  {
+   "file": "src/routes/futuresrecord.js",
+   "live": true,
+   "pages": [
+    "index.html"
+   ],
+   "path": "/futures/standings",
+   "reads_all_tables": false,
+   "tables": []
+  },
+  {
+   "file": "src/routes/games.js",
+   "live": false,
+   "pages": [
+    "pages/team-stats.html"
+   ],
+   "path": "/games",
+   "reads_all_tables": false,
+   "tables": [
+    "games",
+    "teams"
+   ]
+  },
+  {
+   "file": "src/routes/jobs.js",
+   "live": false,
+   "pages": [
+    "pages/database-explorer.html"
+   ],
+   "path": "/jobs/status",
+   "reads_all_tables": false,
+   "tables": []
+  },
+  {
+   "file": "src/routes/leaders.js",
+   "live": false,
+   "pages": [
+    "index.html"
+   ],
+   "path": "/leaders",
+   "reads_all_tables": false,
+   "tables": [
+    "kbo_official_batter_stats",
+    "kbo_official_pitcher_stats",
+    "players",
+    "wrc_plus_comparison"
+   ]
+  },
+  {
+   "file": "src/routes/logo.js",
+   "live": false,
+   "pages": [
+    "index.html"
+   ],
+   "path": "/logo/:code",
+   "reads_all_tables": false,
+   "tables": [
+    "team_logos"
+   ]
+  },
+  {
+   "file": "src/routes/players.js",
+   "live": false,
+   "pages": [
+    "pages/player-analytics.html"
+   ],
+   "path": "/players/:id",
+   "reads_all_tables": false,
+   "tables": [
+    "kbo_official_batter_stats",
+    "kbo_official_pitcher_stats",
+    "kbo_roster",
+    "play_by_play",
+    "players"
+   ]
+  },
+  {
+   "file": "src/routes/players.js",
+   "live": false,
+   "pages": [
+    "pages/player-analytics.html"
+   ],
+   "path": "/players/:id/arsenal",
+   "reads_all_tables": false,
+   "tables": [
+    "kbo_official_batter_stats",
+    "kbo_official_pitcher_stats",
+    "kbo_roster",
+    "play_by_play",
+    "players"
+   ]
+  },
+  {
+   "file": "src/routes/players.js",
+   "live": false,
+   "pages": [
+    "pages/player-analytics.html"
+   ],
+   "path": "/players/:id/usage",
+   "reads_all_tables": false,
+   "tables": [
+    "kbo_official_batter_stats",
+    "kbo_official_pitcher_stats",
+    "kbo_roster",
+    "play_by_play",
+    "players"
+   ]
+  },
+  {
+   "file": "src/routes/players.js",
+   "live": false,
+   "pages": [
+    "index.html",
+    "pages/player-analytics.html"
+   ],
+   "path": "/players/search",
+   "reads_all_tables": false,
+   "tables": [
+    "kbo_official_batter_stats",
+    "kbo_official_pitcher_stats",
+    "kbo_roster",
+    "play_by_play",
+    "players"
+   ]
+  },
+  {
+   "file": "src/routes/roster.js",
+   "live": false,
+   "pages": [
+    "index.html"
+   ],
+   "path": "/roster",
+   "reads_all_tables": false,
+   "tables": [
+    "kbo_roster",
+    "kbo_roster_moves"
+   ]
+  },
+  {
+   "file": "src/routes/roster.js",
+   "live": false,
+   "pages": [
+    "index.html"
+   ],
+   "path": "/roster/moves",
+   "reads_all_tables": false,
+   "tables": [
+    "kbo_roster",
+    "kbo_roster_moves"
+   ]
+  },
+  {
+   "file": "src/routes/schedule.js",
+   "live": true,
+   "pages": [
+    "index.html"
+   ],
+   "path": "/schedule",
+   "reads_all_tables": false,
+   "tables": [
+    "players"
+   ]
+  },
+  {
+   "file": "src/routes/futures.js",
+   "live": true,
+   "pages": [
+    "index.html"
+   ],
+   "path": "/schedule/futures",
+   "reads_all_tables": false,
+   "tables": [
+    "futures_season_stats",
+    "futures_teams"
+   ]
+  },
+  {
+   "file": "src/routes/standings.js",
+   "live": true,
+   "pages": [
+    "index.html",
+    "pages/team-stats.html"
+   ],
+   "path": "/standings",
+   "reads_all_tables": false,
+   "tables": []
+  },
+  {
+   "file": "src/routes/stats.js",
+   "live": false,
+   "pages": [
+    "pages/player-stats.html",
+    "pages/team-stats.html"
+   ],
+   "path": "/stats/batters",
+   "reads_all_tables": false,
+   "tables": [
+    "kbo_official_batter_stats",
+    "kbo_official_pitcher_stats",
+    "players",
+    "wrc_plus_comparison"
+   ]
+  },
+  {
+   "file": "src/routes/stats.js",
+   "live": false,
+   "pages": [
+    "pages/player-stats.html",
+    "pages/team-stats.html"
+   ],
+   "path": "/stats/pitchers",
+   "reads_all_tables": false,
+   "tables": [
+    "kbo_official_batter_stats",
+    "kbo_official_pitcher_stats",
+    "players",
+    "wrc_plus_comparison"
+   ]
+  },
+  {
+   "file": "src/routes/stats.js",
+   "live": false,
+   "pages": [
+    "pages/player-stats.html"
+   ],
+   "path": "/stats/regulation",
+   "reads_all_tables": false,
+   "tables": [
+    "kbo_official_batter_stats",
+    "kbo_official_pitcher_stats",
+    "players",
+    "wrc_plus_comparison"
+   ]
+  },
+  {
+   "file": "src/routes/stats.js",
+   "live": false,
+   "pages": [
+    "pages/player-stats.html",
+    "pages/team-stats.html"
+   ],
+   "path": "/stats/seasons",
+   "reads_all_tables": false,
+   "tables": [
+    "kbo_official_batter_stats",
+    "kbo_official_pitcher_stats",
+    "players",
+    "wrc_plus_comparison"
+   ]
+  },
+  {
+   "file": "src/routes/teamrange.js",
+   "live": false,
+   "pages": [
+    "pages/team-stats.html"
+   ],
+   "path": "/stats/team_range",
+   "reads_all_tables": false,
+   "tables": [
+    "games",
+    "play_by_play"
+   ]
+  },
+  {
+   "file": "src/routes/teams.js",
+   "live": false,
+   "pages": [
+    "pages/player-stats.html"
+   ],
+   "path": "/teams",
+   "reads_all_tables": false,
+   "tables": [
+    "franchises",
+    "team_seasons",
+    "teams"
+   ]
+  },
+  {
+   "file": "src/routes/teamrecord.js",
+   "live": false,
+   "pages": [
+    "pages/team-record.html"
+   ],
+   "path": "/teams/:id",
+   "reads_all_tables": false,
+   "tables": [
+    "franchises",
+    "kbo_official_batter_stats",
+    "kbo_official_pitcher_stats",
+    "korean_series_champion",
+    "team_season_rank",
+    "team_seasons",
+    "team_stadium_by_season"
+   ]
+  },
+  {
+   "file": "src/routes/wrc.js",
+   "live": false,
+   "pages": [],
+   "path": "/wrc/batter-search",
+   "reads_all_tables": false,
+   "tables": [
+    "games",
+    "kbo_official_batter_stats",
+    "play_by_play",
+    "stadium_dim",
+    "weighted_pf_by_batter_season",
+    "wrc_plus_comparison"
+   ]
+  },
+  {
+   "file": "src/routes/wrc.js",
+   "live": false,
+   "pages": [],
+   "path": "/wrc/batter/:id",
+   "reads_all_tables": false,
+   "tables": [
+    "games",
+    "kbo_official_batter_stats",
+    "play_by_play",
+    "stadium_dim",
+    "weighted_pf_by_batter_season",
+    "wrc_plus_comparison"
+   ]
+  },
+  {
+   "file": "src/routes/wrc.js",
+   "live": false,
+   "pages": [
+    "pages/article.html"
+   ],
+   "path": "/wrc/by-stadium",
+   "reads_all_tables": false,
+   "tables": [
+    "games",
+    "kbo_official_batter_stats",
+    "play_by_play",
+    "stadium_dim",
+    "weighted_pf_by_batter_season",
+    "wrc_plus_comparison"
+   ]
+  },
+  {
+   "file": "src/routes/wrc.js",
+   "live": false,
+   "pages": [
+    "pages/article.html"
+   ],
+   "path": "/wrc/distribution",
+   "reads_all_tables": false,
+   "tables": [
+    "games",
+    "kbo_official_batter_stats",
+    "play_by_play",
+    "stadium_dim",
+    "weighted_pf_by_batter_season",
+    "wrc_plus_comparison"
+   ]
+  },
+  {
+   "file": "src/routes/wrc.js",
+   "live": false,
+   "pages": [
+    "pages/article.html"
+   ],
+   "path": "/wrc/leaderboard",
+   "reads_all_tables": false,
+   "tables": [
+    "games",
+    "kbo_official_batter_stats",
+    "play_by_play",
+    "stadium_dim",
+    "weighted_pf_by_batter_season",
+    "wrc_plus_comparison"
+   ]
+  },
+  {
+   "file": "src/routes/wrc.js",
+   "live": false,
+   "pages": [
+    "pages/article.html"
+   ],
+   "path": "/wrc/seasons",
+   "reads_all_tables": false,
+   "tables": [
+    "games",
+    "kbo_official_batter_stats",
+    "play_by_play",
+    "stadium_dim",
+    "weighted_pf_by_batter_season",
+    "wrc_plus_comparison"
+   ]
+  },
+  {
+   "file": "src/routes/wrc.js",
+   "live": false,
+   "pages": [
+    "pages/article.html"
+   ],
+   "path": "/wrc/top-changes",
+   "reads_all_tables": false,
+   "tables": [
+    "games",
+    "kbo_official_batter_stats",
+    "play_by_play",
+    "stadium_dim",
+    "weighted_pf_by_batter_season",
+    "wrc_plus_comparison"
+   ]
+  }
+ ],
+ "scripts": [
+  {
+   "jobs": [
+    "daily",
+    "roster"
+   ],
+   "note": "명단·이동 표에서 번호 없는 이름을 찾아 새 선수를 넣고, 그 표의 빈 player_id 를 채웁니다. 오늘·내일 선발은 우리 일정 API 로 봅니다.",
+   "path": "data_collection/add_new_players.py",
+   "reads": [],
+   "sources": [
+    "kbo_player_search"
+   ],
+   "status_keys": {
+    "daily": "add_new_players",
+    "roster": "add_new_players"
+   },
+   "writes": [
+    "kbo_roster",
+    "kbo_roster_moves",
+    "players"
+   ]
+  },
+  {
+   "jobs": [
+    "daily"
+   ],
+   "note": "--table 인자로 타자·투수 표를 나눠 넣습니다.",
+   "path": "data_collection/csv_to_d1.py",
+   "reads": [],
+   "sources": [],
+   "status_keys": {
+    "daily": "official_stats"
+   },
+   "writes": [
+    "kbo_official_batter_stats",
+    "kbo_official_pitcher_stats"
+   ]
+  },
+  {
+   "jobs": [
+    "daily"
+   ],
+   "note": "그날 문자중계 CSV 에서 경기 결과를 만듭니다(teams 는 팀 이름 확인용).",
+   "path": "data_collection/daily_games_to_d1.py",
+   "reads": [],
+   "sources": [
+    "naver_relay"
+   ],
+   "status_keys": {
+    "daily": "games"
+   },
+   "writes": [
+    "games"
+   ]
+  },
+  {
+   "jobs": [
+    "daily"
+   ],
+   "note": "문자중계를 받아 그날 행을 지우고 다시 넣습니다.",
+   "path": "data_collection/daily_pbp_to_d1.py",
+   "reads": [],
+   "sources": [
+    "naver_relay"
+   ],
+   "status_keys": {
+    "daily": "pbp"
+   },
+   "writes": [
+    "play_by_play"
+   ]
+  },
+  {
+   "jobs": [
+    "roster"
+   ],
+   "note": "roster 워크플로가 올 시즌 퓨처스 기록을 다시 받습니다. 따로 실행 기록 키는 없습니다.",
+   "path": "data_collection/futures_records.py",
+   "reads": [],
+   "sources": [
+    "kbo_futures"
+   ],
+   "status_keys": {},
+   "writes": [
+    "futures_season_stats"
+   ]
+  },
+  {
+   "jobs": [
+    "daily"
+   ],
+   "note": null,
+   "path": "data_collection/futures_to_d1.py",
+   "reads": [],
+   "sources": [
+    "kbo_futures"
+   ],
+   "status_keys": {
+    "daily": "futures"
+   },
+   "writes": [
+    "futures_games"
+   ]
+  },
+  {
+   "jobs": [
+    "monthly"
+   ],
+   "note": "선수 사진 주소의 연도를 최신으로 고칩니다. 공식 기록은 최신 시즌을 찾는 데만 씁니다.",
+   "path": "data_collection/heal_player_photos.py",
+   "reads": [],
+   "sources": [],
+   "status_keys": {},
+   "writes": [
+    "players"
+   ]
+  },
+  {
+   "jobs": [
+    "daily"
+   ],
+   "note": "공식 기록을 CSV 로 받습니다. 표에는 csv_to_d1.py 가 넣습니다.",
+   "path": "data_collection/official_stats_http.py",
+   "reads": [],
+   "sources": [
+    "kbo_record"
+   ],
+   "status_keys": {},
+   "writes": []
+  },
+  {
+   "jobs": [
+    "monthly"
+   ],
+   "note": "공식 기록은 받을 선수 번호 목록을 만드는 데만 씁니다. 로컬 SQLite 의 players 를 고치고 sqlite_to_d1.py --tables players 가 올립니다.",
+   "path": "data_collection/player_info_scraper.py",
+   "reads": [],
+   "sources": [
+    "kbo_player_detail"
+   ],
+   "status_keys": {
+    "monthly": "player_info"
+   },
+   "writes": [
+    "players"
+   ]
+  },
+  {
+   "jobs": [
+    "daily",
+    "monthly",
+    "roster",
+    "weekly"
+   ],
+   "note": "작업 실행 기록(meta_job_runs)만 남깁니다.",
+   "path": "data_collection/record_job_run.py",
+   "reads": [],
+   "sources": [],
+   "status_keys": {},
+   "writes": []
+  },
+  {
+   "jobs": [
+    "daily",
+    "roster"
+   ],
+   "note": "공식 기록·players 는 선수 번호를 찾는 조회용입니다. 퓨처스 명단도 함께 받습니다.",
+   "path": "data_collection/roster_to_d1.py",
+   "reads": [],
+   "sources": [
+    "kbo_futures",
+    "kbo_roster"
+   ],
+   "status_keys": {
+    "daily": "roster",
+    "roster": "roster_pm"
+   },
+   "writes": [
+    "kbo_roster",
+    "kbo_roster_moves"
+   ]
+  },
+  {
+   "jobs": [
+    "daily",
+    "roster"
+   ],
+   "note": "명단의 소속·등번호를 players 에 반영합니다(teams 는 팀 코드 확인용, players 는 비교 대상).",
+   "path": "data_collection/sync_players_from_roster.py",
+   "reads": [
+    "kbo_roster"
+   ],
+   "sources": [],
+   "status_keys": {},
+   "writes": [
+    "players"
+   ]
+  },
+  {
+   "jobs": [
+    "daily"
+   ],
+   "note": "team_seasons 는 옛 시즌 표기명을 프랜차이즈에 잇는 조회용입니다.",
+   "path": "data_collection/team_ranks.py",
+   "reads": [],
+   "sources": [
+    "kbo_record"
+   ],
+   "status_keys": {
+    "daily": "team_ranks"
+   },
+   "writes": [
+    "team_season_rank"
+   ]
+  },
+  {
+   "jobs": [
+    "monthly"
+   ],
+   "note": "월간 작업용으로 D1 을 로컬 SQLite 로 내려받습니다.",
+   "path": "migration/d1_to_sqlite.py",
+   "reads": [],
+   "sources": [],
+   "status_keys": {},
+   "writes": []
+  },
+  {
+   "jobs": [
+    "weekly"
+   ],
+   "note": "전체 내려받기 CSV 를 만듭니다.",
+   "path": "migration/export_csv.py",
+   "reads": [],
+   "sources": [],
+   "status_keys": {},
+   "writes": []
+  },
+  {
+   "jobs": [
+    "weekly"
+   ],
+   "note": "주간 계산용으로 MySQL 을 로컬 SQLite 로 내려받습니다.",
+   "path": "migration/mysql/mysql_to_sqlite.py",
+   "reads": [],
+   "sources": [],
+   "status_keys": {},
+   "writes": []
+  },
+  {
+   "jobs": [
+    "daily"
+   ],
+   "note": "D1 과 MySQL 의 행 수·값을 견줍니다. 표는 쓰지 않습니다.",
+   "path": "migration/mysql/reconcile.py",
+   "reads": [],
+   "sources": [],
+   "status_keys": {
+    "daily": "reconcile"
+   },
+   "writes": []
+  },
+  {
+   "jobs": [
+    "monthly",
+    "weekly"
+   ],
+   "note": "계산 결과 표를 D1·MySQL 에 올립니다. 올리는 표는 계산한 스크립트에 적었습니다.",
+   "path": "migration/sqlite_to_d1.py",
+   "reads": [],
+   "sources": [],
+   "status_keys": {},
+   "writes": []
+  },
+  {
+   "jobs": [
+    "weekly"
+   ],
+   "note": null,
+   "path": "park_factors/build_re24_run_values.py",
+   "reads": [
+    "games",
+    "play_by_play"
+   ],
+   "sources": [],
+   "status_keys": {
+    "weekly": "park_factors"
+   },
+   "writes": [
+    "kbo_run_values_by_season",
+    "re24_matrix_by_season"
+   ]
+  },
+  {
+   "jobs": [
+    "weekly"
+   ],
+   "note": "리그 합계는 공식 타자 기록에서, 이벤트 가치는 build_re24_run_values 의 계산을 가져다 씁니다.",
+   "path": "park_factors/build_woba_weights.py",
+   "reads": [
+    "games",
+    "kbo_official_batter_stats",
+    "play_by_play"
+   ],
+   "sources": [],
+   "status_keys": {
+    "weekly": "park_factors"
+   },
+   "writes": [
+    "kbo_woba_weights_by_season"
+   ]
+  },
+  {
+   "jobs": [
+    "weekly"
+   ],
+   "note": "team_stadium_by_season 의 올 시즌 행을 로컬에서 채우지만 sqlite_to_d1.py 가 올리지 않아 D1·MySQL 에는 반영되지 않습니다.",
+   "path": "park_factors/build_wrc_plus.py",
+   "reads": [
+    "games",
+    "kbo_official_batter_stats",
+    "kbo_woba_weights_by_season",
+    "play_by_play",
+    "self_park_factor",
+    "stadium_dim",
+    "team_stadium_by_season"
+   ],
+   "sources": [],
+   "status_keys": {
+    "weekly": "park_factors"
+   },
+   "writes": [
+    "weighted_pf_by_batter_season",
+    "wrc_plus_comparison"
+   ]
+  },
+  {
+   "jobs": [
+    "weekly"
+   ],
+   "note": null,
+   "path": "park_factors/compute_self_park_factors.py",
+   "reads": [
+    "games",
+    "play_by_play"
+   ],
+   "sources": [],
+   "status_keys": {
+    "weekly": "park_factors"
+   },
+   "writes": [
+    "self_park_factor"
+   ]
+  },
+  {
+   "jobs": [
+    "weekly"
+   ],
+   "note": "중간에 끊긴 경기를 가려 계산에서 뺍니다(로컬 임시 표 truncated_games 만 만들고 올리지 않습니다).",
+   "path": "park_factors/truncated.py",
+   "reads": [
+    "games",
+    "play_by_play"
+   ],
+   "sources": [],
+   "status_keys": {},
+   "writes": []
+  }
+ ],
+ "sources": [
+  {
+   "id": "kbo_futures",
+   "name": "KBO 퓨처스리그",
+   "url": "https://www.koreabaseball.com/Futures/"
+  },
+  {
+   "id": "kbo_live",
+   "name": "KBO 실시간(순위·일정)",
+   "url": "https://www.koreabaseball.com/"
+  },
+  {
+   "id": "kbo_player_detail",
+   "name": "KBO 선수 상세 기록",
+   "url": "https://www.koreabaseball.com/Record/Player/HitterDetail/Basic.aspx"
+  },
+  {
+   "id": "kbo_player_search",
+   "name": "KBO 선수 검색",
+   "url": "https://www.koreabaseball.com/Player/Search.aspx"
+  },
+  {
+   "id": "kbo_record",
+   "name": "KBO 기록실",
+   "url": "https://www.koreabaseball.com/Record/"
+  },
+  {
+   "id": "kbo_roster",
+   "name": "KBO 1군 등록 현황",
+   "url": "https://www.koreabaseball.com/Player/RegisterAll.aspx"
+  },
+  {
+   "id": "naver_relay",
+   "name": "네이버 문자중계",
+   "url": "https://sports.naver.com/kbaseball/"
+  }
+ ],
+ "tables": [
+  {
+   "category": null,
+   "derived_from": [],
+   "desc": null,
+   "kind": "manual",
+   "manual_note": "구단 계보표입니다. migration/build_franchises.py 가 KBO 기록실 팀 드롭다운을 읽어 로컬 DB 에 한 번 만들었고, 정기 작업은 없습니다.",
+   "name": "franchises",
+   "pages": [
+    "pages/player-stats.html",
+    "pages/team-record.html"
+   ],
+   "routes": [
+    "/dashboard/stats",
+    "/teams",
+    "/teams/:id"
+   ],
+   "update_freq": null,
+   "written_by": []
+  },
+  {
+   "category": null,
+   "derived_from": [],
+   "desc": null,
+   "kind": "collected",
+   "manual_note": null,
+   "name": "futures_games",
+   "pages": [],
+   "routes": [],
+   "update_freq": null,
+   "written_by": [
+    "data_collection/futures_to_d1.py"
+   ]
+  },
+  {
+   "category": null,
+   "derived_from": [],
+   "desc": null,
+   "kind": "collected",
+   "manual_note": null,
+   "name": "futures_season_stats",
+   "pages": [
+    "index.html",
+    "pages/player-analytics.html"
+   ],
+   "routes": [
+    "/futures/player/:id",
+    "/futures/search",
+    "/schedule/futures"
+   ],
+   "update_freq": null,
+   "written_by": [
+    "data_collection/futures_records.py"
+   ]
+  },
+  {
+   "category": null,
+   "derived_from": [],
+   "desc": null,
+   "kind": "manual",
+   "manual_note": "퓨처스 팀 목록입니다. data_collection/futures_schedule.py 의 시드값(INSERT OR REPLACE)으로 한 번 채웠고, 정기 작업은 없습니다.",
+   "name": "futures_teams",
+   "pages": [
+    "index.html"
+   ],
+   "routes": [
+    "/schedule/futures"
+   ],
+   "update_freq": null,
+   "written_by": []
+  },
+  {
+   "category": "원천 데이터",
+   "derived_from": [],
+   "desc": "경기·팀 단위 박스스코어 집계 통계(game_id+team_id 단위)",
+   "kind": "manual",
+   "manual_note": "경기별 팀 기록입니다. 코드에서 이 표에 쓰는 곳을 찾지 못했습니다. 예전에 한 번 적재한 뒤 갱신하는 작업이 없습니다.",
+   "name": "game_team_stats",
+   "pages": [],
+   "routes": [],
+   "update_freq": "미사용 (현재 0행)",
+   "written_by": []
+  },
+  {
+   "category": "원천 데이터",
+   "derived_from": [],
+   "desc": "KBO 경기별 기본 메타정보(일자·시즌·경기유형·홈/원정팀·최종 스코어·구장·관중·소요시간·날씨)",
+   "kind": "collected",
+   "manual_note": null,
+   "name": "games",
+   "pages": [
+    "pages/article.html",
+    "pages/team-stats.html"
+   ],
+   "routes": [
+    "/dashboard/stats",
+    "/games",
+    "/stats/team_range",
+    "/wrc/batter-search",
+    "/wrc/batter/:id",
+    "/wrc/by-stadium",
+    "/wrc/distribution",
+    "/wrc/leaderboard",
+    "/wrc/seasons",
+    "/wrc/top-changes"
+   ],
+   "update_freq": "매일 자동 (KST 03:30, PBP 수집 시 함께)",
+   "written_by": [
+    "data_collection/daily_games_to_d1.py"
+   ]
+  },
+  {
+   "category": "공식 통계",
+   "derived_from": [],
+   "desc": "KBO 공식 홈페이지 수집 타자 시즌 통계(선수x시즌, 카운팅·비율·세이버 지표 포함)",
+   "kind": "collected",
+   "manual_note": null,
+   "name": "kbo_official_batter_stats",
+   "pages": [
+    "index.html",
+    "pages/article.html",
+    "pages/player-analytics.html",
+    "pages/player-stats.html",
+    "pages/team-record.html",
+    "pages/team-stats.html"
+   ],
+   "routes": [
+    "/dashboard/stats",
+    "/futures/player/:id",
+    "/futures/search",
+    "/leaders",
+    "/players/:id",
+    "/players/:id/arsenal",
+    "/players/:id/usage",
+    "/players/search",
+    "/stats/batters",
+    "/stats/pitchers",
+    "/stats/regulation",
+    "/stats/seasons",
+    "/teams/:id",
+    "/wrc/batter-search",
+    "/wrc/batter/:id",
+    "/wrc/by-stadium",
+    "/wrc/distribution",
+    "/wrc/leaderboard",
+    "/wrc/seasons",
+    "/wrc/top-changes"
+   ],
+   "update_freq": "매일 자동 (KST 02:00, Selenium 수집)",
+   "written_by": [
+    "data_collection/csv_to_d1.py"
+   ]
+  },
+  {
+   "category": "공식 통계",
+   "derived_from": [],
+   "desc": "KBO 공식 기록 시즌별 투수 성적 및 파생 지표(피출루율·BABIP·K%·BB% 등) 테이블",
+   "kind": "collected",
+   "manual_note": null,
+   "name": "kbo_official_pitcher_stats",
+   "pages": [
+    "index.html",
+    "pages/player-analytics.html",
+    "pages/player-stats.html",
+    "pages/team-record.html",
+    "pages/team-stats.html"
+   ],
+   "routes": [
+    "/dashboard/stats",
+    "/futures/player/:id",
+    "/futures/search",
+    "/leaders",
+    "/players/:id",
+    "/players/:id/arsenal",
+    "/players/:id/usage",
+    "/players/search",
+    "/stats/batters",
+    "/stats/pitchers",
+    "/stats/regulation",
+    "/stats/seasons",
+    "/teams/:id"
+   ],
+   "update_freq": "매일 자동 (KST 02:00, Selenium 수집)",
+   "written_by": [
+    "data_collection/csv_to_d1.py"
+   ]
+  },
+  {
+   "category": null,
+   "derived_from": [],
+   "desc": null,
+   "kind": "collected",
+   "manual_note": null,
+   "name": "kbo_roster",
+   "pages": [
+    "index.html",
+    "pages/player-analytics.html"
+   ],
+   "routes": [
+    "/futures/player/:id",
+    "/futures/search",
+    "/players/:id",
+    "/players/:id/arsenal",
+    "/players/:id/usage",
+    "/players/search",
+    "/roster",
+    "/roster/moves"
+   ],
+   "update_freq": null,
+   "written_by": [
+    "data_collection/add_new_players.py",
+    "data_collection/roster_to_d1.py"
+   ]
+  },
+  {
+   "category": null,
+   "derived_from": [],
+   "desc": null,
+   "kind": "collected",
+   "manual_note": null,
+   "name": "kbo_roster_moves",
+   "pages": [
+    "index.html"
+   ],
+   "routes": [
+    "/roster",
+    "/roster/moves"
+   ],
+   "update_freq": null,
+   "written_by": [
+    "data_collection/add_new_players.py",
+    "data_collection/roster_to_d1.py"
+   ]
+  },
+  {
+   "category": "세이버메트릭스 분석",
+   "derived_from": [
+    "games",
+    "play_by_play"
+   ],
+   "desc": "KBO 시즌별 타격이벤트 유형별 평균 득점가치(run value/RV) 테이블(RE24 기반 선형가중치·wOBA 가중치 산출 원천)",
+   "kind": "derived",
+   "manual_note": null,
+   "name": "kbo_run_values_by_season",
+   "pages": [],
+   "routes": [],
+   "update_freq": "수동/시즌 단위 재계산 (자동 갱신 아님)",
+   "written_by": [
+    "park_factors/build_re24_run_values.py"
+   ]
+  },
+  {
+   "category": "세이버메트릭스 분석",
+   "derived_from": [
+    "games",
+    "kbo_official_batter_stats",
+    "play_by_play"
+   ],
+   "desc": "KBO 시즌별 wOBA 가중치(FanGraphs 방식)와 산출 근거인 리그 집계·이벤트별 득점가치(run value)·스케일 계수 테이블",
+   "kind": "derived",
+   "manual_note": null,
+   "name": "kbo_woba_weights_by_season",
+   "pages": [
+    "pages/team-stats.html"
+   ],
+   "routes": [],
+   "update_freq": "수동/시즌 단위 재계산 (자동 갱신 아님; 파이프라인 입력)",
+   "written_by": [
+    "park_factors/build_woba_weights.py"
+   ]
+  },
+  {
+   "category": null,
+   "derived_from": [],
+   "desc": null,
+   "kind": "manual",
+   "manual_note": "한국시리즈 우승 기록입니다. data_collection/korean_series.py 에 적은 1982~2007 값을 한 번 넣었고, 정기 작업은 없습니다.",
+   "name": "korean_series_champion",
+   "pages": [
+    "pages/team-record.html"
+   ],
+   "routes": [
+    "/teams/:id"
+   ],
+   "update_freq": null,
+   "written_by": []
+  },
+  {
+   "category": null,
+   "derived_from": [],
+   "desc": null,
+   "kind": "meta",
+   "manual_note": null,
+   "name": "meta_backfill",
+   "pages": [],
+   "routes": [],
+   "update_freq": null,
+   "written_by": []
+  },
+  {
+   "category": null,
+   "derived_from": [],
+   "desc": null,
+   "kind": "meta",
+   "manual_note": null,
+   "name": "meta_job_runs",
+   "pages": [],
+   "routes": [],
+   "update_freq": null,
+   "written_by": []
+  },
+  {
+   "category": null,
+   "derived_from": [],
+   "desc": null,
+   "kind": "meta",
+   "manual_note": null,
+   "name": "meta_table_counts",
+   "pages": [],
+   "routes": [],
+   "update_freq": null,
+   "written_by": []
+  },
+  {
+   "category": "원천 데이터",
+   "derived_from": [],
+   "desc": "KBO 투구 단위 플레이바이플레이 원천 기록(투구 트래킹·카운트·주자·수비배치·타석 결과)",
+   "kind": "collected",
+   "manual_note": null,
+   "name": "play_by_play",
+   "pages": [
+    "index.html",
+    "pages/article.html",
+    "pages/player-analytics.html",
+    "pages/team-stats.html"
+   ],
+   "routes": [
+    "/players/:id",
+    "/players/:id/arsenal",
+    "/players/:id/usage",
+    "/players/search",
+    "/stats/team_range",
+    "/wrc/batter-search",
+    "/wrc/batter/:id",
+    "/wrc/by-stadium",
+    "/wrc/distribution",
+    "/wrc/leaderboard",
+    "/wrc/seasons",
+    "/wrc/top-changes"
+   ],
+   "update_freq": "매일 자동 (KST 03:30, daily_kbo_pbp.sh)",
+   "written_by": [
+    "data_collection/daily_pbp_to_d1.py"
+   ]
+  },
+  {
+   "category": "선수·팀·구장 마스터",
+   "derived_from": [
+    "kbo_roster"
+   ],
+   "desc": "KBO 선수 기본 신상·신체·계약·드래프트 정보 마스터 테이블",
+   "kind": "collected",
+   "manual_note": null,
+   "name": "players",
+   "pages": [
+    "index.html",
+    "pages/player-analytics.html",
+    "pages/player-stats.html",
+    "pages/team-stats.html"
+   ],
+   "routes": [
+    "/dashboard/stats",
+    "/futures/player/:id",
+    "/futures/search",
+    "/leaders",
+    "/players/:id",
+    "/players/:id/arsenal",
+    "/players/:id/usage",
+    "/players/search",
+    "/schedule",
+    "/stats/batters",
+    "/stats/pitchers",
+    "/stats/regulation",
+    "/stats/seasons"
+   ],
+   "update_freq": "매일 자동 (KST 05:40 레지스트리 동기화: 신규 영입·이적·등번호 / KST 04:00 변경 감지) + 매월 1일 전체 갱신 (KST 13:00)",
+   "written_by": [
+    "data_collection/add_new_players.py",
+    "data_collection/heal_player_photos.py",
+    "data_collection/player_info_scraper.py",
+    "data_collection/sync_players_from_roster.py"
+   ]
+  },
+  {
+   "category": "세이버메트릭스 분석",
+   "derived_from": [
+    "games",
+    "play_by_play"
+   ],
+   "desc": "시즌별 24개 베이스-아웃 상황의 득점기대값(RE24) 매트릭스, 해당 상황 이후 이닝 종료까지의 평균 기대득점",
+   "kind": "derived",
+   "manual_note": null,
+   "name": "re24_matrix_by_season",
+   "pages": [
+    "pages/factor-stats.html"
+   ],
+   "routes": [],
+   "update_freq": "수동/시즌 단위 재계산 (자동 갱신 아님)",
+   "written_by": [
+    "park_factors/build_re24_run_values.py"
+   ]
+  },
+  {
+   "category": "세이버메트릭스 분석",
+   "derived_from": [
+    "games",
+    "play_by_play"
+   ],
+   "desc": "구장·시즌별 자체 산출 파크팩터(PF) 테이블(득점·단타·2루타·3루타·홈런·장타율, 1000=리그평균 지수, 자체 PBP 다년 윈도우 기반)",
+   "kind": "derived",
+   "manual_note": null,
+   "name": "self_park_factor",
+   "pages": [
+    "pages/factor-stats.html",
+    "pages/team-stats.html"
+   ],
+   "routes": [],
+   "update_freq": "매일 자동 (KST 05:00, park_factors 파이프라인)",
+   "written_by": [
+    "park_factors/compute_self_park_factors.py"
+   ]
+  },
+  {
+   "category": "선수·팀·구장 마스터",
+   "derived_from": [],
+   "desc": "KBO 홈구장(경기장) 차원 테이블, 구장별 식별자·연고팀·운영 기간·임시구장 여부 메타데이터",
+   "kind": "manual",
+   "manual_note": "구장 정보입니다. migration/restore_derived.py 가 한 번 복원해 채웠고, 정기 작업은 없습니다.",
+   "name": "stadium_dim",
+   "pages": [
+    "pages/article.html"
+   ],
+   "routes": [
+    "/wrc/batter-search",
+    "/wrc/batter/:id",
+    "/wrc/by-stadium",
+    "/wrc/distribution",
+    "/wrc/leaderboard",
+    "/wrc/seasons",
+    "/wrc/top-changes"
+   ],
+   "update_freq": "고정 마스터 (수동)",
+   "written_by": []
+  },
+  {
+   "category": "외부 참고 (Statiz)",
+   "derived_from": [],
+   "desc": "Statiz 수집 KBO 구장별·시즌별 파크팩터(PF) 지표, 중립=1000 기준 득점 및 타구유형별 구장 영향도",
+   "kind": "manual",
+   "manual_note": "STATIZ 파크팩터 참고값입니다. migration/restore_derived.py 가 다른 DB 에서 한 번 복원했고, 정기 작업은 없습니다.",
+   "name": "statiz_park_factor",
+   "pages": [],
+   "routes": [],
+   "update_freq": "정적 — 외부(Statiz) 참고 스냅샷, 자동 갱신 안 함",
+   "written_by": []
+  },
+  {
+   "category": "외부 참고 (Statiz)",
+   "derived_from": [],
+   "desc": "Statiz(스탯티즈) 출처 KBO 시즌별 세이버메트릭스 상수(wOBA 가중치·wOBA 스케일·도루 득점가치·FIP 상수·득점/승리 환산계수) 룩업 테이블",
+   "kind": "manual",
+   "manual_note": "STATIZ 연도별 상수 참고값입니다. migration/restore_derived.py 가 다른 DB 에서 한 번 복원했고, 정기 작업은 없습니다.",
+   "name": "statiz_yearly_constants",
+   "pages": [],
+   "routes": [],
+   "update_freq": "정적 — 외부(Statiz) 참고 스냅샷, 자동 갱신 안 함",
+   "written_by": []
+  },
+  {
+   "category": null,
+   "derived_from": [],
+   "desc": null,
+   "kind": "manual",
+   "manual_note": "팀 로고 이미지입니다. data_collection/team_logos.py 로 로컬 PNG 와 생성 배지를 한 번 넣었고, 정기 작업은 없습니다.",
+   "name": "team_logos",
+   "pages": [
+    "index.html"
+   ],
+   "routes": [
+    "/logo/:code"
+   ],
+   "update_freq": null,
+   "written_by": []
+  },
+  {
+   "category": null,
+   "derived_from": [],
+   "desc": null,
+   "kind": "collected",
+   "manual_note": null,
+   "name": "team_season_rank",
+   "pages": [
+    "pages/team-record.html",
+    "pages/team-stats.html"
+   ],
+   "routes": [
+    "/teams/:id"
+   ],
+   "update_freq": null,
+   "written_by": [
+    "data_collection/team_ranks.py"
+   ]
+  },
+  {
+   "category": null,
+   "derived_from": [],
+   "desc": null,
+   "kind": "manual",
+   "manual_note": "시즌별 팀 표기명입니다. franchises 와 같이 migration/build_franchises.py 로 한 번 만들었고, 정기 작업은 없습니다.",
+   "name": "team_seasons",
+   "pages": [
+    "pages/player-stats.html",
+    "pages/team-record.html"
+   ],
+   "routes": [
+    "/teams",
+    "/teams/:id"
+   ],
+   "update_freq": null,
+   "written_by": []
+  },
+  {
+   "category": "선수·팀·구장 마스터",
+   "derived_from": [],
+   "desc": "시즌별 팀-홈구장 매핑 기준표(파크팩터(PF) 산출용 팀·시즌·구장 대응표)",
+   "kind": "manual",
+   "manual_note": "시즌별 홈구장입니다. 2026-06-05 백업 덤프에서 한 번 복원했습니다. park_factors/build_wrc_plus.py 가 올 시즌 행을 로컬에서 채우지만 D1·MySQL 에는 올리지 않습니다.",
+   "name": "team_stadium_by_season",
+   "pages": [
+    "pages/team-record.html",
+    "pages/team-stats.html"
+   ],
+   "routes": [
+    "/teams/:id"
+   ],
+   "update_freq": "매일 자동 (KST 05:00, 파이프라인이 최신 시즌까지 carry)",
+   "written_by": []
+  },
+  {
+   "category": "선수·팀·구장 마스터",
+   "derived_from": [],
+   "desc": "KBO 10개 구단 기본 정보(팀ID·명칭·연고지·홈구장) 마스터 테이블",
+   "kind": "manual",
+   "manual_note": "현재 10팀 목록입니다. database/schema.sql 의 INSERT OR IGNORE 시드로 채웠고, 정기 작업은 없습니다.",
+   "name": "teams",
+   "pages": [
+    "pages/player-stats.html",
+    "pages/team-stats.html"
+   ],
+   "routes": [
+    "/dashboard/stats",
+    "/games",
+    "/teams"
+   ],
+   "update_freq": "고정 마스터 (수동, 거의 불변)",
+   "written_by": []
+  },
+  {
+   "category": "세이버메트릭스 분석",
+   "derived_from": [
+    "games",
+    "kbo_official_batter_stats",
+    "kbo_woba_weights_by_season",
+    "play_by_play",
+    "self_park_factor",
+    "stadium_dim",
+    "team_stadium_by_season"
+   ],
+   "desc": "타자별·시즌별 출전 구장 타석(PA) 가중 파크팩터(득점·홈런·장타) 및 홈구장 대비 편차 집계 (1000 기준, Statiz식)",
+   "kind": "derived",
+   "manual_note": null,
+   "name": "weighted_pf_by_batter_season",
+   "pages": [
+    "pages/article.html"
+   ],
+   "routes": [
+    "/wrc/batter-search",
+    "/wrc/batter/:id",
+    "/wrc/by-stadium",
+    "/wrc/distribution",
+    "/wrc/leaderboard",
+    "/wrc/seasons",
+    "/wrc/top-changes"
+   ],
+   "update_freq": "매일 자동 (KST 05:00, park_factors 파이프라인)",
+   "written_by": [
+    "park_factors/build_wrc_plus.py"
+   ]
+  },
+  {
+   "category": "세이버메트릭스 분석",
+   "derived_from": [
+    "games",
+    "kbo_official_batter_stats",
+    "kbo_woba_weights_by_season",
+    "play_by_play",
+    "self_park_factor",
+    "stadium_dim",
+    "team_stadium_by_season"
+   ],
+   "desc": "타자×시즌 단위로 wOBA·wRAA(FanGraphs 방식)·득점 파크팩터(PF)를 산출하고, PF 적용 방식(홈구장 단독/홈-원정 절반/PA가중)별 조정득점생산(wRC+) 결과를 비교하는 세이버메트릭스 분석 테이블",
+   "kind": "derived",
+   "manual_note": null,
+   "name": "wrc_plus_comparison",
+   "pages": [
+    "index.html",
+    "pages/article.html",
+    "pages/player-stats.html",
+    "pages/team-stats.html"
+   ],
+   "routes": [
+    "/leaders",
+    "/stats/batters",
+    "/stats/pitchers",
+    "/stats/regulation",
+    "/stats/seasons",
+    "/wrc/batter-search",
+    "/wrc/batter/:id",
+    "/wrc/by-stadium",
+    "/wrc/distribution",
+    "/wrc/leaderboard",
+    "/wrc/seasons",
+    "/wrc/top-changes"
+   ],
+   "update_freq": "매일 자동 (KST 05:00, park_factors 파이프라인)",
+   "written_by": [
+    "park_factors/build_wrc_plus.py"
+   ]
+  }
+ ],
+ "version": 1
+}
