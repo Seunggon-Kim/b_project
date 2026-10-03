@@ -28,5 +28,8 @@
   "homepage": "https://github.com/Seunggon-Kim/b_project#readme",
   "devDependencies": {
     "wrangler": "^4.123.0"
+  },
+  "dependencies": {
+    "mysql2": "^3.24.5"
   }
 }

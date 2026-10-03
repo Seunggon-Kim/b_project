@@ -13,6 +13,8 @@
 //
 // 그래서 세지 않고, 적재할 때 적어 둔 값을 읽습니다.
 
+import { isMysql } from './backendflag.js';
+
 /** 메타 표 이름입니다. 적재 스크립트와 이 값이 같아야 합니다. */
 export const COUNTS_TABLE = 'meta_table_counts';
 
@@ -34,7 +36,7 @@ export async function countOf(db, table) {
   }
   try {
     const row = await db
-      .prepare(`SELECT COUNT(*) AS n FROM "${table}"`).first();
+      .prepare(`SELECT COUNT(*) AS n FROM \`${table}\``).first();
     return row ? row.n : null;
   } catch {
     // 원본도 조회에 실패하면 0 이 아니라 null 을 넣습니다.
@@ -78,6 +80,8 @@ export async function countsOf(db, tables) {
  * 빈칸이 낫습니다.**
  */
 export async function shardedCountOf(env, shards, table) {
+  // MySQL 은 play_by_play 가 한 표라 shards 를 쓰지 않습니다(무시).
+  if (isMysql(env)) return countOf(env.DB, table);
   const dbs = shards.map((s) => env[s.binding]).filter(Boolean);
   if (dbs.length !== shards.length) return null;
   const parts = await Promise.all(dbs.map((db) => countOf(db, table)));

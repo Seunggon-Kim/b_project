@@ -36,6 +36,18 @@ export function queryInt(url, name, fallback) {
   return Number.isNaN(n) ? fallback : n;
 }
 
+/**
+ * `LIMIT ?` 에 묶을 값입니다.
+ *
+ * D1(SQLite)은 음수 LIMIT 을 "제한 없음"으로 읽지만 MySQL 은 문법 오류로
+ * 거절합니다(500). 음수면 두 DB 모두에서 제한 없음인 아주 큰 수로 바꿉니다.
+ * 2^53-1 은 정수로 손실 없이 바뀌므로 SQLite 도 받고, 표의 행 수보다 훨씬
+ * 커서 D1 결과는 음수 때와 같습니다.
+ */
+export function sqlLimit(n) {
+  return n < 0 ? Number.MAX_SAFE_INTEGER : n;
+}
+
 export function queryStr(url, name, fallback) {
   const raw = url.searchParams.get(name);
   return raw === null ? fallback : raw;

@@ -2,33 +2,12 @@ import { json } from '../lib/respond.js';
 import { queryInt } from '../lib/router.js';
 import { csvExportPlan, csvRow, isRealType } from '../lib/csv.js';
 import { countOf, countsOf } from '../lib/counts.js';
+import { tableNames, tableColumns } from '../lib/schema.js';
 import {
   isSharded, SHARDED_TABLES, shardCounts, sliceRows, shardTableInfo,
 } from '../lib/pbpvirtual.js';
 import { columnDict, tableMeta } from '../lib/coldict.js';
-
-/**
- * 원본 list_table_names (api/main.py:622-628) 입니다.
- * sqlite 내부 표를 뺀 이름 목록입니다.
- *
- * D1 은 자체 내부 표(`_cf_KV` 등)를 갖고 있습니다. 원본은 `sqlite_%` 만
- * 걸러 내므로 그대로 두면 목록에 섞입니다. 정답지와 맞추려면 그것도 빼야
- * 합니다. `_cf_` 로 시작하는 것을 함께 거릅니다.
- *
- * `meta_` 도 거릅니다. 읽기량을 줄이려고 만든 `meta_table_counts` 같은
- * 내부 표입니다. 원본에 없던 것이라 그대로 두면 데이터 탐색기에
- * 나타나 표가 18개에서 19개로 늘어납니다. 사용자에게 보일 이유가 없고,
- * 앞으로 만들 메타 표도 같은 접두사를 쓰면 자동으로 빠집니다.
- */
-export async function listTableNames(db) {
-  const { results } = await db.prepare(
-    "SELECT name FROM sqlite_master WHERE type='table' "
-    + "AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\' "
-    + "AND name NOT LIKE 'meta\\_%' ESCAPE '\\' "
-    + 'ORDER BY name',
-  ).all();
-  return results.map((r) => r.name);
-}
+import { idFixer } from '../lib/ids.js';
 
 /**
  * 화면에 보일 표 이름 전부입니다.
@@ -38,7 +17,7 @@ export async function listTableNames(db) {
  * 끼워 넣고, 원본과 같은 이름순을 지킵니다.
  */
 export async function visibleTableNames(env) {
-  const names = await listTableNames(env.DB);
+  const names = await tableNames(env);
   const set = new Set(names);
   for (const t of SHARDED_TABLES) {
     if (!set.has(t)) names.push(t);
@@ -69,13 +48,13 @@ export async function dbTables(request, env) {
     // 공용 DB 에는 그 표가 없습니다.
     let n;
     let info;
-    if (isSharded(name)) {
+    if (isSharded(name, env)) {
       const parts = await shardCounts(env, name);
       n = parts.reduce((acc, x) => acc + x.n, 0);
       info = await shardTableInfo(env, name);
     } else {
       n = known.has(name) ? known.get(name) : await countOf(db, name);
-      info = await db.prepare(`PRAGMA table_info("${name}")`).all();
+      info = { results: await tableColumns(env, name) };
     }
     const m = tmeta[name] || {};
     result.push({
@@ -98,7 +77,7 @@ export async function dbTables(request, env) {
 /**
  * 원본 api/main.py:673-716 입니다. 표 하나의 스키마와 페이지네이션된 행.
  *
- * 표 이름이 SQL 에 그대로 들어가는 자리라, **반드시 sqlite_master 목록으로
+ * 표 이름이 SQL 에 그대로 들어가는 자리라, **반드시 표 목록(lib/schema.js)으로
  * 확인한 뒤에만** 조회합니다. 원본이 그렇게 하고 있고 그 확인이 곧 방어입니다.
  */
 export async function dbTable(request, env, ctx, params) {
@@ -109,7 +88,7 @@ export async function dbTable(request, env, ctx, params) {
   if (!names.includes(tableName)) {
     return json({ detail: 'Table not found' }, 404);
   }
-  const sharded = isSharded(tableName);
+  const sharded = isSharded(tableName, env);
 
   const url = new URL(request.url);
   // 원본: limit = max(1, min(int(limit), 500)), offset = max(0, int(offset))
@@ -121,7 +100,7 @@ export async function dbTable(request, env, ctx, params) {
 
   const info = sharded
     ? await shardTableInfo(env, tableName)
-    : await db.prepare(`PRAGMA table_info("${tableName}")`).all();
+    : { results: await tableColumns(env, tableName) };
   const schema = info.results.map((c) => ({
     name: c.name,
     type: c.type || '',
@@ -143,10 +122,11 @@ export async function dbTable(request, env, ctx, params) {
   } else {
     total = await countOf(db, tableName);
     const r = await db
-      .prepare(`SELECT * FROM "${tableName}" LIMIT ? OFFSET ?`)
+      .prepare(`SELECT * FROM \`${tableName}\` LIMIT ? OFFSET ?`)
       .bind(limit, offset).all();
     rows = r.results;
   }
+  rows = rows.map(idFixer(env, tableName));
 
   return json({
     table: tableName,
@@ -217,11 +197,11 @@ export async function dbTableCsv(request, env, ctx, params) {
   if (!names.includes(tableName)) {
     return json({ detail: 'Table not found' }, 404);
   }
-  const sharded = isSharded(tableName);
+  const sharded = isSharded(tableName, env);
 
   const info = sharded
     ? await shardTableInfo(env, tableName)
-    : await db.prepare(`PRAGMA table_info("${tableName}")`).all();
+    : { results: await tableColumns(env, tableName) };
   const columns = info.results.map((c) => c.name);
   // REAL 컬럼은 정수값이라도 `150.0` 처럼 써야 파이썬 출력과 바이트가
   // 같아집니다. 자세한 사정은 lib/csv.js 의 csvCell 주석에 있습니다.
@@ -268,6 +248,7 @@ export async function dbTableCsv(request, env, ctx, params) {
     }, 413);
   }
 
+  const fixIds = idFixer(env, tableName);
   const encoder = new TextEncoder();
 
   let offset = startAt;
@@ -298,7 +279,7 @@ export async function dbTableCsv(request, env, ctx, params) {
       const results = sharded
         ? await sliceRows(env, tableName, offset, take)
         : (await db
-          .prepare(`SELECT * FROM "${tableName}" LIMIT ? OFFSET ?`)
+          .prepare(`SELECT * FROM \`${tableName}\` LIMIT ? OFFSET ?`)
           .bind(take, offset)
           .all()).results;
 
@@ -310,7 +291,8 @@ export async function dbTableCsv(request, env, ctx, params) {
 
       let chunk = '';
       for (const r of results) {
-        chunk += csvRow(columns.map((c) => r[c]), realFlags);
+        const row = fixIds(r);
+        chunk += csvRow(columns.map((c) => row[c]), realFlags);
       }
       controller.enqueue(encoder.encode(chunk));
 

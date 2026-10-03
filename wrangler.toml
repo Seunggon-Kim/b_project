@@ -59,3 +59,15 @@ database_id = "b6bf7d3e-dfef-480e-ae6f-a2c18278b77e"
 binding = "DB_2024_2026"
 database_name = "kbo-pbp-2024-2026"
 database_id = "0ee0dec0-eeac-47da-b31d-ee38426fbb92"
+
+# MySQL(Cloud SQL)을 Hyperdrive 로 읽습니다(3단계).
+# vars.DB_BACKEND 가 'mysql' 일 때만 씁니다. 접속 정보는 Cloudflare 에만 있습니다.
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "f63b3e022f1f4eff99728eb28b08ccaa"
+
+# 읽을 DB 를 정합니다(3단계). 'mysql' 이면 Hyperdrive 로 Cloud SQL MySQL 을 읽고,
+# 'd1' 이면 D1 을 읽습니다. 운영은 2026-10-04 KST 에 MySQL 로 전환했습니다.
+# 되돌리기: 이 값을 "d1" 로 바꿔 다시 배포하거나 `wrangler rollback` 을 씁니다.
+[vars]
+DB_BACKEND = "mysql"

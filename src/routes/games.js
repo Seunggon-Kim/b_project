@@ -1,5 +1,5 @@
 import { json } from '../lib/respond.js';
-import { queryInt } from '../lib/router.js';
+import { queryInt, sqlLimit } from '../lib/router.js';
 
 /**
  * 원본 api/main.py:599-614 입니다. 시즌 경기 목록을 최근순으로.
@@ -32,7 +32,7 @@ export async function games(request, env) {
     WHERE g.season = ?
     ORDER BY g.game_date DESC
     LIMIT ?
-  `).bind(season, limit).all();
+  `).bind(season, sqlLimit(limit)).all();
 
   return json({ games: results, season });
 }

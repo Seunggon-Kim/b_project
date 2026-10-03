@@ -15,6 +15,11 @@ export function kstDateOf(epochMs) {
   return `${y}-${m}-${day}`;
 }
 
+/** 오늘(한국)에서 days 일 전의 날짜 'YYYY-MM-DD' 입니다. */
+export function kstDateDaysAgo(days, nowMs = Date.now()) {
+  return kstDateOf(nowMs - days * 86400000);
+}
+
 export function kstToday() {
   return kstDateOf(Date.now());
 }

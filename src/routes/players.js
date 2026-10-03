@@ -1,4 +1,4 @@
-import { json } from '../lib/respond.js';
+import { json, dbError } from '../lib/respond.js';
 import { queryInt } from '../lib/router.js';
 import { shardOf, seasonDateRange } from '../lib/shard.js';
 
@@ -15,7 +15,7 @@ export const LATEST_TEAM_SQL = `
     UNION ALL
     SELECT season, player_team FROM kbo_official_pitcher_stats
      WHERE player_id = p.player_id AND player_team IS NOT NULL
-  ) ORDER BY season DESC LIMIT 1`;
+  ) AS lt ORDER BY season DESC LIMIT 1`;
 
 /** 바깥 `p` 행이 마지막으로 기록을 남긴 시즌입니다. */
 export const LATEST_SEASON_SQL = `
@@ -23,7 +23,7 @@ export const LATEST_SEASON_SQL = `
     SELECT season FROM kbo_official_batter_stats WHERE player_id = p.player_id
     UNION ALL
     SELECT season FROM kbo_official_pitcher_stats WHERE player_id = p.player_id
-  )`;
+  ) AS ls`;
 
 /**
  * 공식 기록이 있는 가장 최근 시즌입니다.
@@ -46,7 +46,7 @@ export async function currentSeason(db) {
   const row = await db.prepare(
     'SELECT MAX(s) AS s FROM ('
     + 'SELECT MAX(season) AS s FROM kbo_official_batter_stats'
-    + ' UNION ALL SELECT MAX(season) FROM kbo_official_pitcher_stats)',
+    + ' UNION ALL SELECT MAX(season) FROM kbo_official_pitcher_stats) AS cs',
   ).first();
   return row && row.s != null ? Number(row.s) : null;
 }
@@ -58,6 +58,10 @@ export async function currentSeason(db) {
  * 숫자면 정수로 한 번 더 찾습니다.
  */
 export async function robustPlayerLookup(db, playerId) {
+  // D1 의 선수 ID 는 숫자 글자(일부는 `.0` 꼬리)뿐입니다. 그 밖의 입력은
+  // D1 에서 어떤 행과도 맞지 않았습니다. MySQL 은 INT 열과 글자를 느슨하게
+  // 비교해 '73153x' 를 73153 으로 읽으므로, 질의 전에 같은 결과(없음)를 냅니다.
+  if (!/^\d+(\.0+)?$/.test(String(playerId))) return null;
   let row = await db.prepare('SELECT * FROM players WHERE player_id = ?')
     .bind(playerId).first();
   if (row) return row;
@@ -282,7 +286,8 @@ export async function playerArsenal(request, env, ctx, params) {
     // 아닙니다. 문자열과 정수가 섞여 있어 값이 다를 수 있습니다.
     return json({ player_id: playerId, arsenal: results, count: results.length });
   } catch (err) {
-    return json({
+    // 실패가 캐시에 굳지 않게 503 으로 바꿨습니다(본문은 같음).
+    return dbError(err, {
       error: String(err && err.message ? err.message : err),
       traceback: String((err && err.stack) || ''),
     });
@@ -407,7 +412,8 @@ export async function playerUsage(request, env, ctx, params) {
       usage: result,
     });
   } catch (err) {
-    return json({
+    // 실패가 캐시에 굳지 않게 503 으로 바꿨습니다(본문은 같음).
+    return dbError(err, {
       error: String(err && err.message ? err.message : err),
       traceback: String((err && err.stack) || ''),
     });

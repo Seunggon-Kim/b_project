@@ -1,5 +1,7 @@
 import { json } from '../lib/respond.js';
 import { queryInt } from '../lib/router.js';
+import { kstDateDaysAgo } from '../lib/kst.js';
+import { intIdOrSame } from '../lib/ids.js';
 
 // 1군 등록·말소 현황입니다.
 //
@@ -46,9 +48,9 @@ export async function rosterMoves(request, env) {
     // 인덱스를 못 타므로 문자열 범위로 자릅니다.
     const { results: rows } = await env.DB.prepare(
       `SELECT ${COLS} FROM kbo_roster_moves `
-      + "WHERE move_date >= date('now', '+9 hours', ?) "
+      + 'WHERE move_date >= ? '
       + 'ORDER BY move_date DESC, kind DESC, team LIMIT ?',
-    ).bind(`-${days} days`, limit).all();
+    ).bind(kstDateDaysAgo(days), limit).all();
     results = rows;
   }
 
@@ -73,7 +75,9 @@ export async function rosterMoves(request, env) {
         team: r.team,
         name: r.name,
         position: r.position,
-        playerId: r.player_id,
+        // MySQL(Hyperdrive)은 열 정보가 없어 글자로 오므로 숫자로 되돌립니다.
+        // D1 은 이미 숫자라 intIdOrSame 이 그대로 돌려줍니다.
+        playerId: intIdOrSame(r.player_id),
       });
     }
   }
@@ -108,10 +112,13 @@ export async function roster(request, env) {
     // 포지션 순서를 투수·포수·내야수·외야수로 고정합니다. 사전순으로
     // 두면 내야수가 맨 앞에 와서 야구 화면답지 않습니다.
     + "ORDER BY team, CASE role WHEN '투수' THEN 1 WHEN '포수' THEN 2 "
-    + "WHEN '내야수' THEN 3 ELSE 4 END, CAST(back_number AS INTEGER)",
+    + "WHEN '내야수' THEN 3 ELSE 4 END, CAST(back_number AS SIGNED)",
   );
 
   const { results } = await stmt.bind(...binds).all();
   const asOf = results.length ? results[0].as_of : null;
-  return json({ team, league, asOf, count: results.length, players: results });
+  // player_id 는 D1 에서 INTEGER 입니다. MySQL 이 글자로 준 값을 숫자로
+  // 되돌립니다(D1 은 이미 숫자라 값이 같습니다).
+  const players = results.map((r) => ({ ...r, player_id: intIdOrSame(r.player_id) }));
+  return json({ team, league, asOf, count: results.length, players });
 }
