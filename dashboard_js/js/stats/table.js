@@ -1,6 +1,10 @@
 /*
- * 팀 통계 표 그리기입니다. HTML 문자열을 만들 뿐 DOM 에 붙이지는 않습니다
- * (붙이는 일은 page.js). columns.js 가 먼저 로드되어야 합니다.
+ * 팀·선수 통계 표 그리기입니다. HTML 문자열을 만들 뿐 DOM 에 붙이지는 않습니다
+ * (붙이는 일은 각 페이지의 page.js). columns.js 가 먼저 로드되어야 합니다.
+ *
+ * 앞 칸(고정 칸)은 opt.idCols = [{ key, label, cls, href?(row) }] 로 받습니다.
+ * 없으면 팀 칸 하나입니다(팀 통계). opt.page = { size, index } 를 주면 그
+ * 쪽만 그립니다(size 0 은 전체). CSV 는 쪽과 상관없이 전체입니다.
  */
 (function (root) {
   'use strict';
@@ -63,15 +67,39 @@
     return missing(n) ? i + 1 : n;
   }
 
+  /** 앞 칸 목록입니다. 없으면 팀 칸 하나(팀 통계)입니다. */
+  function idColsOf(opt) {
+    if (opt.idCols && opt.idCols.length) return opt.idCols;
+    return [{ key: 'team', label: '팀', cls: 'ts-team', href: opt.teamHref ? r => opt.teamHref(r.team) : null }];
+  }
+
+  /**
+   * 쪽 나누기입니다. size 가 없거나 0 이면 한 쪽에 전부입니다. index 는
+   * 0부터이고, 범위를 벗어나면 가까운 끝 쪽으로 맞춥니다.
+   */
+  function pageOf(total, page) {
+    const size = page && page.size > 0 ? page.size : 0;
+    if (!size) return { start: 0, end: total, index: 0, count: 1 };
+    const count = Math.max(1, Math.ceil(total / size));
+    const want = page && Number.isInteger(page.index) ? page.index : 0;
+    const index = Math.min(Math.max(0, want), count - 1);
+    return { start: index * size, end: Math.min(total, (index + 1) * size), index: index, count: count };
+  }
+
   function rowHtml(r, rank, opt, isLeague) {
     const showRank = opt.rank !== false;
-    const href = !isLeague && opt.teamHref ? opt.teamHref(r.team) : null;
-    const name = isLeague ? '리그 평균' : r.team;
-    const tcell = href ? `<a class="player-link" href="${esc(href)}">${esc(name)}</a>` : esc(name);
     const cls = isLeague ? ' class="ts-league"' : (opt.highlight && opt.highlight === r.team ? ' class="ts-hl"' : '');
     let h = `<tr${cls}>`;
     if (showRank) h += `<td class="ts-rank">${rank}</td>`;
-    h += `<td class="ts-team">${tcell}</td>`;
+    idColsOf(opt).forEach(function (c, i) {
+      let cell;
+      if (isLeague) cell = i === 0 ? '리그 평균' : '';
+      else {
+        const href = c.href ? c.href(r) : null;
+        cell = href ? `<a class="player-link" href="${esc(href)}">${esc(r[c.key])}</a>` : esc(r[c.key]);
+      }
+      h += `<td class="${c.cls}">${cell}</td>`;
+    });
     for (const c of opt.cols) {
       const v = r[c.key];
       const k = [];
@@ -83,12 +111,12 @@
     return h + '</tr>';
   }
 
-  /** 표 HTML 입니다. 리그 평균 행은 정렬과 상관없이 맨 아래입니다. */
+  /** 표 HTML 입니다. 리그 평균 행은 정렬·쪽과 상관없이 맨 아래입니다. */
   function renderTable(opt) {
     const showRank = opt.rank !== false;
     let h = '<div class="table-container ts-wrap"><table class="table ts-table"><thead><tr>';
     if (showRank) h += '<th class="ts-rank">#</th>';
-    h += '<th class="ts-team">팀</th>';
+    for (const c of idColsOf(opt)) h += `<th class="${c.cls}">${esc(c.label)}</th>`;
     for (const c of opt.cols) {
       const on = opt.sort && opt.sort.key === c.key;
       const ind = on ? `<span class="sort-ind">${opt.sort.dir === 'asc' ? '▲' : '▼'}</span>` : '';
@@ -96,7 +124,9 @@
         + `<span class="ts-term" data-col="${esc(c.key)}">${esc(c.label)}</span>${ind}</th>`;
     }
     h += '</tr></thead><tbody>';
-    sorted(opt).forEach(function (r, i) { h += rowHtml(r, rankNo(opt, r, i), opt, false); });
+    const all = sorted(opt);
+    const pg = pageOf(all.length, opt.page);
+    all.slice(pg.start, pg.end).forEach(function (r, i) { h += rowHtml(r, rankNo(opt, r, pg.start + i), opt, false); });
     if (opt.league) h += rowHtml(opt.league, '', opt, true);
     return h + '</tbody></table></div>';
   }
@@ -106,14 +136,18 @@
     return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }
 
-  /** 지금 보이는 표 그대로의 CSV 입니다. 엑셀용 BOM 을 붙입니다. */
+  /** 지금 보이는 칸·정렬 그대로의 CSV 입니다(쪽과 상관없이 전체). 엑셀용 BOM 을 붙입니다. */
   function toCsv(opt) {
-    const lines = [['#', '팀'].concat(opt.cols.map(c => c.label))];
+    const ids = idColsOf(opt);
+    const lines = [['#'].concat(ids.map(c => c.label), opt.cols.map(c => c.label))];
     sorted(opt).forEach(function (r, i) {
-      lines.push([rankNo(opt, r, i), r.team].concat(opt.cols.map(c => C().fmt(r[c.key], c.kind))));
+      lines.push([rankNo(opt, r, i)]
+        .concat(ids.map(c => (missing(r[c.key]) ? '' : r[c.key])), opt.cols.map(c => C().fmt(r[c.key], c.kind))));
     });
-    if (opt.league) lines.push(['', '리그 평균'].concat(opt.cols.map(c => C().fmt(opt.league[c.key], c.kind))));
-    return '\uFEFF' + lines.map(l => l.map(csvCell).join(',')).join('\r\n') + '\r\n';
+    if (opt.league) {
+      lines.push([''].concat(ids.map((c, i) => (i === 0 ? '리그 평균' : '')), opt.cols.map(c => C().fmt(opt.league[c.key], c.kind))));
+    }
+    return '﻿' + lines.map(l => l.map(csvCell).join(',')).join('\r\n') + '\r\n';
   }
 
   /** 머리글에 마우스를 올렸을 때 뜨는 설명 창 내용입니다. */
@@ -125,7 +159,7 @@
     return h;
   }
 
-  const api = { esc, indexClass, sortRows, renderTable, toCsv, tipHtml };
+  const api = { esc, indexClass, sortRows, pageOf, renderTable, toCsv, tipHtml };
   TS.table = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

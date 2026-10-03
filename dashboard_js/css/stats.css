@@ -88,3 +88,10 @@ a.tabbtn { text-decoration: none; display: inline-flex; align-items: center; }
 .tip-box { position: fixed; z-index: 9999; display: none; max-width: 300px; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem 0.7rem; font-size: 0.82rem; font-family: inherit; line-height: 1.45; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12); pointer-events: none; white-space: normal; }
 .tip-box b { display: block; margin-bottom: 2px; }
 .tip-box .f { display: block; margin-top: 4px; color: var(--text-muted); }
+
+/* ===== 선수 통계 ===== */
+/* 선수 표: # · 이름은 가로 스크롤해도 고정, 팀은 고정하지 않음 */
+.ts-table th.ts-name, .ts-table td.ts-name { position: sticky; left: 2.6rem; z-index: 3; text-align: left; white-space: nowrap; background: var(--bg-secondary); border-right: 1px solid var(--border-color); font-weight: 600; }
+.ts-table thead th.ts-name { z-index: 6; background: var(--bg-tertiary); }
+.ts-table tr.ts-league td.ts-name { background: var(--bg-tertiary); }
+.ts-table th.ts-pteam, .ts-table td.ts-pteam { text-align: left; white-space: nowrap; }
