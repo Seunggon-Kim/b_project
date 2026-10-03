@@ -54,7 +54,11 @@
     return `<p class="text-muted ts-sub">${esc(season)}년은 경기별 결과가 없어 볼 수 없습니다. 경기 결과는 2008년부터 있습니다.</p>`;
   }
 
-  const api = { h2hHtml, monthlyHtml, noGamesHtml };
+  function gamesErrorHtml() {
+    return '<p class="text-muted ts-sub">경기 결과 자료를 받지 못해 볼 수 없습니다. 잠시 뒤 다시 열어 주세요.</p>';
+  }
+
+  const api = { h2hHtml, monthlyHtml, noGamesHtml, gamesErrorHtml };
   TS.record = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

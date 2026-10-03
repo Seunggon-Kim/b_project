@@ -49,11 +49,15 @@
         .ctrl-divider { align-self: stretch; width: 1px; min-height: 1.8rem; background: var(--border-color); }
         .ctrl-note { flex-basis: 100%; font-size: 0.85rem; }
         .ctrl-note:empty { display: none; }
-        @media (max-width: 640px) { .ctrl-divider { display: none; } .ctrl-group { flex-wrap: wrap; } }
+        @media (max-width: 640px) {
+            .ctrl-divider { display: none; }
+            .ctrl-group { flex-wrap: wrap; flex-shrink: 1; max-width: 100%; }
+            .ctrl-group input[type="date"] { flex: 1 1 130px; min-width: 0; max-width: 100% !important; }
+        }
         /* 사용자 지정 칸 고르개 */
         .col-panel { flex-basis: 100%; border-top: 1px solid var(--border-color); margin-top: 0.5rem; padding-top: 0.75rem; }
         .col-panel.hidden { display: none; }
-        .col-panel-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
+        .col-panel-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.6rem; }
         .col-panel-btns { margin-left: auto; display: flex; gap: 0.35rem; }
         .col-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.35rem 0.9rem; }
         .col-list label { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; cursor: pointer; margin: 0; }
@@ -78,7 +82,9 @@
         .sort-ind { font-size: 0.72em; margin-left: 3px; vertical-align: middle; }
         .ts-term { text-decoration: underline dotted var(--text-muted); text-underline-offset: 3px; cursor: help; }
         .ts-league td { background: var(--bg-tertiary); font-weight: 700; border-top: 2px solid var(--border-color); }
-        .ts-hl td { background-color: rgba(245, 158, 11, 0.12); }
+        .ts-table tr.ts-league td.ts-rank, .ts-table tr.ts-league td.ts-team { background: var(--bg-tertiary); }
+        /* 강조는 배경 대신 위아래 테두리로 둡니다. 빨강·파랑 칸 색이 그대로 보입니다. */
+        .ts-hl td { box-shadow: inset 0 2px 0 rgba(245, 158, 11, 0.75), inset 0 -2px 0 rgba(245, 158, 11, 0.75); font-weight: 700; }
         /* 지수 칸 색(리그 평균 100 대비) */
         .ts-up1 { background: rgba(239, 68, 68, 0.13); }
         .ts-up2 { background: rgba(239, 68, 68, 0.24); }
@@ -86,10 +92,10 @@
         .ts-down1 { background: rgba(59, 130, 246, 0.14); }
         .ts-down2 { background: rgba(59, 130, 246, 0.26); }
         .ts-down3 { background: rgba(59, 130, 246, 0.40); }
-        .ts-pos { color: #dc2626; }
-        .ts-neg { color: #2563eb; }
-        [data-theme="dark"] .ts-pos { color: #f87171; }
-        [data-theme="dark"] .ts-neg { color: #60a5fa; }
+        .ts-table td.ts-pos { color: #dc2626; }
+        .ts-table td.ts-neg { color: #2563eb; }
+        [data-theme="dark"] .ts-table td.ts-pos { color: #f87171; }
+        [data-theme="dark"] .ts-table td.ts-neg { color: #60a5fa; }
         /* 상대 전적 */
         .ts-h2h td, .ts-h2h th { text-align: center; }
         .ts-win { background: rgba(239, 68, 68, 0.13); }

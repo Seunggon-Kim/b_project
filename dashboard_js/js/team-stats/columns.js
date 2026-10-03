@@ -112,7 +112,7 @@
     w: { label: 'W', kind: 'int', range: true, desc: '승리입니다.' },
     l: { label: 'L', kind: 'int', range: true, better: 'low', desc: '패배입니다.' },
     d: { label: 'D', kind: 'int', range: true, desc: '무승부입니다.' },
-    pct: { label: '승률', kind: 'avg3', range: true, desc: '승률입니다. 무승부는 뺍니다.', formula: 'W ÷ (W + L)' },
+    pct: { label: '승률', kind: 'avg3', range: true, desc: '승률입니다. 시즌은 KBO 공식 승률입니다. 공식 승률은 시대마다 무승부를 다르게 셉니다(일부 옛 시즌은 0.5승, 2009·2010년은 패, 2011년부터는 뺍니다). 기간별은 무승부를 뺍니다.', formula: '기간별: W ÷ (W + L)' },
     gb: { label: '승차', kind: 'gb', range: true, better: 'low', desc: '1위와의 승차입니다. 시즌은 공식 순위표 값이고, 1999·2000년은 리그 안에서 잰 값입니다.', formula: '((1위 W − W) + (L − 1위 L)) ÷ 2' },
     r: { label: 'R', kind: 'int', range: true, desc: '팀 득점입니다. 2008년부터는 경기 점수 합이고, 그 전은 공식 타자 기록 합입니다.' },
     ra: { label: 'RA', kind: 'int', range: true, better: 'low', desc: '팀 실점입니다. 2008년부터는 경기 점수 합이고, 그 전은 공식 투수 기록 합입니다.' },

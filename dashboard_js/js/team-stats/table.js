@@ -22,7 +22,7 @@
    */
   function indexClass(v, dir) {
     if (missing(v)) return '';
-    const d = (v - 100) * (dir === 'low' ? -1 : 1);
+    const d = (Math.round(v) - 100) * (dir === 'low' ? -1 : 1);
     const a = Math.abs(d);
     const lv = a >= 10 ? 3 : a >= 5 ? 2 : a >= 2 ? 1 : 0;
     if (!lv) return '';
@@ -54,6 +54,13 @@
   function sorted(opt) {
     const col = opt.cols.find(c => c.key === opt.sort.key);
     return col ? sortRows(opt.rows, col.key, opt.sort.dir, col.kind) : opt.rows.slice();
+  }
+
+  /** # 칸 숫자입니다. opt.rankOf 가 있으면 그 값(팀을 골라 거른 표에서도 전체 순위), 없으면 줄 번호입니다. */
+  function rankNo(opt, r, i) {
+    if (typeof opt.rankOf !== 'function') return i + 1;
+    const n = opt.rankOf(r);
+    return missing(n) ? i + 1 : n;
   }
 
   function rowHtml(r, rank, opt, isLeague) {
@@ -89,7 +96,7 @@
         + `<span class="ts-term" data-col="${esc(c.key)}">${esc(c.label)}</span>${ind}</th>`;
     }
     h += '</tr></thead><tbody>';
-    sorted(opt).forEach(function (r, i) { h += rowHtml(r, i + 1, opt, false); });
+    sorted(opt).forEach(function (r, i) { h += rowHtml(r, rankNo(opt, r, i), opt, false); });
     if (opt.league) h += rowHtml(opt.league, '', opt, true);
     return h + '</tbody></table></div>';
   }
@@ -103,7 +110,7 @@
   function toCsv(opt) {
     const lines = [['#', '팀'].concat(opt.cols.map(c => c.label))];
     sorted(opt).forEach(function (r, i) {
-      lines.push([i + 1, r.team].concat(opt.cols.map(c => C().fmt(r[c.key], c.kind))));
+      lines.push([rankNo(opt, r, i), r.team].concat(opt.cols.map(c => C().fmt(r[c.key], c.kind))));
     });
     if (opt.league) lines.push(['', '리그 평균'].concat(opt.cols.map(c => C().fmt(opt.league[c.key], c.kind))));
     return '\uFEFF' + lines.map(l => l.map(csvCell).join(',')).join('\r\n') + '\r\n';

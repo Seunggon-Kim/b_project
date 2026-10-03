@@ -93,7 +93,8 @@
 
   // ===== 화면(브라우저에서만) =====
 
-  const SEASON_CAVEAT = '출처: KBO 공식 선수 기록을 팀별로 합산해 계산합니다. 비율 지표는 성분에서 다시 계산합니다. 시즌 중 트레이드된 선수는 그 시즌 기록 전체가 한 팀으로 잡혀 팀 합산이 조금 어긋날 수 있습니다. 진행 중인 시즌은 최신 일일 갱신 기준이라 KBO 실시간과 1~2경기 차이가 날 수 있습니다.';
+  const SEASON_CAVEAT = '출처: KBO 공식 선수 기록을 팀별로 합산해 계산합니다. 비율 지표는 성분에서 다시 계산합니다. 시즌 중 트레이드된 선수는 그 시즌 기록 전체가 한 팀으로 잡혀 팀 합산이 조금 어긋날 수 있습니다.';
+  const LIVE_SEASON_CAVEAT = ' 진행 중인 시즌은 최신 일일 갱신 기준이라 KBO 실시간과 1~2경기 차이가 날 수 있습니다.';
   const OLD_CAVEAT = ' 2007년 이전은 파크팩터가 없어 OPS+·ERA-·FIP-를 구장 보정 없이 계산했고, wOBA·wRC+는 2008년부터 있습니다.';
   const RANGE_CAVEAT = '선택한 기간 안에 끝난 경기의 경기 기록(PBP)을 집계합니다. 시즌 누적과 산출 방식이 달라 수치가 다를 수 있습니다.';
   const REC_CAVEAT = '승패는 공식 순위표입니다. 득점·실점과 홈·원정·1점차·월별·상대 전적은 정규시즌 경기 결과에서 셉니다(2008년부터). 2007년 이전 득점·실점은 공식 선수 기록 합계입니다.';
@@ -107,6 +108,8 @@
     custom: { bat: null, pit: null }, panelOpen: false,
     seasonErrors: [], seq: 0, last: null, pbpMax: new Date().getFullYear(),
   };
+
+  let tipHide = function () {};
 
   function $(id) { return document.getElementById(id); }
   function mode() { return S.st.start && S.st.end ? 'range' : 'season'; }
@@ -286,6 +289,7 @@
   /** 받은 데이터로 지금 탭을 그립니다. 서버를 부르지 않습니다. 데이터가 아직이면 그리지 않습니다(받는 중인 refresh 가 그립니다). */
   function render() {
     if (!dataReady(S.st, S)) return;
+    tipHide();
     const st = S.st, C = TS.columns, M = TS.metrics, T = TS.table, R = TS.record;
     const y = st.season, m = mode();
     const alerts = [];
@@ -296,7 +300,7 @@
 
     const keys = keysNow();
     const cols = keys.map(k => C.def(st.tab, k));
-    let rows = [], league = null, splits = null, caveat = '';
+    let rows = [], league = null, splits = null, caveat = '', gamesFailed = false;
 
     if (st.tab === 'rec') {
       if (m === 'range') {
@@ -305,7 +309,8 @@
         splits = M.gameSplits(g.games, ymd(st.start), ymd(st.end));
         rows = M.recordFromGames(splits);
         const n = rows.reduce((a, r) => a + r.g, 0) / 2;
-        $('range-note').textContent = n ? `반영: ${st.start} ~ ${st.end}, ${n}경기` : '해당 기간 경기 없음';
+        if (n) $('range-note').textContent = `반영: ${st.start} ~ ${st.end}, ${n}경기`;
+        else $('range-note').textContent = g.errors.length ? '' : '해당 기간 경기 없음';
         caveat = REC_RANGE_CAVEAT;
       } else {
         const sd = S.season[y];
@@ -315,9 +320,14 @@
         if (y >= PBP_MIN) {
           const g = S.games[y];
           errAlerts(alerts, g.errors);
-          if (g.games.length) splits = M.gameSplits(g.games);
+          if (g.errors.length) gamesFailed = true;
+          else if (g.games.length) splits = M.gameSplits(g.games);
         }
         rows = M.recordTable(v.rank, v.batTotals, v.pitTotals, splits);
+        // 경기 결과를 못 받았으면 득실 칸을 공식 합으로 몰래 바꾸지 않고 비웁니다.
+        if (gamesFailed) {
+          rows = rows.map(r => Object.assign({}, r, { r: null, ra: null, diff: null, pyth: null, expw: null, luck: null, runsFrom: 'none' }));
+        }
         // 끝난 시즌에서 경기 결과가 공식 순위표와 다르면 알립니다. 진행 중
         // 시즌은 실시간 순위와 하루 차이가 정상이라 알리지 않습니다.
         if (splits && y < S.pbpMax) {
@@ -343,7 +353,7 @@
       league = rows.length ? tbl.league : null;
       alerts.push({ kind: 'info', text: '기간별은 경기 기록으로 세서 RBI·ERA·FIP 등은 없습니다. 계산할 수 없는 칸은 숨겼습니다.' });
       const d = rr.data || {};
-      $('range-note').textContent = d.games ? `반영: ${fmtYmd(d.date_min)} ~ ${fmtYmd(d.date_max)}, ${d.games}경기` : '해당 기간 경기 없음';
+      $('range-note').textContent = d.games ? `반영: ${fmtYmd(d.date_min)} ~ ${fmtYmd(d.date_max)}, ${d.games}경기` : (rr.errors.length ? '' : '해당 기간 경기 없음');
       caveat = d.note || RANGE_CAVEAT;
     } else {
       const sd = S.season[y];
@@ -356,21 +366,29 @@
       const tbl = st.tab === 'bat' ? v.bat : v.pit;
       rows = tbl.rows;
       league = rows.length ? tbl.league : null;
-      caveat = SEASON_CAVEAT + (y < PBP_MIN ? OLD_CAVEAT : '') + (live ? LIVE_CAVEAT : '');
+      caveat = SEASON_CAVEAT + (y === S.pbpMax ? LIVE_SEASON_CAVEAT : '') + (y < PBP_MIN ? OLD_CAVEAT : '') + (live ? LIVE_CAVEAT : '');
     }
 
     fillTeams(rows.map(r => r.team));
     const shown = st.team ? rows.filter(r => r.team === st.team) : rows;
     const sort = pickSort(st, keys, rows);
-    S.last = { cols: cols, rows: shown, league: league, sort: sort };
+    // 팀을 골랐을 때 # 는 전체 팀을 같은 정렬로 세운 순위입니다.
+    let rankOf;
+    if (st.team) {
+      const sc = cols.find(c => c.key === sort.key);
+      const rankMap = {};
+      (sc ? T.sortRows(rows, sc.key, sort.dir, sc.kind) : rows).forEach((r, i) => { rankMap[r.team] = i + 1; });
+      rankOf = r => rankMap[r.team];
+    }
+    S.last = { cols: cols, rows: shown, league: league, sort: sort, rankOf: rankOf };
     $('ts-table').innerHTML = shown.length
-      ? T.renderTable({ cols: cols, rows: shown, league: league, sort: sort, teamHref: teamHref })
+      ? T.renderTable({ cols: cols, rows: shown, league: league, sort: sort, teamHref: teamHref, rankOf: rankOf })
       : createEmptyState(m === 'range' ? '해당 기간 기록이 없습니다.' : '해당 시즌 기록이 없습니다.');
 
     if (st.tab === 'rec') {
       const order = rows.slice().sort((a, b) => (b.pct || 0) - (a.pct || 0)).map(r => r.team);
-      $('ts-h2h').innerHTML = splits ? R.h2hHtml(splits, order, st.team) : R.noGamesHtml(y);
-      $('ts-monthly').innerHTML = splits ? R.monthlyHtml(splits, order, st.team) : R.noGamesHtml(y);
+      $('ts-h2h').innerHTML = splits ? R.h2hHtml(splits, order, st.team) : (gamesFailed ? R.gamesErrorHtml() : R.noGamesHtml(y));
+      $('ts-monthly').innerHTML = splits ? R.monthlyHtml(splits, order, st.team) : (gamesFailed ? R.gamesErrorHtml() : R.noGamesHtml(y));
     }
     $('caveat-note').textContent = caveat;
     renderAlerts(alerts);
@@ -384,7 +402,14 @@
     const seq = ++S.seq;
     if (!opt.noUrl) writeUrl(opt.replace);
     $('ts-table').innerHTML = createLoadingSpinner();
-    await ensureData();
+    try {
+      await ensureData();
+    } catch (e) {
+      if (seq !== S.seq) return;
+      console.error(e);
+      $('ts-table').innerHTML = createErrorMessage('팀 기록을 불러오는데 실패했습니다.');
+      return;
+    }
     if (seq !== S.seq) return;
     render();
   }
@@ -415,6 +440,12 @@
 
   function bindTips() {
     let box = null;
+    function hideTip() { if (box) box.style.display = 'none'; }
+    tipHide = hideTip;
+    window.addEventListener('scroll', hideTip, { passive: true });
+    document.addEventListener('touchstart', function (e) {
+      if (!(e.target.closest && e.target.closest('.ts-term'))) hideTip();
+    }, { passive: true });
     document.addEventListener('mouseover', function (e) {
       const el = e.target.closest && e.target.closest('.ts-term[data-col]');
       if (!el) return;
@@ -432,7 +463,7 @@
       box.style.top = (r.bottom + 6) + 'px';
     });
     document.addEventListener('mouseout', function (e) {
-      if (box && e.target.closest && e.target.closest('.ts-term[data-col]')) box.style.display = 'none';
+      if (e.target.closest && e.target.closest('.ts-term[data-col]')) hideTip();
     });
   }
 
@@ -469,6 +500,11 @@
     $('range-go').addEventListener('click', function () {
       const a = $('range-start').value, b = $('range-end').value;
       if (!a || !b) return;
+      const yy = String(S.st.season) + '-';
+      if (!a.startsWith(yy) || !b.startsWith(yy)) {
+        $('range-note').textContent = `기간은 ${S.st.season}년 안에서 골라 주세요.`;
+        return;
+      }
       S.st.start = a <= b ? a : b;
       S.st.end = a <= b ? b : a;
       S.st.sort = '';

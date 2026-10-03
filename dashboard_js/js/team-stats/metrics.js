@@ -285,6 +285,15 @@
     return { rows: rows, league: league, ctx: { lgEra: lgR.era, cfip: cfip } };
   }
 
+  /** 공식 승률 문자열(예 '0.603')을 숫자로 읽습니다. 비었거나 숫자가 아니면 W÷(W+L)입니다. */
+  function officialPct(p, w, l) {
+    if (p !== null && p !== undefined && String(p).trim() !== '') {
+      const n = Number(p);
+      if (Number.isFinite(n)) return n;
+    }
+    return div(w, w + l);
+  }
+
   /**
    * 그 시즌의 공식 순위표입니다. 팀-시즌 한 줄씩입니다(1982~1988 도 시즌
    * 합계). 1999·2000 은 드림·매직 양대 리그라 승차는 리그 안 값입니다.
@@ -300,7 +309,7 @@
         league: r.league || '단일',
         g: num(r.games),
         w: w, l: l, d: d,
-        pct: div(w, w + l),
+        pct: officialPct(r.pct, w, l),
         gb: r.gb === null || r.gb === undefined || r.gb === '' ? null : num(r.gb),
       };
     }
@@ -323,7 +332,7 @@
         league: '단일',
         g: num(t.games),
         w: w, l: l, d: d,
-        pct: div(w, w + l),
+        pct: officialPct(t.pct, w, l),
         gb: t.gb === null || t.gb === undefined || t.gb === '' ? null : num(t.gb),
       };
     }
