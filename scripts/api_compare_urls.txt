@@ -45,10 +45,13 @@
 /stats/team_range?start=2025-04-01&end=2025-04-30
 /stats/team_range?start=20190501&end=20190531
 /stats/team_range?start=2012-04-07&end=2012-05-07
+# limit 음수는 D1 에서 "제한 없음"입니다(MySQL 은 sqlLimit 로 같은 뜻).
+/stats/batters?season=2025&limit=-1
 
 # 선수 검색·상세·구종·사용률(타자 B / 투수 P)
 /players/search?q=김현수
 /players/search?q=이정후
+/players/search?q=김
 /players/73153
 /players/74163
 /players/69209
@@ -70,6 +73,10 @@
 /players/77829/arsenal?season=2010
 /players/77829/usage?season=2010
 404 /players/99999999
+# D1 은 TEXT 비교라 '73153x' 와 맞는 선수가 없고, 숫자만인 ID 도 아니라 정수로 다시
+# 찾지 않아 404 입니다(routes/players.js robustPlayerLookup). MySQL 은 INT 열과 비교할 때
+# '73153x' 를 73153 으로 바꿔 찾을 수 있어 이 줄로 확인합니다.
+404 /players/73153x
 
 # 경기·명단·이동
 /games?season=2008&limit=30
@@ -110,6 +117,12 @@
 /db/table/players?limit=50&offset=1000
 /db/table/play_by_play?limit=50&offset=0
 /db/table/play_by_play?limit=50&offset=2000000
+# 명단·이동의 player_id, 로고 BLOB(숫자 배열)이 D1 과 같은 모양인지 봅니다.
+/db/table/kbo_roster?limit=50
+/db/table/kbo_roster_moves?limit=50
+/db/table/team_logos?limit=2
 /db/table/teams/csv?limit=100
 /db/table/franchises/csv?limit=100
+# CSV 한 번 상한(20,000행)까지 흘려보냅니다. 질의하며 흘려보내는 길입니다.
+/db/table/play_by_play/csv?limit=20000&offset=0
 404 /db/table/no_such_table
