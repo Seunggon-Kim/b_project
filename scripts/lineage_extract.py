@@ -11,9 +11,16 @@ import re
 
 DOW = ["일", "월", "화", "수", "목", "금", "토"]
 
-CRON = re.compile(r"cron:\s*'([^']+)'")
-STEP = re.compile(r"^\s*-\s*name:\s*(.+?)\s*$")
-PY_CALL = re.compile(r"\bpython3?\s+(?:-m\s+([A-Za-z_][\w.]*)|([A-Za-z0-9_./-]+\.py))")
+CRON = re.compile(r"""cron:\s*(['"])(.+?)\1""")
+# YAML 목록 항목 줄(`- name:`, `- run:`, `- id:` …)마다 단계가 바뀝니다.
+ITEM = re.compile(r"^\s*-\s+")
+NAME = re.compile(r"^(\s*)(-\s+)?name:\s*(.+?)\s*$")
+# 해석기를 어떻게 부르든(python -u, python3.12, python -X utf8, 줄 이음 `\`)
+# 줄에 있는 `<경로>.py`·`-m <모듈>`·`bash <경로>.sh` 를 모두 잡습니다.
+PY_FILE = re.compile(r"(?<![\w./-])([A-Za-z0-9_./-]+\.py)(?![\w.-])")
+PY_MOD = re.compile(r"(?<!\S)-m\s+([A-Za-z_][\w.]*)")
+SH_FILE = re.compile(r"\b(?:ba)?sh\s+([A-Za-z0-9_./-]+\.sh)(?![\w.-])")
+TRAILING_COMMENT = re.compile(r"(?:^|\s)#.*$")
 JOB_KEY = re.compile(r"record_job_run\.py\s+--job\s+([a-z_]+)")
 TABLE = re.compile(r"CREATE TABLE `([A-Za-z0-9_]+)`")
 
@@ -38,6 +45,9 @@ def cron_to_kst(cron):
     if dom == "*" and dow.isdigit():
         return "매주 %s %s" % (DOW[(int(dow) + (1 if next_day else 0)) % 7], hm)
     if dow == "*" and dom.isdigit():
+        if next_day and int(dom) >= 28:
+            # 다음 날이 그달에 없을 수 있습니다(31일 → "32일"). 원문을 둡니다.
+            return cron
         return "매월 %d일 %s" % (int(dom) + (1 if next_day else 0), hm)
     return cron
 
@@ -45,27 +55,39 @@ def cron_to_kst(cron):
 def parse_workflow(text):
     """워크플로 YAML 글자에서 실행 시각과 (단계 이름, 스크립트) 목록을 뽑습니다.
 
-    `python 경로.py` 와 `python -m 모듈` 을 모두 스크립트로 봅니다(모듈은 경로로
-    바꿈). `pip` 은 뺍니다. 주석 줄(#)은 건너뜁니다. 같은 (단계, 스크립트)는
-    한 번만 넣습니다.
+    주석이 아닌 줄의 `<경로>.py`, `-m <모듈>`(모듈은 경로로 바꿈, `pip` 은 뺌),
+    `bash <경로>.sh` 를 모두 스크립트로 봅니다. 해석기를 어떻게 부르든
+    (`python -u`, `python3.12`, `python -X utf8`, `python \\` 다음 줄의 경로)
+    빠지지 않게 하려는 것입니다. 단계 이름은 목록 항목 줄(`- …`)마다 비우고
+    그 항목의 `name:` 으로 채웁니다. 이름 없는 단계가 앞 단계의 이름을
+    물려받지 않습니다. 같은 (단계, 스크립트)는 한 번만 넣습니다.
     """
     m = CRON.search(text)
-    steps, seen, name = [], set(), None
+    steps, seen, name, key_indent = [], set(), None, None
     for line in text.splitlines():
         if line.lstrip().startswith("#"):
             continue
-        s = STEP.match(line)
-        if s:
-            name = s.group(1).strip().strip("'\"")
+        line = TRAILING_COMMENT.sub("", line)
+        item = ITEM.match(line)
+        if item:
+            name, key_indent = None, item.end()
+        n = NAME.match(line)
+        # `- name:` 이거나 그 항목의 키 자리에 있는 `name:` 만 단계 이름입니다
+        # (`with:` 아래 `name:` 같은 더 깊은 키는 아님).
+        if n and (n.group(2) or len(n.group(1)) == key_indent):
+            name = n.group(3).strip().strip("'\"")
             continue
-        for mod, path in PY_CALL.findall(line):
-            if mod == "pip":
-                continue
-            script = mod.replace(".", "/") + ".py" if mod else path
+        found = [(f.start(), f.group(1)) for f in PY_FILE.finditer(line)]
+        found += [(f.start(), f.group(1).replace(".", "/") + ".py")
+                  for f in PY_MOD.finditer(line) if f.group(1) != "pip"]
+        found += [(f.start(), f.group(1)) for f in SH_FILE.finditer(line)]
+        for _, script in sorted(found):
+            while script.startswith("./"):
+                script = script[2:]
             if (name, script) not in seen:
                 seen.add((name, script))
                 steps.append({"name": name, "script": script})
-    return {"cron_utc": m.group(1) if m else None, "steps": steps}
+    return {"cron_utc": m.group(2) if m else None, "steps": steps}
 
 
 def job_keys(text):

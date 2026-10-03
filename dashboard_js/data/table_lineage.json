@@ -429,6 +429,11 @@
    "stale_hours": 36,
    "steps": [
     {
+     "name": "MySQL 연결",
+     "script": "migration/mysql/ci_proxy.sh",
+     "status_key": null
+    },
+    {
      "name": "PBP 수집·적재",
      "script": "data_collection/daily_pbp_to_d1.py",
      "status_key": "pbp"
@@ -538,6 +543,11 @@
    "stale_hours": 840,
    "steps": [
     {
+     "name": "MySQL 연결",
+     "script": "migration/mysql/ci_proxy.sh",
+     "status_key": null
+    },
+    {
      "name": "players·공식기록 내려받기",
      "script": "migration/d1_to_sqlite.py",
      "status_key": null
@@ -571,6 +581,11 @@
    "schedule_kst": "매일 16:07",
    "stale_hours": 36,
    "steps": [
+    {
+     "name": "MySQL 연결",
+     "script": "migration/mysql/ci_proxy.sh",
+     "status_key": null
+    },
     {
      "name": "등록 명단 적재",
      "script": "data_collection/roster_to_d1.py",
@@ -610,6 +625,11 @@
    "schedule_kst": "매주 화 05:47",
    "stale_hours": 192,
    "steps": [
+    {
+     "name": "MySQL 연결",
+     "script": "migration/mysql/ci_proxy.sh",
+     "status_key": null
+    },
     {
      "name": "MySQL 내려받기",
      "script": "migration/mysql/mysql_to_sqlite.py",
@@ -1580,6 +1600,20 @@
    ],
    "note": "전체 내려받기 CSV 를 만듭니다.",
    "path": "migration/export_csv.py",
+   "reads": [],
+   "sources": [],
+   "status_keys": {},
+   "writes": []
+  },
+  {
+   "jobs": [
+    "daily",
+    "monthly",
+    "roster",
+    "weekly"
+   ],
+   "note": "러너에서 Cloud SQL 프록시를 띄워 뒤 단계가 MySQL 에도 쓰게 합니다(이중 적재). 표는 쓰지 않습니다.",
+   "path": "migration/mysql/ci_proxy.sh",
    "reads": [],
    "sources": [],
    "status_keys": {},

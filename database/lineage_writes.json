@@ -189,6 +189,12 @@
       },
       "note": "D1 과 MySQL 의 행 수·값을 견줍니다. 표는 쓰지 않습니다."
     },
+    "migration/mysql/ci_proxy.sh": {
+      "sources": [],
+      "writes": [],
+      "reads": [],
+      "note": "러너에서 Cloud SQL 프록시를 띄워 뒤 단계가 MySQL 에도 쓰게 합니다(이중 적재). 표는 쓰지 않습니다."
+    },
     "migration/mysql/mysql_to_sqlite.py": {
       "sources": [],
       "writes": [],

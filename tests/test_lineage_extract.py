@@ -186,3 +186,79 @@ def test_source_routes_extra_shapes():
       API.getTeams(2025); API.dbCsvUrl(t);
     """
     assert lx.source_routes(page, pats, methods) == set(pats)
+
+
+def test_cron_to_kst_month_end_rollover_keeps_raw():
+    # 28일 이후에 한국 시각으로 날을 넘기면 "32일" 같은 없는 날이 나옵니다.
+    assert lx.cron_to_kst("30 20 28 * *") == "30 20 28 * *"
+    assert lx.cron_to_kst("30 20 31 * *") == "30 20 31 * *"
+    assert lx.cron_to_kst("30 10 28 * *") == "매월 28일 19:30"
+    assert lx.cron_to_kst("30 20 27 * *") == "매월 28일 05:30"
+
+
+def test_parse_workflow_cron_double_quotes():
+    assert lx.parse_workflow('on:\n  schedule:\n    - cron: "47 20 * * 1"\n')["cron_utc"] == "47 20 * * 1"
+
+
+WF_FORMS = """
+on:
+  schedule:
+    - cron: '33 18 * * *'
+jobs:
+  run:
+    steps:
+      - name: 여러 꼴
+        run: |
+          python -u data_collection/a.py --x 1
+          python3.12 data_collection/b.py
+          python -X utf8 ./data_collection/c.py
+          python \
+            data_collection/d.py --flag
+          python -X utf8 -m migration.mysql.e --days 3
+          python -m pip install -r requirements.txt  # pip 은 뺍니다 z.py
+      - name: MySQL 연결
+        run: bash migration/mysql/ci_proxy.sh
+"""
+
+
+def test_parse_workflow_interpreter_forms():
+    w = lx.parse_workflow(WF_FORMS)
+    assert w["steps"] == [
+        {"name": "여러 꼴", "script": "data_collection/a.py"},
+        {"name": "여러 꼴", "script": "data_collection/b.py"},
+        {"name": "여러 꼴", "script": "data_collection/c.py"},
+        {"name": "여러 꼴", "script": "data_collection/d.py"},
+        {"name": "여러 꼴", "script": "migration/mysql/e.py"},
+        {"name": "MySQL 연결", "script": "migration/mysql/ci_proxy.sh"},
+    ]
+
+
+WF_NAMES = """
+jobs:
+  run:
+    steps:
+      - name: 첫 단계
+        run: python a.py
+      - run: python b.py
+      - id: c
+        name: 셋째 단계
+        run: python c.py
+      - id: d
+        run: python d.py
+      - name: 올리기
+        uses: actions/upload-artifact@v4
+        with:
+          name: not-a-step-name
+      - run: python e.py
+"""
+
+
+def test_parse_workflow_step_name_resets_per_item():
+    # 이름 없는 단계가 앞 단계의 이름을 물려받지 않습니다.
+    assert lx.parse_workflow(WF_NAMES)["steps"] == [
+        {"name": "첫 단계", "script": "a.py"},
+        {"name": None, "script": "b.py"},
+        {"name": "셋째 단계", "script": "c.py"},
+        {"name": None, "script": "d.py"},
+        {"name": None, "script": "e.py"},
+    ]

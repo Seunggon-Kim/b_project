@@ -6,6 +6,7 @@
 일을 다시 놓치지 않으려는 것입니다.
 """
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -112,3 +113,33 @@ def test_결과_모양():
     # 정렬·결정성
     assert d["edges"] == sorted(d["edges"], key=lambda e: (e["from"], e["to"]))
     assert bl.build(ROOT) == d
+
+
+def scheduled_workflows():
+    """`schedule:` 이 있는 워크플로 파일 이름(확장자 뺌)입니다."""
+    base = ROOT / ".github" / "workflows"
+    return {p.stem for p in [*base.glob("*.yml"), *base.glob("*.yaml")]
+            if re.search(r"^\s*schedule:", p.read_text(encoding="utf-8"), re.M)}
+
+
+def test_정해진_시각에_도는_워크플로를_모두_봅니다():
+    # 새 예약 워크플로를 만들고 계보 목록에 넣지 않으면, 그 작업이 쓰는 표가
+    # 조용히 빠집니다.
+    assert set(WORKFLOWS) == set(bl.WORKFLOWS) == scheduled_workflows()
+
+
+def test_작업마다_한국_시각_일정이_있습니다():
+    bad = [j["id"] for j in bl.build(ROOT)["jobs"] if not j["schedule_kst"]]
+    assert not bad, "cron 을 읽지 못한 작업: %s" % bad
+
+
+def test_손_파일의_스크립트가_실제_파일입니다():
+    missing = sorted(p for p in HAND["scripts"] if not (ROOT / p).is_file())
+    assert not missing, "없는 파일: %s" % missing
+
+
+def test_표를_쓰는_스크립트는_예약_워크플로에서_돕니다():
+    # 손 파일에 writes 를 적어도 아무 작업도 부르지 않으면 그 표는 갱신되지 않습니다.
+    steps = {s["script"] for w in WORKFLOWS for s in lx.parse_workflow(wf_text(w))["steps"]}
+    idle = sorted(p for p, s in HAND["scripts"].items() if s.get("writes") and p not in steps)
+    assert not idle, "어떤 예약 워크플로도 부르지 않는 쓰기 스크립트: %s" % idle
