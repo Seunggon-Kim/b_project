@@ -443,7 +443,7 @@ test('스크립트 순서: 공용 통계 → quicklook → 인라인', () => {
     '../js/api.js', '../js/components.js',
     '../js/stats/metrics.js', '../js/stats/columns.js', '../js/player-analytics/quicklook.js',
   ]);
-  assert.ok(html.indexOf('player-analytics/quicklook.js') < html.indexOf('<script>\n'), '인라인 스크립트보다 먼저');
+  assert.ok(html.indexOf('player-analytics/quicklook.js') < html.search(/<script>\r?\n/), '인라인 스크립트보다 먼저');
 });
 
 test('CSS: style.css 바로 뒤에 player-analytics.css', () => {
@@ -460,7 +460,7 @@ test('카드 줄: Quick Look 이 먼저, 프로필이 다음, id 유지', () => 
 });
 
 test('옛 표 코드가 빠지고 새 함수를 씀', () => {
-  for (const gone of ['futuresSeasonTable', 'FUT_SEASON_METRICS', 'verticalTable(', '시즌별 성적', '상세 프로필', 'header-bar-info-group']) {
+  for (const gone of ['futuresSeasonTable', 'FUT_SEASON_METRICS', 'verticalTable(', '>시즌별 성적<', '>상세 프로필<', 'header-bar-info-group']) {
     assert.ok(!html.includes(gone), gone);
   }
   for (const used of ['quicklook.build(', 'quicklook.buildFutures(', 'quicklook.summary(', 'quicklook.tableHtml(', 'quicklook.ageParts(', 'pa-hdr-name', 'profileHtml(']) {
@@ -566,7 +566,7 @@ Expected: page-html 4개 FAIL, quicklook 11개 PASS.
 
 82~84행 헤더 여는 태그를 `<div id="player-header-bar" class="player-header-bar pa-hdr fade-in">` 로 바꿉니다.
 
-86~97행(주석 두 줄, `#player-card`, `.stats-card`)을 아래로 바꿉니다. `player-details-grid` 여는 줄과 그 아래 퓨처스·Standard 블록은 그대로 둡니다.
+86~97행(`<!-- Player Details Grid` 주석부터 `.stats-card` 닫는 `</div>` 까지, `player-details-grid` 여는 줄 포함)을 아래로 바꿉니다. 그 아래 퓨처스 최근 경기·Standard 블록과 `player-details-grid` 닫는 태그는 그대로 둡니다.
 
 ```html
             <!-- 팬그래프 선수 페이지의 카드 줄입니다. 왼쪽 Quick Look(2칸),
