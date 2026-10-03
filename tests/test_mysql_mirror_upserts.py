@@ -43,7 +43,29 @@ def test_job_run(fake_sink):
 
 
 def test_scripts_mirror_inside_main():
-    for name in ("daily_games_to_d1", "futures_to_d1", "csv_to_d1", "record_job_run"):
+    for name in ("daily_games_to_d1", "futures_to_d1", "csv_to_d1", "record_job_run",
+                 "team_ranks"):
         src = (ROOT / "data_collection" / (name + ".py")).read_text(encoding="utf-8")
         assert "from mysql_sink import mirror" in src, name
         assert "mirror(" in src.split("def main", 1)[1], name
+
+
+def test_team_ranks(fake_sink):
+    import team_ranks
+    row = {"season": 2026, "team_name": "KT", "league": "단일"}
+    assert team_ranks.mysql_write_ranks(fake_sink, [row]) == 1
+    assert fake_sink.calls[0][:5] == (
+        "upsert", "team_season_rank", team_ranks.COLUMNS,
+        ["season", "team_name", "league"], [row])
+    assert fake_sink.calls[1] == ("refresh_count", "team_season_rank")
+
+
+def test_team_ranks_current_season(monkeypatch):
+    import team_ranks
+    # 한국 날짜 기준입니다. 2026-12-31 15:30 UTC 는 한국으로 2027-01-01 입니다.
+    import datetime as dt
+    utc = dt.datetime(2026, 12, 31, 15, 30, tzinfo=dt.timezone.utc)
+    assert team_ranks.current_season(utc) == 2027
+    # 그해 순위가 아직 없으면(비시즌) 빈 목록, 있으면 그해만 고릅니다.
+    assert team_ranks.pick_current([2025, 2026], 2027) == []
+    assert team_ranks.pick_current([2025, 2026], 2026) == [2026]

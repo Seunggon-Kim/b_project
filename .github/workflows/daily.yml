@@ -149,6 +149,16 @@ jobs:
           python data_collection/record_job_run.py --job futures \
             --status ${{ steps.futures.outcome == 'success' && 'ok' || 'fail' }}
 
+      # --- 2-2. 올 시즌 팀 순위 ---------------------------------------
+      # 팀 기록실(/teams/:id)의 시즌별 순위·승패가 team_season_rank 를
+      # 읽습니다. 처음엔 한 번만 받아 2026 이 8월 말 값에 멈춰 있었습니다
+      # (2026-10-03 발견). KBO 기록실 한 페이지라 가볍습니다. 비시즌에는
+      # 스스로 건너뜁니다.
+      - name: 올 시즌 팀 순위 적재
+        id: team_ranks
+        continue-on-error: true
+        run: python data_collection/team_ranks.py --current
+
       # --- 3. KBO 공식 통계 (원래 02:00 KST) --------------------------
       # Selenium 으로 KBO 사이트를 읽습니다. 러너 IP 가 막히면 여기서
       # 실패합니다(설계 7장 위험 1).
@@ -323,6 +333,7 @@ jobs:
             echo "|---|---|"
             echo "| PBP 수집·적재 | ${{ steps.pbp.outcome }} |"
             echo "| games 적재 | ${{ steps.games.outcome }} |"
+            echo "| 올 시즌 팀 순위 | ${{ steps.team_ranks.outcome }} |"
             echo "| 타자 수집 | ${{ steps.scrape_batter.outcome }} |"
             echo "| 타자 적재 | ${{ steps.load_batter.outcome }} |"
             echo "| 투수 수집 | ${{ steps.scrape_pitcher.outcome }} |"
@@ -341,7 +352,8 @@ jobs:
         run: |
           fail=0
           for s in "${{ steps.pbp.outcome }}" "${{ steps.load_batter.outcome }}" \
-                   "${{ steps.load_pitcher.outcome }}" "${{ steps.purge.outcome }}"; do
+                   "${{ steps.load_pitcher.outcome }}" "${{ steps.purge.outcome }}" \
+                   "${{ steps.team_ranks.outcome }}"; do
             if [ "$s" != "success" ]; then fail=1; fi
           done
           # games 는 경기가 없는 날 건너뛰므로 skipped 를 실패로 보지 않습니다.

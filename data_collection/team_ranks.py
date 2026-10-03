@@ -32,8 +32,18 @@ KBO 기록실이 45시즌을 그대로 줍니다.
     py data_collection/team_ranks.py --dry-run
     py data_collection/team_ranks.py --from 1982 --to 2026
     py data_collection/team_ranks.py --season 2026      # 올 시즌만
+    py data_collection/team_ranks.py --current          # daily 가 부릅니다
+
+## 매일 올 시즌을 다시 받습니다
+
+처음엔 1982~2026 을 한 번(2026-08-29)만 받았습니다. 그 뒤 2026 이 8월 말
+값(KT 111경기)에 멈춰 팀 기록실 순위·승패가 한 달 넘게 늦었습니다
+(2026-10-03 발견). 그래서 daily 가 `--current` 로 올 시즌만 다시 받습니다.
+KBO 기록실 한 페이지라 가볍습니다. 그해 순위가 아직 없으면(비시즌)
+건너뜁니다.
 """
 import argparse
+import datetime
 import re
 import sys
 import time
@@ -44,11 +54,15 @@ sys.path.insert(0, str(ROOT / "data_collection"))
 
 from d1_load import query, run_d1_file, sql_literal  # noqa: E402
 from kbo_http import Session  # noqa: E402
+from mysql_sink import mirror  # noqa: E402
 
 URL = "https://www.koreabaseball.com/Record/TeamRank/TeamRank.aspx"
 TABLE_CLASS = "tData"
 
 SQL_TMP = ROOT / "migration" / "_team_ranks.sql"
+
+KST = datetime.timezone(datetime.timedelta(hours=9))
+KEYS = ["season", "team_name", "league"]
 
 _TAG = re.compile(r"<[^>]+>")
 _TABLE = re.compile(r'<table[^>]*class="tData[^"]*"[^>]*>([\s\S]*?)</table>')
@@ -170,6 +184,24 @@ def insert_sql(rows):
     return head + values + tail
 
 
+def mysql_write_ranks(sink, rows):
+    """D1 의 ON CONFLICT(season, team_name, league) DO UPDATE 와 같습니다."""
+    n = sink.upsert("team_season_rank", COLUMNS, KEYS, rows)
+    sink.refresh_count("team_season_rank")
+    return n
+
+
+def current_season(now=None):
+    """한국 날짜 기준 올해입니다. 러너는 UTC 라 1월 1일 새벽이 어긋납니다."""
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    return now.astimezone(KST).year
+
+
+def pick_current(seasons, year):
+    """그해 순위가 KBO 에 있으면 [그해], 아직 없으면(비시즌) [] 입니다."""
+    return [year] if year in seasons else []
+
+
 def name_map():
     """그 시즌 표기명 -> franchise_id 입니다."""
     rows = query("SELECT team_name, franchise_id FROM team_seasons;")
@@ -189,6 +221,8 @@ def main():
     ap.add_argument("--from", dest="year_from", type=int, default=None)
     ap.add_argument("--to", dest="year_to", type=int, default=None)
     ap.add_argument("--season", type=int, default=None)
+    ap.add_argument("--current", action="store_true",
+                    help="올 시즌(한국 날짜)만. 그해 순위가 아직 없으면 건너뜁니다")
     ap.add_argument("--delay", type=float, default=0.3)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
@@ -200,7 +234,13 @@ def main():
         print("시즌 목록을 못 읽었습니다. 페이지 구조가 바뀌었을 수 있습니다.")
         return 1
 
-    if args.season:
+    if args.current:
+        year = current_season()
+        seasons = pick_current(seasons, year)
+        if not seasons:
+            print("%d 순위가 아직 없습니다(비시즌). 건너뜁니다." % year)
+            return 0
+    elif args.season:
         seasons = [args.season]
     else:
         lo = args.year_from or min(seasons)
@@ -243,6 +283,7 @@ def main():
                        encoding="utf-8", newline="\n")
     run_d1_file(SQL_TMP)
     print("적재 완료 %s행" % format(len(rows), ","))
+    mirror("team_ranks", lambda sink: mysql_write_ranks(sink, rows))
     return 0
 
 
