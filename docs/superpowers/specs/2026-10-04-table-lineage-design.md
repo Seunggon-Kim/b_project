@@ -72,7 +72,7 @@
 | 작업 → 스크립트, 실행 시각 | `.github/workflows/{daily,roster,weekly,monthly}.yml` | `python <경로>.py`·`python -m <모듈>` 호출과 `cron:` 을 읽습니다. 단계 이름도 함께 가져옵니다. cron(UTC)을 한국 시각 문구로 바꿉니다(예: `33 18 * * *` → "매일 03:33"). |
 | API 주소 → 표 | `src/index.js` 의 `router.add('GET', 경로, 함수)`, `src/routes/*.js` | 함수별로 SQL 글자의 `FROM`·`JOIN` 뒤 표 이름을 뽑아 실제 표 목록(`migration/mysql/schema.sql`)에 있는 것만 남깁니다. 같은 파일의 도우미 함수가 쓰는 SQL 은 그 파일의 라우트 모두에 붙입니다(과대 추정 허용, 누락보다 낫습니다). |
 | 화면 → API 주소 | `dashboard_js/**/*.html`, `dashboard_js/js/*.js` | `${API_BASE_URL}/…` 글자를 뽑고, `api.js` 의 메서드(`API.getX`)가 부르는 주소를 그 메서드를 부르는 화면에 붙입니다. 경로의 변수 부분은 `src/index.js` 패턴(`/players/:id`)에 맞춰 정규화합니다. |
-| 표 설명·분류 | `database/column_descriptions.json` | `category`, `table_desc`, `update_freq` |
+| 표 설명·분류 | `database/column_descriptions.json` | `category`, `table_desc` (갱신 주기는 손으로 적은 `update_freq` 대신 `jobs[].schedule_kst` 를 씁니다) |
 
 외부 사이트를 그대로 넘기는 API(`/standings`, `/schedule*`, `/futures*`)는 표가 없으므로 원천에 "KBO 실시간"으로 잇습니다.
 
@@ -95,7 +95,7 @@
   }],
   "tables": [{
     "name": "team_season_rank", "kind": "collected",
-    "category": "…", "desc": "…", "update_freq": "…",
+    "category": "…", "desc": "…",
     "written_by": ["data_collection/team_ranks.py"], "derived_from": [],
     "routes": ["/teams/:id"], "pages": ["pages/team-record.html"], "manual_note": null
   }],

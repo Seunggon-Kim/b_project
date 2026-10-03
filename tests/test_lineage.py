@@ -199,3 +199,17 @@ def test_팀_통계가_참조_표_4개와_주소를_읽습니다():
                  "team_stadium_by_season", "team_season_rank"):
         t = next(x for x in d["tables"] if x["name"] == name)
         assert "pages/team-stats.html" in t["pages"], name
+
+
+def test_표마다_설명이_있습니다():
+    # 계보 탭과 데이터 탐색 페이지가 표 설명을 column_descriptions.json 에서 읽습니다.
+    tables = json.loads((ROOT / "database" / "column_descriptions.json")
+                        .read_text(encoding="utf-8"))["tables"]
+    missing = sorted(t for t in KNOWN if not t.startswith("meta_")
+                     and not (tables.get(t, {}).get("table_desc") or "").strip())
+    assert not missing, "database/column_descriptions.json 에 table_desc 가 없는 표: %s" % missing
+
+
+def test_표_항목에_update_freq_를_두지_않습니다():
+    # 일정은 jobs[].schedule_kst 하나로 봅니다(손으로 적은 주기 글자와 어긋나지 않게).
+    assert not [t["name"] for t in bl.build(ROOT)["tables"] if "update_freq" in t]

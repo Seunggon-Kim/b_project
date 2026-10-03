@@ -880,7 +880,7 @@ def build(root=ROOT):
         meta = coldict.get(t, {})
         tables.append({
             "name": t, "kind": kind, "category": meta.get("category"),
-            "desc": meta.get("table_desc"), "update_freq": meta.get("update_freq"),
+            "desc": meta.get("table_desc"),
             "written_by": writers, "derived_from": derived, "routes": t_routes,
             "pages": sorted(t_pages), "manual_note": hand.get("manual_tables", {}).get(t),
         })
