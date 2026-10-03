@@ -41,12 +41,15 @@
         .ctrl-group { display: flex; align-items: center; gap: 0.6rem; flex-wrap: nowrap; flex-shrink: 0; }
         .ctrl-group label { white-space: nowrap; flex-shrink: 0; margin: 0; }
         .ctrl-group .tabbtn { height: 37px; box-sizing: border-box; }
-        /* CSV·링크 복사·기록실은 늘 아래 줄에 따로 두고 위에 구분선을 긋습니다. */
-        .ctrl-right { flex-basis: 100%; justify-content: flex-end; margin-left: 0; border-top: 1px solid var(--border-color); padding-top: 0.7rem; }
+        /* CSV·링크 복사·기록실은 표 카드 제목 줄 오른쪽에 둡니다. */
+        .ts-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+        .ts-actions .tabbtn { height: 34px; box-sizing: border-box; }
+        @media (max-width: 640px) { .ts-card .card-header { flex-wrap: wrap; gap: 0.5rem; } }
+        .ts-table.ts-month { width: auto; min-width: 60%; }
         .ctrl-divider { align-self: stretch; width: 1px; min-height: 1.8rem; background: var(--border-color); }
         .ctrl-note { flex-basis: 100%; font-size: 0.85rem; }
         .ctrl-note:empty { display: none; }
-        @media (max-width: 640px) { .ctrl-divider { display: none; } .ctrl-group { flex-wrap: wrap; } .ctrl-right { margin-left: 0; } }
+        @media (max-width: 640px) { .ctrl-divider { display: none; } .ctrl-group { flex-wrap: wrap; } }
         /* 사용자 지정 칸 고르개 */
         .col-panel { flex-basis: 100%; border-top: 1px solid var(--border-color); margin-top: 0.5rem; padding-top: 0.75rem; }
         .col-panel.hidden { display: none; }
@@ -94,12 +97,6 @@
         .ts-self { color: var(--text-muted); }
         .ts-total { font-weight: 700; border-left: 2px solid var(--border-color); }
         .ts-sub { font-size: 0.82rem; margin: 0 0 0.6rem; }
-        /* 지표 설명 */
-        .ts-glossary { padding: 0.8rem 1rem !important; }
-        .ts-glossary summary { cursor: pointer; font-weight: 600; }
-        .ts-glossary dl { margin: 0.6rem 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 0.3rem 0.9rem; font-size: 0.82rem; }
-        .ts-glossary dt { font-weight: 700; }
-        .ts-glossary dd { margin: 0; color: var(--text-secondary); }
         /* 머리글 설명 창 */
         .tip-box { position: fixed; z-index: 9999; display: none; max-width: 300px; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem 0.7rem; font-size: 0.82rem; font-family: inherit; line-height: 1.45; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12); pointer-events: none; white-space: normal; }
         .tip-box b { display: block; margin-bottom: 2px; }
@@ -170,11 +167,6 @@
                     <button type="button" id="range-go" class="tabbtn active">조회</button>
                     <button type="button" id="range-clear" class="tabbtn" hidden>시즌 전체</button>
                 </div>
-                <div class="ctrl-group ctrl-right">
-                    <button type="button" id="csv-btn" class="tabbtn">CSV</button>
-                    <button type="button" id="link-btn" class="tabbtn">링크 복사</button>
-                    <a id="team-record-link" class="tabbtn" href="team-record">기록실</a>
-                </div>
                 <span class="text-muted ctrl-note" id="range-note"></span>
                 <div id="col-panel" class="col-panel hidden">
                     <div class="col-panel-head">
@@ -197,6 +189,11 @@
             <div class="card ts-card">
                 <div class="card-header">
                     <h3 class="card-title" id="ts-title">팀 타격</h3>
+                    <div class="ts-actions">
+                        <button type="button" id="csv-btn" class="tabbtn">CSV</button>
+                        <button type="button" id="link-btn" class="tabbtn" title="지금 보는 화면 그대로 열리는 주소를 복사합니다.">링크 복사</button>
+                        <a id="team-record-link" class="tabbtn" href="team-record">기록실</a>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div id="ts-table"></div>
@@ -222,11 +219,6 @@
                     </div>
                 </div>
             </div>
-
-            <details class="card ts-glossary mt-3">
-                <summary>지표 설명</summary>
-                <dl id="ts-glossary-list"></dl>
-            </details>
 
             <div class="card mt-3"
                 style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);">

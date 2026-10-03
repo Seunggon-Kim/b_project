@@ -348,7 +348,7 @@
    * 경기 결과로 팀별 승패·득실·홈/원정·1점차·월별·상대 전적을 셉니다.
    * 정규시즌만 셉니다. 점수가 같으면 무승부입니다.
    * start·end 는 YYYYMMDD 숫자이고, 없으면 전체입니다.
-   * 월은 3·4월을 묶어 키 4 로 둡니다.
+   * 월은 3·4월을 묶어 키 4 로, 9·10월도 묶어 키 9 로 둡니다.
    */
   function gameSplits(games, start, end) {
     const out = {};
@@ -370,7 +370,7 @@
         || x.away_score === null || x.away_score === undefined) continue;
       const hs = num(x.home_score), as = num(x.away_score);
       const month = Math.floor(day / 100) % 100;
-      const mk = month <= 4 ? 4 : month;
+      const mk = month <= 4 ? 4 : (month >= 9 ? 9 : month);
       const sides = [
         [x.home_team_id, hs, as, 'home', x.away_team_id],
         [x.away_team_id, as, hs, 'away', x.home_team_id],

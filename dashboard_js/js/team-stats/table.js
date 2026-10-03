@@ -118,17 +118,7 @@
     return h;
   }
 
-  /** 표 아래 '지표 설명' 목록입니다. */
-  function glossaryHtml(defs) {
-    return defs.filter(Boolean).map(function (d) {
-      let dd = esc(d.desc);
-      if (d.formula) dd += ` 계산식: ${esc(d.formula)}`;
-      if (d.since) dd += ` ${d.since}년부터 있습니다.`;
-      return `<dt>${esc(d.label)}</dt><dd>${dd}</dd>`;
-    }).join('');
-  }
-
-  const api = { esc, indexClass, sortRows, renderTable, toCsv, tipHtml, glossaryHtml };
+  const api = { esc, indexClass, sortRows, renderTable, toCsv, tipHtml };
   TS.table = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

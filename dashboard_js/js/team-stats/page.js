@@ -321,11 +321,12 @@
         // 끝난 시즌에서 경기 결과가 공식 순위표와 다르면 알립니다. 진행 중
         // 시즌은 실시간 순위와 하루 차이가 정상이라 알리지 않습니다.
         if (splits && y < S.pbpMax) {
-          const mm = M.recordMismatches(v.rank, splits);
+          let mm = M.recordMismatches(v.rank, splits);
+          if (st.team) mm = mm.filter(x => x.team === st.team);
           if (mm.length) {
             alerts.push({
               kind: 'info',
-              text: '경기 결과 원천에 빠지거나 끊긴 경기가 있어, 아래 팀의 득실·홈·원정·1점차·월별·상대 전적이 공식 기록과 조금 다릅니다: '
+              text: '경기 결과 원천이 공식 기록과 다른 경기(빠지거나 끊기거나 결과가 다른 경기)가 있어, 아래 팀의 득실·홈·원정·1점차·월별·상대 전적이 공식 기록과 조금 다릅니다: '
                 + mm.map(x => `${x.team}(공식 ${x.official.w}-${x.official.l}-${x.official.d}, 경기 결과 ${x.games.w}-${x.games.l}-${x.games.d})`).join(', ') + '.',
             });
           }
@@ -371,7 +372,6 @@
       $('ts-h2h').innerHTML = splits ? R.h2hHtml(splits, order, st.team) : R.noGamesHtml(y);
       $('ts-monthly').innerHTML = splits ? R.monthlyHtml(splits, order, st.team) : R.noGamesHtml(y);
     }
-    $('ts-glossary-list').innerHTML = T.glossaryHtml(cols);
     $('caveat-note').textContent = caveat;
     renderAlerts(alerts);
     syncRecordLink();

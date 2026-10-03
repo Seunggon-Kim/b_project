@@ -157,10 +157,12 @@
     }
     const n = Number(v);
     if (!Number.isFinite(n)) return '-';
+    // 반올림하면 0 이 되는 음수는 '-0.0' 대신 '0.0' 으로 보입니다.
+    const noNegZero = s => (/^-[0.]+$/.test(s) ? s.slice(1) : s);
     switch (kind) {
-      case 'avg3': return n.toFixed(3).replace(/^(-?)0\./, '$1.');
-      case 'f1': return n.toFixed(1);
-      case 'f2': return n.toFixed(2);
+      case 'avg3': return noNegZero(n.toFixed(3).replace(/^(-?)0\./, '$1.'));
+      case 'f1': return noNegZero(n.toFixed(1));
+      case 'f2': return noNegZero(n.toFixed(2));
       case 'idx': return String(Math.round(n));
       case 'ip': {
         const o = Math.round(n), w = Math.floor(o / 3), r = o % 3;

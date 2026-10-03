@@ -30,12 +30,12 @@
     return h + '</tbody></table></div>';
   }
 
-  /** 월별 승률입니다. 3·4월은 묶습니다(키 4). */
+  /** 월별 승률입니다. 3·4월은 묶고(키 4), 9·10월도 묶습니다(키 9). */
   function monthlyHtml(splits, order, highlight) {
     const months = [...new Set(order.flatMap(t => Object.keys((splits[t] && splits[t].month) || {}).map(Number)))]
       .sort((a, b) => a - b);
     let h = '<div class="table-container ts-wrap"><table class="table ts-table ts-month"><thead><tr><th class="ts-team">팀</th>';
-    months.forEach(function (m) { h += `<th>${m === 4 ? '3·4월' : m + '월'}</th>`; });
+    months.forEach(function (m) { h += `<th>${m === 4 ? '3·4월' : m === 9 ? '9·10월' : m + '월'}</th>`; });
     h += '</tr></thead><tbody>';
     order.forEach(function (t) {
       const mm = (splits[t] && splits[t].month) || {};
