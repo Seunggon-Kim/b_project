@@ -126,7 +126,7 @@
 
   // 프로필 카드 아래 '시즌 타일' 지표입니다. [라벨, 합계 키, 표시 형식]
   const TILES = {
-    pit: [['ERA', 'era', 'f2'], ['IP', 'outs', 'ip'], ['K%', 'kpct', 'pct'], ['WHIP', 'whip', 'f2']],
+    pit: [['ERA', 'era', 'f2'], ['IP', 'outs', 'ip'], ['K%', 'kpct', 'pct'], ['K-BB%', 'kbbpct', 'pct']],
     bat: [['AVG', 'avg', 'avg3'], ['OPS', 'ops', 'avg3'], ['HR', 'hr', 'int'], ['RBI', 'rbi', 'int']],
   };
   // 퓨처스 응답에는 OPS 가 없어 타자는 OBP·SLG 를 씁니다.
