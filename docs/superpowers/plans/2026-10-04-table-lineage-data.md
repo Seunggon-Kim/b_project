@@ -26,6 +26,7 @@
 - **실행 기록 키는 작업마다 다를 수 있습니다.** `roster_to_d1.py` 는 daily 에서 `roster`, roster.yml 에서 `roster_pm` 으로 남습니다. 그래서 손 파일과 결과 JSON 의 스크립트 항목은 `status_key`(글자) 대신 `status_keys`(작업 이름 → 키)를 씁니다. 결과의 `jobs[].steps[].status_key` 는 그 작업의 값으로 풀어 둡니다.
 - **데이터 탐색 페이지는 모든 표를 읽습니다.** 그 페이지를 "표 → 화면" 선에 넣으면 선이 30개 늘어 그림이 무너집니다. 결과 JSON 의 그 페이지에 `"explorer": true` 를 두고 `edges` 에서 뺍니다. `/db/tables`·`/db/table/:name` 주소도 표마다의 `routes` 에서 뺍니다(모든 표를 읽는 주소라 정보가 없음).
 - **다른 화면이 `/db/table/<이름>` 으로 특정 표를 읽는 경우**(팀 통계의 참조 표 4개)는 그 화면 소스 파일에 글자로 적힌 표 이름을 그 화면이 읽는 표로 봅니다.
+- **페이지가 싣는 `js/api.js` 의 글자는 세지 않습니다.** 그 안의 주소 틀이 모두 잡혀 페이지마다 쓰지 않는 주소가 붙습니다. `api.js` 는 페이지가 실제로 부르는 `API.<메서드>` 로만 셉니다(Task 2 구현 중 발견).
 - **외부를 넘기는 API**(실시간 순위·일정·퓨처스)는 손 파일 `live_route_files` 에 적고, 그 주소를 쓰는 화면에 `source:kbo_live → page:…` 선을 긋습니다.
 
 ## 파일 구조
@@ -713,6 +714,9 @@ def test_결과_모양():
     assert wrc["kind"] == "derived" and "play_by_play" in wrc["derived_from"]
     assert {"from": "job:daily", "to": "table:team_season_rank"} in d["edges"]
     assert {"from": "table:play_by_play", "to": "table:wrc_plus_comparison"} in d["edges"]
+    # api.js 를 싣기만 하고 부르지 않는 주소가 페이지에 붙지 않습니다.
+    stats = next(p for p in d["pages"] if p["path"] == "pages/player-stats.html")
+    assert "/db/tables" not in stats["routes"] and "/jobs/status" not in stats["routes"]
     explorer = next(p for p in d["pages"] if p["path"] == "pages/database-explorer.html")
     assert explorer["explorer"] is True
     assert not any(e["to"] == "page:pages/database-explorer.html" for e in d["edges"])
@@ -822,11 +826,16 @@ def build(root=ROOT):
 
     # 화면 → API 주소, 화면이 /db/table/<이름> 으로 읽는 표
     methods = lx.api_methods(_read(root, "dashboard_js/js/api.js"))
+    api_js = (root / "dashboard_js" / "js" / "api.js").resolve()
     pages, page_routes, page_db = [], {}, {}
     for p in _pages(root):
         html = p.read_text(encoding="utf-8")
+        # api.js 글자는 넣지 않습니다. 그 안의 주소 틀이 모두 잡혀, api.js 를
+        # 싣는 페이지마다 쓰지도 않는 주소 20여 개가 붙습니다. api.js 는
+        # 페이지가 실제로 부르는 API.<메서드> 로만 셉니다.
         text = html + "".join(f.read_text(encoding="utf-8")
-                              for f in lx.page_sources(p.resolve(), html))
+                              for f in lx.page_sources(p.resolve(), html)
+                              if f.resolve() != api_js)
         rel = p.relative_to(root / "dashboard_js").as_posix()
         routes = lx.source_routes(text, patterns, methods)
         page_routes[rel] = routes
