@@ -42,7 +42,15 @@ class Statement {
 
   async all() {
     const conn = await this.db.connection();
-    const [rows] = await conn.query(this.sql, this.params);
+    let rows;
+    try {
+      [rows] = await conn.query(this.sql, this.params);
+    } catch (err) {
+      // 연결이 끊긴 오류(mysql2 가 fatal 로 표시)만 남깁니다. 표가 없는
+      // 것(ER_NO_SUCH_TABLE) 같은 보통 오류는 라우트가 물러설 길로 씁니다.
+      if (err && err.fatal === true) this.db.fail(err);
+      throw err;
+    }
     return { results: rows.map((r) => this.db.shape(r)) };
   }
 
@@ -57,10 +65,30 @@ export class MysqlDb {
     this.open = open;
     this.textColumns = textColumns;
     this.conn = null;
+    // 연결 수준의 첫 실패입니다(없으면 null). 라우트 몇 곳은 질의 오류를
+    // 삼키고 0·빈칸으로 물러섭니다. 표가 없을 때를 위한 것인데, MySQL 이
+    // 아예 안 닿을 때도 그렇게 되면 200 + 0 이 한 시간 캐시됩니다.
+    // index.js 가 이 값을 보고 응답을 503 으로 바꿉니다(backend.js
+    // finalizeResponse).
+    this.failed = null;
+  }
+
+  /** 연결 수준의 실패를 남깁니다. 처음 것만 둡니다. */
+  fail(err) {
+    if (!this.failed) this.failed = err || new Error('MySQL 연결 실패');
   }
 
   connection() {
-    if (!this.conn) this.conn = this.open();
+    if (!this.conn) {
+      // open 이 바로 던져도(설정 누락 등) 거절된 약속으로 바꿔 같은 길로
+      // 처리합니다.
+      this.conn = Promise.resolve()
+        .then(() => this.open())
+        .catch((err) => {
+          this.fail(err);
+          throw err;
+        });
+    }
     return this.conn;
   }
 

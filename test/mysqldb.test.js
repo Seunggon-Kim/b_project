@@ -58,3 +58,36 @@ test('close 는 연결을 연 적이 없으면 아무것도 하지 않습니다'
   const db = new MysqlDb(async () => { throw new Error('열면 안 됩니다'); });
   await db.close();
 });
+
+test('연결을 못 열면 failed 에 그 오류를 남깁니다', async () => {
+  const boom = new Error('connect ECONNREFUSED');
+  const db = new MysqlDb(async () => { throw boom; });
+  assert.equal(db.failed, null);
+  await assert.rejects(db.prepare('SELECT 1').all(), /ECONNREFUSED/);
+  assert.equal(db.failed, boom);
+  // 두 번째 질의도 같은 실패이고, 처음 오류를 그대로 둡니다.
+  await assert.rejects(db.prepare('SELECT 2').first());
+  assert.equal(db.failed, boom);
+});
+
+test('open 이 바로 던져도 failed 에 남깁니다', async () => {
+  const db = new MysqlDb(() => { throw new TypeError('hd is undefined'); });
+  await assert.rejects(db.prepare('SELECT 1').all(), TypeError);
+  assert.ok(db.failed instanceof TypeError);
+});
+
+test('연결 수준(fatal) 질의 오류는 failed 에 남깁니다', async () => {
+  const err = Object.assign(new Error('Connection lost'), { fatal: true, code: 'PROTOCOL_CONNECTION_LOST' });
+  const conn = { async query() { throw err; }, async end() {} };
+  const db = new MysqlDb(async () => conn);
+  await assert.rejects(db.prepare('SELECT 1').all(), /Connection lost/);
+  assert.equal(db.failed, err);
+});
+
+test('표가 없는 것 같은 보통 오류는 failed 에 남기지 않습니다', async () => {
+  const err = Object.assign(new Error("Table 'x' doesn't exist"), { code: 'ER_NO_SUCH_TABLE', fatal: false });
+  const conn = { async query() { throw err; }, async end() {} };
+  const db = new MysqlDb(async () => conn);
+  await assert.rejects(db.prepare('SELECT 1 FROM x').all(), /doesn't exist/);
+  assert.equal(db.failed, null);
+});

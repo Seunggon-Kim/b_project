@@ -1,7 +1,7 @@
 import { createRouter } from './lib/router.js';
 import { json, serverError } from './lib/respond.js';
 import { withCache } from './lib/cachepolicy.js';
-import { withBackend, closeAfterBody } from './lib/backend.js';
+import { withBackend, closeAfterBody, finalizeResponse } from './lib/backend.js';
 import { standings } from './routes/standings.js';
 import { schedule } from './routes/schedule.js';
 import { futures } from './routes/futures.js';
@@ -103,7 +103,10 @@ export default {
   async fetch(request, env, ctx) {
     const backend = withBackend(env);
     try {
-      const res = await router.handle(request, backend.env, ctx);
+      // MySQL 연결이 끊긴 적이 있으면 라우트 응답 대신 503·no-store 입니다
+      // (lib/backend.js finalizeResponse). D1 이면 응답을 그대로 둡니다.
+      const res = finalizeResponse(
+        await router.handle(request, backend.env, ctx), backend);
       // Cache-Control 을 여기서 한 번에 붙입니다. 라우트마다 붙이면
       // 빠뜨리기 쉽고, 빠뜨린 곳은 캐시가 안 걸려 DB 를 그대로 읽습니다.
       // 정책은 lib/cachepolicy.js 에 있습니다.
@@ -112,7 +115,8 @@ export default {
       return backend.done ? closeAfterBody(cached, backend.done, ctx) : cached;
     } catch (err) {
       if (backend.done) ctx.waitUntil(backend.done());
-      return serverError(err);
+      // 던진 원인이 MySQL 연결이면 500 대신 503·no-store 입니다.
+      return finalizeResponse(serverError(err), backend);
     }
   },
 };
