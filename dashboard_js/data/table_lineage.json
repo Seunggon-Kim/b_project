@@ -609,6 +609,11 @@
     {
      "name": "퓨처스 올 시즌 기록 갱신",
      "script": "data_collection/futures_records.py",
+     "status_key": "futures_records"
+    },
+    {
+     "name": "퓨처스 기록 결과 기록",
+     "script": "data_collection/record_job_run.py",
      "status_key": null
     },
     {
@@ -1444,13 +1449,15 @@
    "jobs": [
     "roster"
    ],
-   "note": "roster 워크플로가 올 시즌 퓨처스 기록을 다시 받습니다. 따로 실행 기록 키는 없습니다.",
+   "note": "roster 워크플로가 올 시즌 퓨처스 기록을 다시 받습니다.",
    "path": "data_collection/futures_records.py",
    "reads": [],
    "sources": [
     "kbo_futures"
    ],
-   "status_keys": {},
+   "status_keys": {
+    "roster": "futures_records"
+   },
    "writes": [
     "futures_season_stats"
    ]

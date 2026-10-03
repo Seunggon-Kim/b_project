@@ -143,3 +143,46 @@ def test_표를_쓰는_스크립트는_예약_워크플로에서_돕니다():
     steps = {s["script"] for w in WORKFLOWS for s in lx.parse_workflow(wf_text(w))["steps"]}
     idle = sorted(p for p, s in HAND["scripts"].items() if s.get("writes") and p not in steps)
     assert not idle, "어떤 예약 워크플로도 부르지 않는 쓰기 스크립트: %s" % idle
+
+
+def test_받아_오거나_계산하는_표는_실행_기록이_있습니다():
+    # 실행 기록이 없으면 화면의 상태 점이 늘 회색이라, 멈춰도 티가 나지 않습니다.
+    d = bl.build(ROOT)
+    by_path = {s["path"]: s for s in d["scripts"]}
+    ok = HAND.get("no_status_ok", {})
+    bad = []
+    for t in d["tables"]:
+        if t["kind"] not in ("collected", "derived") or t["name"] in ok:
+            continue
+        if not any(by_path[p]["status_keys"].get(w)
+                   for p in t["written_by"] for w in by_path[p]["jobs"]):
+            bad.append(t["name"])
+    assert not bad, (
+        "도는 작업에서 실행 기록 키(status_keys)를 남기는 스크립트가 없는 표: %s\n"
+        "워크플로에 record_job_run.py 단계를 더하거나 no_status_ok 에 이유를 적으십시오." % bad)
+    stale = sorted(set(ok) - {t["name"] for t in d["tables"] if t["kind"] in ("collected", "derived")})
+    assert not stale, "no_status_ok 에 받아 오거나 계산하는 표가 아닌 이름: %s" % stale
+
+
+def test_실행_기록_키가_그_워크플로의_단계와_맞습니다():
+    steps = {w: {s["script"] for s in lx.parse_workflow(wf_text(w))["steps"]} for w in WORKFLOWS}
+    keys = {w: lx.job_keys(wf_text(w)) for w in WORKFLOWS}
+    bad = []
+    for p, s in HAND["scripts"].items():
+        for w, k in s.get("status_keys", {}).items():
+            if w not in keys:
+                bad.append("%s: 없는 워크플로 %s" % (p, w))
+                continue
+            if k not in keys[w]:
+                bad.append("%s: %s.yml 이 남기지 않는 키 %s" % (p, w, k))
+            if p not in steps[w]:
+                bad.append("%s: %s.yml 이 부르지 않는 스크립트" % (p, w))
+    assert not bad, bad
+    used = {(w, k) for s in HAND["scripts"].values() for w, k in s.get("status_keys", {}).items()}
+    exempt = set(HAND.get("job_keys_without_tables", {}))
+    unused = sorted("%s.yml: %s" % (w, k) for w in WORKFLOWS for k in keys[w]
+                    if (w, k) not in used and k not in exempt)
+    assert not unused, (
+        "손 파일 어느 스크립트의 status_keys 에도 없는 실행 기록 키: %s\n"
+        "그 단계의 스크립트에 적거나, 표와 무관한 키면 job_keys_without_tables 에 이유를 적으십시오."
+        % unused)

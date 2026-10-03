@@ -151,7 +151,10 @@
         "futures_season_stats"
       ],
       "reads": [],
-      "note": "roster 워크플로가 올 시즌 퓨처스 기록을 다시 받습니다. 따로 실행 기록 키는 없습니다."
+      "status_keys": {
+        "roster": "futures_records"
+      },
+      "note": "roster 워크플로가 올 시즌 퓨처스 기록을 다시 받습니다."
     },
     "data_collection/player_info_scraper.py": {
       "sources": [
@@ -304,6 +307,8 @@
     "korean_series_champion": "한국시리즈 우승 기록입니다. data_collection/korean_series.py 에 적은 1982~2007 값을 한 번 넣었고, 정기 작업은 없습니다.",
     "game_team_stats": "경기별 팀 기록입니다. 코드에서 이 표에 쓰는 곳을 찾지 못했습니다. 예전에 한 번 적재한 뒤 갱신하는 작업이 없습니다."
   },
+  "no_status_ok": {},
+  "job_keys_without_tables": {},
   "live_route_files": [
     "src/routes/standings.js",
     "src/routes/schedule.js",

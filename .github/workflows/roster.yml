@@ -134,6 +134,14 @@ jobs:
         continue-on-error: true
         run: python data_collection/futures_records.py --season 2026
 
+      # futures_season_stats 의 실행 기록입니다. 계보 탭의 상태 점이 봅니다.
+      - name: 퓨처스 기록 결과 기록
+        if: always()
+        continue-on-error: true
+        run: |
+          python data_collection/record_job_run.py --job futures_records \
+            --status ${{ steps.futures.outcome == 'success' && 'ok' || (steps.futures.outcome == 'skipped' && 'skip' || 'fail') }}
+
       - name: 결과 기록
         if: always()
         continue-on-error: true
