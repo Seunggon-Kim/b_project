@@ -93,8 +93,113 @@
     return clean(o);
   }
 
+  /**
+   * 참조 표를 찾기 쉬운 모양으로 바꿉니다.
+   * refs = { weights, pf, stadium, rank } (각 /db/table 의 rows)
+   */
+  function indexRefs(refs) {
+    refs = refs || {};
+    const ix = { weights: {}, pf: {}, home: {}, pfOk: false };
+    for (const r of refs.weights || []) ix.weights[num(r.season)] = r;
+    for (const r of refs.pf || []) ix.pf[num(r.season) + '|' + r.stadium] = num(r.run_pf);
+    for (const r of refs.stadium || []) ix.home[r.player_team + '|' + num(r.season)] = r.stadium;
+    ix.pfOk = (refs.pf || []).length > 0 && (refs.stadium || []).length > 0;
+    return ix;
+  }
+
+  /**
+   * 반 구장 보정입니다. 선수 wRC+ 의 pf_half 와 같습니다.
+   *   (홈구장 run_pf + 1000) / 2000
+   * 2008 전은 파크팩터가 없어 1(보정 없음)입니다. 참조 표를 못 받았으면
+   * null 입니다. 홈구장이나 값이 없으면 선수 wRC+ 계산기처럼 중립(1000)
+   * 으로 봅니다(park_factors/build_wrc_plus.py).
+   */
+  function pfHalf(ix, team, season) {
+    if (season < 2008) return 1;
+    if (!ix || !ix.pfOk) return null;
+    const st = ix.home[team + '|' + season];
+    const run = st ? ix.pf[season + '|' + st] : 0;
+    return ((run > 0 ? run : 1000) + 1000) / 2000;
+  }
+
+  /**
+   * wOBA 입니다. 선수 wOBA 와 같은 식입니다(BB 는 고의4구 포함).
+   *   (wBB·BB + wHBP·HBP + w1B·1B + w2B·2B + w3B·3B + wHR·HR) / (AB + BB + SF + HBP)
+   */
+  function wobaOf(t, w) {
+    if (!w) return null;
+    const one = t.h - t.d2 - t.d3 - t.hr;
+    const den = t.ab + t.bb + t.sf + t.hbp;
+    if (!(den > 0)) return null;
+    const v = (num(w.fg_wBB) * t.bb + num(w.fg_wHBP) * t.hbp + num(w.fg_w1B) * one
+      + num(w.fg_w2B) * t.d2 + num(w.fg_w3B) * t.d3 + num(w.fg_wHR) * t.hr) / den;
+    return Number.isFinite(v) ? v : null;
+  }
+
+  /** 여러 합계 객체를 keys 만 더합니다. */
+  function sumObjects(list, keys) {
+    const s = {};
+    for (const k of keys) s[k] = 0;
+    for (const o of list) for (const k of keys) s[k] += num(o[k]);
+    return s;
+  }
+
+  /**
+   * 타격 표입니다. totals 는 sumBatting 결과(또는 기간별 합계)입니다.
+   * keys 는 합계 키 목록입니다(기간별은 응답에 있는 칸만).
+   */
+  function battingTable(totals, season, ix, keys) {
+    keys = keys || BAT_KEYS;
+    const teams = Object.values(totals || {});
+    const lg = sumObjects(teams, keys);
+    const lgR = battingRates(lg);
+    const w = (ix && ix.weights[season]) || null;
+    const lgWoba = wobaOf(lg, w);
+    const L = div(lg.r, lg.pa);
+    const scale = w ? num(w.wOBA_scale) : 0;
+
+    const rows = teams.map(function (t) {
+      const row = Object.assign({}, t, battingRates(t));
+      const pf = pfHalf(ix, t.team, season);
+      row.woba = wobaOf(t, w);
+      row.wraa = null;
+      row.wrc = null;
+      row.wrcp = null;
+      if (row.woba !== null && lgWoba !== null && scale > 0 && t.pa > 0) {
+        row.wraa = (row.woba - lgWoba) / scale * t.pa;
+        if (L !== null) {
+          row.wrc = (row.wraa / t.pa + L) * t.pa;
+          // 선수 wRC+ 와 같은 식: K + (2 - PF) * 100, K = (wRAA/PA) / L * 100
+          if (pf !== null) row.wrcp = (row.wraa / t.pa) / L * 100 + (2 - pf) * 100;
+        }
+      }
+      row.opsp = (row.obp !== null && row.slg !== null && lgR.obp > 0 && lgR.slg > 0 && pf)
+        ? 100 * (row.obp / lgR.obp + row.slg / lgR.slg - 1) / pf
+        : null;
+      return row;
+    });
+
+    const n = teams.length || 1;
+    const league = { team: '리그 평균', isLeague: true };
+    for (const k of keys) league[k] = lg[k] / n;
+    Object.assign(league, lgR);
+    league.single = lgR.single === null ? null : lgR.single / n;
+    league.woba = lgWoba;
+    league.wraa = lgWoba === null ? null : 0;
+    league.wrc = lgWoba !== null && L !== null ? L * lg.pa / n : null;
+    league.wrcp = rows.some(r => r.wrcp !== null) ? 100 : null;
+    league.opsp = rows.some(r => r.opsp !== null) ? 100 : null;
+
+    return {
+      rows: rows,
+      league: league,
+      ctx: { lgWoba: lgWoba, L: L, scale: scale, lgObp: lgR.obp, lgSlg: lgR.slg, hasWeights: !!w },
+    };
+  }
+
   const api = {
     num, div, clean, ipOuts, BAT_SUM, BAT_KEYS, sumBy, sumBatting, battingRates,
+    indexRefs, pfHalf, wobaOf, sumObjects, battingTable,
   };
   TS.metrics = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
