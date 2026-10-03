@@ -12,7 +12,11 @@ gameID·game_date·home_alias·away_alias·score·stadium 이 모두 있으므�
   - home/away_team_id: PBP alias(크롤러가 현재 팀명으로 채움)를 우선, 옛 코드는 프랜차이즈
     매핑으로 보정. 미해결은 LOG 후 raw alias 적재(검토용).
   - game_type: gameID 접두어로 판정한다(game_type.py). 날짜 컷오프는 쓰지 않는다.
-  - score: gameID 별 score_home/score_away 의 최댓값(최종 누적).
+  - score: gameID 별로 (플레이 전 점수 + 그 플레이에서 공격 팀이 낸 점수)의
+    최댓값. score_home/score_away 는 플레이 **전** 점수라 최댓값만 쓰면
+    끝내기처럼 마지막 플레이의 득점이 빠집니다(2015~2025 정규시즌마다
+    50~80경기가 무승부로 남았음, 2026-10-03). 숫자로 바꿔 셉니다. daily 의
+    작은 DB 는 TEXT 열이라 글자 최댓값('9' > '15')이 됩니다.
 
 실행: python data_collection/games_from_pbp.py [db_path] [--dry-run]
 """
@@ -62,8 +66,14 @@ def derive_games(con, skip_existing=True):
                MAX(home_alias) AS halias,
                MAX(away_alias) AS aalias,
                MAX(stadium)    AS stadium,
-               MAX(score_home) AS hs,
-               MAX(score_away) AS as_
+               MAX(CAST(score_home AS INTEGER)
+                   + CASE WHEN inning_topbot = '말'
+                          THEN COALESCE(CAST(runs_scored AS INTEGER), 0)
+                          ELSE 0 END) AS hs,
+               MAX(CAST(score_away AS INTEGER)
+                   + CASE WHEN inning_topbot = '초'
+                          THEN COALESCE(CAST(runs_scored AS INTEGER), 0)
+                          ELSE 0 END) AS as_
         FROM play_by_play
         WHERE gameID IS NOT NULL AND gameID <> ''
         GROUP BY gameID

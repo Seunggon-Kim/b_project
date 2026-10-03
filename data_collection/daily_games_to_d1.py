@@ -30,7 +30,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # derive_games 가 읽는 컬럼입니다.
 NEEDED = ["gameID", "game_date", "home_alias", "away_alias", "stadium",
-          "score_home", "score_away"]
+          "inning_topbot", "score_home", "score_away", "runs_scored"]
 
 GAME_COLS = ["game_id", "game_date", "season", "game_type",
              "home_team_id", "away_team_id", "home_score", "away_score",
