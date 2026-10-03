@@ -157,3 +157,32 @@ def test_page_sources_ignores_query_string(tmp_path):
     html = '<script src="../js/api.js?v=1.2"></script>'
     page = tmp_path / "pages" / "player-stats.html"
     assert [p.resolve() for p in lx.page_sources(page, html)] == [(tmp_path / "js" / "api.js").resolve()]
+
+
+def test_source_routes_literal_paths():
+    pats = ["/wrc/seasons", "/wrc/by-stadium", "/players/:id"]
+    page = """
+      const a = await fetchJSON('/wrc/seasons');
+      const b = await fetchJSON(`/wrc/by-stadium?season=${s}`);
+      const c = await fetchJSON("/players/${id}");
+    """
+    assert lx.source_routes(page, pats, {}) == {"/wrc/seasons", "/wrc/by-stadium", "/players/:id"}
+    neg = """const l = '/pages/team-stats.html'; const i = '/assets/x.png'; const r = '/';"""
+    assert lx.source_routes(neg, pats, {}) == set()
+
+
+def test_source_routes_extra_shapes():
+    pats = ["/teams", "/schedule", "/schedule/futures", "/logo/:code", "/db/table/:name/csv"]
+    api = (
+        "static async getTeams(s) { fetch(`${API_BASE_URL}/teams${q}`); }\n"
+        "static dbCsvUrl(name) { return `${API_BASE_URL}/db/table/${encodeURIComponent(name)}/csv`; }\n"
+    )
+    methods = lx.api_methods(api)
+    assert methods["getTeams"] == "/teams${q}"
+    assert "dbCsvUrl" in methods
+    page = """
+      const m = { main: { ep: 'schedule' }, futures: { ep: 'schedule/futures' } };
+      const img = `<img src="${API_BASE_URL}/logo/${code}" alt="">`;
+      API.getTeams(2025); API.dbCsvUrl(t);
+    """
+    assert lx.source_routes(page, pats, methods) == set(pats)

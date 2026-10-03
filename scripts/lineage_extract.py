@@ -81,13 +81,16 @@ def schema_tables(schema_sql):
 IMPORT = re.compile(r"import\s*\{([^}]*)\}\s*from\s*'\./routes/([\w-]+)\.js'", re.S)
 ADD = re.compile(r"router\.add\(\s*'GET'\s*,\s*'([^']+)'\s*,\s*([A-Za-z_]\w*)?")
 SQL_TABLE = re.compile(r"\b(?:FROM|JOIN)\s+[`\"\\]*([A-Za-z_]\w*)")
-TEMPLATE = re.compile(r"`\$\{[A-Za-z_][\w.]*\}(/[^`?'\"\s]*)")
+TEMPLATE = re.compile(r"\$\{[A-Za-z_][\w.]*\}(/[^`?'\"\s]*)")
 API_CALL = re.compile(r"\bAPI\.([A-Za-z_]\w*)\(")
-METHOD = re.compile(r"static\s+async\s+([A-Za-z_]\w*)\s*\(")
+METHOD = re.compile(r"static\s+(?:async\s+)?([A-Za-z_]\w*)\s*\(")
 SCRIPT_SRC = re.compile(r"<script[^>]+src=\"([^\"]+)\"")
 QUOTED = re.compile(r"['\"]([a-z][a-z0-9_]*)['\"]")
 TITLE = re.compile(r"<title>\s*(.*?)\s*</title>", re.S)
+# 화면의 `ep: 'schedule'` 같은 속성 값(나중에 `${API_BASE_URL}/${ep}` 로 붙는 주소)
+EP = re.compile(r"\bep:\s*'([a-z][a-z0-9_/-]*)'")
 VAR = re.compile(r"\$\{[^}]*\}")
+LITERAL = re.compile(r"[`'\"](/[^`'\"?#\s]+)")
 
 
 def route_files(index_js):
@@ -117,7 +120,11 @@ def sql_tables(js_text, known):
 
 def match_route(template_path, patterns):
     """`/players/${id}/arsenal` 같은 화면 쪽 주소 틀을 라우트 패턴에 맞춥니다."""
-    path = VAR.sub(":v", template_path).rstrip("/")
+    # 첫 번째로 맞는 패턴이 이깁니다. src/index.js 가 /players/search 같은 글자 경로를
+    # /players/:id 같은 변수 경로보다 먼저 등록한다는 점에 기댑니다.
+    # `/teams${q}` 처럼 글자에 바로 붙은 끝 변수(쿼리 문자열)는 버립니다.
+    path = re.sub(r"(?<=[^/])"+VAR.pattern+"$", "", template_path)
+    path = VAR.sub(":v", path).rstrip("/")
     segs = path.split("/")
     for p in patterns:
         ps = p.rstrip("/").split("/")
@@ -158,6 +165,16 @@ def source_routes(text, patterns, methods):
     found = set()
     for tpl in TEMPLATE.findall(text):
         r = match_route(tpl, patterns)
+        if r:
+            found.add(r)
+    # 따옴표·백틱으로 시작하는 글자 경로('/wrc/seasons', `/wrc/by-stadium?…`).
+    # 라우트에 맞는 것만 남기므로 '/pages/x'·'/assets/x.png' 같은 링크는 걸러집니다.
+    for lit in LITERAL.findall(text):
+        r = match_route(lit, patterns)
+        if r:
+            found.add(r)
+    for ep in EP.findall(text):
+        r = match_route("/" + ep, patterns)
         if r:
             found.add(r)
     for name in API_CALL.findall(text):
