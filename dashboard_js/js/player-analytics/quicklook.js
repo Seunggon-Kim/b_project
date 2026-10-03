@@ -124,6 +124,52 @@
     return { head: ['시즌', '올해'], rows: rows, career: false };
   }
 
+  // 프로필 카드 아래 '시즌 타일' 지표입니다. [라벨, 합계 키, 표시 형식]
+  const TILES = {
+    pit: [['ERA', 'era', 'f2'], ['IP', 'outs', 'ip'], ['K%', 'kpct', 'pct'], ['WHIP', 'whip', 'f2']],
+    bat: [['AVG', 'avg', 'avg3'], ['OPS', 'ops', 'avg3'], ['HR', 'hr', 'int'], ['RBI', 'rbi', 'int']],
+  };
+  // 퓨처스 응답에는 OPS 가 없어 타자는 OBP·SLG 를 씁니다.
+  const FUT_TILES = { pitcher: ['ERA', 'IP', 'SO', 'G'], batter: ['AVG', 'OBP', 'SLG', 'HR'] };
+
+  /**
+   * 기록이 있는 가장 최근 1군 시즌의 핵심 숫자 넷입니다. 기록이 없으면 null.
+   * 비시즌·은퇴 선수도 빈 타일이 되지 않도록 '올해' 가 아니라 마지막 기록 시즌을 씁니다.
+   */
+  function seasonTiles(player) {
+    const kind = kindOf(player);
+    const all = seasonRows(player, kind);
+    const ys = all.map(function (s) { return Number(s.season); }).filter(Number.isFinite);
+    if (!ys.length) return null;
+    const y = Math.max.apply(null, ys);
+    const t = total(all.filter(function (s) { return Number(s.season) === y; }), kind);
+    return {
+      title: y + ' 시즌',
+      items: TILES[kind].map(function (d) { return { label: d[0], value: cell(t[d[1]], d[2]) }; }),
+    };
+  }
+
+  /** 퓨처스 최신 시즌(응답 맨 앞)의 핵심 숫자 넷입니다. 기록이 없으면 null. */
+  function futuresTiles(seasons, kind) {
+    const s = (seasons || [])[0];
+    if (!s) return null;
+    return {
+      title: s.season + ' 퓨처스',
+      items: (FUT_TILES[kind] || FUT_TILES.batter).map(function (k) { return { label: k, value: text(s[k]) }; }),
+    };
+  }
+
+  /** 타일 묶음 HTML 입니다. null 이면 빈 글자입니다. */
+  function tilesHtml(t) {
+    if (!t) return '';
+    return '<div class="pa-tiles"><div class="pa-tiles-title">' + esc(t.title) + '</div><div class="pa-tiles-grid">'
+      + t.items.map(function (i) {
+        return '<div class="pa-tile"><div class="pa-tile-label">' + esc(i.label)
+          + '</div><div class="pa-tile-value">' + esc(i.value) + '</div></div>';
+      }).join('')
+      + '</div></div>';
+  }
+
   function esc(s) {
     return String(s).replace(/[&<>"]/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
@@ -163,7 +209,8 @@
     return /^\d{8}$/.test(s) ? s.slice(0, 4) + '.' + s.slice(4, 6) + '.' + s.slice(6, 8) : null;
   }
 
-  const api = { ROWS, FUT, kindOf, pickSeasons, total, build, buildFutures, summary, tableHtml, ageParts, dobText };
+  const api = { ROWS, FUT, kindOf, pickSeasons, total, build, buildFutures, summary, tableHtml, ageParts, dobText,
+    TILES, FUT_TILES, seasonTiles, futuresTiles, tilesHtml };
   PA.quicklook = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

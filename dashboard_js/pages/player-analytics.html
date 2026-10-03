@@ -634,6 +634,8 @@
                 + '</span></div>';
             html += model ? Q.tableHtml(model) : '<p class="text-muted mt-2">퓨처스 기록이 없습니다.</p>';
             statsDiv.innerHTML = html;
+            // 프로필 아래 최신 퓨처스 시즌 타일입니다. 연도별 기록이 없으면 붙이지 않습니다.
+            cardDiv.insertAdjacentHTML('beforeend', Q.tilesHtml(Q.futuresTiles(seasons, f.kind)));
 
             // 최근 경기는 전체 폭 카드로 뺍니다. 시즌별 성적 칸에 같이
             // 넣으면 표가 길어지면서 옆의 상세 프로필까지 늘어납니다.
@@ -720,6 +722,8 @@
                 const isPitcher = player.position === '투수';
                 const Q = window.PlayerAnalytics.quicklook;
                 statsDiv.innerHTML = Q.tableHtml(Q.build(player, new Date().getFullYear()));
+                // 프로필 아래 최근 시즌 타일입니다. 두 카드 높이를 맞출 때 남는 자리를 채웁니다.
+                cardDiv.insertAdjacentHTML('beforeend', Q.tilesHtml(Q.seasonTiles(player)));
 
                 // Detailed Stats Section (Pitching)
                 const detailedSection = document.getElementById('detailed-stats-section');
