@@ -98,6 +98,10 @@
   },
   {
    "from": "source:kbo_live",
+   "to": "page:pages/player-stats.html"
+  },
+  {
+   "from": "source:kbo_live",
    "to": "page:pages/team-stats.html"
   },
   {
@@ -127,10 +131,6 @@
   {
    "from": "source:naver_relay",
    "to": "job:daily"
-  },
-  {
-   "from": "table:franchises",
-   "to": "page:pages/player-stats.html"
   },
   {
    "from": "table:franchises",
@@ -254,6 +254,10 @@
   },
   {
    "from": "table:kbo_woba_weights_by_season",
+   "to": "page:pages/player-stats.html"
+  },
+  {
+   "from": "table:kbo_woba_weights_by_season",
    "to": "page:pages/team-stats.html"
   },
   {
@@ -334,6 +338,10 @@
   },
   {
    "from": "table:self_park_factor",
+   "to": "page:pages/player-stats.html"
+  },
+  {
+   "from": "table:self_park_factor",
    "to": "page:pages/team-stats.html"
   },
   {
@@ -362,6 +370,10 @@
   },
   {
    "from": "table:team_season_rank",
+   "to": "page:pages/player-stats.html"
+  },
+  {
+   "from": "table:team_season_rank",
    "to": "page:pages/team-record.html"
   },
   {
@@ -370,11 +382,11 @@
   },
   {
    "from": "table:team_seasons",
-   "to": "page:pages/player-stats.html"
+   "to": "page:pages/team-record.html"
   },
   {
-   "from": "table:team_seasons",
-   "to": "page:pages/team-record.html"
+   "from": "table:team_stadium_by_season",
+   "to": "page:pages/player-stats.html"
   },
   {
    "from": "table:team_stadium_by_season",
@@ -752,11 +764,12 @@
    "explorer": false,
    "path": "pages/player-stats.html",
    "routes": [
+    "/db/table/:name",
+    "/standings",
     "/stats/batters",
     "/stats/pitchers",
     "/stats/regulation",
-    "/stats/seasons",
-    "/teams"
+    "/stats/seasons"
    ],
    "title": "선수 통계 - Bstats"
   },
@@ -777,7 +790,6 @@
     "/standings",
     "/stats/batters",
     "/stats/pitchers",
-    "/stats/regulation",
     "/stats/seasons",
     "/stats/team_range"
    ],
@@ -808,6 +820,7 @@
    "pages": [
     "pages/database-explorer.html",
     "pages/factor-stats.html",
+    "pages/player-stats.html",
     "pages/team-stats.html"
    ],
    "path": "/db/table/:name",
@@ -1142,6 +1155,7 @@
    "live": true,
    "pages": [
     "index.html",
+    "pages/player-stats.html",
     "pages/team-stats.html"
    ],
    "path": "/standings",
@@ -1184,8 +1198,7 @@
    "file": "src/routes/stats.js",
    "live": false,
    "pages": [
-    "pages/player-stats.html",
-    "pages/team-stats.html"
+    "pages/player-stats.html"
    ],
    "path": "/stats/regulation",
    "reads_all_tables": false,
@@ -1228,9 +1241,7 @@
   {
    "file": "src/routes/teams.js",
    "live": false,
-   "pages": [
-    "pages/player-stats.html"
-   ],
+   "pages": [],
    "path": "/teams",
    "reads_all_tables": false,
    "tables": [
@@ -1803,7 +1814,6 @@
    "manual_note": "구단 계보표입니다. migration/build_franchises.py 가 KBO 기록실 팀 드롭다운을 읽어 로컬 DB 에 한 번 만들었고, 정기 작업은 없습니다.",
    "name": "franchises",
    "pages": [
-    "pages/player-stats.html",
     "pages/team-record.html"
    ],
    "routes": [
@@ -2046,6 +2056,7 @@
    "manual_note": null,
    "name": "kbo_woba_weights_by_season",
    "pages": [
+    "pages/player-stats.html",
     "pages/team-stats.html"
    ],
    "routes": [],
@@ -2199,6 +2210,7 @@
    "name": "self_park_factor",
    "pages": [
     "pages/factor-stats.html",
+    "pages/player-stats.html",
     "pages/team-stats.html"
    ],
    "routes": [],
@@ -2272,6 +2284,7 @@
    "manual_note": null,
    "name": "team_season_rank",
    "pages": [
+    "pages/player-stats.html",
     "pages/team-record.html",
     "pages/team-stats.html"
    ],
@@ -2290,7 +2303,6 @@
    "manual_note": "시즌별 팀 표기명입니다. franchises 와 같이 migration/build_franchises.py 로 한 번 만들었고, 정기 작업은 없습니다.",
    "name": "team_seasons",
    "pages": [
-    "pages/player-stats.html",
     "pages/team-record.html"
    ],
    "routes": [
@@ -2307,6 +2319,7 @@
    "manual_note": "시즌별 홈구장입니다. 2026-06-05 백업 덤프에서 한 번 복원했습니다. park_factors/build_wrc_plus.py 가 올 시즌 행을 로컬에서 채우지만 D1·MySQL 에는 올리지 않습니다.",
    "name": "team_stadium_by_season",
    "pages": [
+    "pages/player-stats.html",
     "pages/team-record.html",
     "pages/team-stats.html"
    ],
