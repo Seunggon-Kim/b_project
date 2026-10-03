@@ -1,0 +1,114 @@
+# 응답 대조용 URL 목록입니다(api_compare.mjs). 한 줄에 경로 하나, # 줄은 주석입니다.
+# 제외: /standings /schedule* /futures*(외부 사이트를 읽어 시각마다 바뀜), /jobs/status(매번 바뀜), POST /admin/*
+# 선수·팀 ID 는 공개 데이터(kbo_official_*_stats, teams, franchises)에서 골랐습니다.
+
+# 루트·기본
+/
+
+# 팀·팀 기록실(franchise_id)
+/teams
+/teams?season=2008
+/teams?season=2012
+/teams?season=2019
+/teams?season=2025
+/teams?season=2026
+/teams/HT
+/teams/LG
+/teams/OB
+/teams/WO
+/teams/OB?name=두산
+
+# 리더·대시보드·시즌·규정
+/leaders
+/leaders?season=2008
+/leaders?season=2015
+/leaders?season=2025
+/leaders?season=2026
+/dashboard/stats
+/stats/seasons
+/stats/regulation
+
+# 타자·투수 시즌 기록
+/stats/batters?season=2008&limit=50&min_pa=100
+/stats/pitchers?season=2008&limit=50&min_ip=30
+/stats/batters?season=2012&limit=50&min_pa=100
+/stats/pitchers?season=2012&limit=50&min_ip=30
+/stats/batters?season=2019&limit=50&min_pa=100
+/stats/pitchers?season=2019&limit=50&min_ip=30
+/stats/batters?season=2025&limit=50&min_pa=100
+/stats/pitchers?season=2025&limit=50&min_ip=30
+/stats/batters?season=2026&limit=50&min_pa=100
+/stats/pitchers?season=2026&limit=50&min_ip=30
+/stats/batters?season=2025&limit=30&team_ids=KIA,LG
+/stats/pitchers?season=2019&limit=30&team_ids=두산,키움
+/stats/team_range?start=2025-04-01&end=2025-04-30
+/stats/team_range?start=20190501&end=20190531
+/stats/team_range?start=2012-04-07&end=2012-05-07
+
+# 선수 검색·상세·구종·사용률(타자 B / 투수 P)
+/players/search?q=김현수
+/players/search?q=이정후
+/players/73153
+/players/74163
+/players/69209
+/players/65357
+/players/77147
+/players/77829
+/players/79430
+/players/65543
+/players/53375
+/players/55730
+/players/79430/arsenal?season=2012
+/players/79430/usage?season=2012
+/players/65543/arsenal?season=2019
+/players/65543/usage?season=2019
+/players/53375/arsenal?season=2025
+/players/53375/usage?season=2025
+/players/55730/arsenal?season=2026
+/players/55730/usage?season=2026
+/players/77829/arsenal?season=2010
+/players/77829/usage?season=2010
+/players/99999999
+
+# 경기·명단·이동
+/games?season=2008&limit=30
+/games?season=2019&limit=30
+/games?season=2025&limit=30
+/games?season=2026&limit=30
+/roster
+/roster?team=KIA
+/roster?league=퓨처스
+/roster/moves
+/roster/moves?days=30&limit=100
+/logo/HT
+
+# wRC+
+/wrc/seasons
+/wrc/leaderboard?season=2008&n=30
+/wrc/leaderboard?season=2019&n=30
+/wrc/leaderboard?season=2025&n=30
+/wrc/leaderboard?season=2026&n=30
+/wrc/by-stadium?season=2025
+/wrc/by-stadium?season=2012
+/wrc/top-changes?season=2025&direction=up&n=10
+/wrc/top-changes?season=2019&direction=down&n=10
+/wrc/batter-search?q=김&season=2025
+/wrc/batter-search?q=이&season=2012
+/wrc/batter/74163
+/wrc/batter/69209
+/wrc/batter/65357
+/wrc/distribution?season=2025
+/wrc/distribution?season=2015
+
+# DB 탐색기(play_by_play 는 샤드 네 개라 큰 offset 도 봅니다)
+/db/tables
+/db/table/players?limit=50&offset=0
+/db/table/games?limit=50&offset=0
+/db/table/team_seasons?limit=50&offset=0
+/db/table/wrc_plus_comparison?limit=50&offset=0
+/db/table/players?limit=50&offset=1000
+/db/table/play_by_play?limit=50&offset=0
+/db/table/play_by_play?limit=50&offset=2000000
+/db/table/teams/csv?limit=100
+/db/table/franchises/csv?limit=100
+/db/table/no_such_table
