@@ -311,6 +311,7 @@
   "job_keys_without_tables": {},
   "unused_routes": {
     "/": "API 가 살아 있는지 알려 주는 인라인 응답입니다. 화면은 부르지 않습니다.",
+    "/teams": "선수 통계 개편(2026-10-04) 뒤로 어느 화면도 API.getTeams 를 부르지 않습니다. 다시 쓰면 이 줄을 지웁니다.",
     "/wrc/batter-search": "옛 FastAPI(api/main.py)에서 옮겨 온 주소입니다. 지금 어느 화면도 부르지 않습니다.",
     "/wrc/batter/:id": "옛 FastAPI(api/main.py)에서 옮겨 온 주소입니다. 지금 어느 화면도 부르지 않습니다."
   },
