@@ -28,8 +28,8 @@ export async function tableNames(env) {
   }
   const { results } = await env.DB.prepare(
     "SELECT name FROM sqlite_master WHERE type='table' "
-    + "AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '\_cf\_%' ESCAPE '\' "
-    + "AND name NOT LIKE 'meta\_%' ESCAPE '\' "
+    + "AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\' "
+    + "AND name NOT LIKE 'meta\\_%' ESCAPE '\\' "
     + 'ORDER BY name',
   ).all();
   return results.map((r) => r.name);

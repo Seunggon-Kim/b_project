@@ -80,6 +80,7 @@ export async function countsOf(db, tables) {
  * 빈칸이 낫습니다.**
  */
 export async function shardedCountOf(env, shards, table) {
+  // MySQL 은 play_by_play 가 한 표라 shards 를 쓰지 않습니다(무시).
   if (isMysql(env)) return countOf(env.DB, table);
   const dbs = shards.map((s) => env[s.binding]).filter(Boolean);
   if (dbs.length !== shards.length) return null;

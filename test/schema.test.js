@@ -69,3 +69,21 @@ test('MySQL 타입 이름을 SQLite 식으로 바꿉니다', () => {
   assert.equal(sqliteTypeOf('datetime'), 'TEXT');
   assert.equal(sqliteTypeOf('mediumblob'), 'BLOB');
 });
+
+test('D1 표 목록 SQL 은 ESCAPE 한 글자 역슬래시를 그대로 보냅니다', async () => {
+  const db = fakeDb([['sqlite_master', [{ name: 'games' }, { name: 'players' }]]]);
+  const names = await tableNames({ DB: db });
+  assert.deepEqual(names, ['games', 'players']);
+  const sql = db.seen[0][0];
+  assert.ok(sql.includes("NOT LIKE '\\_cf\\_%' ESCAPE '\\'"));
+  assert.ok(sql.includes("NOT LIKE 'meta\\_%' ESCAPE '\\'"));
+  assert.ok(!sql.includes("ESCAPE ''"));
+});
+
+test('D1 표 존재 확인은 sqlite_master 에 이름을 묶어 묻습니다', async () => {
+  const yes = fakeDb([['sqlite_master', [{ x: 1 }]]]);
+  assert.equal(await tableExists({ DB: yes }, 'games'), true);
+  assert.match(yes.seen[0][0], /sqlite_master/);
+  assert.deepEqual(yes.seen[0][1], ['games']);
+  assert.equal(await tableExists({ DB: fakeDb([]) }, 'nope'), false);
+});
