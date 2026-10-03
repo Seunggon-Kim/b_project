@@ -85,19 +85,17 @@ def build(root=ROOT):
             live_routes.add(path)
 
     # 화면 → API 주소, 화면이 /db/table/<이름> 으로 읽는 표
-    methods = lx.api_methods(_read(root, "dashboard_js/js/api.js"))
-    api_js = (root / "dashboard_js" / "js" / "api.js").resolve()
+    # 여러 페이지가 싣는 JS(와 늘 js/api.js)는 라이브러리입니다. 그 글자를 통째로
+    # 넣으면 싣는 페이지마다 쓰지도 않는 주소가 붙습니다. 페이지가 부르는 멤버
+    # (API.getGames, TS.data.loadRefs …)의 글자만 셉니다(lx.page_texts).
+    page_list = _pages(root)
+    texts = lx.page_texts(page_list, always={root / "dashboard_js" / "js" / "api.js"})
     pages, page_routes, page_db = [], {}, {}
-    for p in _pages(root):
+    for p in page_list:
         html = p.read_text(encoding="utf-8")
-        # api.js 글자는 넣지 않습니다. 그 안의 주소 틀이 모두 잡혀, api.js 를
-        # 싣는 페이지마다 쓰지도 않는 주소 20여 개가 붙습니다. api.js 는
-        # 페이지가 실제로 부르는 API.<메서드> 로만 셉니다.
-        text = html + "".join(f.read_text(encoding="utf-8")
-                              for f in lx.page_sources(p.resolve(), html)
-                              if f.resolve() != api_js)
+        text = texts[p]
         rel = p.relative_to(root / "dashboard_js").as_posix()
-        routes = lx.source_routes(text, patterns, methods)
+        routes = lx.source_routes(text, patterns)
         page_routes[rel] = routes
         if "/db/table/:name" in routes and rel != EXPLORER_PAGE:
             page_db[rel] = lx.quoted_tables(text, visible)

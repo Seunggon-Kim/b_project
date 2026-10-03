@@ -262,3 +262,122 @@ def test_parse_workflow_step_name_resets_per_item():
         {"name": None, "script": "d.py"},
         {"name": None, "script": "e.py"},
     ]
+
+
+# 두 페이지가 같이 싣는 라이브러리입니다(js/stats/data.js 와 같은 꼴). 주석·정규식의
+# 따옴표, 안쪽 화살표 함수, 내보내기 객체가 계보를 흐리지 않아야 합니다.
+LIB_DATA = """
+(function (root) {
+  'use strict';
+  const TS = root.TeamStats = root.TeamStats || {};
+  function clean(s) { return String(s).replace(/["'{]/g, ''); }  // it's a regex
+  async function getJson(url, listKey) { const res = await fetch(url); return res.json(); }
+  const REF_TABLES = {
+    weights: 'kbo_woba_weights_by_season',
+    pf: 'self_park_factor',
+  };
+  async function loadRefs(base, opts) {
+    const out = {};
+    await Promise.all(Object.keys(REF_TABLES).map(async function (k) {
+      const name = REF_TABLES[k];
+      const r = await getJson(`${base}/db/table/${name}?limit=500`, 'rows');
+      out[k] = r;
+    }));
+    return out;
+  }
+  async function loadGames(base, season) {
+    const desc = list => list.sort((a, b) => b - a);
+    const r = await getJson(`${base}/games?season=${season}`, 'games');
+    return desc(r.games);
+  }
+  /** 규정(/stats/regulation)입니다. Don't read 'stadium_dim' here. */
+  async function loadRegulation(base) {
+    return getJson(`${base}/stats/regulation`, null);
+  }
+  const api = { clean, getJson, loadRefs, loadGames, loadRegulation };
+  TS.data = api;
+  if (typeof module === 'object' && module.exports) module.exports = api;
+})(typeof window !== 'undefined' ? window : globalThis);
+"""
+
+LIB_NAV = """
+function init() { fetch('/standings'); }
+function loadAll() { return fetch('/db/tables'); }
+document.addEventListener('DOMContentLoaded', init);
+if (typeof module !== 'undefined') module.exports = { init, loadAll };
+"""
+
+
+def _site(tmp_path, files):
+    for rel, text in files.items():
+        p = tmp_path / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text, encoding="utf-8")
+    return tmp_path
+
+
+def test_page_texts_library_members_go_only_to_callers(tmp_path):
+    site = _site(tmp_path, {
+        "js/data.js": LIB_DATA,
+        "js/nav.js": LIB_NAV,
+        # 한 페이지만 싣는 파일은 라이브러리가 아니라 그 페이지 코드입니다.
+        "js/a-page.js": "function unused() { return fetch(`${B}/stats/regulation`); }",
+        "pages/a.html": ('<script src="../js/nav.js"></script><script src="../js/data.js"></script>'
+                         '<script src="../js/a-page.js"></script>'
+                         '<script>const D = TS.data; D.loadGames(base, 2025);</script>'),
+        "pages/b.html": ('<script src="../js/nav.js"></script><script src="../js/data.js"></script>'
+                         '<script>TS.data.loadRefs(base);</script>'),
+    })
+    a, b = site / "pages" / "a.html", site / "pages" / "b.html"
+    texts = lx.page_texts([a, b])
+    pats = ["/games", "/db/table/:name", "/stats/regulation", "/standings", "/db/tables"]
+    known = {"kbo_woba_weights_by_season", "self_park_factor", "games", "stadium_dim"}
+    # 맨 위 코드가 넘기는 콜백(init)은 모든 페이지 몫이고, 내보내기 객체에만 있는
+    # 멤버(loadAll)는 아무 페이지에도 붙지 않습니다.
+    assert lx.source_routes(texts[a], pats, {}) == {"/games", "/stats/regulation", "/standings"}
+    # 'games' 는 a 가 부르는 loadGames 안의 글자입니다. 주석 속 'stadium_dim' 은 셈하지 않습니다.
+    assert lx.quoted_tables(texts[a], known) == {"games"}
+    assert lx.source_routes(texts[b], pats, {}) == {"/db/table/:name", "/standings"}
+    assert lx.quoted_tables(texts[b], known) == {"kbo_woba_weights_by_season", "self_park_factor"}
+
+
+LIB_FORMS = """
+function plain() { return fetch(`${B}/r1`); }
+async function asyncFn() { return fetch(`${B}/r2`); }
+class Api {
+    static async method(a = 1, b = f(2)) { return fetch(`${B}/r3`); }
+}
+const obj = {
+    colon: function (x) { return fetch(`${B}/r4`); },
+    arrow: async (x) => fetch(`${B}/r5`),
+};
+const assigned = (x) => { return fetch(`${B}/r6`); };
+const assignedAsync = async (x) => fetch(`${B}/r7`);
+"""
+
+
+def test_page_texts_member_forms(tmp_path):
+    site = _site(tmp_path, {
+        "js/lib.js": LIB_FORMS,
+        "pages/a.html": ('<script src="../js/lib.js"></script>'
+                         '<script>plain(); Api.method(); obj.arrow(1); assignedAsync(2);'
+                         ' function asyncFn() {}</script>'),
+        "pages/b.html": ('<script src="../js/lib.js"></script>'
+                         '<script>asyncFn(); obj.colon(1); assigned(3);</script>'),
+    })
+    a, b = site / "pages" / "a.html", site / "pages" / "b.html"
+    texts = lx.page_texts([a, b])
+    pats = ["/r1", "/r2", "/r3", "/r4", "/r5", "/r6", "/r7"]
+    # a 의 `function asyncFn() {}` 는 정의라 부른 것으로 치지 않습니다.
+    assert lx.source_routes(texts[a], pats, {}) == {"/r1", "/r3", "/r5", "/r7"}
+    assert lx.source_routes(texts[b], pats, {}) == {"/r2", "/r4", "/r6"}
+
+
+def test_page_texts_api_js_is_always_a_library(tmp_path):
+    site = _site(tmp_path, {
+        "js/api.js": API_JS,
+        "pages/x.html": '<script src="../js/api.js"></script><script>API.getGames(2025);</script>',
+    })
+    x = site / "pages" / "x.html"
+    texts = lx.page_texts([x], always={(site / "js" / "api.js").resolve()})
+    assert lx.source_routes(texts[x], ["/games", "/players/:id/arsenal"], {}) == {"/games"}

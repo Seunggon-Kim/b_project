@@ -8,6 +8,7 @@
 (database/lineage_writes.json)에 적고, 테스트가 실제 코드와 맞는지 봅니다.
 """
 import re
+from pathlib import Path
 
 DOW = ["일", "월", "화", "수", "목", "금", "토"]
 
@@ -182,8 +183,14 @@ def page_sources(page_path, html):
     return out
 
 
-def source_routes(text, patterns, methods):
-    """소스 글자가 부르는 라우트 패턴들입니다(주소 틀 + API.<메서드> 호출)."""
+def source_routes(text, patterns, methods=None):
+    """소스 글자가 부르는 라우트 패턴들입니다(주소 틀 + API.<메서드> 호출).
+
+    methods(api_methods 의 결과)를 주면 `API.<메서드>(` 호출도 주소로 셉니다.
+    build_lineage 는 이것 대신 page_texts 로 페이지가 부르는 라이브러리 멤버의
+    글자를 넣어 씁니다.
+    """
+    methods = methods or {}
     found = set()
     for tpl in TEMPLATE.findall(text):
         r = match_route(tpl, patterns)
@@ -215,3 +222,327 @@ def quoted_tables(text, known):
 def page_title(html):
     m = TITLE.search(html)
     return m.group(1).strip() if m else ""
+
+
+# --- 여러 페이지가 같이 싣는 JS(라이브러리) ---------------------------------
+#
+# 라이브러리를 싣기만 해도 그 안의 주소가 모두 페이지에 붙으면 안 됩니다.
+# 라이브러리 글자를 이름 있는 멤버(함수·메서드·객체 상수)로 나누고, 페이지가
+# 부르는 멤버(와 그 멤버가 쓰는 멤버)의 글자와 맨 위 코드(실을 때 도는 코드)만
+# 페이지 글자에 넣습니다. 정규식으로 하는 대략의 읽기입니다. 문법을 다 읽지는
+# 않지만 주석·따옴표·백틱·정규식 글자 속은 건너뛰어 괄호 짝을 맞춥니다.
+
+JS_KEYWORDS = {"if", "for", "while", "switch", "catch", "function", "with", "return",
+               "typeof", "new", "await", "else", "do", "try", "in", "of", "delete",
+               "void", "throw", "case", "yield", "super", "import", "export"}
+JS_FUNC = re.compile(r"\b(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)\s*\(")
+JS_ASSIGN_FUNC = re.compile(
+    r"(?<![\w$.])([A-Za-z_$][\w$]*)\s*[:=]\s*(?:async\s+)?function\b[^(]*\(")
+JS_ASSIGN_ARROW = re.compile(
+    r"(?<![\w$.])([A-Za-z_$][\w$]*)\s*[:=]\s*(?:async\s*)?"
+    r"(?:\((?:[^()]|\([^()]*\))*\)|[A-Za-z_$][\w$]*)\s*=>")
+JS_METHOD = re.compile(
+    r"(?<![\w$.])(?:static\s+)?(?:async\s+)?(?:[gs]et\s+)?([A-Za-z_$][\w$]*)\s*"
+    r"\((?:[^()]|\([^()]*\))*\)\s*\{")
+JS_DATA = re.compile(r"\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*([\[{])")
+JS_IDENT = re.compile(r"(?<![\w$])([A-Za-z_$][\w$]*)")
+JS_CALL = re.compile(r"(?<![\w$])([A-Za-z_$][\w$]*)\s*\(")
+REGEX_PREV = set("(,=:[!&|?{};+-*%<>~^")
+REGEX_KEYWORD = re.compile(
+    r"\b(?:return|typeof|case|void|delete|throw|in|of|new|else|do|yield|await)\s*$")
+
+
+def _blank(buf, a, b):
+    for k in range(a, b):
+        if buf[k] != "\n":
+            buf[k] = " "
+
+
+def _quoted_end(js, i):
+    """js[i] 가 ' 또는 " 일 때 닫는 따옴표 다음 위치입니다(줄이 끝나면 거기서 멈춤)."""
+    q, j, n = js[i], i + 1, len(js)
+    while j < n and js[j] != q and js[j] != "\n":
+        j += 2 if js[j] == "\\" else 1
+    return min(j + 1, n)
+
+
+def _regex_end(js, i):
+    """js[i] 가 정규식 글자의 / 일 때 닫는 / 와 플래그 다음 위치입니다."""
+    j, n, in_class = i + 1, len(js), False
+    while j < n and js[j] != "\n":
+        c = js[j]
+        if c == "\\":
+            j += 2
+            continue
+        if c == "[":
+            in_class = True
+        elif c == "]":
+            in_class = False
+        elif c == "/" and not in_class:
+            j += 1
+            while j < n and (js[j].isalnum() or js[j] == "_"):
+                j += 1
+            return j
+        j += 1
+    return j
+
+
+def _lex(js, i, code, plain, in_expr=False):
+    """주석은 code·plain 둘 다에서, 글자 속은 code 에서만 지웁니다.
+
+    in_expr 면 백틱 안 `${ … }` 의 식이라 짝 맞는 `}` 다음 위치를 돌려줍니다.
+    """
+    n, depth, prev = len(js), 0, ""
+    while i < n:
+        c, nx = js[i], js[i + 1:i + 2]
+        if c == "/" and nx in ("/", "*"):
+            if nx == "/":
+                j = js.find("\n", i)
+                j = n if j < 0 else j
+            else:
+                j = js.find("*/", i + 2)
+                j = n if j < 0 else j + 2
+            _blank(code, i, j)
+            _blank(plain, i, j)
+            i = j
+            continue
+        if c in "'\"":
+            j = _quoted_end(js, i)
+            _blank(code, i + 1, j - 1)
+            i, prev = j, "a"
+            continue
+        if c == "`":
+            i, prev = _template(js, i, code, plain), "a"
+            continue
+        if c == "/" and (prev == "" or prev in REGEX_PREV
+                         or (prev == "w" and REGEX_KEYWORD.search(js[max(0, i - 12):i]))):
+            j = _regex_end(js, i)
+            _blank(code, i + 1, j - 1)
+            i, prev = j, "a"
+            continue
+        if in_expr:
+            if c == "{":
+                depth += 1
+            elif c == "}":
+                if depth == 0:
+                    return i + 1
+                depth -= 1
+        if not c.isspace():
+            prev = "w" if (c.isalnum() or c in "_$") else c
+        i += 1
+    return n
+
+
+def _template(js, i, code, plain):
+    """js[i] 가 백틱일 때 닫는 백틱 다음 위치입니다. `${ … }` 안은 코드로 읽습니다."""
+    j, n = i + 1, len(js)
+    while j < n:
+        c = js[j]
+        if c == "\\":
+            _blank(code, j, min(j + 2, n))
+            j += 2
+            continue
+        if c == "`":
+            return j + 1
+        if c == "$" and js[j + 1:j + 2] == "{":
+            j = _lex(js, j + 2, code, plain, in_expr=True)
+            continue
+        if c != "\n":
+            code[j] = " "
+        j += 1
+    return n
+
+
+def js_mask(js):
+    """(code, plain): code 는 주석과 글자 속을, plain 은 주석만 공백으로 바꾼 글자입니다.
+
+    길이와 줄바꿈 위치는 원문과 같습니다.
+    """
+    code, plain = list(js), list(js)
+    _lex(js, 0, code, plain)
+    return "".join(code), "".join(plain)
+
+
+def _close(code, i):
+    """code[i] 의 여는 괄호와 짝인 닫는 괄호 다음 위치입니다."""
+    depth = 0
+    for k in range(i, len(code)):
+        ch = code[k]
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+            if depth == 0:
+                return k + 1
+    return len(code)
+
+
+def _expr_end(code, i):
+    """화살표 함수의 식 몸통이 끝나는 곳(같은 깊이의 ; , 또는 바깥 닫는 괄호)입니다."""
+    depth = 0
+    for k in range(i, len(code)):
+        ch = code[k]
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            if depth == 0:
+                return k
+            depth -= 1
+        elif ch in ";," and depth == 0:
+            return k
+    return len(code)
+
+
+def _body_after(code, j):
+    """j 뒤 공백을 건너 `{` 이면 그 짝까지, 아니면 식 끝까지입니다."""
+    while j < len(code) and code[j].isspace():
+        j += 1
+    if j < len(code) and code[j] == "{":
+        return _close(code, j)
+    return _expr_end(code, j)
+
+
+def js_members(code):
+    """이름 있는 멤버 목록 [(이름, 시작, 끝)]입니다(시작 순).
+
+    code 는 js_mask 의 첫 번째 값입니다. 알아보는 꼴: `function NAME(`,
+    `async function NAME(`, 메서드 `NAME(…) {`, `NAME: function`, `NAME = function`,
+    `NAME: (…) =>`, `NAME = async (…) =>`, `NAME = x =>`, 객체·배열 상수
+    `const NAME = {` / `[`.
+    """
+    found = {}
+
+    def add(m, end):
+        if m.group(1) not in JS_KEYWORDS and m.start(1) not in found:
+            found[m.start(1)] = (m.group(1), m.start(), end)
+
+    for m in JS_FUNC.finditer(code):
+        add(m, _body_after(code, _close(code, m.end() - 1)))
+    for m in JS_ASSIGN_FUNC.finditer(code):
+        add(m, _body_after(code, _close(code, m.end() - 1)))
+    for m in JS_ASSIGN_ARROW.finditer(code):
+        add(m, _body_after(code, m.end()))
+    for m in JS_METHOD.finditer(code):
+        add(m, _close(code, m.end() - 1))
+    for m in JS_DATA.finditer(code):
+        add(m, _close(code, m.end() - 1))
+    return sorted(found.values(), key=lambda x: (x[1], -x[2]))
+
+
+def js_library(js):
+    """라이브러리 글자를 (맨 위 코드, 멤버들)로 나눕니다.
+
+    맨 위 코드는 어느 멤버에도 들지 않는 코드(실을 때 돎)로 {"text", "seeds"},
+    멤버들은 이름 → [{"text", "refs"}] 입니다(같은 이름이 여럿이면 모두).
+    text 는 주석만 지운 글자(주소·따옴표 표 이름을 찾는 데 씀), refs 는 그
+    코드에 나오는 이름들, seeds 는 맨 위 코드가 부르거나 콜백으로 넘기는
+    이름들입니다. 멤버 안에 든 멤버의 글자는 안쪽 멤버 몫입니다.
+    """
+    code, plain = js_mask(js)
+    members = js_members(code)
+    owner = [-1] * len(js)
+    for idx, (_, start, end) in enumerate(members):
+        owner[start:end] = [idx] * (end - start)
+    texts, codes = {}, {}
+    k = 0
+    while k < len(js):
+        j = k
+        while j < len(js) and owner[j] == owner[k]:
+            j += 1
+        texts.setdefault(owner[k], []).append(plain[k:j])
+        codes.setdefault(owner[k], []).append(code[k:j])
+        k = j
+
+    def text(o):
+        return "\n".join(texts.get(o, []))
+
+    out = {}
+    for idx, (name, _, _) in enumerate(members):
+        refs = set(JS_IDENT.findall("\n".join(codes.get(idx, []))))
+        out.setdefault(name, []).append({"text": text(idx), "refs": refs})
+    top_code = "\n".join(codes.get(-1, []))
+    return {"text": text(-1), "seeds": js_calls(top_code) | _callback_args(top_code)}, out
+
+
+JS_TOKEN = re.compile(r"[A-Za-z_$][\w$.]*|[()\[\]{},]|\S")
+
+
+def _callback_args(code):
+    """괄호 안에 이름 하나만 홀로 넘기는 인자입니다(`on('load', init)` 의 init).
+
+    맨 위 코드가 넘기는 콜백은 실을 때 걸어 두는 것이라 부른 것으로 봅니다.
+    `module.exports = { a, b }` 같은 객체 안의 이름은 넘기는 인자가 아니라 뺍니다.
+    """
+    toks = [m.group(0) for m in JS_TOKEN.finditer(code)]
+    out, stack = set(), []
+    for i, t in enumerate(toks):
+        if t in "([{":
+            stack.append(t)
+        elif t in ")]}":
+            if stack:
+                stack.pop()
+        elif (stack and stack[-1] == "(" and (t[0].isalpha() or t[0] in "_$")
+              and i > 0 and toks[i - 1] in ("(", ",")
+              and i + 1 < len(toks) and toks[i + 1] in (",", ")")):
+            out.add(t.rsplit(".", 1)[-1])
+    return out
+
+
+def js_calls(text):
+    """글자에서 부르는 이름들입니다(`NAME(`·`.NAME(`). 정의(`function NAME(`, `NAME(…) {`)는 뺍니다."""
+    defs = {m.start(1) for m in JS_FUNC.finditer(text)}
+    defs |= {m.start(1) for m in JS_METHOD.finditer(text)}
+    return {m.group(1) for m in JS_CALL.finditer(text)
+            if m.start(1) not in defs and m.group(1) not in JS_KEYWORDS}
+
+
+def used_text(page_code, libraries):
+    """페이지가 실제로 쓰는 글자입니다.
+
+    page_code 는 페이지 자신의 글자(HTML + 그 페이지만 싣는 JS), libraries 는
+    페이지가 싣는 라이브러리 글자들입니다. 페이지 글자 + 라이브러리의 맨 위
+    코드 + 페이지가 부르는 멤버와, 그 멤버가 쓰는 멤버(끝까지 따라감)의 글자를
+    이어 붙입니다. 맨 위 코드는 부르거나 콜백으로 넘기는 멤버만 따라갑니다.
+    `TS.data = api`·`module.exports = { … }` 같은 내보내기 하나로 모든 멤버가
+    붙는 것을 막으려는 것입니다.
+    """
+    tops, members = [], {}
+    for js in libraries:
+        top, ms = js_library(js)
+        tops.append(top)
+        for name, parts in ms.items():
+            members.setdefault(name, []).extend(parts)
+    todo = list(js_calls(page_code).union(*[t["seeds"] for t in tops]))
+    reached = set()
+    while todo:
+        name = todo.pop()
+        if name in reached or name not in members:
+            continue
+        reached.add(name)
+        todo += [r for p in members[name] for r in p["refs"]]
+    texts = [page_code] + [t["text"] for t in tops]
+    texts += [p["text"] for n in sorted(reached) for p in members[n]]
+    return "\n".join(texts)
+
+
+def page_texts(pages, always=()):
+    """페이지(HTML 경로)마다 그 페이지가 쓰는 글자입니다.
+
+    두 페이지 이상이 싣는 로컬 JS 와 always 에 든 파일(js/api.js)은
+    라이브러리로 보고 used_text 로 부르는 멤버만 넣습니다. 나머지 JS 는
+    그 페이지의 글자로 통째로 넣습니다.
+    """
+    html, srcs, count = {}, {}, {}
+    for p in pages:
+        html[p] = Path(p).read_text(encoding="utf-8")
+        srcs[p] = [f.resolve() for f in page_sources(Path(p).resolve(), html[p])]
+        for f in set(srcs[p]):
+            count[f] = count.get(f, 0) + 1
+    always = {Path(a).resolve() for a in always}
+    libs = {f for f, c in count.items() if c >= 2} | always
+    read = {f: f.read_text(encoding="utf-8") for f in count}
+    out = {}
+    for p in pages:
+        own = html[p] + "".join("\n" + read[f] for f in srcs[p] if f not in libs)
+        out[p] = used_text(own, [read[f] for f in srcs[p] if f in libs])
+    return out

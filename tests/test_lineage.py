@@ -186,3 +186,16 @@ def test_실행_기록_키가_그_워크플로의_단계와_맞습니다():
         "손 파일 어느 스크립트의 status_keys 에도 없는 실행 기록 키: %s\n"
         "그 단계의 스크립트에 적거나, 표와 무관한 키면 job_keys_without_tables 에 이유를 적으십시오."
         % unused)
+
+
+def test_팀_통계가_참조_표_4개와_주소를_읽습니다():
+    # js/stats/data.js 를 다른 페이지도 싣게 되어도(라이브러리) 팀 통계가 부르는
+    # loadRefs 의 표 이름과 주소는 팀 통계에 남아야 합니다.
+    d = bl.build(ROOT)
+    ts = next(p for p in d["pages"] if p["path"] == "pages/team-stats.html")
+    assert {"/db/table/:name", "/games", "/standings", "/stats/batters", "/stats/pitchers",
+            "/stats/seasons", "/stats/team_range"} <= set(ts["routes"])
+    for name in ("kbo_woba_weights_by_season", "self_park_factor",
+                 "team_stadium_by_season", "team_season_rank"):
+        t = next(x for x in d["tables"] if x["name"] == name)
+        assert "pages/team-stats.html" in t["pages"], name
