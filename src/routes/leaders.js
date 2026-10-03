@@ -204,14 +204,14 @@ export async function leaders(request, env) {
     // 같이 반올림 전 값으로 합니다.
     const wrcTopBy = async (metricCol, digits, alias) => {
       const { results } = await env.DB.prepare(
-        'SELECT CAST(w.batter_ID AS TEXT) AS player_id, '
+        'SELECT CAST(w.batter_ID AS CHAR) AS player_id, '
         + 'COALESCE(b.player_name, p.player_name) AS name, '
         + 'COALESCE(b.player_team, p.team_id) AS team, '
         + 'ROUND(w.' + metricCol + ', ' + digits + ') AS ' + alias + ' '
         + 'FROM wrc_plus_comparison w '
-        + 'LEFT JOIN players p ON p.player_id = CAST(w.batter_ID AS TEXT) '
+        + 'LEFT JOIN players p ON p.player_id = CAST(w.batter_ID AS CHAR) '
         + 'LEFT JOIN kbo_official_batter_stats b '
-        + 'ON b.player_id = CAST(w.batter_ID AS TEXT) AND b.season = w.season '
+        + 'ON b.player_id = CAST(w.batter_ID AS CHAR) AND b.season = w.season '
         + 'WHERE w.season=? AND w.PA >= ? '
         + 'ORDER BY w.' + metricCol + ' DESC LIMIT 5',
       ).bind(season, qualPa).all();
@@ -253,9 +253,9 @@ export async function leaders(request, env) {
       // 컬럼을 새로 채우지 않는 이유는 team_id·is_active 와 같습니다.
       // 아무도 갱신하지 않는 컬럼은 곧 낡습니다.
       + 'CASE WHEN ps.total_batters_faced > 0 '
-      + 'THEN ps.strikeout * 100.0 / ps.total_batters_faced END AS kpct, '
+      + 'THEN ps.strikeout * 100.0e0 / ps.total_batters_faced END AS kpct, '
       + 'CASE WHEN ps.total_batters_faced > 0 '
-      + 'THEN ps.base_on_balls * 100.0 / ps.total_batters_faced END AS bbpct '
+      + 'THEN ps.base_on_balls * 100.0e0 / ps.total_batters_faced END AS bbpct '
       + 'FROM kbo_official_pitcher_stats ps LEFT JOIN players p ON ps.player_id=p.player_id '
       + 'WHERE ps.season=?',
     ).bind(season).all()).results;

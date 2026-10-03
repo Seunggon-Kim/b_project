@@ -85,7 +85,7 @@ const WRC_JOIN = `
   JOIN weighted_pf_by_batter_season wpf
     ON wrc.batter_ID = wpf.batter_ID AND wrc.season = wpf.season
   LEFT JOIN kbo_official_batter_stats b
-    ON b.player_id = CAST(wrc.batter_ID AS TEXT) AND b.season = wrc.season`;
+    ON b.player_id = CAST(wrc.batter_ID AS CHAR) AND b.season = wrc.season`;
 
 /** 원본 829-867. 시즌 목록과 요약입니다. **배열**을 돌려줍니다. */
 export async function wrcSeasons(request, env) {
@@ -101,7 +101,7 @@ export async function wrcSeasons(request, env) {
       FROM games WHERE season BETWEEN 2015 AND 2026 GROUP BY 1
     ),
     thr AS (
-      SELECT season, MIN(?, CAST(ROUND(3.1 * ROUND(2.0*g/10.0)) AS INT)) AS t FROM gp
+      SELECT season, CASE WHEN ? < CAST(ROUND(3.1e0 * ROUND(2.0e0*g/10.0e0)) AS SIGNED) THEN ? ELSE CAST(ROUND(3.1e0 * ROUND(2.0e0*g/10.0e0)) AS SIGNED) END AS t FROM gp
     )
     SELECT w.season,
            (SELECT t FROM thr WHERE thr.season = w.season) AS min_pa,
@@ -115,7 +115,7 @@ export async function wrcSeasons(request, env) {
     WHERE w.PA >= thr.t
     GROUP BY w.season
     ORDER BY w.season
-  `).bind(minPa).all();
+  `).bind(minPa, minPa).all();
 
   // 원본은 행마다 쿼리를 한 번 더 날려 편차 목록을 받아 표준편차를 냅니다.
   // 시즌 수만큼이라(최대 12) D1 의 호출당 50개 한도 안입니다.
@@ -258,7 +258,7 @@ export async function wrcBatter(request, env, ctx, params) {
     const from = seasonDateRange(seasons[0]).from;
     const to = seasonDateRange(seasons[seasons.length - 1]).to;
     const { results } = await pdb.prepare(`
-      SELECT CAST(game_date / 10000 AS TEXT) AS season, stadium, COUNT(*) AS pa
+      SELECT CAST(CAST(game_date / 10000 AS SIGNED) AS CHAR) AS season, stadium, COUNT(*) AS pa
       FROM play_by_play
       WHERE batter_ID = ? AND game_date >= ? AND game_date < ?
       GROUP BY season, stadium

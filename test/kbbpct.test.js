@@ -40,10 +40,10 @@ test('상대타자로 나눠 계산합니다', () => {
   for (const f of FILES) {
     const src = readFileSync(f, 'utf8');
     assert.ok(
-      /ps\.strikeout \* 100\.0 \/ ps\.total_batters_faced/.test(src),
+      /ps\.strikeout \* 100.0e0 \/ ps\.total_batters_faced/.test(src),
       `${f} 에 K% 계산이 없습니다`);
     assert.ok(
-      /ps\.base_on_balls \* 100\.0 \/ ps\.total_batters_faced/.test(src),
+      /ps\.base_on_balls \* 100.0e0 \/ ps\.total_batters_faced/.test(src),
       `${f} 에 BB% 계산이 없습니다`);
   }
 });

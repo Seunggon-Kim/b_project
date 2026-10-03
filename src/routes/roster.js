@@ -1,5 +1,6 @@
 import { json } from '../lib/respond.js';
 import { queryInt } from '../lib/router.js';
+import { kstDateDaysAgo } from '../lib/kst.js';
 
 // 1군 등록·말소 현황입니다.
 //
@@ -46,9 +47,9 @@ export async function rosterMoves(request, env) {
     // 인덱스를 못 타므로 문자열 범위로 자릅니다.
     const { results: rows } = await env.DB.prepare(
       `SELECT ${COLS} FROM kbo_roster_moves `
-      + "WHERE move_date >= date('now', '+9 hours', ?) "
+      + 'WHERE move_date >= ? '
       + 'ORDER BY move_date DESC, kind DESC, team LIMIT ?',
-    ).bind(`-${days} days`, limit).all();
+    ).bind(kstDateDaysAgo(days), limit).all();
     results = rows;
   }
 
@@ -108,7 +109,7 @@ export async function roster(request, env) {
     // 포지션 순서를 투수·포수·내야수·외야수로 고정합니다. 사전순으로
     // 두면 내야수가 맨 앞에 와서 야구 화면답지 않습니다.
     + "ORDER BY team, CASE role WHEN '투수' THEN 1 WHEN '포수' THEN 2 "
-    + "WHEN '내야수' THEN 3 ELSE 4 END, CAST(back_number AS INTEGER)",
+    + "WHEN '내야수' THEN 3 ELSE 4 END, CAST(back_number AS SIGNED)",
   );
 
   const { results } = await stmt.bind(...binds).all();

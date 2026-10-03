@@ -15,7 +15,7 @@ export const LATEST_TEAM_SQL = `
     UNION ALL
     SELECT season, player_team FROM kbo_official_pitcher_stats
      WHERE player_id = p.player_id AND player_team IS NOT NULL
-  ) ORDER BY season DESC LIMIT 1`;
+  ) AS lt ORDER BY season DESC LIMIT 1`;
 
 /** 바깥 `p` 행이 마지막으로 기록을 남긴 시즌입니다. */
 export const LATEST_SEASON_SQL = `
@@ -23,7 +23,7 @@ export const LATEST_SEASON_SQL = `
     SELECT season FROM kbo_official_batter_stats WHERE player_id = p.player_id
     UNION ALL
     SELECT season FROM kbo_official_pitcher_stats WHERE player_id = p.player_id
-  )`;
+  ) AS ls`;
 
 /**
  * 공식 기록이 있는 가장 최근 시즌입니다.
@@ -46,7 +46,7 @@ export async function currentSeason(db) {
   const row = await db.prepare(
     'SELECT MAX(s) AS s FROM ('
     + 'SELECT MAX(season) AS s FROM kbo_official_batter_stats'
-    + ' UNION ALL SELECT MAX(season) FROM kbo_official_pitcher_stats)',
+    + ' UNION ALL SELECT MAX(season) FROM kbo_official_pitcher_stats) AS cs',
   ).first();
   return row && row.s != null ? Number(row.s) : null;
 }

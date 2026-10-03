@@ -13,9 +13,9 @@ import { tableExists } from '../lib/schema.js';
 // 확인했습니다(폰세 36.2 vs 36.155, 라일리 30.5 vs 30.465).
 // `ps.*` 뒤에 같은 이름으로 내보내므로 화면은 고칠 것이 없습니다.
 const KPCT = 'CASE WHEN ps.total_batters_faced > 0 '
-  + 'THEN ps.strikeout * 100.0 / ps.total_batters_faced END';
+  + 'THEN ps.strikeout * 100.0e0 / ps.total_batters_faced END';
 const BBPCT = 'CASE WHEN ps.total_batters_faced > 0 '
-  + 'THEN ps.base_on_balls * 100.0 / ps.total_batters_faced END';
+  + 'THEN ps.base_on_balls * 100.0e0 / ps.total_batters_faced END';
 
 /** 원본 api/main.py:337-353 입니다. 기록이 있는 시즌 목록을 내림차순으로. */
 export async function statsSeasons(request, env) {
@@ -24,7 +24,7 @@ export async function statsSeasons(request, env) {
       SELECT season FROM kbo_official_batter_stats
       UNION
       SELECT season FROM kbo_official_pitcher_stats
-    )
+    ) AS ss
     WHERE season IS NOT NULL
     ORDER BY season DESC
   `).all();
@@ -98,7 +98,7 @@ export async function statsBatters(request, env) {
     : ', NULL AS woba, NULL AS wraa, NULL AS wrc_plus';
   const wrcJoin = hasWrc
     ? ' LEFT JOIN wrc_plus_comparison w '
-      + 'ON CAST(w.batter_ID AS TEXT) = b.player_id AND w.season = b.season'
+      + 'ON CAST(w.batter_ID AS CHAR) = b.player_id AND w.season = b.season'
     : '';
 
   // 팀과 이름은 그 시즌 기록 행의 값을 먼저 씁니다. `players` 는 지금
@@ -146,7 +146,7 @@ export async function statsPitchers(request, env) {
            ${BBPCT} AS base_on_balls_per_pa
     FROM kbo_official_pitcher_stats ps
     LEFT JOIN players p ON ps.player_id = p.player_id
-    WHERE ps.season = ? AND CAST(ps.innings_pitched AS REAL) >= ?${team.sql}
+    WHERE ps.season = ? AND CAST(ps.innings_pitched AS DOUBLE) >= ?${team.sql}
     ORDER BY ps.earned_run_average ASC LIMIT ?`;
 
   const { results } = await env.DB.prepare(sql)

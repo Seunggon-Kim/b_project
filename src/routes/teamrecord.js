@@ -41,13 +41,13 @@ export function inningsExpr(col) {
   return `(
     CASE
       WHEN ${col} LIKE '% %'
-        THEN CAST(SUBSTR(${col}, 1, INSTR(${col}, ' ') - 1) AS REAL)
+        THEN CAST(SUBSTR(${col}, 1, INSTR(${col}, ' ') - 1) AS DOUBLE)
       WHEN ${col} LIKE '%/%' THEN 0
-      ELSE CAST(${col} AS REAL)
+      ELSE CAST(${col} AS DOUBLE)
     END
     + CASE
-        WHEN ${col} LIKE '%1/3' THEN 1.0/3.0
-        WHEN ${col} LIKE '%2/3' THEN 2.0/3.0
+        WHEN ${col} LIKE '%1/3' THEN 1.0e0/3.0e0
+        WHEN ${col} LIKE '%2/3' THEN 2.0e0/3.0e0
         ELSE 0
       END)`;
 }

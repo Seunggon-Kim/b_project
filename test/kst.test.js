@@ -28,3 +28,13 @@ test('한 자리 월과 일을 0 으로 채웁니다', () => {
 test('kstToday 는 YYYY-MM-DD 형태입니다', () => {
   assert.match(kstToday(), /^\d{4}-\d{2}-\d{2}$/);
 });
+
+test('며칠 전 한국 날짜를 YYYY-MM-DD 로 줍니다', async () => {
+  const { kstDateDaysAgo } = await import('../src/lib/kst.js');
+  // 2026-10-03 23:30 KST = 2026-10-03 14:30 UTC
+  const now = Date.UTC(2026, 9, 3, 14, 30);
+  assert.equal(kstDateDaysAgo(0, now), '2026-10-03');
+  assert.equal(kstDateDaysAgo(7, now), '2026-09-26');
+  // 2026-10-04 00:30 KST = 2026-10-03 15:30 UTC — 한국은 이미 4일입니다.
+  assert.equal(kstDateDaysAgo(0, Date.UTC(2026, 9, 3, 15, 30)), '2026-10-04');
+});
