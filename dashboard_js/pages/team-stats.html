@@ -41,7 +41,8 @@
         .ctrl-group { display: flex; align-items: center; gap: 0.6rem; flex-wrap: nowrap; flex-shrink: 0; }
         .ctrl-group label { white-space: nowrap; flex-shrink: 0; margin: 0; }
         .ctrl-group .tabbtn { height: 37px; box-sizing: border-box; }
-        .ctrl-right { margin-left: auto; }
+        /* CSV·링크 복사·기록실은 늘 아래 줄에 따로 두고 위에 구분선을 긋습니다. */
+        .ctrl-right { flex-basis: 100%; justify-content: flex-end; margin-left: 0; border-top: 1px solid var(--border-color); padding-top: 0.7rem; }
         .ctrl-divider { align-self: stretch; width: 1px; min-height: 1.8rem; background: var(--border-color); }
         .ctrl-note { flex-basis: 100%; font-size: 0.85rem; }
         .ctrl-note:empty { display: none; }
@@ -76,20 +77,20 @@
         .ts-league td { background: var(--bg-tertiary); font-weight: 700; border-top: 2px solid var(--border-color); }
         .ts-hl td { background-color: rgba(245, 158, 11, 0.12); }
         /* 지수 칸 색(리그 평균 100 대비) */
-        .ts-up1 { background: rgba(59, 130, 246, 0.14); }
-        .ts-up2 { background: rgba(59, 130, 246, 0.26); }
-        .ts-up3 { background: rgba(59, 130, 246, 0.40); }
-        .ts-down1 { background: rgba(239, 68, 68, 0.13); }
-        .ts-down2 { background: rgba(239, 68, 68, 0.24); }
-        .ts-down3 { background: rgba(239, 68, 68, 0.38); }
-        .ts-pos { color: #2563eb; }
-        .ts-neg { color: #dc2626; }
-        [data-theme="dark"] .ts-pos { color: #60a5fa; }
-        [data-theme="dark"] .ts-neg { color: #f87171; }
+        .ts-up1 { background: rgba(239, 68, 68, 0.13); }
+        .ts-up2 { background: rgba(239, 68, 68, 0.24); }
+        .ts-up3 { background: rgba(239, 68, 68, 0.38); }
+        .ts-down1 { background: rgba(59, 130, 246, 0.14); }
+        .ts-down2 { background: rgba(59, 130, 246, 0.26); }
+        .ts-down3 { background: rgba(59, 130, 246, 0.40); }
+        .ts-pos { color: #dc2626; }
+        .ts-neg { color: #2563eb; }
+        [data-theme="dark"] .ts-pos { color: #f87171; }
+        [data-theme="dark"] .ts-neg { color: #60a5fa; }
         /* 상대 전적 */
         .ts-h2h td, .ts-h2h th { text-align: center; }
-        .ts-win { background: rgba(59, 130, 246, 0.15); }
-        .ts-loss { background: rgba(239, 68, 68, 0.13); }
+        .ts-win { background: rgba(239, 68, 68, 0.13); }
+        .ts-loss { background: rgba(59, 130, 246, 0.15); }
         .ts-self { color: var(--text-muted); }
         .ts-total { font-weight: 700; border-left: 2px solid var(--border-color); }
         .ts-sub { font-size: 0.82rem; margin: 0 0 0.6rem; }
@@ -208,7 +209,7 @@
                         <h3 class="card-title">상대 전적</h3>
                     </div>
                     <div class="card-body">
-                        <p class="text-muted ts-sub">가로 줄 팀이 세로 칸 팀을 상대로 거둔 승-패(-무)입니다. 이긴 쪽이 많으면 옅은 파랑, 진 쪽이 많으면 옅은 빨강입니다.</p>
+                        <p class="text-muted ts-sub">가로 줄 팀이 세로 칸 팀을 상대로 거둔 승-패(-무)입니다. 이긴 쪽이 많으면 옅은 빨강, 진 쪽이 많으면 옅은 파랑입니다.</p>
                         <div id="ts-h2h"></div>
                     </div>
                 </div>

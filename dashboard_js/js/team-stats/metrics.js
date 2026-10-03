@@ -360,6 +360,9 @@
     }
     for (const x of games || []) {
       if (x.game_type !== '정규시즌') continue;
+      // 순위결정전(game_id 가 '6666' 으로 시작)은 정규시즌 개인 기록에는
+      // 들어가지만 팀 순위(승패)에는 들어가지 않습니다. 팀 성적에서는 뺍니다.
+      if (String(x.game_id || '').startsWith('6666')) continue;
       const day = num(x.game_date);
       if (start && day < start) continue;
       if (end && day > end) continue;
@@ -439,6 +442,27 @@
     return rows;
   }
 
+  /**
+   * 경기 결과로 센 승·패·무가 공식 순위표와 다른 팀입니다. 원천 기록이
+   * 빠지거나 끊긴 경기가 있으면 생깁니다. 화면은 끝난 시즌에서만 알립니다.
+   */
+  function recordMismatches(rank, splits) {
+    const out = [];
+    if (!rank || !splits) return out;
+    for (const team of Object.keys(splits)) {
+      const k = rank[team], s = splits[team];
+      if (!k || !s) continue;
+      if (k.w !== s.w || k.l !== s.l || k.d !== s.d) {
+        out.push({
+          team: team,
+          official: { w: k.w, l: k.l, d: k.d, g: k.g },
+          games: { w: s.w, l: s.l, d: s.d, g: s.g },
+        });
+      }
+    }
+    return out;
+  }
+
   /** 시즌 보기 전체입니다. 팀 행의 g 는 순위표 경기 수로 바꿉니다. */
   function seasonView(input) {
     const season = num(input.season);
@@ -508,7 +532,7 @@
     num, div, clean, ipOuts, BAT_SUM, BAT_KEYS, sumBy, sumBatting, battingRates,
     indexRefs, pfHalf, wobaOf, sumObjects, battingTable,
     PIT_SUM, PIT_KEYS, sumPitching, pitchingRates, fipCore, pitchingTable,
-    rankFor, rankFromStandings, pythag, gameSplits, recordTable, recordFromGames, seasonView,
+    rankFor, rankFromStandings, pythag, gameSplits, recordTable, recordFromGames, recordMismatches, seasonView,
     RANGE_BAT, RANGE_PIT, rangeTotals, rangeBattingTable, rangePitchingTable,
   };
   TS.metrics = api;
