@@ -128,8 +128,9 @@
     return (teams || []).some(t => !(rank && rank[t] && rank[t].g > 0));
   }
 
+  // 팀 통계 고르개와 같은 순서입니다(한글 팀 먼저, 다음 영문 팀).
   function teamsOf(rows) {
-    return [...new Set((rows || []).map(r => r.team).filter(Boolean))].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    return [...new Set((rows || []).map(r => r.team).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'));
   }
 
   function positionsOf(rows) {
