@@ -392,14 +392,14 @@ test('pfHalf: 홈구장을 모르면 중립(1000) → 1', () => {
   assert.equal(M.pfHalf(ix, '없는팀', 2025), 1);
 });
 
-test('검증: 선수 wOBA 를 같은 식으로 재현(1e-5 안)', () => {
+test('검증: 선수 wOBA 를 같은 식으로 재현(서버가 소수 셋째 자리로 반올림해 주므로 반올림 오차 안)', () => {
   const w = ix.weights[2025];
   let n = 0;
   for (const p of b) {
     if (p.woba === null || p.woba === undefined) continue;
     const t = Object.values(M.sumBatting([p]))[0];
     const mine = M.wobaOf(t, w);
-    assert.ok(near(mine, Number(p.woba), 1e-5), `${p.player_name}: ${mine} vs ${p.woba}`);
+    assert.ok(near(mine, Number(p.woba), 5.0001e-4), `${p.player_name}: ${mine} vs ${p.woba}`);
     n++;
   }
   assert.ok(n >= 150, `wOBA 가 있는 선수가 ${n}명뿐입니다`);
