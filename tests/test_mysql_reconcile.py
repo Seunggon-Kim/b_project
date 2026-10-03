@@ -76,7 +76,7 @@ def test_check_skips_record_tables_in_counts(monkeypatch):
 
 
 def test_check_chunks_d1_count_query(monkeypatch):
-    names = ["t%d" % i for i in range(10)] + ["players", "kbo_roster", "kbo_roster_moves"]
+    names = ["t%d" % i for i in range(10)] + ["players", "games", "kbo_roster", "kbo_roster_moves"]
     d1, my = _run_check(monkeypatch, names)
     assert all(s.count("UNION ALL") + 1 <= r.D1_UNION_MAX for s in d1)
     for n in names:

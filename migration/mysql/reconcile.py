@@ -5,13 +5,14 @@
     py -m migration.mysql.reconcile --days 7      # 최근 7일 경기는 경기별 행 수까지
 
 - play_by_play 를 뺀 모든 표: 양쪽 행 수.
-- players·kbo_roster·kbo_roster_moves: 열쇠로 짝지어 값까지 견줍니다. 수집이
+- players·kbo_roster·kbo_roster_moves·games: 열쇠로 짝지어 값까지 견줍니다. 수집이
   UPDATE 로 고치는 표라 행 수만으로는 어긋남이 안 보입니다. created_at·
   updated_at 은 두 DB 가 따로 시각을 찍으므로 뺍니다.
 - play_by_play: D1 샤드별 meta_table_counts 합과 MySQL 행 수. 최근 N일
   경기는 경기별 행 수.
 
-D1 읽기는 하루 약 7만 행입니다(무료 한도 500만의 1.4%). 값 비교 규칙은
+D1 읽기는 하루 약 8만 3천 행입니다(무료 한도 500만의 1.7%). games 값 비교가
+약 1만 3천 행입니다. 값 비교 규칙은
 적재와 같습니다. ''·'-' 는 값 없음, 정수 열의 '7.0' 은 7 입니다.
 """
 import argparse
@@ -29,6 +30,7 @@ from migration.mysql.ddl import OUT_DIR, q
 KST = datetime.timezone(datetime.timedelta(hours=9))
 PBP = "play_by_play"
 FULL = {"players": ["player_id"],
+        "games": ["game_id"],
         "kbo_roster": ["team", "name", "back_number"],
         "kbo_roster_moves": ["move_date", "kind", "team", "name"]}
 # 두 DB 가 일부러 다르게 쓰는 기록표입니다. meta_table_counts 는 D1 이 샤드별로,
