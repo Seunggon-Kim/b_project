@@ -28,6 +28,7 @@ name: roster
 #   CLOUDFLARE_API_TOKEN   D1 적재
 #   CLOUDFLARE_ACCOUNT_ID  D1 적재
 #   ADMIN_TOKEN            적재 뒤 캐시 비우기
+#   GCP_WIF_PROVIDER / GCP_LOADER_SA / CLOUDSQL_INSTANCE / MYSQL_LOADER_PASSWORD / MYSQL_SERVER_PUBKEY   MySQL 이중 적재(변수 MYSQL_MIRROR=on 일 때)
 
 on:
   schedule:

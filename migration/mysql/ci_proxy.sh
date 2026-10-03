@@ -31,7 +31,8 @@ for _ in $(seq 1 30); do
 done
 if ! (echo > /dev/tcp/127.0.0.1/3307) 2>/dev/null; then
   echo "프록시가 30초 안에 뜨지 않았습니다."
-  tail -20 "$DIR/proxy.log"
+  # 공개 저장소의 Actions 로그는 누구나 봅니다.
+  tail -20 "$DIR/proxy.log" | sed -E 's/[0-9]{1,3}(\.[0-9]{1,3}){3}/<IP>/g'
   exit 1
 fi
 

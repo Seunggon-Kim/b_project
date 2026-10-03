@@ -15,11 +15,12 @@ name: weekly
 # ## 필요한 시크릿
 #
 #   CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID / ADMIN_TOKEN
+#   GCP_WIF_PROVIDER / GCP_LOADER_SA / CLOUDSQL_INSTANCE / MYSQL_LOADER_PASSWORD / MYSQL_SERVER_PUBKEY   MySQL 이중 적재(변수 MYSQL_MIRROR=on 일 때)
 
 on:
   # 일정은 꺼 두었습니다(2026-10, D1 무료 한도 보호). D1 에서 400만 행을
   # 내려받아 한 번에 하루 한도의 대부분을 씁니다. MySQL 에서 내려받도록
-  # 바꾼 뒤(2단계 2B Task 7) 다시 켭니다.
+  # 바꾼 뒤(2단계 2B Task 9) 다시 켭니다.
   #   schedule:
   #     - cron: '47 20 * * 1'
   workflow_dispatch:
