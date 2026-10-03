@@ -19,13 +19,23 @@ export const MYSQL_OPTIONS = {
 };
 
 // D1 에서 TEXT 였다가 MySQL 에서 정수가 된 ID 열입니다(1단계 스키마).
-// 응답 모양을 지키려고 글자로 되돌립니다. kbo_roster(_moves).player_id 와
-// wrc 표의 batter_ID 는 D1 에서도 정수였지만 이름이 같아 함께 글자가
-// 됩니다. 그 차이는 Task 7 대조에서 라우트별로 판단합니다.
+// 응답 모양을 지키려고 글자로 되돌립니다.
+//
+// 이름만 보고 바꾸면 D1 에서도 INTEGER 였던 같은 이름 열(kbo_roster(_moves)
+// .player_id, wrc_plus_comparison·weighted_pf_by_batter_season 의 batter_ID)
+// 까지 글자가 됩니다. 그래서 mysql2 의 열 정보(orgTable·orgName)로 원래
+// 표가 아래 TEXT_ID_TABLES 인 열만 바꿉니다. 원래 표가 없는 계산한 열만
+// 이 이름 목록으로 판단합니다.
 export const TEXT_ID_COLUMNS = new Set([
   'player_id', 'batter_ID', 'pitcher_ID', 'on_1b_id', 'on_2b_id', 'on_3b_id',
   'pos_1_id', 'pos_2_id', 'pos_3_id', 'pos_4_id', 'pos_5_id',
   'pos_6_id', 'pos_7_id', 'pos_8_id', 'pos_9_id',
+]);
+
+// 위 ID 열이 D1 에서 TEXT 였던 표입니다.
+export const TEXT_ID_TABLES = new Set([
+  'players', 'kbo_official_batter_stats', 'kbo_official_pitcher_stats',
+  'futures_season_stats', 'play_by_play',
 ]);
 
 class Statement {
@@ -43,15 +53,18 @@ class Statement {
   async all() {
     const conn = await this.db.connection();
     let rows;
+    let fields;
     try {
-      [rows] = await conn.query(this.sql, this.params);
+      [rows, fields] = await conn.query(this.sql, this.params);
     } catch (err) {
       // 연결이 끊긴 오류(mysql2 가 fatal 로 표시)만 남깁니다. 표가 없는
       // 것(ER_NO_SUCH_TABLE) 같은 보통 오류는 라우트가 물러설 길로 씁니다.
       if (err && err.fatal === true) this.db.fail(err);
       throw err;
     }
-    return { results: rows.map((r) => this.db.shape(r)) };
+    // 글자로 바꿀 키는 질의마다 한 번 정합니다(행마다 열 정보를 보지 않음).
+    const keys = this.db.textKeysOf(fields);
+    return { results: rows.map((r) => this.db.shape(r, keys)) };
   }
 
   async first() {
@@ -61,9 +74,10 @@ class Statement {
 }
 
 export class MysqlDb {
-  constructor(open, { textColumns = TEXT_ID_COLUMNS } = {}) {
+  constructor(open, { textColumns = TEXT_ID_COLUMNS, textTables = TEXT_ID_TABLES } = {}) {
     this.open = open;
     this.textColumns = textColumns;
+    this.textTables = textTables;
     this.conn = null;
     // 연결 수준의 첫 실패입니다(없으면 null). 라우트 몇 곳은 질의 오류를
     // 삼키고 0·빈칸으로 물러섭니다. 표가 없을 때를 위한 것인데, MySQL 이
@@ -96,10 +110,39 @@ export class MysqlDb {
     return new Statement(this, sql);
   }
 
-  shape(row) {
+  /**
+   * 결과 열 정보(mysql2 의 fields)로 글자로 바꿀 행 키를 정합니다.
+   *
+   * 원래 표(orgTable)가 TEXT_ID_TABLES 이고 원래 열(orgName)이
+   * TEXT_ID_COLUMNS 인 열의 키(name, 별칭)입니다. orgTable 이 빈 계산한
+   * 열(COALESCE·집계, 물리화한 파생 표)은 열 이름 규칙으로 물러섭니다.
+   * 이름이 겹치면 mysql2 가 행에 마지막 열 값을 남기므로 마지막 열을
+   * 따릅니다. 열 정보가 아예 없으면 null(행 키 이름 규칙)입니다.
+   *
+   * Hyperdrive 를 거쳐도 mysql2 가 orgTable·orgName 을 채우는지는
+   * 스테이징에서 확인해야 합니다(Task 7). 비어 오면 모두 이름 규칙이 되어
+   * 예전 동작과 같아집니다.
+   */
+  textKeysOf(fields) {
+    if (!Array.isArray(fields) || !fields.length) return null;
+    const keys = new Set();
+    for (const f of fields) {
+      if (!f || typeof f.name !== 'string') continue;
+      const orgTable = f.orgTable || '';
+      const text = orgTable
+        ? this.textTables.has(orgTable) && this.textColumns.has(f.orgName)
+        : this.textColumns.has(f.name);
+      if (text) keys.add(f.name);
+      else keys.delete(f.name);
+    }
+    return keys;
+  }
+
+  shape(row, keys = null) {
+    const text = keys || this.textColumns;
     let out = row;
     for (const k of Object.keys(row)) {
-      if (this.textColumns.has(k) && typeof row[k] === 'number') {
+      if (text.has(k) && typeof row[k] === 'number') {
         if (out === row) out = { ...row };
         out[k] = String(row[k]);
       }
