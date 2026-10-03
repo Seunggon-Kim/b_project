@@ -213,3 +213,78 @@ def test_표마다_설명이_있습니다():
 def test_표_항목에_update_freq_를_두지_않습니다():
     # 일정은 jobs[].schedule_kst 하나로 봅니다(손으로 적은 주기 글자와 어긋나지 않게).
     assert not [t["name"] for t in bl.build(ROOT)["tables"] if "update_freq" in t]
+
+
+def integrity_problems(d):
+    """결과 JSON 안의 이름이 서로 가리키는 것이 실제로 있는지 봅니다."""
+    out = []
+    routes = {r["path"]: r for r in d["routes"]}
+    pages = {p["path"]: p for p in d["pages"]}
+    scripts = {s["path"] for s in d["scripts"]}
+    tables = {t["name"] for t in d["tables"]}
+    for p in d["pages"]:
+        for r in p["routes"]:
+            if r not in routes:
+                out.append("페이지 %s 의 주소 %s 가 routes 에 없습니다" % (p["path"], r))
+            elif p["path"] not in routes[r]["pages"]:
+                out.append("routes[%s].pages 에 %s 가 없습니다" % (r, p["path"]))
+    for r in d["routes"]:
+        for p in r["pages"]:
+            if p not in pages or r["path"] not in pages[p]["routes"]:
+                out.append("pages[%s].routes 에 %s 가 없습니다" % (p, r["path"]))
+    for t in d["tables"]:
+        out += ["표 %s 의 written_by %s 가 scripts 에 없습니다" % (t["name"], s)
+                for s in t["written_by"] if s not in scripts]
+        out += ["표 %s 의 derived_from %s 가 tables 에 없습니다" % (t["name"], s)
+                for s in t["derived_from"] if s not in tables]
+    ids = ({"source:" + s["id"] for s in d["sources"]} | {"job:" + j["id"] for j in d["jobs"]}
+           | {"table:" + t for t in tables} | {"page:" + p for p in pages})
+    out += ["선의 끝 %s 가 없습니다" % x for e in d["edges"] for x in (e["from"], e["to"])
+            if x not in ids]
+    return out
+
+
+def test_결과_안의_이름이_서로_맞습니다():
+    assert not integrity_problems(bl.build(ROOT))
+
+
+def test_이름_검사가_어긋남을_잡습니다():
+    import copy
+    d = bl.build(ROOT)
+    breaks = [
+        lambda x: x["pages"][0]["routes"].append("/nowhere"),
+        lambda x: next(r for r in x["routes"] if r["pages"])["pages"].pop(),
+        lambda x: x["tables"][0]["written_by"].append("nope.py"),
+        lambda x: x["tables"][0]["derived_from"].append("nope_table"),
+        lambda x: x["edges"].append({"from": "job:nope", "to": "table:games"}),
+    ]
+    for i, brk in enumerate(breaks):
+        bad = copy.deepcopy(d)
+        brk(bad)
+        assert integrity_problems(bad), "어긋남 %d 을 잡지 못했습니다" % i
+
+
+def test_등록된_GET_주소는_어느_화면이든_씁니다():
+    d = bl.build(ROOT)
+    used = {r for p in d["pages"] for r in p["routes"]}
+    pats = lx.route_patterns((ROOT / "src" / "index.js").read_text(encoding="utf-8"))
+    ok = HAND.get("unused_routes", {})
+    unused = sorted(p for p in pats if p not in used and p not in ok)
+    assert not unused, (
+        "어느 화면도 부르지 않는 주소: %s\n화면이 부르는 꼴을 못 읽은 것인지 보고, "
+        "정말 안 쓰면 unused_routes 에 이유를 적으십시오." % unused)
+    stale = sorted(p for p in ok if p not in pats or p in used)
+    assert not stale, "unused_routes 에 있는데 없거나 쓰이는 주소: %s" % stale
+
+
+def test_표를_읽는_주소는_표가_하나_이상입니다():
+    d = bl.build(ROOT)
+    ok = HAND.get("routes_without_tables", {})
+    empty = sorted(r["path"] for r in d["routes"]
+                   if not r["live"] and not r["reads_all_tables"] and not r["tables"]
+                   and r["path"] not in ok)
+    assert not empty, (
+        "표를 하나도 찾지 못한 주소: %s\nSQL 을 못 읽은 것인지 보고, 정말 표가 없으면 "
+        "routes_without_tables 에 이유를 적으십시오." % empty)
+    stale = sorted(p for p in ok if not any(r["path"] == p and not r["tables"] for r in d["routes"]))
+    assert not stale, "routes_without_tables 에 있는데 표가 있거나 없는 주소: %s" % stale
