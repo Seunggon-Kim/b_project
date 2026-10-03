@@ -586,6 +586,24 @@
   };
 
   /**
+   * 그 시즌 모든 선수에서 값이 0 이거나 없는 칸은 기록이 없는 칸입니다(옛 시즌
+   * API 는 없는 기록을 null 이 아니라 0 으로 채웁니다). 그런 칸을 행과 리그 행에서
+   * null 로 바꿉니다. 표시용 칸만 바꾸고 지표 계산은 이미 끝난 뒤입니다.
+   * 반환값은 비운 칸 목록입니다.
+   */
+  function blankUnrecorded(rows, league, keys) {
+    const blanked = [];
+    if (!rows.length) return blanked;
+    for (const k of keys) {
+      if (!rows.every(r => r[k] === null || r[k] === undefined || r[k] === 0)) continue;
+      for (const r of rows) r[k] = null;
+      if (league && k in league) league[k] = null;
+      blanked.push(k);
+    }
+    return blanked;
+  }
+
+  /**
    * 선수 타격 표입니다. 리그 기준값은 팀 표와 같게, 팀이 있는 선수 전체의
    * 합으로 셉니다. 행은 선수 한 명씩이고 id·name·team·pos·g 를 붙입니다.
    *
@@ -613,6 +631,7 @@
     league.wraa = c.lgWoba === null ? null : 0;
     league.wrcp = rows.some(r => r.wrcp !== null) ? 100 : null;
     league.opsp = rows.some(r => r.opsp !== null) ? 100 : null;
+    blankUnrecorded(rows, league, ['risp', 'ph', 'gw', 'multi', 'xr', 'gpa', 'ppa', 'ibb']);
     return { rows: rows, league: league, ctx: battingCtxOut(c) };
   }
 
@@ -634,6 +653,8 @@
     league.ef = league.fip !== null ? 0 : null;
     league.erap = rows.some(r => r.erap !== null) ? 100 : null;
     league.fipp = rows.some(r => r.fipp !== null) ? 100 : null;
+    // P/IP 는 투구 수(np)로 만든 칸이라 np 가 비면 0 이 되어 같이 비워집니다.
+    blankUnrecorded(rows, league, ['gs', 'hld', 'bs', 'wp', 'np', 'pip', 'qs', 'ibb']);
     return { rows: rows, league: league, ctx: { lgEra: c.lgR.era, cfip: c.cfip } };
   }
 

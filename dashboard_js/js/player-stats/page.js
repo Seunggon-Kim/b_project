@@ -89,20 +89,24 @@
 
   const SORT_PREF = {
     bat: [['wrcp', 'desc'], ['opsp', 'desc'], ['avg', 'desc'], ['ops', 'desc']],
-    sit: [['risp', 'desc']],
+    sit: [['risp', 'desc'], ['pa', 'desc']],
     pit: [['era', 'asc'], ['fip', 'asc'], ['whip', 'asc']],
   };
 
   // rows 를 주면 모든 선수가 값 없음(null)인 칸(예: 2007년 이전 wRC+)은 기본 정렬에서 건너뜁니다.
+  function hasValue(rows, k) {
+    return !rows || !rows.length || rows.some(r => r && r[k] != null && !Number.isNaN(r[k]));
+  }
+
   function defaultSort(tab, group, keys, rows) {
-    const has = k => !rows || !rows.length || rows.some(r => r && r[k] != null && !Number.isNaN(r[k]));
+    const has = k => hasValue(rows, k);
     const pref = tab === 'bat' && group === 'sit' ? SORT_PREF.sit : SORT_PREF[tab];
     for (const [k, d] of pref) if (keys.includes(k) && has(k)) return { key: k, dir: d };
     return { key: keys[0], dir: 'desc' };
   }
 
   function pickSort(st, keys, rows) {
-    if (st.sort && keys.includes(st.sort)) return { key: st.sort, dir: st.dir || 'desc' };
+    if (st.sort && keys.includes(st.sort) && hasValue(rows, st.sort)) return { key: st.sort, dir: st.dir || 'desc' };
     return defaultSort(st.tab, st.group, keys, rows);
   }
 
@@ -185,7 +189,7 @@
   const LIVE_QUAL_CAVEAT = ' 올해 소속팀 경기 수는 KBO 실시간 순위입니다.';
   const LIVE_SEASON_CAVEAT = ' 진행 중인 시즌은 최신 일일 갱신 기준이라 KBO 실시간과 1~2경기 차이가 날 수 있습니다.';
   const OLD_CAVEAT = ' 2007년 이전은 파크팩터가 없어 OPS+·ERA-·FIP-를 구장 보정 없이 계산했고, wOBA·wRC+는 2008년부터 있습니다.';
-  const SIT_CAVEAT = ' 상황 묶음(득점권·대타·결승타·멀티히트·XR·GPA·P/PA)은 KBO 공식 기록 값 그대로라 리그 평균은 비워 둡니다.';
+  const SIT_CAVEAT = ' 상황 묶음(득점권·대타·결승타·멀티히트·XR·GPA·P/PA)은 KBO 공식 기록 값 그대로라 리그 평균은 비워 둡니다. 대타로 나온 적이 없는 선수도 대타 타율이 .000으로 보입니다.';
 
   /** 표 아래 출처·주의 문구입니다. latest 는 가장 최근 시즌, live 는 실시간 순위로 규정을 셌는지입니다. */
   function caveatText(st, latest, live) {
@@ -307,9 +311,15 @@
     $('col-panel').classList.toggle('hidden', !(st.group === 'custom' && S.panelOpen));
   }
 
+  /** 사용자 지정 칸입니다. 비어 있으면 대시보드 칸을 켠 것으로 봅니다(표와 패널이 같은 기준). */
+  function customOrDash(tab) {
+    const c = S.custom[tab];
+    return c && c.length ? c : TS.columns.PGROUPS[tab].dash;
+  }
+
   function renderColPanel() {
     const tab = S.st.tab, C = TS.columns, esc = TS.table.esc;
-    const on = new Set(S.custom[tab] || C.PGROUPS[tab].dash);
+    const on = new Set(customOrDash(tab));
     const defs = C.PORDER[tab].map(k => C.pdef(tab, k));
     $('col-list').innerHTML = defs.map(d => `<label class="${on.has(d.key) ? '' : 'off'}" title="${esc(d.desc)}">`
       + `<input type="checkbox" data-col="${d.key}"${on.has(d.key) ? ' checked' : ''}>${esc(d.label)}</label>`).join('');
@@ -326,7 +336,9 @@
     errAlerts(alerts, S.seasonErrors);
     errAlerts(alerts, S.refs.errors);
     const sd = S.season[y];
-    errAlerts(alerts, sd.errors);
+    // 지금 탭에 필요한 기록의 실패만 알립니다.
+    const otherTab = st.tab === 'bat' ? '투수 기록' : '타자 기록';
+    errAlerts(alerts, (sd.errors || []).filter(e => e.what !== otherTab));
     syncTabs();
 
     const ix = M.indexRefs(S.refs);
@@ -337,8 +349,9 @@
       const rk = rankNow(alerts);
       live = rk.live;
       const reg = S.reg && S.reg.regulation ? S.reg.regulation[String(y)] || null : null;
-      if (S.reg) errAlerts(alerts, S.reg.errors);
       const miss = teamsOf(tbl.rows).filter(t => !(rk.rank[t] && rk.rank[t].g > 0));
+      // 규정 기준은 순위표에 없는 팀이 있어 실제로 필요할 때만 알립니다.
+      if (S.reg && miss.length) errAlerts(alerts, S.reg.errors);
       if (miss.length && reg) {
         alerts.push({ kind: 'info', text: `순위표에 없는 팀(${miss.join(', ')})은 그 시즌 공통 규정(${reg.qual_pa}타석, ${reg.qual_ip}이닝)으로 셉니다.` });
       } else if (miss.length) {
@@ -459,7 +472,8 @@
       const st = S.st;
       st.tab = b.dataset.tab;
       if (!GROUPS_BY_TAB[st.tab].includes(st.group)) st.group = 'dash';
-      if (typeof st.min === 'number' && !MIN_STEPS[st.tab].includes(st.min)) st.min = 'q';
+      // 숫자 최소값(50타석 등)은 탭마다 뜻이 달라 규정 이상으로 돌립니다.
+      if (typeof st.min === 'number') st.min = 'q';
       if (st.tab !== 'bat') st.pos = '';
       resetView();
       refresh();
@@ -469,8 +483,7 @@
       if (!b) return;
       const g = b.dataset.group;
       if (g === 'custom') S.panelOpen = S.st.group === 'custom' ? !S.panelOpen : true;
-      if (g !== S.st.group) { S.st.group = g; resetView(); }
-      writeUrl();
+      if (g !== S.st.group) { S.st.group = g; resetView(); writeUrl(); }
       render();
     });
     $('season-select').addEventListener('change', function (e) {
@@ -534,7 +547,7 @@
       const k = e.target.getAttribute('data-col');
       if (!k) return;
       const tab = S.st.tab;
-      const on = new Set(S.custom[tab] || TS.columns.PGROUPS[tab].dash);
+      const on = new Set(customOrDash(tab));
       if (e.target.checked) on.add(k); else on.delete(k);
       S.custom[tab] = TS.columns.PORDER[tab].filter(x => on.has(x));
       writeUrl(true);
@@ -555,6 +568,7 @@
     window.addEventListener('popstate', function () {
       S.st = parseState(location.search);
       normalize();
+      S.panelOpen = S.st.group === 'custom';
       fillSeasons();
       refresh({ noUrl: true });
     });
