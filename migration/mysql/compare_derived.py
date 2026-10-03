@@ -16,6 +16,7 @@ from migration.mysql.ddl import ROOT
 from migration.sqlite_to_d1 import DERIVED_TABLES
 
 REPORT = ROOT / "docs" / "mysql-migration" / "weekly-compare-report.md"
+IGNORE_COLS = {"captured_at"}  # 계산한 시각이라 두 번 돌리면 늘 다릅니다
 
 
 def canon(v):
@@ -40,6 +41,8 @@ def compare(a, b, table):
     if set(ca) != set(cb):
         return ["%s: 열이 다릅니다 (A만 %s / B만 %s)"
                 % (table, sorted(set(ca) - set(cb)), sorted(set(cb) - set(ca)))]
+    ca = [c for c in ca if c not in IGNORE_COLS]
+    cb = [c for c in cb if c not in IGNORE_COLS]
     cols = sorted(ca)
     ra, rb = rows(a, table, cols), rows(b, table, cols)
     only_a, only_b = ra - rb, rb - ra
