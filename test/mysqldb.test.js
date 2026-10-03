@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 
 import {
   MysqlDb, MYSQL_OPTIONS, TEXT_ID_COLUMNS, TEXT_ID_TABLES,
@@ -159,4 +160,40 @@ test('글자로 바꿀 열 목록은 행마다가 아니라 질의마다 한 번
   const { results } = await db.prepare('SELECT 1').all();
   assert.deepEqual(results.map((r) => r.player_id), ['1', '2', '3']);
   assert.equal(reads, 1);
+});
+
+test('close 는 연결을 못 열었어도 던지지 않습니다', async () => {
+  const db = new MysqlDb(async () => { throw new Error('connect ETIMEDOUT'); });
+  await assert.rejects(db.prepare('SELECT 1').all());
+  await db.close();
+});
+
+test('close 는 end() 가 실패해도 던지지 않습니다', async () => {
+  const conn = fakeConn([]);
+  conn.end = async () => { throw new Error('Connection lost'); };
+  const db = new MysqlDb(async () => conn);
+  await db.prepare('SELECT 1').all();
+  await db.close();
+});
+
+test('질의 사이에 연결이 끊긴 오류 이벤트는 던지지 않고 failed 에 남깁니다', async () => {
+  const conn = Object.assign(new EventEmitter(), fakeConn([{ a: 1 }]));
+  const db = new MysqlDb(async () => conn);
+  await db.prepare('SELECT 1').all();
+  const err = Object.assign(new Error('Connection lost: The server closed the connection.'), { fatal: true });
+  // 듣는 쪽이 없으면 EventEmitter 가 이 오류를 던져 Worker 가 죽습니다.
+  conn.emit('error', err);
+  assert.equal(db.failed, err);
+});
+
+test('BLOB(Buffer·Uint8Array)은 D1 처럼 숫자 배열로 돌려줍니다', async () => {
+  const fields = [field('code', 'team_logos'), field('image', 'team_logos'), field('raw')];
+  const db = new MysqlDb(async () => fakeConn(
+    [{ code: 'HT', image: Buffer.from([137, 80, 78, 71]), raw: new Uint8Array([0, 255]) }], fields));
+  const row = await db.prepare('SELECT 1').first();
+  assert.ok(Array.isArray(row.image));
+  assert.deepEqual(row, { code: 'HT', image: [137, 80, 78, 71], raw: [0, 255] });
+  assert.equal(JSON.stringify(row.image), '[137,80,78,71]');
+  // CSV 칸도 D1 과 같게 쉼표로 이은 숫자가 됩니다.
+  assert.equal(String(row.image), '137,80,78,71');
 });

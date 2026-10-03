@@ -98,7 +98,15 @@ export class MysqlDb {
       // 처리합니다.
       this.conn = Promise.resolve()
         .then(() => this.open())
-        .catch((err) => {
+        .then((conn) => {
+          // 질의가 없는 사이에 연결이 끊기면 mysql2 가 'error' 이벤트를
+          // 냅니다. 듣는 쪽이 없으면 EventEmitter 가 그 오류를 던져 Worker 가
+          // 죽습니다. 던지지 않고 연결 실패로 남깁니다.
+          if (conn && typeof conn.on === 'function') {
+            conn.on('error', (err) => this.fail(err));
+          }
+          return conn;
+        }, (err) => {
           this.fail(err);
           throw err;
         });
@@ -142,18 +150,38 @@ export class MysqlDb {
     const text = keys || this.textColumns;
     let out = row;
     for (const k of Object.keys(row)) {
-      if (text.has(k) && typeof row[k] === 'number') {
+      const v = row[k];
+      if (typeof v === 'number') {
+        if (text.has(k)) {
+          if (out === row) out = { ...row };
+          out[k] = String(v);
+        }
+      } else if (v instanceof Uint8Array) {
+        // BLOB 입니다. mysql2 는 Buffer 로 주고 D1 은 숫자 배열로 줍니다.
+        // Buffer 를 그대로 두면 JSON 이 {type,data} 가 되고 CSV 칸이 깨진
+        // 글자가 됩니다(/db/table/team_logos). D1 처럼 숫자 배열로 바꿉니다.
         if (out === row) out = { ...row };
-        out[k] = String(row[k]);
+        out[k] = Array.from(v);
       }
     }
     return out;
   }
 
+  /**
+   * 연결을 닫습니다. 던지지 않습니다.
+   *
+   * 응답을 보낸 뒤 waitUntil 에서 불립니다. 연결을 못 열었거나 이미
+   * 끊겼으면 닫을 것이 없으니 조용히 넘어갑니다.
+   */
   async close() {
     if (!this.conn) return;
-    const c = await this.conn;
-    await c.end();
+    try {
+      const c = await this.conn;
+      await c.end();
+    } catch {
+      // 열기 실패는 이미 failed 에 남았습니다. 끊긴 연결의 end() 실패는
+      // 할 일이 없습니다.
+    }
   }
 }
 
