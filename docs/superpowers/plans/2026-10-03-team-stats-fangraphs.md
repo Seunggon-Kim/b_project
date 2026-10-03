@@ -3543,3 +3543,185 @@ git status --short
 git add dashboard_js/js/team-stats/metrics.js dashboard_js/js/team-stats/columns.js
 git commit -m "feat(team-stats): 2008년부터 팀 득실을 경기 점수로 셈(트레이드 영향 없앰)" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+
+---
+
+### Task 13: 색 방향·고르개 구분선·순위결정전 제외·원천 차이 알림(2026-10-04 추가)
+
+Task 10 뒤에 추가한 단계입니다. **Task 11 보다 먼저 실행합니다.**
+
+배경:
+- evan 피드백(미리보기): ① 좋은 수치일수록 빨강, 나쁜 수치일수록 파랑으로 바꿉니다(지수 칸·상대 전적·득실차/승수 차 글자색 모두). ② 고르개 줄에서 CSV·링크 복사·기록실이 좁은 화면에서 구분 없이 꺾입니다 → 이 버튼들을 늘 아래 줄에 두고 위에 구분선을 긋습니다.
+- DB 세션 안내: games 의 `game_type='정규시즌'` 에는 순위결정전(game_id 가 `6666` 으로 시작, 2021·2024 각 1경기)이 들어 있습니다. 개인 기록에는 들어가지만 팀 순위에는 안 들어가므로 **팀 성적 집계에서 뺍니다.**
+- 원천 기록이 깨지거나 빠진 경기가 있습니다(2025 한화-SSG 1경기 없음, 2021-06-27 롯데-두산 없음, 2024-07-24 키움-두산 5회 2:2 에서 끊김). 끝난 시즌에서 팀별 경기 결과 승패무가 공식 순위표와 다르면 팀 성적 탭에 알립니다(경기 이름을 코드에 박지 않습니다). 진행 중 시즌은 실시간 순위와 하루 차이가 정상이라 알리지 않습니다.
+
+**Files:**
+- Modify: `dashboard_js/js/team-stats/metrics.js` (`gameSplits` 한 줄, `recordMismatches` 추가, `api`)
+- Modify: `dashboard_js/js/team-stats/page.js` (팀 성적 시즌 분기에 알림 몇 줄)
+- Modify: `dashboard_js/pages/team-stats.html` (CSS 색·고르개 줄, 상대 전적 설명 문구)
+- Modify: `C:/tmp/bstats-team-stats-check/tests/metrics.record.test.js` (테스트 추가)
+
+**Interfaces:**
+- Produces: `recordMismatches(rank, splits)` → `[{ team, official: {w,l,d,g}, games: {w,l,d,g} }]`. `splits` 에 있는 팀 중 순위표와 승·패·무 중 하나라도 다른 팀만 담습니다. 순위표에 없는 팀이나 `splits` 에 없는 팀은 건너뜁니다.
+
+- [ ] **Step 1: 테스트 더하기**
+
+`metrics.record.test.js` 끝에 더합니다:
+
+```js
+test('gameSplits: 순위결정전(game_id 6666…)은 팀 성적에서 뺌', () => {
+  const g = [
+    { game_id: '20210101AABB02021', game_type: '정규시즌', game_date: 20210501, home_team_id: 'A', away_team_id: 'B', home_score: 3, away_score: 2 },
+    { game_id: '66661031AABB02021', game_type: '정규시즌', game_date: 20211031, home_team_id: 'A', away_team_id: 'B', home_score: 1, away_score: 0 },
+  ];
+  const s = M.gameSplits(g);
+  assert.equal(s.A.g, 1);
+  assert.equal(s.A.w, 1);
+  assert.equal(s.B.l, 1);
+  assert.equal(s.A.month[10], undefined);
+});
+
+test('recordMismatches: 순위표와 경기 결과 승패무가 다른 팀만', () => {
+  const rank = {
+    A: { team: 'A', g: 3, w: 2, l: 1, d: 0 },
+    B: { team: 'B', g: 3, w: 1, l: 2, d: 0 },
+    C: { team: 'C', g: 3, w: 1, l: 1, d: 1 },
+  };
+  const splits = {
+    A: { team: 'A', g: 3, w: 2, l: 1, d: 0 },
+    B: { team: 'B', g: 2, w: 1, l: 1, d: 0 },
+    Z: { team: 'Z', g: 1, w: 1, l: 0, d: 0 },
+  };
+  const mm = M.recordMismatches(rank, splits);
+  assert.deepEqual(mm.map(x => x.team), ['B']);
+  assert.deepEqual(mm[0].official, { w: 1, l: 2, d: 0, g: 3 });
+  assert.deepEqual(mm[0].games, { w: 1, l: 1, d: 0, g: 2 });
+  assert.deepEqual(M.recordMismatches(rank, null), []);
+});
+
+test('검증 5c: 2025 경기 결과와 순위표가 다른 팀은 원천 누락 1경기의 한화·SSG 뿐', () => {
+  const mm = M.recordMismatches(M.rankFor(R.rank, 2025), M.gameSplits(games));
+  assert.deepEqual(mm.map(x => x.team).sort(), ['SSG', '한화']);
+});
+```
+
+- [ ] **Step 2: 테스트가 실패하는지 확인**
+
+Run: `node --test C:/tmp/bstats-team-stats-check/tests/metrics.record.test.js`
+Expected: FAIL — `s.A.g` 가 2(결정전이 들어감), `M.recordMismatches is not a function`
+
+- [ ] **Step 3: metrics.js 고치기**
+
+`gameSplits` 안의 `if (x.game_type !== '정규시즌') continue;` 바로 아래에 넣습니다:
+
+```js
+      // 순위결정전(game_id 가 '6666' 으로 시작)은 정규시즌 개인 기록에는
+      // 들어가지만 팀 순위(승패)에는 들어가지 않습니다. 팀 성적에서는 뺍니다.
+      if (String(x.game_id || '').startsWith('6666')) continue;
+```
+
+`recordFromGames` 바로 아래에 넣고 `api` 에 `recordMismatches` 를 더합니다:
+
+```js
+  /**
+   * 경기 결과로 센 승·패·무가 공식 순위표와 다른 팀입니다. 원천 기록이
+   * 빠지거나 끊긴 경기가 있으면 생깁니다. 화면은 끝난 시즌에서만 알립니다.
+   */
+  function recordMismatches(rank, splits) {
+    const out = [];
+    if (!rank || !splits) return out;
+    for (const team of Object.keys(splits)) {
+      const k = rank[team], s = splits[team];
+      if (!k || !s) continue;
+      if (k.w !== s.w || k.l !== s.l || k.d !== s.d) {
+        out.push({
+          team: team,
+          official: { w: k.w, l: k.l, d: k.d, g: k.g },
+          games: { w: s.w, l: s.l, d: s.d, g: s.g },
+        });
+      }
+    }
+    return out;
+  }
+```
+
+- [ ] **Step 4: 테스트가 통과하는지 확인**
+
+Run: `node --test "C:/tmp/bstats-team-stats-check/tests/*.test.js"`
+Expected: PASS
+
+- [ ] **Step 5: page.js 에 알림 넣기**
+
+팀 성적 시즌 분기에서 `rows = M.recordTable(v.rank, v.batTotals, v.pitTotals, splits);` 바로 아래에 넣습니다:
+
+```js
+        // 끝난 시즌에서 경기 결과가 공식 순위표와 다르면 알립니다. 진행 중
+        // 시즌은 실시간 순위와 하루 차이가 정상이라 알리지 않습니다.
+        if (splits && y < S.pbpMax) {
+          const mm = M.recordMismatches(v.rank, splits);
+          if (mm.length) {
+            alerts.push({
+              kind: 'info',
+              text: '경기 결과 원천에 빠지거나 끊긴 경기가 있어, 아래 팀의 득실·홈·원정·1점차·월별·상대 전적이 공식 기록과 조금 다릅니다: '
+                + mm.map(x => `${x.team}(공식 ${x.official.w}-${x.official.l}-${x.official.d}, 경기 결과 ${x.games.w}-${x.games.l}-${x.games.d})`).join(', ') + '.',
+            });
+          }
+        }
+```
+
+- [ ] **Step 6: team-stats.html 고치기**
+
+CSS 에서 지수 칸 색·글자색·상대 전적 색을 바꿉니다(좋을수록 빨강, 나쁠수록 파랑):
+
+```css
+        /* 지수 칸 색(리그 평균 100 대비). 좋을수록 빨강, 나쁠수록 파랑입니다. */
+        .ts-up1 { background: rgba(239, 68, 68, 0.13); }
+        .ts-up2 { background: rgba(239, 68, 68, 0.24); }
+        .ts-up3 { background: rgba(239, 68, 68, 0.38); }
+        .ts-down1 { background: rgba(59, 130, 246, 0.14); }
+        .ts-down2 { background: rgba(59, 130, 246, 0.26); }
+        .ts-down3 { background: rgba(59, 130, 246, 0.40); }
+        .ts-pos { color: #dc2626; }
+        .ts-neg { color: #2563eb; }
+        [data-theme="dark"] .ts-pos { color: #f87171; }
+        [data-theme="dark"] .ts-neg { color: #60a5fa; }
+```
+
+```css
+        .ts-win { background: rgba(239, 68, 68, 0.13); }
+        .ts-loss { background: rgba(59, 130, 246, 0.15); }
+```
+
+고르개 줄: `.ctrl-right { margin-left: auto; }` 를 아래로 바꿉니다(640px 미디어 쿼리 안의 `.ctrl-right { margin-left: 0; }` 는 그대로 둡니다):
+
+```css
+        /* CSV·링크 복사·기록실은 늘 아래 줄에 따로 두고 위에 구분선을 긋습니다. */
+        .ctrl-right { flex-basis: 100%; justify-content: flex-end; margin-left: 0; border-top: 1px solid var(--border-color); padding-top: 0.7rem; }
+```
+
+상대 전적 설명 문구를 바꿉니다:
+
+```html
+<p class="text-muted ts-sub">가로 줄 팀이 세로 칸 팀을 상대로 거둔 승-패(-무)입니다. 이긴 쪽이 많으면 옅은 빨강, 진 쪽이 많으면 옅은 파랑입니다.</p>
+```
+
+- [ ] **Step 7: 캡처로 확인**
+
+`py C:/tmp/bstats-team-stats-check/preview.py` 를 백그라운드로 띄우고(127.0.0.2:8765), 아래 두 장만 찍은 뒤 끕니다:
+
+```bash
+S=C:/tmp/bstats-team-stats-check/shot.sh
+bash $S t13_bat_1126 "/pages/team-stats.html?tab=bat&group=dash&season=2025" 1126 1200
+bash $S t13_rec_2024 "/pages/team-stats.html?tab=rec&season=2024" 1400 2600
+```
+
+확인: 위쪽 wRC+ 칸이 빨강·아래쪽이 파랑, 고르개 둘째 줄(CSV·링크 복사·기록실) 위에 구분선, 2024 팀 성적에 "경기 결과 원천에 빠지거나 끊긴 경기가 있어 … 두산 … 키움 …" 알림, 상대 전적 이긴 칸이 빨강.
+
+- [ ] **Step 8: 커밋**
+
+```bash
+cd C:/Users/김승곤/Desktop/b_project
+git status --short
+git add dashboard_js/js/team-stats/metrics.js dashboard_js/js/team-stats/page.js dashboard_js/pages/team-stats.html
+git commit -m "feat(team-stats): 좋을수록 빨강으로 색 방향을 바꾸고 고르개 구분선·순위결정전 제외·원천 차이 알림 추가" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
