@@ -57,16 +57,23 @@ test('상대타자가 0 이면 나누지 않습니다', () => {
   }
 });
 
-test('기록실이 화면과 같은 이름으로 내보냅니다', () => {
-  // player-stats.html 이 이 두 이름으로 읽습니다. 이름을 바꾸면
-  // 화면 컬럼이 통째로 빕니다.
+test('서버는 같은 이름으로 내보내고, 선수 통계 화면은 성분으로 셉니다', () => {
+  // 서버는 strikeout_per_pa·base_on_balls_per_pa 이름으로 내보냅니다.
+  // 선수 통계 화면은 이 저장 컬럼을 읽지 않고, 공용 계산(metrics.js)이
+  // 삼진·볼넷을 상대타자(타자는 pa, 투수는 tbf)로 나눠 K%·BB% 를 셉니다.
   const src = readFileSync('src/routes/stats.js', 'utf8');
   assert.ok(src.includes('AS strikeout_per_pa'));
   assert.ok(src.includes('AS base_on_balls_per_pa'));
 
+  const m = readFileSync('dashboard_js/js/stats/metrics.js', 'utf8');
+  assert.match(m, /kpct: div\(t\.so \* 100, t\.pa\)/, '타자 K% 를 pa 로 세지 않습니다');
+  assert.match(m, /bbpct: div\(t\.bb \* 100, t\.pa\)/, '타자 BB% 를 pa 로 세지 않습니다');
+  assert.match(m, /kpct: div\(t\.so \* 100, t\.tbf\)/, '투수 K% 를 tbf 로 세지 않습니다');
+  assert.match(m, /bbpct: div\(t\.bb \* 100, t\.tbf\)/, '투수 BB% 를 tbf 로 세지 않습니다');
+
   const html = readFileSync('dashboard_js/pages/player-stats.html', 'utf8');
-  assert.ok(html.includes("key: 'strikeout_per_pa'"));
-  assert.ok(html.includes("key: 'base_on_balls_per_pa'"));
+  assert.ok(html.includes('../js/stats/metrics.js'),
+    '선수 통계 페이지가 공용 계산을 싣지 않습니다');
 });
 
 test('K-BB% 는 둘 다 있을 때만 냅니다', () => {

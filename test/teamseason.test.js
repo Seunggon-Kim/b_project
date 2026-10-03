@@ -23,7 +23,7 @@ import { readFileSync } from 'node:fs';
 
 const ROUTE = 'src/routes/teams.js';
 const API = 'dashboard_js/js/api.js';
-const PAGE = 'dashboard_js/pages/player-stats.html';
+const PAGE_JS = 'dashboard_js/js/player-stats/page.js';
 
 test('시즌을 주면 그 시즌 팀을 봅니다', () => {
   const src = readFileSync(ROUTE, 'utf8');
@@ -61,25 +61,40 @@ test('해체팀은 현재 팀 없이도 나옵니다', () => {
     'teams 를 이너로 조인하면 해체팀이 사라집니다.');
 });
 
-test('화면이 시즌을 넘깁니다', () => {
+test('화면이 그 시즌 기록에서 팀을 고릅니다', () => {
+  // API 쪽 시즌 인자는 다른 화면을 위해 지킵니다.
   const api = readFileSync(API, 'utf8');
   assert.match(api, /static async getTeams\(season\)/,
     'getTeams 가 시즌을 받지 않습니다.');
   assert.match(api, /season \? `\?season=\$\{encodeURIComponent\(season\)\}`/,
     '시즌을 질의로 붙이지 않습니다.');
 
-  const page = readFileSync(PAGE, 'utf8');
-  assert.match(page, /API\.getTeams\(getSelectedSeason\(\)\)/,
-    '화면이 시즌 없이 팀을 부릅니다.');
+  // 선수 통계 화면은 /teams 를 부르지 않고, 그 시즌 기록의 team 에서
+  // 팀 목록을 만듭니다. 현재 팀 10개를 쓰면 1982 에 KT 가 뜨는 옛 문제가 돌아옵니다.
+  const page = readFileSync(PAGE_JS, 'utf8');
+  assert.ok(page.includes("fillSelect('team-select', teamsOf(tbl.rows)"),
+    '팀 고르개를 그 시즌 기록에서 채우지 않습니다.');
+  const i = page.indexOf('function teamsOf');
+  assert.ok(i > 0, 'teamsOf 가 없습니다.');
+  assert.match(page.slice(i, i + 300), /r\.team/,
+    'teamsOf 가 행의 team 을 모으지 않습니다.');
+  assert.ok(!page.includes('API.getTeams') && !page.includes('/teams'),
+    '화면이 현재 팀 목록(/teams)을 부르면 옛 시즌에 없는 팀이 뜹니다.');
 });
 
-test('시즌을 바꾸면 팀 목록을 다시 받습니다', () => {
-  const page = readFileSync(PAGE, 'utf8');
-  const i = page.indexOf('function onSeasonChange()');
-  assert.ok(i > 0, 'onSeasonChange 가 없습니다.');
-  const body = page.slice(i, i + 600);
-  assert.ok(body.includes('await loadTeams()'),
-    '시즌만 바뀌고 팀 목록은 그대로라 없는 팀으로 거르게 됩니다.');
-  assert.ok(body.indexOf('await loadTeams()') < body.indexOf('refreshStats()'),
-    '팀 목록보다 데이터를 먼저 부르면 한 박자 늦습니다.');
+test('시즌을 바꾸면 그 시즌 기록을 받고 팀 목록을 다시 만듭니다', () => {
+  const page = readFileSync(PAGE_JS, 'utf8');
+  const i = page.indexOf("$('season-select').addEventListener('change'");
+  assert.ok(i > 0, 'season-select change 처리가 없습니다.');
+  assert.ok(page.slice(i, i + 600).includes('refresh()'),
+    '시즌만 바뀌고 기록은 그대로라 없는 팀으로 거르게 됩니다.');
+
+  const r = page.indexOf('function render()');
+  assert.ok(r > 0, 'render 가 없습니다.');
+  const body = page.slice(r);
+  const sd = body.indexOf('const sd = S.season[y]');
+  const tbl = body.indexOf('const tbl =');
+  const fill = body.indexOf("fillSelect('team-select', teamsOf(tbl.rows)");
+  assert.ok(sd > 0 && sd < tbl, '표가 그 시즌 기록(S.season[y])에서 나오지 않습니다.');
+  assert.ok(tbl < fill, '팀 목록을 표보다 먼저 만들면 한 박자 늦습니다.');
 });
