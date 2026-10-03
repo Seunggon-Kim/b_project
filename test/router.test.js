@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createRouter, matchPath, queryInt, queryStr } from '../src/lib/router.js';
+import {
+  createRouter, matchPath, queryInt, queryStr, sqlLimit,
+} from '../src/lib/router.js';
 
 test('고정 경로가 매칭됩니다', () => {
   assert.deepEqual(matchPath('/standings', '/standings'), {});
@@ -89,4 +91,15 @@ test('메서드가 다르면 405 입니다', async () => {
   const res = await r.handle(
     new Request('https://x/teams', { method: 'POST' }), {}, {});
   assert.equal(res.status, 405);
+});
+
+test('sqlLimit 는 음수(D1 의 "제한 없음")를 아주 큰 수로 바꿉니다', () => {
+  assert.equal(sqlLimit(-1), Number.MAX_SAFE_INTEGER);
+  assert.equal(sqlLimit(-50), Number.MAX_SAFE_INTEGER);
+});
+
+test('sqlLimit 는 0 이상이면 그대로 둡니다', () => {
+  assert.equal(sqlLimit(0), 0);
+  assert.equal(sqlLimit(30), 30);
+  assert.equal(sqlLimit(100), 100);
 });

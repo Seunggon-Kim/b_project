@@ -1,5 +1,5 @@
 import { json } from '../lib/respond.js';
-import { queryInt } from '../lib/router.js';
+import { queryInt, sqlLimit } from '../lib/router.js';
 import { pyRound } from './leaders.js';
 import { tableExists } from '../lib/schema.js';
 
@@ -116,7 +116,7 @@ export async function statsBatters(request, env) {
     ORDER BY b.batting_average DESC LIMIT ?`;
 
   const { results } = await env.DB.prepare(sql)
-    .bind(season, minPa, ...team.binds, limit).all();
+    .bind(season, minPa, ...team.binds, sqlLimit(limit)).all();
 
   // team_ids 는 받은 그대로 돌려줍니다. 없으면 null 입니다.
   return json({
@@ -150,7 +150,7 @@ export async function statsPitchers(request, env) {
     ORDER BY ps.earned_run_average ASC LIMIT ?`;
 
   const { results } = await env.DB.prepare(sql)
-    .bind(season, minIp, ...team.binds, limit).all();
+    .bind(season, minIp, ...team.binds, sqlLimit(limit)).all();
 
   return json({
     pitchers: results,

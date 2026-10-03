@@ -1,5 +1,5 @@
 import { json } from '../lib/respond.js';
-import { queryInt, queryStr } from '../lib/router.js';
+import { queryInt, queryStr, sqlLimit } from '../lib/router.js';
 import { pyRound } from './leaders.js';
 import { fanOut, allSeasons, seasonDateRange } from '../lib/shard.js';
 
@@ -184,7 +184,7 @@ export async function wrcLeaderboard(request, env) {
     WHERE wrc.season = ? AND wrc.PA >= ?
     ORDER BY ${sortCol} DESC
     LIMIT ?
-  `).bind(season, minPa, n).all();
+  `).bind(season, minPa, sqlLimit(n)).all();
   return json(results);
 }
 
@@ -217,7 +217,7 @@ export async function wrcTopChanges(request, env) {
     WHERE wrc.season = ? AND wrc.PA >= ?
     ORDER BY (wrc.wRC_weighted - wrc.wRC_half) ${order}
     LIMIT ?
-  `).bind(season, minPa, n).all();
+  `).bind(season, minPa, sqlLimit(n)).all();
   return json(results);
 }
 
