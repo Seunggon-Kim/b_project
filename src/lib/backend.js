@@ -38,13 +38,18 @@ export function finalizeResponse(res, backend) {
 }
 
 /**
- * 응답 본문을 끝까지 보낸 뒤 연결을 닫습니다.
+ * MySQL 연결을 닫을 때를 정합니다.
  *
  * CSV 내려받기는 본문을 흘려보내는 동안 질의를 계속 합니다. 응답을
- * 돌려주자마자 닫으면 중간에 끊깁니다.
+ * 돌려주자마자 닫으면 중간에 끊기므로 본문을 끝까지 보낸 뒤 닫습니다.
+ *
+ * 그 밖의 응답(JSON·이미지)은 본문이 이미 다 만들어져 있습니다. 감싸면
+ * 청크 전송이 되고 손님이 다 받을 때까지 연결을 붙잡으므로, 응답은 그대로
+ * (같은 객체) 돌려주고 닫기만 예약합니다.
  */
 export function closeAfterBody(res, done, ctx) {
-  if (!res.body) {
+  const type = (res.headers.get('content-type') || '').toLowerCase();
+  if (!res.body || !type.startsWith('text/csv')) {
     ctx.waitUntil(done());
     return res;
   }

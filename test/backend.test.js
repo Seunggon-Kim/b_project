@@ -26,12 +26,15 @@ test('mysql 이면 DB 와 샤드 바인딩을 같은 어댑터로 바꿉니다',
   assert.equal(closed, true);
 });
 
-test('응답 본문을 다 보낸 뒤에 연결을 닫습니다', async () => {
+test('CSV 는 본문을 다 보낸 뒤에 연결을 닫습니다', async () => {
   let closed = false;
   const waits = [];
   const ctx = { waitUntil: (p) => waits.push(p) };
-  const res = closeAfterBody(new Response('abc', { status: 200, headers: { 'x-a': '1' } }),
-    async () => { closed = true; }, ctx);
+  const orig = new Response('abc', {
+    status: 200, headers: { 'x-a': '1', 'content-type': 'text/csv; charset=utf-8' },
+  });
+  const res = closeAfterBody(orig, async () => { closed = true; }, ctx);
+  assert.notEqual(res, orig);
   assert.equal(closed, false);
   assert.equal(await res.text(), 'abc');
   await Promise.all(waits);
@@ -70,4 +73,27 @@ test('finalizeResponse: MySQL 연결이 끊겼으면 503·no-store 로 바꿉니
   assert.deepEqual(await out.json(), { detail: 'connect ETIMEDOUT' });
   // 버린 원래 본문(CSV 스트림 등)은 닫아 더 읽지 않게 합니다.
   assert.equal(cancelled, true);
+});
+
+test('JSON 은 감싸지 않고 바로 닫기를 예약합니다(같은 객체)', async () => {
+  let closed = false;
+  const waits = [];
+  const ctx = { waitUntil: (p) => waits.push(p) };
+  const orig = new Response('{"a":1}', {
+    status: 200, headers: { 'content-type': 'application/json; charset=utf-8' },
+  });
+  const res = closeAfterBody(orig, async () => { closed = true; }, ctx);
+  assert.equal(res, orig);
+  assert.equal(waits.length, 1);
+  await Promise.all(waits);
+  assert.equal(closed, true);
+  assert.deepEqual(await res.json(), { a: 1 });
+});
+
+test('이미지(로고)처럼 CSV 가 아닌 본문도 감싸지 않습니다', async () => {
+  const waits = [];
+  const orig = new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'image/png' } });
+  const res = closeAfterBody(orig, async () => {}, { waitUntil: (p) => waits.push(p) });
+  assert.equal(res, orig);
+  assert.equal(waits.length, 1);
 });
