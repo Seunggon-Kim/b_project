@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>팀 통계 - Bstats</title>
-    <meta name="description" content="KBO 팀별 타격·투구 기록 (시즌 누적·기간별)">
+    <meta name="description" content="KBO 팀별 타격·투구·팀 성적 (시즌 누적·기간별, wOBA·wRC+·FIP·상대 전적)">
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -21,88 +21,88 @@
     <!-- Styles -->
     <link rel="stylesheet" href="../css/style.css">
     <style>
-        .tabbtn { background: transparent; color: inherit; border: 1px solid #94a3b8; border-radius: 8px; padding: 0.4rem 0.9rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+        [hidden] { display: none !important; }
+        .tabbtn { background: transparent; color: inherit; border: 1px solid #94a3b8; border-radius: 8px; padding: 0.4rem 0.9rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; white-space: nowrap; flex-shrink: 0; font-family: inherit; }
         .tabbtn.active { background: #3b82f6; color: #fff; border-color: #3b82f6; }
         .tabbtn:hover { border-color: #3b82f6; }
-        .section-head { display: flex; align-items: center; gap: 0.4rem; font-size: 1.25rem; font-weight: 700; margin: 0 0 0.25rem; }
-        .section-head .material-symbols-outlined { font-size: 1.4rem; }
-        /* 4개 표가 동시에 스피너→표로 교체될 때 레이아웃 점프를 줄이기 위한 최소 높이 */
-        #team-batting, #team-pitching { min-height: 320px; }
-        /* factor-stats(.fs-tab)와 동일한 밑줄형 탭 */
-        .fs-tabs { display: flex; justify-content: center; gap: 0.5rem; border-bottom: 2px solid var(--border-color); margin-bottom: 1.25rem; flex-wrap: wrap; }
-        .fs-tab { background: none; border: none; padding: 0.7rem 1.4rem; font-size: 1rem; font-weight: 600; font-family: inherit; color: var(--text-secondary); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; display: inline-flex; align-items: center; gap: 0.4rem; }
+        .tabbtn:disabled { opacity: 0.45; cursor: not-allowed; }
+        a.tabbtn { text-decoration: none; display: inline-flex; align-items: center; }
+        /* factor-stats(.fs-tab)와 같은 밑줄형 탭 */
+        .fs-tabs { display: flex; justify-content: center; gap: 0.5rem; border-bottom: 2px solid var(--border-color); margin-bottom: 1rem; flex-wrap: wrap; }
+        .fs-tab { background: none; border: none; padding: 0.7rem 1.4rem; font-size: 1rem; font-weight: 600; font-family: inherit; color: var(--text-secondary); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
         .fs-tab:hover { color: var(--primary); }
         .fs-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
-        /* 시즌·기간 통합 컨트롤 바 */
-        /* 카드 기본 여백(32px)은 고르개 한 줄에 너무 큽니다.
-           `card-body` 보다 뒤에 두어 이 값이 이깁니다. */
+        /* 묶음 버튼(사각형, CSV 버튼과 같은 모양) */
+        .ts-groups { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0 0 0.9rem; }
+        /* 고르개 줄 */
         .ctrl-bar { display: flex; align-items: center; gap: 0.7rem 1.5rem; flex-wrap: wrap; padding: 0.75rem 1rem !important; }
-        /* 카드 자체 여백(32px)도 줄입니다. `card-body` 안쪽 여백과
-           겹쳐 한 줄짜리 고르개가 137px 이 됩니다. */
-        .ctrl-card { padding: 0 !important; margin-bottom: 2rem !important; }
-        /* 안내 문구는 제 줄을 씁니다. 고르개와 같은 줄에 두면 문구가
-           길어질 때 기간·조회·기록실이 아래로 밀려납니다. 비어 있을
-           때는 자리를 차지하지 않습니다. */
-        .ctrl-note {
-            flex-basis: 100%;
-            font-size: 0.85rem;
-        }
-
-        .ctrl-note:empty { display: none; }
-
-        /* 컬럼 고르개입니다. 지표가 서른 개를 넘어 한 줄에 못 넣습니다. */
-        .col-panel {
-            flex-basis: 100%;
-            border-top: 1px solid var(--border-color);
-            margin-top: 0.5rem;
-            padding-top: 0.75rem;
-        }
-
-        .col-panel.hidden { display: none; }
-
-        .col-panel-head {
-            display: flex;
-            align-items: center;
-            gap: 0.6rem;
-            margin-bottom: 0.6rem;
-        }
-
-        .col-panel-btns { margin-left: auto; display: flex; gap: 0.35rem; }
-
-        .col-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-            gap: 0.35rem 0.9rem;
-        }
-
-        .col-list label {
-            display: flex;
-            align-items: center;
-            gap: 0.35rem;
-            font-size: 0.85rem;
-            cursor: pointer;
-            margin: 0;
-        }
-
-        .col-list label.off { color: var(--text-muted); }
+        .ctrl-card { padding: 0 !important; margin-bottom: 1rem !important; }
+        .ctrl-card:hover, .ts-card:hover { transform: none; }
         .ctrl-group { display: flex; align-items: center; gap: 0.6rem; flex-wrap: nowrap; flex-shrink: 0; }
         .ctrl-group label { white-space: nowrap; flex-shrink: 0; margin: 0; }
-        .ctrl-divider { align-self: stretch; width: 1px; min-height: 1.8rem; background: var(--border-color); }
-        /* `tabbtn` 은 button 용이라 a 에는 줄이 남습니다. */
-        /* `tabbtn` 은 button 용이라 a 에는 줄이 남습니다. 높이도
-           button 과 다르게 잡혀(37 vs 33) 나란히 두면 어긋납니다.
-           둘 다 같은 높이로 맞춥니다. */
         .ctrl-group .tabbtn { height: 37px; box-sizing: border-box; }
-        a.tabbtn { text-decoration: none; display: inline-flex; align-items: center; }
-        @media (max-width: 640px) { .ctrl-divider { display: none; } .ctrl-group { flex-wrap: wrap; } }
-        /* 정렬 가능한 표 헤더 */
-        .table th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
-        .table th.sortable:hover { color: #3b82f6; }
-        .table th.sorted { color: #3b82f6; }
+        .ctrl-right { margin-left: auto; }
+        .ctrl-divider { align-self: stretch; width: 1px; min-height: 1.8rem; background: var(--border-color); }
+        .ctrl-note { flex-basis: 100%; font-size: 0.85rem; }
+        .ctrl-note:empty { display: none; }
+        @media (max-width: 640px) { .ctrl-divider { display: none; } .ctrl-group { flex-wrap: wrap; } .ctrl-right { margin-left: 0; } }
+        /* 사용자 지정 칸 고르개 */
+        .col-panel { flex-basis: 100%; border-top: 1px solid var(--border-color); margin-top: 0.5rem; padding-top: 0.75rem; }
+        .col-panel.hidden { display: none; }
+        .col-panel-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
+        .col-panel-btns { margin-left: auto; display: flex; gap: 0.35rem; }
+        .col-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.35rem 0.9rem; }
+        .col-list label { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; cursor: pointer; margin: 0; }
+        .col-list label.off { color: var(--text-muted); }
+        .col-list label.na { opacity: 0.45; cursor: not-allowed; }
+        /* 알림 */
+        .ts-alerts:empty { display: none; }
+        .ts-alerts { margin-bottom: 0.8rem; }
+        .ts-alert { border-left: 3px solid var(--warning); background: rgba(245, 158, 11, 0.08); padding: 0.45rem 0.7rem; font-size: 0.85rem; margin-bottom: 0.4rem; border-radius: 6px; color: var(--text-secondary); }
+        .ts-alert-info { border-left-color: var(--primary); background: rgba(59, 130, 246, 0.07); }
+        /* 표: 촘촘한 간격, 순위·팀 열 고정 */
+        .ts-wrap { max-height: none; }
+        .ts-table th, .ts-table td { padding: 0.42rem 0.55rem; font-size: 0.82rem; text-align: right; }
+        .ts-table th.ts-rank, .ts-table td.ts-rank { position: sticky; left: 0; z-index: 3; width: 2.6rem; min-width: 2.6rem; max-width: 2.6rem; text-align: left; background: var(--bg-secondary); border-right: none; }
+        .ts-table th.ts-team, .ts-table td.ts-team { position: sticky; left: 2.6rem; z-index: 3; text-align: left; background: var(--bg-secondary); border-right: 1px solid var(--border-color); font-weight: 600; }
+        .ts-table thead th { z-index: 4; }
+        .ts-table thead th.ts-rank, .ts-table thead th.ts-team { z-index: 6; background: var(--bg-tertiary); }
+        .ts-table.ts-h2h th.ts-team, .ts-table.ts-h2h td.ts-team, .ts-table.ts-month th.ts-team, .ts-table.ts-month td.ts-team { left: 0; }
+        .ts-table th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+        .ts-table th.sortable:hover { color: #3b82f6; }
+        .ts-table th.sorted { color: #3b82f6; }
         .sort-ind { font-size: 0.72em; margin-left: 3px; vertical-align: middle; }
-        .th-info { font-size: 0.95em; margin-left: 2px; vertical-align: middle; color: var(--text-muted); cursor: help; }
-        /* ⓘ 헤더 정보 커스텀 툴팁 — 흰색(테마) 배경 + 사이트 폰트 */
-        .tip-box { position: fixed; z-index: 9999; display: none; max-width: 280px; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem 0.7rem; font-size: 0.82rem; font-family: inherit; line-height: 1.45; box-shadow: 0 6px 20px rgba(0,0,0,0.12); pointer-events: none; white-space: normal; }
+        .ts-term { text-decoration: underline dotted var(--text-muted); text-underline-offset: 3px; cursor: help; }
+        .ts-league td { background: var(--bg-tertiary); font-weight: 700; border-top: 2px solid var(--border-color); }
+        .ts-hl td { background-color: rgba(245, 158, 11, 0.12); }
+        /* 지수 칸 색(리그 평균 100 대비) */
+        .ts-up1 { background: rgba(59, 130, 246, 0.14); }
+        .ts-up2 { background: rgba(59, 130, 246, 0.26); }
+        .ts-up3 { background: rgba(59, 130, 246, 0.40); }
+        .ts-down1 { background: rgba(239, 68, 68, 0.13); }
+        .ts-down2 { background: rgba(239, 68, 68, 0.24); }
+        .ts-down3 { background: rgba(239, 68, 68, 0.38); }
+        .ts-pos { color: #2563eb; }
+        .ts-neg { color: #dc2626; }
+        [data-theme="dark"] .ts-pos { color: #60a5fa; }
+        [data-theme="dark"] .ts-neg { color: #f87171; }
+        /* 상대 전적 */
+        .ts-h2h td, .ts-h2h th { text-align: center; }
+        .ts-win { background: rgba(59, 130, 246, 0.15); }
+        .ts-loss { background: rgba(239, 68, 68, 0.13); }
+        .ts-self { color: var(--text-muted); }
+        .ts-total { font-weight: 700; border-left: 2px solid var(--border-color); }
+        .ts-sub { font-size: 0.82rem; margin: 0 0 0.6rem; }
+        /* 지표 설명 */
+        .ts-glossary { padding: 0.8rem 1rem !important; }
+        .ts-glossary summary { cursor: pointer; font-weight: 600; }
+        .ts-glossary dl { margin: 0.6rem 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 0.3rem 0.9rem; font-size: 0.82rem; }
+        .ts-glossary dt { font-weight: 700; }
+        .ts-glossary dd { margin: 0; color: var(--text-secondary); }
+        /* 머리글 설명 창 */
+        .tip-box { position: fixed; z-index: 9999; display: none; max-width: 300px; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem 0.7rem; font-size: 0.82rem; font-family: inherit; line-height: 1.45; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12); pointer-events: none; white-space: normal; }
+        .tip-box b { display: block; margin-bottom: 2px; }
+        .tip-box .f { display: block; margin-top: 4px; color: var(--text-muted); }
     </style>
     <script src="../js/config.js"></script>
     <script src="../js/theme-toggle.js"></script>
@@ -129,18 +129,23 @@
         </div>
     </header>
 
-    <!-- Main Content -->
     <main class="container">
         <h1 class="fade-in">팀 통계</h1>
-        <p class="text-secondary mb-3">KBO 팀별 기록입니다. 타격·투구는 탭으로 전환하고, 시즌 누적과 기간별을 한 화면에서 함께 봅니다. 표 머리글을 클릭하면 정렬됩니다.</p>
+        <p class="text-secondary mb-3">KBO 팀별 기록입니다. 묶음 탭으로 지표 묶음을 바꿉니다. <span class="ts-term">점선 밑줄</span>이 있는 지표에 마우스를 올리면 뜻과 계산식이 나오고, 누르면 정렬됩니다.</p>
 
-        <!-- 타격/투구 탭 -->
-        <div class="fs-tabs" id="stat-tabs">
-            <button type="button" id="tab-batting" class="fs-tab active">타격</button>
-            <button type="button" id="tab-pitching" class="fs-tab">투구</button>
+        <div class="fs-tabs" id="ts-tabs">
+            <button type="button" class="fs-tab active" data-tab="bat">타격</button>
+            <button type="button" class="fs-tab" data-tab="pit">투구</button>
+            <button type="button" class="fs-tab" data-tab="rec">팀 성적</button>
         </div>
 
-        <!-- 시즌·기간 컨트롤 (나란히) -->
+        <div class="ts-groups" id="ts-groups">
+            <button type="button" class="tabbtn active" data-group="dash">대시보드</button>
+            <button type="button" class="tabbtn" data-group="std">표준</button>
+            <button type="button" class="tabbtn" data-group="adv">고급</button>
+            <button type="button" class="tabbtn" data-group="custom">사용자 지정</button>
+        </div>
+
         <div class="card ctrl-card">
             <div class="card-body ctrl-bar">
                 <div class="ctrl-group">
@@ -162,16 +167,20 @@
                     <span class="text-muted">~</span>
                     <input type="date" id="range-end" class="input" style="max-width:185px;">
                     <button type="button" id="range-go" class="tabbtn active">조회</button>
+                    <button type="button" id="range-clear" class="tabbtn" hidden>시즌 전체</button>
+                </div>
+                <div class="ctrl-group ctrl-right">
+                    <button type="button" id="csv-btn" class="tabbtn">CSV</button>
+                    <button type="button" id="link-btn" class="tabbtn">링크 복사</button>
                     <a id="team-record-link" class="tabbtn" href="team-record">기록실</a>
-                    <button type="button" id="col-toggle" class="tabbtn">컬럼</button>
                 </div>
                 <span class="text-muted ctrl-note" id="range-note"></span>
                 <div id="col-panel" class="col-panel hidden">
                     <div class="col-panel-head">
-                        <strong>보일 컬럼</strong>
+                        <strong>보일 칸</strong>
                         <span class="text-muted" id="col-count"></span>
                         <span class="col-panel-btns">
-                            <button type="button" data-col-preset="basic" class="tabbtn">기본</button>
+                            <button type="button" data-col-preset="basic" class="tabbtn">대시보드와 같게</button>
                             <button type="button" data-col-preset="all" class="tabbtn">전체</button>
                             <button type="button" id="col-close" class="tabbtn">닫기</button>
                         </span>
@@ -181,36 +190,47 @@
             </div>
         </div>
 
-        <!-- ===== 표 영역 (시즌 누적 / 기간별 전환) ===== -->
-        <section id="table-section">
-            <h2 class="section-head"><span id="view-head">시즌 누적</span></h2>
-            <p class="text-secondary mb-2" style="font-size:0.9rem;" id="view-desc">선수 기록을 팀별로 합산한 시즌 누적 성적입니다.</p>
+        <div id="ts-alerts" class="ts-alerts"></div>
 
-            <div class="card stat-batting">
+        <section>
+            <div class="card ts-card">
                 <div class="card-header">
-                    <h3 class="card-title" id="bat-title">팀 타격 (시즌 누적)</h3>
+                    <h3 class="card-title" id="ts-title">팀 타격</h3>
                 </div>
                 <div class="card-body">
-                    <div id="team-batting"></div>
+                    <div id="ts-table"></div>
                 </div>
             </div>
 
-            <div class="card stat-pitching" style="display:none;">
-                <div class="card-header">
-                    <h3 class="card-title" id="pit-title">팀 투구 (시즌 누적)</h3>
+            <div id="ts-rec-extra" hidden>
+                <div class="card ts-card mt-3">
+                    <div class="card-header">
+                        <h3 class="card-title">상대 전적</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted ts-sub">가로 줄 팀이 세로 칸 팀을 상대로 거둔 승-패(-무)입니다. 이긴 쪽이 많으면 옅은 파랑, 진 쪽이 많으면 옅은 빨강입니다.</p>
+                        <div id="ts-h2h"></div>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <div id="team-pitching"></div>
+                <div class="card ts-card mt-3">
+                    <div class="card-header">
+                        <h3 class="card-title">월별 승률</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="ts-monthly"></div>
+                    </div>
                 </div>
             </div>
+
+            <details class="card ts-glossary mt-3">
+                <summary>지표 설명</summary>
+                <dl id="ts-glossary-list"></dl>
+            </details>
 
             <div class="card mt-3"
                 style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);">
                 <div class="card-body">
-                    <p class="text-muted" style="font-size:0.85rem;margin:0;" id="caveat-note">
-                        출처: KBO 공식 선수 기록을 팀별로 합산해 계산합니다. AVG·OBP·SLG·OPS·ERA·WHIP는 성분에서 재산출합니다.
-                        현재 진행 중인 시즌은 최신 일일 갱신 기준이라 KBO 실시간과 1~2경기 차이가 날 수 있습니다.
-                    </p>
+                    <p class="text-muted" style="font-size:0.85rem;margin:0;" id="caveat-note"></p>
                 </div>
             </div>
         </section>
@@ -218,712 +238,12 @@
 
     <script src="../js/api.js"></script>
     <script src="../js/components.js"></script>
-    <script>
-        const num = v => (v === null || v === undefined || v === '') ? 0 : (+v || 0);
-        function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m])); }
-        // 서버가 숫자를 문자열로 직렬화해도 안전하도록 Number 변환 기반으로 포맷한다.
-        function avg3(x) { const n = Number(x); return (Number.isFinite(n) ? n : 0).toFixed(3).replace(/^0\./, '.'); }
-        function f2(x) { const n = Number(x); return (Number.isFinite(n) ? n : 0).toFixed(2); }
-
-        // 비동기 로드 경쟁조건 가드 — 시즌/기간 표가 동시에 로드되므로 카운터를 분리한다.
-        let loadSeq = 0;
-
-        // '81 1/3' -> 244 outs
-        function ipOuts(s) {
-            s = String(s == null ? '' : s).trim();
-            const m = s.match(/^(\d+)(?:\s+([12])\/3)?$/);
-            return m ? (+m[1]) * 3 + (m[2] ? +m[2] : 0) : 0;
-        }
-        function ipFmt(outs) { const w = Math.floor(outs / 3), r = outs % 3; return r ? `${w} ${r}/3` : `${w}`; }
-
-        // ===== 정렬 가능한 표 렌더러 (이 페이지 전용, 공용 createTable 미사용) =====
-        // columns: [{ key, label, type:'num'|'str', fmt?(raw,row)->string, sortVal?(row)->any }]
-        //   - key === '__rank' 는 현재 표시 순서 기준 순위(1..n), 정렬 비활성
-        function makeSortable(containerId, columns, rows, def) {
-            const container = document.getElementById(containerId);
-            if (!container) return;
-            const state = { key: def.key, dir: def.dir };
-
-            function sortValue(col, row) { return col.sortVal ? col.sortVal(row) : row[col.key]; }
-
-            function render() {
-                const col = columns.find(c => c.key === state.key) || columns[0];
-                const arr = rows.slice();
-                arr.sort((a, b) => {
-                    const av = sortValue(col, a), bv = sortValue(col, b);
-                    let cmp;
-                    if (col.type === 'str') cmp = String(av == null ? '' : av).localeCompare(String(bv == null ? '' : bv), 'ko');
-                    else cmp = (Number(av) || 0) - (Number(bv) || 0);
-                    if (cmp === 0) return 0;
-                    return state.dir === 'asc' ? cmp : -cmp;
-                });
-
-                const thead = columns.map(c => {
-                    const sortable = c.key !== '__rank' && c.sortable !== false;
-                    const active = sortable && state.key === c.key;
-                    const ind = active ? `<span class="sort-ind">${state.dir === 'asc' ? '▲' : '▼'}</span>` : '';
-                    const cls = sortable ? (active ? 'sortable sorted' : 'sortable') : '';
-                    const dk = sortable ? ` data-key="${c.key}"` : '';
-                    const title = sortable ? ' title="클릭하면 정렬됩니다"' : '';
-                    const tip = c.tip ? `<span class="th-info material-symbols-outlined" data-tip="${esc(c.tip)}">info</span>` : '';
-                    return `<th class="${cls}"${dk}${title}>${c.label}${ind}${tip}</th>`;
-                }).join('');
-
-                const tbody = arr.map((row, i) => {
-                    const cells = columns.map(c => {
-                        if (c.key === '__rank') return `<td>${i + 1}</td>`;
-                        const raw = row[c.key];
-                        const disp = c.fmt ? c.fmt(raw, row) : ((raw == null || raw === '') ? '-' : raw);
-                        return `<td>${disp}</td>`;
-                    }).join('');
-                    return `<tr>${cells}</tr>`;
-                }).join('');
-
-                container.innerHTML = `<div class="table-container"><table class="table"><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table></div>`;
-
-                container.querySelectorAll('th.sortable').forEach(th => {
-                    th.addEventListener('click', () => {
-                        const k = th.getAttribute('data-key');
-                        if (state.key === k) state.dir = state.dir === 'asc' ? 'desc' : 'asc';
-                        else { state.key = k; const c = columns.find(x => x.key === k); state.dir = (c && c.type === 'str') ? 'asc' : 'desc'; }
-                        render();
-                    });
-                });
-            }
-            render();
-        }
-
-        // ===== 컬럼 정의 (팀 컬럼은 로고 없이 팀명만) =====
-        // 팀 이름을 누르면 팀 기록실로 갑니다. 매핑은 components.js 에
-        // 있습니다(정본은 D1 team_seasons).
-        const TEAM_COL = {
-            key: 'team', label: '팀', type: 'str',
-            fmt: (v) => {
-                const href = window.teamRecordHref
-                    ? window.teamRecordHref(v, '') : null;
-                return href
-                    ? `<a class="player-link" href="${href}">${esc(v)}</a>`
-                    : esc(v);
-            },
-        };
-
-        // 컬럼 정의입니다. `on` 이 true 인 것이 처음에 보입니다.
-        // 나머지는 '컬럼' 창에서 켜면 나옵니다.
-        const num1 = v => (v === null || v === undefined) ? '-' : (+v).toFixed(1);
-        const num2 = v => (v === null || v === undefined) ? '-' : (+v).toFixed(2);
-
-        const BAT_COLS = [
-            { key: '__rank', label: '순위', fixed: true },
-            { ...TEAM_COL, fixed: true },
-            { key: 'g', label: 'G', type: 'num', tip: '팀이 치른 경기 수가 아니라 선수별 출장 경기의 합입니다' },
-            { key: 'avg', label: 'AVG', type: 'num', fmt: v => avg3(v), on: true },
-            { key: 'pa', label: 'PA', type: 'num', on: true },
-            { key: 'ab', label: 'AB', type: 'num', on: true },
-            { key: 'r', label: 'R', type: 'num', on: true },
-            { key: 'h', label: 'H', type: 'num', on: true },
-            { key: 'single', label: '1B', type: 'num', tip: '단타입니다. 안타에서 2·3루타와 홈런을 뺍니다' },
-            { key: 'd2', label: '2B', type: 'num', on: true },
-            { key: 'd3', label: '3B', type: 'num', on: true },
-            { key: 'hr', label: 'HR', type: 'num', on: true },
-            { key: 'tb', label: 'TB', type: 'num', on: true },
-            { key: 'xbh', label: 'XBH', type: 'num', tip: '장타입니다. 2루타·3루타·홈런의 합입니다' },
-            { key: 'rbi', label: 'RBI', type: 'num', on: true },
-            { key: 'gw', label: 'GW RBI', type: 'num', tip: '결승타점입니다' },
-            { key: 'bb', label: 'BB', type: 'num', on: true },
-            { key: 'ibb', label: 'IBB', type: 'num', tip: '고의4구입니다' },
-            { key: 'hbp', label: 'HBP', type: 'num', tip: '몸에 맞는 공입니다' },
-            { key: 'so', label: 'SO', type: 'num', on: true },
-            { key: 'sac', label: 'SAC', type: 'num', tip: '희생번트입니다' },
-            { key: 'sf', label: 'SF', type: 'num', tip: '희생플라이입니다' },
-            { key: 'gidp', label: 'GIDP', type: 'num', tip: '병살타입니다' },
-            { key: 'multi', label: '멀티히트', type: 'num', tip: '한 경기에 안타 두 개 이상을 친 횟수입니다' },
-            { key: 'obp', label: 'OBP', type: 'num', fmt: v => avg3(v), on: true },
-            { key: 'slg', label: 'SLG', type: 'num', fmt: v => avg3(v), on: true },
-            { key: 'ops', label: 'OPS', type: 'num', fmt: v => avg3(v), on: true },
-            { key: 'isop', label: 'IsoP', type: 'num', fmt: v => avg3(v), tip: '순수 장타력입니다. 장타율에서 타율을 뺍니다' },
-            { key: 'babip', label: 'BABIP', type: 'num', fmt: v => avg3(v), tip: '인플레이 타구의 타율입니다. 삼진·홈런을 뺀 타구만 셉니다' },
-            { key: 'kpct', label: 'K%', type: 'num', fmt: num1, tip: '타석 대비 삼진 비율입니다' },
-            { key: 'bbpct', label: 'BB%', type: 'num', fmt: num1, tip: '타석 대비 볼넷 비율입니다' },
-            { key: 'bbk', label: 'BB/K', type: 'num', fmt: num2, tip: '삼진 하나당 볼넷 개수입니다' },
-            { key: 'go', label: 'GO', type: 'num', tip: '땅볼 아웃입니다' },
-            { key: 'ao', label: 'AO', type: 'num', tip: '뜬공 아웃입니다' },
-            { key: 'goao', label: 'GO/AO', type: 'num', fmt: num2, tip: '뜬공 하나당 땅볼 개수입니다' },
-        ];
-        const PIT_COLS = [
-            { key: '__rank', label: '순위', fixed: true },
-            { ...TEAM_COL, fixed: true },
-            { key: 'era', label: 'ERA', type: 'num', fmt: v => f2(v), on: true },
-            { key: 'g', label: 'G', type: 'num', tip: '선수별 등판 경기의 합입니다' },
-            { key: 'gs', label: 'GS', type: 'num', tip: '선발 등판입니다' },
-            { key: 'gf', label: 'GF', type: 'num', tip: '경기를 마무리한 횟수입니다' },
-            { key: 'w', label: 'W', type: 'num', on: true },
-            { key: 'l', label: 'L', type: 'num', on: true },
-            { key: 'sv', label: 'SV', type: 'num', on: true },
-            { key: 'svo', label: 'SVO', type: 'num', tip: '세이브 기회입니다' },
-            { key: 'bs', label: 'BS', type: 'num', tip: '블론 세이브입니다' },
-            { key: 'hld', label: 'HLD', type: 'num', on: true },
-            { key: 'cg', label: 'CG', type: 'num', tip: '완투입니다' },
-            { key: 'sho', label: 'SHO', type: 'num', tip: '완봉입니다' },
-            { key: 'qs', label: 'QS', type: 'num', tip: '선발 6이닝 이상 자책 3점 이하입니다' },
-            { key: 'outs', label: 'IP', type: 'num', fmt: v => ipFmt(v), on: true },
-            { key: 'tbf', label: 'TBF', type: 'num', tip: '상대한 타자 수입니다' },
-            { key: 'np', label: 'NP', type: 'num', tip: '던진 공의 수입니다' },
-            { key: 'h', label: 'H', type: 'num', on: true },
-            { key: 'd2', label: '2B', type: 'num', tip: '내준 2루타입니다' },
-            { key: 'd3', label: '3B', type: 'num', tip: '내준 3루타입니다' },
-            { key: 'hr', label: 'HR', type: 'num', on: true },
-            { key: 'r', label: 'R', type: 'num', on: true },
-            { key: 'er', label: 'ER', type: 'num', on: true },
-            { key: 'bb', label: 'BB', type: 'num', on: true },
-            { key: 'ibb', label: 'IBB', type: 'num', tip: '고의4구입니다' },
-            { key: 'hbp', label: 'HBP', type: 'num', tip: '몸에 맞는 공입니다' },
-            { key: 'so', label: 'SO', type: 'num', on: true },
-            { key: 'wp', label: 'WP', type: 'num', tip: '폭투입니다' },
-            { key: 'bk', label: 'BK', type: 'num', tip: '보크입니다' },
-            { key: 'gidp', label: 'GIDP', type: 'num', tip: '유도한 병살입니다' },
-            { key: 'whip', label: 'WHIP', type: 'num', fmt: v => f2(v), on: true },
-            { key: 'k9', label: 'K/9', type: 'num', fmt: v => f2(v), on: true },
-            { key: 'bb9', label: 'BB/9', type: 'num', fmt: v => f2(v), tip: '9이닝당 볼넷입니다' },
-            { key: 'h9', label: 'H/9', type: 'num', fmt: v => f2(v), tip: '9이닝당 피안타입니다' },
-            { key: 'hr9', label: 'HR/9', type: 'num', fmt: v => f2(v), tip: '9이닝당 피홈런입니다' },
-            { key: 'kbb', label: 'K/BB', type: 'num', fmt: num2, tip: '볼넷 하나당 삼진 개수입니다' },
-            { key: 'kpct', label: 'K%', type: 'num', fmt: num1, tip: '상대 타자 대비 삼진 비율입니다' },
-            { key: 'bbpct', label: 'BB%', type: 'num', fmt: num1, tip: '상대 타자 대비 볼넷 비율입니다' },
-            { key: 'oavg', label: '피안타율', type: 'num', fmt: v => avg3(v), tip: '상대 타자에서 사사구를 뺀 값으로 나눈 근사입니다' },
-            { key: 'pip', label: 'P/IP', type: 'num', fmt: num1, tip: '1이닝당 투구 수입니다' },
-            { key: 'go', label: 'GO', type: 'num', tip: '유도한 땅볼 아웃입니다' },
-            { key: 'ao', label: 'AO', type: 'num', tip: '유도한 뜬공 아웃입니다' },
-            { key: 'goao', label: 'GO/AO', type: 'num', fmt: num2, tip: '뜬공 하나당 땅볼 개수입니다' },
-        ];
-        const RBAT_COLS = [
-            { key: '__rank', label: '순위' }, TEAM_COL,
-            { key: 'G', label: 'G', type: 'num' },
-            { key: 'AVG', label: 'AVG', type: 'num', fmt: v => avg3(v) },
-            { key: 'PA', label: 'PA', type: 'num' }, { key: 'AB', label: 'AB', type: 'num' },
-            { key: 'R', label: 'R', type: 'num' }, { key: 'H', label: 'H', type: 'num' },
-            { key: '2B', label: '2B', type: 'num' }, { key: '3B', label: '3B', type: 'num' },
-            { key: 'HR', label: 'HR', type: 'num' }, { key: 'TB', label: 'TB', type: 'num' },
-            { key: 'BB', label: 'BB', type: 'num' }, { key: 'SO', label: 'SO', type: 'num' },
-            { key: 'OBP', label: 'OBP', type: 'num', fmt: v => avg3(v) },
-            { key: 'SLG', label: 'SLG', type: 'num', fmt: v => avg3(v) },
-            { key: 'OPS', label: 'OPS', type: 'num', fmt: v => avg3(v) }
-        ];
-        const RPIT_COLS = [
-            { key: '__rank', label: '순위' }, TEAM_COL,
-            { key: 'G', label: 'G', type: 'num' },
-            { key: 'IP_text', label: 'IP', type: 'num', fmt: v => (v == null || v === '') ? '-' : esc(v), sortVal: row => ipOuts(row.IP_text) },
-            { key: 'H', label: 'H', type: 'num' }, { key: 'R', label: 'R', type: 'num' },
-            { key: 'BB', label: 'BB', type: 'num' }, { key: 'SO', label: 'SO', type: 'num' },
-            { key: 'HR', label: 'HR', type: 'num' },
-            { key: 'WHIP', label: 'WHIP', type: 'num', fmt: v => f2(v) },
-            { key: 'RA9', label: 'RA/9', type: 'num', fmt: v => f2(v), tip: 'RA/9 = 9이닝당 실점(Runs Allowed/9). 기간별은 PBP에 자책 구분이 없어 ERA 대신 사용합니다.' },
-            { key: 'K9', label: 'K/9', type: 'num', fmt: v => f2(v) },
-            { key: 'AVG_against', label: 'AVG', type: 'num', fmt: v => avg3(v), tip: '투수가 상대한 타자들의 타율입니다.' }
-        ];
-
-        // ===== 집계 (선수 기록 합산) =====
-        // 팀 합산은 두 갈래로 나뉩니다.
-        //
-        //   합계형   타석·안타·홈런처럼 그냥 더하면 되는 값
-        //   비율형   타율·출루율처럼 **성분에서 다시 계산**해야 하는 값
-        //
-        // 선수별 비율을 평균 내면 안 됩니다. 타석 10번인 선수와 500번인
-        // 선수가 같은 무게를 갖게 되어 틀립니다.
-        const BAT_SUM = {
-            pa: 'plate_appearance', ab: 'at_bat', r: 'run', h: 'single',
-            d2: 'double', d3: 'triple', hr: 'home_run', tb: 'total_bases',
-            rbi: 'run_batted_in', bb: 'base_on_balls', so: 'strikeout',
-            hbp: 'hit_by_pitch', sf: 'sacrifice_fly', sac: 'sacrifice_bunts',
-            ibb: 'intentional_base_on_balls', gidp: 'ground_into_double_play',
-            multi: 'multi_hits', xbh: 'extra_base_hits', go: 'ground_outs',
-            ao: 'air_outs', gw: 'gw_rbi', g: 'games',
-        };
-
-        function aggBatting(rows) {
-            const m = {};
-            for (const r of rows) {
-                const t = r.player_team; if (!t) continue;
-                const a = m[t] || (m[t] = { team: t });
-                for (const k of Object.keys(BAT_SUM)) {
-                    a[k] = (a[k] || 0) + num(r[BAT_SUM[k]]);
-                }
-            }
-            return Object.values(m).map(a => {
-                const single = a.h - a.d2 - a.d3 - a.hr;
-                a.avg = a.ab ? a.h / a.ab : 0;
-                const obpDen = a.ab + a.bb + a.hbp + a.sf;
-                a.obp = obpDen ? (a.h + a.bb + a.hbp) / obpDen : 0;
-                a.slg = a.ab ? a.tb / a.ab : 0;
-                a.ops = a.obp + a.slg;
-                // 순수 장타력입니다. 장타율에서 타율을 뺍니다.
-                a.isop = a.slg - a.avg;
-                a.kpct = a.pa ? a.so * 100 / a.pa : 0;
-                a.bbpct = a.pa ? a.bb * 100 / a.pa : 0;
-                a.bbk = a.so ? a.bb / a.so : 0;
-                // 인플레이 타구의 타율입니다. 삼진·홈런·희생플라이를 뺍니다.
-                const babipDen = a.ab - a.so - a.hr + a.sf;
-                a.babip = babipDen > 0 ? (a.h - a.hr) / babipDen : 0;
-                a.goao = a.ao ? a.go / a.ao : 0;
-                a.single = single;
-                return a;
-            });
-        }
-        const PIT_SUM = {
-            h: 'hits', r: 'run', er: 'earned_run', bb: 'base_on_balls',
-            so: 'strikeout', hr: 'home_run', w: 'wins', l: 'losses',
-            sv: 'save', hld: 'hold', hbp: 'hit_by_pitch',
-            ibb: 'intentional_base_on_balls', cg: 'complete_game',
-            sho: 'shutout', qs: 'quality_start', bs: 'blown_save',
-            tbf: 'total_batters_faced', np: 'number_of_pitchers',
-            d2: 'double', d3: 'triple', wp: 'wild_pitch', bk: 'balk',
-            gs: 'games_started', gf: 'games_finished',
-            svo: 'save_opportunity', gidp: 'ground_into_double_play',
-            go: 'ground_outs', ao: 'air_outs', g: 'games',
-        };
-
-        function aggPitching(rows) {
-            const m = {};
-            for (const r of rows) {
-                const t = r.player_team; if (!t) continue;
-                const a = m[t] || (m[t] = { team: t, outs: 0 });
-                a.outs += ipOuts(r.innings_pitched);
-                for (const k of Object.keys(PIT_SUM)) {
-                    a[k] = (a[k] || 0) + num(r[PIT_SUM[k]]);
-                }
-            }
-            return Object.values(m).map(a => {
-                a.era = a.outs ? a.er * 27 / a.outs : 0;
-                a.whip = a.outs ? (a.h + a.bb) * 3 / a.outs : 0;
-                a.bb9 = a.outs ? a.bb * 27 / a.outs : 0;
-                a.hr9 = a.outs ? a.hr * 27 / a.outs : 0;
-                a.h9 = a.outs ? a.h * 27 / a.outs : 0;
-                a.kbb = a.bb ? a.so / a.bb : 0;
-                a.kpct = a.tbf ? a.so * 100 / a.tbf : 0;
-                a.bbpct = a.tbf ? a.bb * 100 / a.tbf : 0;
-                a.pip = a.outs ? a.np * 3 / a.outs : 0;
-                // 피안타율입니다. 상대타자에서 사사구·희생타를 뺀 것이
-                // 분모라야 맞지만, 공식 기록에 그 성분이 다 없어서
-                // 상대타자에서 사사구만 뺀 근사입니다.
-                const abAgainst = a.tbf - a.bb - a.hbp;
-                a.oavg = abAgainst > 0 ? a.h / abAgainst : 0;
-                a.goao = a.ao ? a.go / a.ao : 0;
-                a.k9 = a.outs ? a.so * 27 / a.outs : 0;
-                return a;
-            });
-        }
-
-        const SEASON_CAVEAT = '출처: KBO 공식 선수 기록을 팀별로 합산해 계산합니다. AVG·OBP·SLG·OPS·ERA·WHIP는 성분에서 재산출합니다. 현재 진행 중인 시즌은 최신 일일 갱신 기준이라 KBO 실시간과 1~2경기 차이가 날 수 있습니다.';
-        const RANGE_CAVEAT = '선택한 기간 내 종료 경기의 PBP 이벤트를 집계합니다. 시즌 누적과 산출 방식이 달라 수치가 다를 수 있습니다.';
-
-        // 표 1개를 시즌 누적/기간별 모드로 전환할 때 헤더·설명을 갱신
-        function setViewHeader(mode) {
-            const isRange = mode === 'range';
-            // 머리글 아이콘은 없앴습니다. 글자만 바꿉니다.
-            document.getElementById('view-head').textContent = isRange ? '기간별' : '시즌 누적';
-            document.getElementById('view-desc').textContent = isRange
-                ? '선택한 기간의 경기(PBP) 이벤트를 집계한 성적입니다.'
-                : '선수 기록을 팀별로 합산한 시즌 누적 성적입니다.';
-        }
-
-        // ===== 시즌 누적(선수 기록 합산) 팀 성적 =====
-        // 지금 보이는 컬럼입니다. 탭(타격/투구)마다 따로 기억합니다.
-        //
-        // 지표가 타격 33개, 투구 43개라 한 번에 다 보이면 표가 옆으로
-        // 한참 흘러갑니다. 처음에는 자주 보는 것만 켜 둡니다.
-        const shownCols = { batting: null, pitching: null };
-
-        function colDefs(kind) {
-            return kind === 'batting' ? BAT_COLS : PIT_COLS;
-        }
-
-        /** 그 탭에서 보일 컬럼 키 집합입니다. 처음이면 기본값을 만듭니다. */
-        function visibleCols(kind) {
-            if (!shownCols[kind]) {
-                shownCols[kind] = new Set(
-                    colDefs(kind).filter(c => c.fixed || c.on).map(c => c.key));
-            }
-            return shownCols[kind];
-        }
-
-        /** 고른 컬럼만 남깁니다. 순위·팀은 늘 남습니다. */
-        function pickCols(cols, kind) {
-            const on = visibleCols(kind);
-            return cols.filter(c => c.fixed || on.has(c.key));
-        }
-
-        function renderColPanel() {
-            const kind = currentStat;
-            const defs = colDefs(kind).filter(c => !c.fixed);
-            const on = visibleCols(kind);
-            document.getElementById('col-list').innerHTML = defs.map(c =>
-                `<label class="${on.has(c.key) ? '' : 'off'}"`
-                + `${c.tip ? ` title="${esc(c.tip)}"` : ''}>`
-                + `<input type="checkbox" data-col="${c.key}"`
-                + `${on.has(c.key) ? ' checked' : ''}>${esc(c.label)}</label>`
-            ).join('');
-            document.getElementById('col-count').textContent =
-                `${on.size - 2}개 / ${defs.length}개`;
-        }
-
-        function applyColPreset(which) {
-            const kind = currentStat;
-            const defs = colDefs(kind);
-            shownCols[kind] = new Set(
-                defs.filter(c => c.fixed || (which === 'all' ? true : c.on))
-                    .map(c => c.key));
-            renderColPanel();
-            drawTables();
-        }
-
-        document.addEventListener('click', (e) => {
-            if (e.target.id === 'col-toggle' || e.target.id === 'col-close') {
-                document.getElementById('col-panel').classList.toggle('hidden');
-                if (!document.getElementById('col-panel').classList.contains('hidden')) {
-                    renderColPanel();
-                }
-                return;
-            }
-            const preset = e.target.getAttribute
-                && e.target.getAttribute('data-col-preset');
-            if (preset) applyColPreset(preset);
-        });
-
-        document.addEventListener('change', (e) => {
-            const key = e.target.getAttribute
-                && e.target.getAttribute('data-col');
-            if (!key) return;
-            const on = visibleCols(currentStat);
-            if (e.target.checked) on.add(key);
-            else on.delete(key);
-            renderColPanel();
-            drawTables();
-        });
-
-        // 마지막으로 받은 표입니다. 팀 고르개만 바뀌었을 때 서버를 다시
-        // 두드리지 않으려고 들고 있습니다. 열 팀짜리 표를 다시 받는 것은
-        // 낭비입니다.
-        let lastView = null;
-
-        /** 고른 팀입니다. 빈 문자열이면 전체입니다. */
-        function pickedTeam() {
-            const el = document.getElementById('team-select');
-            return el ? el.value : '';
-        }
-
-        /**
-         * 팀 고르개를 지금 표에 있는 팀으로 채웁니다.
-         *
-         * 고르고 있던 팀이 새 표에 없으면 '전체' 로 돌아갑니다. 1985년을
-         * 보다가 KT 를 고른 채 두면 표가 빈 채로 남습니다.
-         */
-        function fillTeams(rows) {
-            const el = document.getElementById('team-select');
-            if (!el) return;
-            const was = el.value;
-            const names = [...new Set((rows || []).map(r => r.team)
-                .filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'));
-            el.innerHTML = '<option value="">전체</option>'
-                + names.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
-            el.value = names.includes(was) ? was : '';
-        }
-
-        /** 보관한 표를 고른 팀으로 걸러 다시 그립니다. */
-        function drawTables() {
-            if (!lastView) return;
-            fillTeams(lastView.bat.length ? lastView.bat : lastView.pit);
-            syncRecordLink();
-            const t = pickedTeam();
-            const keep = rows => (t ? rows.filter(r => r.team === t) : rows);
-            const batDiv = document.getElementById('team-batting');
-            const pitDiv = document.getElementById('team-pitching');
-            const bat = keep(lastView.bat);
-            const pit = keep(lastView.pit);
-            if (!bat.length) batDiv.innerHTML = createEmptyState(lastView.batEmpty);
-            else makeSortable('team-batting',
-                pickCols(lastView.batCols, 'batting'), bat, lastView.batDef);
-            if (!pit.length) pitDiv.innerHTML = createEmptyState(lastView.pitEmpty);
-            else makeSortable('team-pitching',
-                pickCols(lastView.pitCols, 'pitching'), pit, lastView.pitDef);
-        }
-
-        /** 기록실 버튼을 고른 팀에 맞춥니다. */
-        function syncRecordLink() {
-            const a = document.getElementById('team-record-link');
-            if (!a) return;
-            const t = pickedTeam();
-            const href = t && window.teamRecordHref
-                ? window.teamRecordHref(t, '') : null;
-            // 팀을 안 골랐으면 기록실 첫 화면으로 보냅니다.
-            a.href = href ? `${href}&name=${encodeURIComponent(t)}` : 'team-record';
-            a.textContent = t ? `${t} 기록실` : '기록실';
-        }
-
-        async function loadTeamStats(season) {
-            const seq = ++loadSeq;
-            const batDiv = document.getElementById('team-batting');
-            const pitDiv = document.getElementById('team-pitching');
-            batDiv.innerHTML = createLoadingSpinner();
-            pitDiv.innerHTML = createLoadingSpinner();
-            setViewHeader('season');
-            document.getElementById('bat-title').textContent = season ? `팀 타격 (${season} 시즌 누적)` : '팀 타격 (시즌 누적)';
-            document.getElementById('pit-title').textContent = season ? `팀 투구 (${season} 시즌 누적)` : '팀 투구 (시즌 누적)';
-            document.getElementById('caveat-note').textContent = SEASON_CAVEAT;
-            // 기간 안내는 건드리지 않습니다. 경기 기록이 없는 시즌이라는
-            // 안내가 여기 들어 있는데, 시즌 누적을 그리면서 지우면
-            // 사용자는 왜 기간 조회가 꺼졌는지 알 수 없습니다.
-            try {
-                const [bd, pd] = await Promise.all([
-                    API.getBatterStats(season, 2000, 0, ''),
-                    API.getPitcherStats(season, 2000, 0, '')
-                ]);
-                if (seq !== loadSeq) return; // 다른 조회로 대체됨
-                const bagg = aggBatting((bd && bd.batters) || []);
-                const pagg = aggPitching((pd && pd.pitchers) || []);
-
-                lastView = {
-                    bat: bagg, pit: pagg,
-                    batCols: BAT_COLS, pitCols: PIT_COLS,
-                    batDef: { key: 'avg', dir: 'desc' },
-                    pitDef: { key: 'era', dir: 'asc' },
-                    batEmpty: '해당 시즌 타격 기록이 없습니다.',
-                    pitEmpty: '해당 시즌 투구 기록이 없습니다.',
-                };
-                drawTables();
-            } catch (e) {
-                if (seq !== loadSeq) return;
-                batDiv.innerHTML = createErrorMessage('팀 기록을 불러오는데 실패했습니다.');
-                pitDiv.innerHTML = '';
-            }
-        }
-
-        // ===== 기간별(PBP) 팀 성적 =====
-        function fmtDate(dt) { const z = n => String(n).padStart(2, '0'); return dt.getFullYear() + '-' + z(dt.getMonth() + 1) + '-' + z(dt.getDate()); }
-        function fmtYmd(n) { const s = String(n == null ? '' : n); return s.length === 8 ? s.slice(0, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6, 8) : s; }
-
-        function renderRange(d) {
-            const batDiv = document.getElementById('team-batting');
-            const pitDiv = document.getElementById('team-pitching');
-            const b = (d && d.batting) || [], p = (d && d.pitching) || [];
-            lastView = {
-                bat: b, pit: p,
-                batCols: RBAT_COLS, pitCols: RPIT_COLS,
-                batDef: { key: 'AVG', dir: 'desc' },
-                pitDef: { key: 'IP_text', dir: 'desc' },
-                batEmpty: '해당 기간 타격 기록이 없습니다.',
-                pitEmpty: '해당 기간 투구 기록이 없습니다.',
-            };
-            drawTables();
-        }
-
-        async function loadTeamRange(start, end) {
-            const seq = ++loadSeq;
-            const batDiv = document.getElementById('team-batting');
-            const pitDiv = document.getElementById('team-pitching');
-            if (!start || !end) { batDiv.innerHTML = createEmptyState('기간을 선택해 주세요.'); pitDiv.innerHTML = ''; return; }
-            batDiv.innerHTML = createLoadingSpinner();
-            pitDiv.innerHTML = createLoadingSpinner();
-            setViewHeader('range');
-            document.getElementById('bat-title').textContent = '팀 타격 (기간별)';
-            document.getElementById('pit-title').textContent = '팀 투구 (기간별)';
-            document.getElementById('caveat-note').textContent = RANGE_CAVEAT;
-            try {
-                const res = await fetch(`${API_BASE_URL}/stats/team_range?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
-                if (!res.ok) throw new Error('http ' + res.status);
-                const d = await res.json();
-                if (seq !== loadSeq) return; // 다른 조회로 대체됨
-                renderRange(d);
-                const rn = document.getElementById('range-note');
-                if (rn) rn.textContent = d.games ? `반영: ${fmtYmd(d.date_min)} ~ ${fmtYmd(d.date_max)}, ${d.games}경기` : '해당 기간 경기 없음';
-                if (d.note) document.getElementById('caveat-note').textContent = d.note;
-            } catch (e) {
-                if (seq !== loadSeq) return;
-                batDiv.innerHTML = createErrorMessage('기간별 기록을 불러오는데 실패했습니다.');
-                pitDiv.innerHTML = '';
-            }
-        }
-
-        // ===== 전역 타격/투구 탭 =====
-        // 지금 보고 있는 탭입니다. 컬럼 고르개가 탭마다 따로 기억합니다.
-        let currentStat = 'batting';
-
-        function showStat(which) {
-            const showBat = which !== 'pitching';
-            currentStat = showBat ? 'batting' : 'pitching';
-            if (!document.getElementById('col-panel').classList.contains('hidden')) {
-                renderColPanel();
-            }
-            document.querySelectorAll('.stat-batting').forEach(el => { el.style.display = showBat ? '' : 'none'; });
-            document.querySelectorAll('.stat-pitching').forEach(el => { el.style.display = showBat ? 'none' : ''; });
-            document.getElementById('tab-batting').classList.toggle('active', showBat);
-            document.getElementById('tab-pitching').classList.toggle('active', !showBat);
-        }
-
-        // ===== 시즌 드롭다운: 보유 데이터 기준 동적 생성 =====
-        // /dashboard/stats 의 시즌 범위로 상·하한을 잡아 클라이언트 시계·하드코딩 의존을 제거하고,
-        // 그 범위에서 각 연도를 프로브해 공식 기록이 있는 시즌만 채택, 세션 캐시로 재진입 시 재프로브 생략.
-        async function buildSeasonOptions() {
-            const sel = document.getElementById('season-select');
-            // 공식 기록이 있는 시즌입니다. `/stats/seasons` 가 타자·투수
-            // 기록의 시즌을 합쳐 내림차순으로 줍니다(1982~2026, 45개).
-            //
-            // 전에는 `/dashboard/stats` 의 범위를 읽고 연도마다 한 번씩
-            // 두드려 확인했습니다. 그 범위는 **`games` 표 기준**이라
-            // 2008년부터였고, 그래서 1982~2007 공식 기록이 있는데도
-            // 고르개에 안 나왔습니다. 프로브도 마흔다섯 번이 됩니다.
-            const CACHE_KEY = 'teamstats_seasons_v2';
-            const fill = (list) => {
-                sel.innerHTML = list
-                    .map(y => `<option value="${y}">${y}</option>`).join('');
-                return list;
-            };
-            try {
-                const cached = JSON.parse(
-                    sessionStorage.getItem(CACHE_KEY) || 'null');
-                if (Array.isArray(cached) && cached.length) return fill(cached);
-            } catch (e) { /* 캐시 무시 */ }
-
-            let list = [];
-            try {
-                const r = await fetch(`${API_BASE_URL}/stats/seasons`);
-                if (r.ok) {
-                    const d = await r.json();
-                    list = Array.isArray(d && d.seasons) ? d.seasons : [];
-                }
-            } catch (e) { /* 아래 폴백 */ }
-
-            if (!list.length) {
-                // 엔드포인트가 죽었을 때입니다. 빈 고르개보다 낫습니다.
-                const maxY = new Date().getFullYear();
-                for (let y = maxY; y >= 1982; y--) list.push(y);
-            } else {
-                try {
-                    sessionStorage.setItem(CACHE_KEY, JSON.stringify(list));
-                } catch (e) { /* 저장 무시 */ }
-            }
-            return fill(list);
-        }
-
-        // 경기 기록(PBP)이 있는 시즌입니다. 기간별은 이 자료로만 셉니다.
-        //
-        // 공식 기록은 1982년부터지만 **경기 기록은 2008년부터**입니다.
-        // 두 범위가 다릅니다. 아래에서 실제 값으로 덮어씁니다.
-        let PBP_MIN = 2008;
-        let PBP_MAX = new Date().getFullYear();
-
-        /**
-         * 기간 입력을 고른 시즌에 묶습니다.
-         *
-         * 전에는 둘이 따로 놀았습니다. 시즌을 1982로 두고 기간을
-         * 2026-08-16~08-27 로 조회하면 2026년 표가 나왔습니다. 화면
-         * 머리에는 1982가 걸려 있는데 내용은 2026이니 읽는 사람이
-         * 속습니다.
-         *
-         * 이제 시즌을 고르면 기간도 그 해로 옮깁니다. 경기 기록이 없는
-         * 시즌이면 기간 조회를 아예 막습니다.
-         */
-        function syncRangeToSeason(season) {
-            const y = Number(season);
-            const startEl = document.getElementById('range-start');
-            const endEl = document.getElementById('range-end');
-            const goEl = document.getElementById('range-go');
-            const noteEl = document.getElementById('range-note');
-            if (!y) return;
-
-            const has = y >= PBP_MIN && y <= PBP_MAX;
-            for (const el of [startEl, endEl, goEl]) el.disabled = !has;
-            goEl.title = has ? '' : '이 시즌은 경기 기록이 없습니다';
-
-            if (!has) {
-                startEl.value = '';
-                endEl.value = '';
-                noteEl.textContent =
-                    `${y} 시즌은 경기 기록이 없어 기간별로 볼 수 없습니다`
-                    + ` (경기 기록은 ${PBP_MIN}년부터입니다)`;
-                return;
-            }
-
-            // 그 해 안으로만 고르게 막습니다.
-            const lo = `${y}-01-01`;
-            const hi = `${y}-12-31`;
-            for (const el of [startEl, endEl]) { el.min = lo; el.max = hi; }
-
-            // 기본값은 두 주입니다. 올해면 오늘까지, 지난 시즌이면 9월
-            // 말까지입니다. 10월 말로 두면 정규시즌이 이미 끝나 있어
-            // 조회해도 빈 표가 나옵니다.
-            const now = new Date();
-            const end = y === now.getFullYear() ? now : new Date(y, 8, 30);
-            const start = new Date(end.getTime() - 13 * 86400000);
-            startEl.value = fmtDate(start);
-            endEl.value = fmtDate(end);
-            noteEl.textContent = '';
-        }
-
-        /** 경기 기록이 있는 시즌 범위를 받아 둡니다. */
-        async function loadPbpRange() {
-            try {
-                const r = await fetch(`${API_BASE_URL}/dashboard/stats`);
-                if (!r.ok) return;
-                const d = await r.json();
-                // `seasons` 는 `games` 표 기준입니다('2008~2026').
-                const m = String((d && d.seasons) || '').match(/(\d{4})\D+(\d{4})/);
-                if (m) {
-                    PBP_MIN = Math.min(+m[1], +m[2]);
-                    PBP_MAX = Math.max(+m[1], +m[2]);
-                }
-            } catch (e) { /* 기본값을 씁니다 */ }
-        }
-
-        // 이벤트 바인딩
-        const sel = document.getElementById('season-select');
-        sel.addEventListener('change', () => {
-            syncRangeToSeason(sel.value);
-            loadTeamStats(sel.value);
-        });
-
-        // 팀 고르개는 **표에 실제로 있는 팀**으로 채웁니다.
-        //
-        // 열 구단을 박아 두면 옛 시즌에서 안 맞습니다. 1985년 표에는
-        // 삼성·해태·OB·롯데·청보·MBC 가 있지 지금 이름이 없습니다.
-        // `fillTeams` 를 표를 받을 때마다 부릅니다.
-        const teamSel = document.getElementById('team-select');
-        teamSel.addEventListener('change', () => {
-            // 서버를 다시 두드리지 않습니다. 이미 받은 표를 거릅니다.
-            drawTables();
-            syncRecordLink();
-        });
-        syncRecordLink();
-        document.getElementById('range-go').addEventListener('click', () => loadTeamRange(document.getElementById('range-start').value, document.getElementById('range-end').value));
-        document.getElementById('tab-batting').addEventListener('click', () => showStat('batting'));
-        document.getElementById('tab-pitching').addEventListener('click', () => showStat('pitching'));
-
-        // 초기 로드: 기본은 시즌 누적(타격 탭). 기간은 '조회' 시 같은 표를 PBP로 전환
-        (async function init() {
-            document.getElementById('team-batting').innerHTML = createLoadingSpinner();
-            document.getElementById('team-pitching').innerHTML = createLoadingSpinner();
-            // 시즌 목록과 경기 기록 범위를 함께 받습니다. 서로 다른
-            // 표를 보는 값이라 둘 다 필요합니다.
-            await Promise.all([buildSeasonOptions(), loadPbpRange()]);
-            syncRangeToSeason(sel.value);
-            loadTeamStats(sel.value);
-        })();
-
-        // ⓘ 헤더 정보: 흰색 배경·사이트 폰트 커스텀 툴팁(브라우저 기본 title 대체)
-        (function () {
-            let box = null;
-            function ensure() { if (!box) { box = document.createElement('div'); box.className = 'tip-box'; document.body.appendChild(box); } return box; }
-            document.addEventListener('mouseover', e => {
-                const el = e.target.closest('.th-info[data-tip]'); if (!el) return;
-                const b = ensure(); b.textContent = el.getAttribute('data-tip'); b.style.display = 'block';
-                const r = el.getBoundingClientRect();
-                const left = Math.min(r.left, window.innerWidth - b.offsetWidth - 12);
-                b.style.left = Math.max(8, left) + 'px';
-                b.style.top = (r.bottom + 6) + 'px';
-            });
-            document.addEventListener('mouseout', e => {
-                if (box && e.target.closest('.th-info[data-tip]')) box.style.display = 'none';
-            });
-        })();
-    </script>
+    <script src="../js/team-stats/metrics.js"></script>
+    <script src="../js/team-stats/columns.js"></script>
+    <script src="../js/team-stats/data.js"></script>
+    <script src="../js/team-stats/table.js"></script>
+    <script src="../js/team-stats/record.js"></script>
+    <script src="../js/team-stats/page.js"></script>
 </body>
 
 </html>
