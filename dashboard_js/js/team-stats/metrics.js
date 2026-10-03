@@ -197,9 +197,98 @@
     };
   }
 
+  // 공식 투수 기록 칸 → 팀 합계 키입니다. 이닝은 sumPitching 이 outs 로 셉니다.
+  const PIT_SUM = {
+    h: 'hits', r: 'run', er: 'earned_run', bb: 'base_on_balls', so: 'strikeout',
+    hr: 'home_run', w: 'wins', l: 'losses', sv: 'save', hld: 'hold',
+    hbp: 'hit_by_pitch', ibb: 'intentional_base_on_balls', cg: 'complete_game',
+    sho: 'shutout', qs: 'quality_start', bs: 'blown_save', tbf: 'total_batters_faced',
+    np: 'number_of_pitchers', d2: 'double', d3: 'triple', wp: 'wild_pitch', bk: 'balk',
+    gs: 'games_started', gf: 'games_finished', svo: 'save_opportunity',
+    gidp: 'ground_into_double_play', go: 'ground_outs', ao: 'air_outs',
+    sh: 'sacrifice_bunts', sf: 'sacrifice_fly',
+  };
+  const PIT_KEYS = Object.keys(PIT_SUM).concat(['outs']);
+
+  function sumPitching(rows) {
+    return sumBy(rows, PIT_SUM, function (a, r) {
+      a.outs = (a.outs || 0) + ipOuts(r.innings_pitched);
+    });
+  }
+
+  /** 투구 비율입니다. 응답에 없는 칸이 있으면 그 지표는 null 입니다. */
+  function pitchingRates(t) {
+    const outs = t.outs;
+    const per9 = function (x) { return div(x * 27, outs); };
+    const o = {
+      era: per9(t.er),
+      ra9: per9(t.r),
+      whip: div((t.h + t.bb) * 3, outs),
+      k9: per9(t.so),
+      bb9: per9(t.bb),
+      h9: per9(t.h),
+      hr9: per9(t.hr),
+      kbb: div(t.so, t.bb),
+      kpct: div(t.so * 100, t.tbf),
+      bbpct: div(t.bb * 100, t.tbf),
+      // 피안타율: 상대 타수 = TBF - BB - HBP - SH - SF (투수 기록의 BB 는 고의4구 포함)
+      oavg: div(t.h, t.tbf - t.bb - t.hbp - t.sh - t.sf),
+      babip: div(t.h - t.hr, t.tbf - t.bb - t.hbp - t.sh - t.so - t.hr),
+      lobpct: div((t.h + t.bb + t.hbp - t.r) * 100, t.h + t.bb + t.hbp - 1.4 * t.hr),
+      pip: div(t.np * 3, outs),
+      goao: div(t.go, t.ao),
+    };
+    o.kbbpct = o.kpct === null || o.bbpct === null ? null : o.kpct - o.bbpct;
+    return clean(o);
+  }
+
+  /** FIP 의 상수 앞부분입니다: (13·HR + 3·(BB − IBB + HBP) − 2·SO) / IP */
+  function fipCore(t) {
+    return div((13 * t.hr + 3 * (t.bb - t.ibb + t.hbp) - 2 * t.so) * 3, t.outs);
+  }
+
+  /**
+   * 투구 표입니다. FIP 상수는 그해 리그 합으로 직접 셉니다.
+   *   cFIP = 리그 ERA − 리그 fipCore
+   * 그래서 리그 평균 FIP = 리그 ERA 입니다.
+   */
+  function pitchingTable(totals, season, ix, keys) {
+    keys = keys || PIT_KEYS;
+    const teams = Object.values(totals || {});
+    const lg = sumObjects(teams, keys);
+    const lgR = pitchingRates(lg);
+    const lgCore = fipCore(lg);
+    const cfip = lgR.era !== null && lgCore !== null ? lgR.era - lgCore : null;
+
+    const rows = teams.map(function (t) {
+      const row = Object.assign({}, t, pitchingRates(t));
+      const core = fipCore(t);
+      const pf = pfHalf(ix, t.team, season);
+      row.fip = core !== null && cfip !== null ? core + cfip : null;
+      row.ef = row.era !== null && row.fip !== null ? row.era - row.fip : null;
+      row.erap = row.era !== null && lgR.era > 0 && pf !== null
+        ? 100 * row.era * (2 - pf) / lgR.era : null;
+      row.fipp = row.fip !== null && lgR.era > 0 && pf !== null
+        ? 100 * row.fip * (2 - pf) / lgR.era : null;
+      return row;
+    });
+
+    const n = teams.length || 1;
+    const league = { team: '리그 평균', isLeague: true };
+    for (const k of keys) league[k] = lg[k] / n;
+    Object.assign(league, lgR);
+    league.fip = cfip !== null ? lgR.era : null;
+    league.ef = league.fip !== null ? 0 : null;
+    league.erap = rows.some(r => r.erap !== null) ? 100 : null;
+    league.fipp = rows.some(r => r.fipp !== null) ? 100 : null;
+
+    return { rows: rows, league: league, ctx: { lgEra: lgR.era, cfip: cfip } };
+  }
+
   const api = {
     num, div, clean, ipOuts, BAT_SUM, BAT_KEYS, sumBy, sumBatting, battingRates,
     indexRefs, pfHalf, wobaOf, sumObjects, battingTable,
+    PIT_SUM, PIT_KEYS, sumPitching, pitchingRates, fipCore, pitchingTable,
   };
   TS.metrics = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
