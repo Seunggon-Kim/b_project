@@ -147,7 +147,7 @@
     if (opt.league) {
       lines.push([''].concat(ids.map((c, i) => (i === 0 ? '리그 평균' : '')), opt.cols.map(c => C().fmt(opt.league[c.key], c.kind))));
     }
-    return '﻿' + lines.map(l => l.map(csvCell).join(',')).join('\r\n') + '\r\n';
+    return '\uFEFF' + lines.map(l => l.map(csvCell).join(',')).join('\r\n') + '\r\n';
   }
 
   /** 머리글에 마우스를 올렸을 때 뜨는 설명 창 내용입니다. */
