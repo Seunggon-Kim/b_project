@@ -73,14 +73,16 @@
     rec: [['pct', 'desc']],
   };
 
-  function defaultSort(tab, keys) {
-    for (const [k, d] of SORT_PREF[tab]) if (keys.includes(k)) return { key: k, dir: d };
+  // rows 를 주면 모든 팀이 값 없음(null)인 칸(예: 2007년 이전 wRC+)은 기본 정렬에서 건너뜁니다.
+  function defaultSort(tab, keys, rows) {
+    const has = k => !rows || !rows.length || rows.some(r => r && r[k] != null && !Number.isNaN(r[k]));
+    for (const [k, d] of SORT_PREF[tab]) if (keys.includes(k) && has(k)) return { key: k, dir: d };
     return { key: keys[0], dir: 'desc' };
   }
 
-  function pickSort(st, keys) {
+  function pickSort(st, keys, rows) {
     if (st.sort && keys.includes(st.sort)) return { key: st.sort, dir: st.dir || 'desc' };
-    return defaultSort(st.tab, keys);
+    return defaultSort(st.tab, keys, rows);
   }
 
   function csvName(st, mode) {
@@ -358,7 +360,7 @@
 
     fillTeams(rows.map(r => r.team));
     const shown = st.team ? rows.filter(r => r.team === st.team) : rows;
-    const sort = pickSort(st, keys);
+    const sort = pickSort(st, keys, rows);
     S.last = { cols: cols, rows: shown, league: league, sort: sort };
     $('ts-table').innerHTML = shown.length
       ? T.renderTable({ cols: cols, rows: shown, league: league, sort: sort, teamHref: teamHref })
@@ -486,7 +488,7 @@
       const th = e.target.closest('th.sortable');
       if (!th) return;
       const k = th.dataset.key;
-      const cur = pickSort(S.st, keysNow());
+      const cur = pickSort(S.st, keysNow(), S.last && S.last.rows);
       if (cur.key === k) S.st.dir = cur.dir === 'asc' ? 'desc' : 'asc';
       else {
         const d = TS.columns.def(S.st.tab, k);
