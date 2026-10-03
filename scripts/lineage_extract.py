@@ -76,3 +76,103 @@ def job_keys(text):
 def schema_tables(schema_sql):
     """MySQL 스키마(migration/mysql/schema.sql)의 표 이름입니다."""
     return set(TABLE.findall(schema_sql))
+
+
+IMPORT = re.compile(r"import\s*\{([^}]*)\}\s*from\s*'\./routes/([\w-]+)\.js'", re.S)
+ADD = re.compile(r"router\.add\(\s*'GET'\s*,\s*'([^']+)'\s*,\s*([A-Za-z_]\w*)?")
+SQL_TABLE = re.compile(r"\b(?:FROM|JOIN)\s+[`\"\\]*([A-Za-z_]\w*)")
+TEMPLATE = re.compile(r"`\$\{[A-Za-z_][\w.]*\}(/[^`?'\"\s]*)")
+API_CALL = re.compile(r"\bAPI\.([A-Za-z_]\w*)\(")
+METHOD = re.compile(r"static\s+async\s+([A-Za-z_]\w*)\s*\(")
+SCRIPT_SRC = re.compile(r"<script[^>]+src=\"([^\"]+)\"")
+QUOTED = re.compile(r"['\"]([a-z][a-z0-9_]*)['\"]")
+TITLE = re.compile(r"<title>\s*(.*?)\s*</title>", re.S)
+VAR = re.compile(r"\$\{[^}]*\}")
+
+
+def route_files(index_js):
+    """GET 경로 → 그 핸들러가 있는 라우트 파일입니다. 인라인 핸들러는 뺍니다."""
+    owner = {}
+    for names, mod in IMPORT.findall(index_js):
+        for n in names.split(","):
+            n = n.strip().split(" as ")[-1].strip()
+            if n:
+                owner[n] = "src/routes/%s.js" % mod
+    return {path: owner[h] for path, h in ADD.findall(index_js) if h in owner}
+
+
+def route_patterns(index_js):
+    """등록된 GET 경로 전부(등록 순서)입니다."""
+    return [path for path, _ in ADD.findall(index_js)]
+
+
+def sql_tables(js_text, known):
+    """SQL 글자의 FROM·JOIN 뒤 표 이름 가운데 실제 표만 돌려줍니다.
+
+    대문자 FROM·JOIN 만 봅니다. JS 의 `import … from` 과 주석의 소문자 from 을
+    피하려는 것입니다. 이 저장소의 SQL 은 키워드를 대문자로 씁니다.
+    """
+    return {t for t in SQL_TABLE.findall(js_text) if t in known}
+
+
+def match_route(template_path, patterns):
+    """`/players/${id}/arsenal` 같은 화면 쪽 주소 틀을 라우트 패턴에 맞춥니다."""
+    path = VAR.sub(":v", template_path).rstrip("/")
+    segs = path.split("/")
+    for p in patterns:
+        ps = p.rstrip("/").split("/")
+        if len(ps) != len(segs):
+            continue
+        if all(a == b or (b.startswith(":") and a) for a, b in zip(segs, ps)):
+            if all(not (a == ":v" and not b.startswith(":")) for a, b in zip(segs, ps)):
+                return p
+    return None
+
+
+def api_methods(api_js):
+    """api.js 의 `static async <이름>(` 마다 그 몸통에서 처음 부르는 주소 틀입니다."""
+    out = {}
+    starts = [(m.group(1), m.start()) for m in METHOD.finditer(api_js)]
+    for i, (name, start) in enumerate(starts):
+        end = starts[i + 1][1] if i + 1 < len(starts) else len(api_js)
+        t = TEMPLATE.search(api_js, start, end)
+        if t:
+            out[name] = t.group(1)
+    return out
+
+
+def page_sources(page_path, html):
+    """페이지가 `<script src>` 로 싣는 로컬 JS 파일(있는 것만, 순서대로)입니다."""
+    out = []
+    for src in SCRIPT_SRC.findall(html):
+        if "://" in src:
+            continue
+        f = (page_path.parent / src.split("?")[0].split("#")[0]).resolve()
+        if f.exists():
+            out.append(f)
+    return out
+
+
+def source_routes(text, patterns, methods):
+    """소스 글자가 부르는 라우트 패턴들입니다(주소 틀 + API.<메서드> 호출)."""
+    found = set()
+    for tpl in TEMPLATE.findall(text):
+        r = match_route(tpl, patterns)
+        if r:
+            found.add(r)
+    for name in API_CALL.findall(text):
+        if name in methods:
+            r = match_route(methods[name], patterns)
+            if r:
+                found.add(r)
+    return found
+
+
+def quoted_tables(text, known):
+    """따옴표로 적힌 실제 표 이름들입니다(`/db/table/<이름>` 으로 읽는 화면용)."""
+    return {t for t in QUOTED.findall(text) if t in known}
+
+
+def page_title(html):
+    m = TITLE.search(html)
+    return m.group(1).strip() if m else ""

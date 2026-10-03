@@ -57,3 +57,103 @@ def test_job_keys():
 def test_schema_tables():
     sql = "CREATE TABLE `games` (\n  `a` INT\n);\nCREATE TABLE `meta_job_runs` (x INT);\n"
     assert lx.schema_tables(sql) == {"games", "meta_job_runs"}
+
+
+INDEX_JS = """
+import { json } from './lib/respond.js';
+import { standings } from './routes/standings.js';
+import {
+  playersSearch, playerDetail as detail,
+} from './routes/players.js';
+router.add('GET', '/', () => json({ ok: 1 }));
+router.add('GET', '/standings', standings);
+router.add('GET', '/players/search', playersSearch);
+router.add('GET', '/players/:id', detail);
+router.add('POST', '/admin/purge-cache', purge);
+"""
+
+
+def test_route_files_and_patterns():
+    assert lx.route_files(INDEX_JS) == {
+        "/standings": "src/routes/standings.js",
+        "/players/search": "src/routes/players.js",
+        "/players/:id": "src/routes/players.js",
+    }
+    assert lx.route_patterns(INDEX_JS) == ["/", "/standings", "/players/search", "/players/:id"]
+
+
+def test_sql_tables():
+    js = """
+      const a = await db.prepare('SELECT * FROM players WHERE x = ?');
+      const b = `SELECT g.a FROM games g JOIN \\`teams\\` t ON 1
+                 LEFT JOIN "kbo_roster" r ON 1 WHERE a IN (SELECT 1 FROM nope)`;
+      import { x } from './y.js';  // from comments are lower-case and ignored
+    """
+    assert lx.sql_tables(js, {"players", "games", "teams", "kbo_roster"}) == {
+        "players", "games", "teams", "kbo_roster"}
+
+
+def test_match_route():
+    pats = ["/players/search", "/players/:id", "/players/:id/arsenal", "/db/table/:name"]
+    assert lx.match_route("/players/${playerId}/arsenal", pats) == "/players/:id/arsenal"
+    assert lx.match_route("/players/search", pats) == "/players/search"
+    assert lx.match_route("/players/${id}", pats) == "/players/:id"
+    assert lx.match_route("/db/table/${name}", pats) == "/db/table/:name"
+    assert lx.match_route("/nowhere", pats) is None
+    assert lx.match_route("/players/", pats) is None
+
+
+API_JS = """
+class API {
+    static async getGames(season = 2025, limit = 50) {
+        const response = await fetch(`${API_BASE_URL}/games?season=${season}&limit=${limit}`);
+    }
+    static async getPitchArsenal(playerId) {
+        const response = await fetch(`${API_BASE_URL}/players/${playerId}/arsenal`);
+    }
+}
+"""
+
+
+def test_api_methods():
+    assert lx.api_methods(API_JS) == {
+        "getGames": "/games", "getPitchArsenal": "/players/${playerId}/arsenal"}
+
+
+def test_source_routes_and_tables():
+    pats = ["/games", "/players/:id/arsenal", "/db/table/:name", "/stats/seasons"]
+    methods = lx.api_methods(API_JS)
+    page = """
+      const g = await API.getGames(2025);
+      const r = await getJson(`${base}/db/table/${name}?limit=500`);
+      const s = await getJson(`${base}/stats/seasons`);
+      const refs = ['kbo_woba_weights_by_season', "stadium_dim", 'not_a_table'];
+      const other = `${dir}/file.txt`;
+    """
+    assert lx.source_routes(page, pats, methods) == {"/games", "/db/table/:name", "/stats/seasons"}
+    assert lx.quoted_tables(page, {"kbo_woba_weights_by_season", "stadium_dim"}) == {
+        "kbo_woba_weights_by_season", "stadium_dim"}
+
+
+def test_page_sources_and_title(tmp_path):
+    (tmp_path / "js").mkdir()
+    (tmp_path / "pages").mkdir()
+    (tmp_path / "js" / "api.js").write_text("x", encoding="utf-8")
+    html = ('<title> 팀 통계 | bstats </title>'
+            '<script src="../js/api.js"></script>'
+            '<script src="https://cdn.example/x.js"></script>'
+            '<script src="../js/missing.js"></script>')
+    page = tmp_path / "pages" / "team-stats.html"
+    # Windows 임시 폴더는 짧은 이름(8.3)·한글 사용자 폴더 때문에 경로 표기가 갈릴 수
+    # 있어 양쪽을 resolve() 로 맞춰 비교합니다.
+    assert [p.resolve() for p in lx.page_sources(page, html)] == [(tmp_path / "js" / "api.js").resolve()]
+    assert lx.page_title(html) == "팀 통계 | bstats"
+
+
+def test_page_sources_ignores_query_string(tmp_path):
+    (tmp_path / "js").mkdir()
+    (tmp_path / "pages").mkdir()
+    (tmp_path / "js" / "api.js").write_text("x", encoding="utf-8")
+    html = '<script src="../js/api.js?v=1.2"></script>'
+    page = tmp_path / "pages" / "player-stats.html"
+    assert [p.resolve() for p in lx.page_sources(page, html)] == [(tmp_path / "js" / "api.js").resolve()]
