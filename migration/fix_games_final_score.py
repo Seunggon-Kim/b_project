@@ -39,6 +39,7 @@ sys.path.insert(0, str(ROOT / "data_collection"))
 
 from d1_load import run_d1_file, sql_literal  # noqa: E402
 from mysql_sink import mirror  # noqa: E402
+from migration.fix_games_from_naver import PBP_INCOMPLETE  # noqa: E402
 
 FIRST_SEASON = 2015
 APPLY_SQL = ROOT / "migration" / "_fix_games_final_score.sql"
@@ -69,7 +70,9 @@ def changes(cur):
     cur.execute(FINAL_SCORE, (FIRST_SEASON * 10000, FIRST_SEASON))
     return [dict(zip(("game_id", "season", "game_type", "old_home", "old_away",
                       "home", "away"), r)) for r in cur.fetchall()
-            if r[5] is not None and r[6] is not None]
+            if r[5] is not None and r[6] is not None
+            # PBP 가 끊긴 경기는 네이버 최종 점수로 넣었습니다(fix_games_from_naver).
+            and r[0] not in PBP_INCOMPLETE]
 
 
 def update_sql(rows, home, away):
