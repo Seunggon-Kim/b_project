@@ -55,3 +55,10 @@ def test_workflow_run_scripts_have_valid_bash_syntax():
                 res = subprocess.run([bash, "-n"], input=script, text=True,
                                      capture_output=True, encoding="utf-8")
                 assert res.returncode == 0, "%s / %s: %s" % (name, step.get("name"), res.stderr)
+
+
+def test_weekly_pulls_from_mysql():
+    t = (WF / "weekly.yml").read_text(encoding="utf-8")
+    assert "python -m migration.mysql.mysql_to_sqlite" in t
+    assert "migration/d1_to_sqlite.py" not in t
+    assert "id-token: write" in t and "id: mirror_check" in t
