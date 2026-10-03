@@ -203,10 +203,393 @@
 
   // ===== 화면(브라우저에서만) =====
 
+  const S = {
+    st: null, seasons: [], refs: { errors: [] },
+    season: {}, standings: null, reg: null,
+    custom: { bat: null, pit: null }, panelOpen: false,
+    seasonErrors: [], seq: 0, last: null, latest: new Date().getFullYear(),
+  };
+
+  let tipHide = function () {};
+
+  function $(id) { return document.getElementById(id); }
+  function keysNow() { return visibleKeys(S.st.tab, S.st.group, S.st.season, S.custom[S.st.tab]); }
+
+  function writeUrl(replace) {
+    const st = S.st;
+    st.cols = st.group === 'custom' ? (S.custom[st.tab] || []) : [];
+    const url = location.pathname + toSearch(st);
+    if (replace) history.replaceState(null, '', url);
+    else history.pushState(null, '', url);
+  }
+
+  /** 상태를 받은 시즌 목록에 맞춥니다. */
+  function normalize() {
+    const st = S.st;
+    if (!st.season || !S.seasons.includes(st.season)) st.season = S.seasons[0];
+    if (st.group === 'custom' && st.cols.length) S.custom[st.tab] = st.cols.slice();
+  }
+
+  function errAlerts(list, errors) {
+    (errors || []).forEach(function (e) {
+      list.push({ kind: 'warn', text: `${e.what} 자료를 받지 못했습니다 (${e.error}). 이 자료가 필요한 칸은 '-'로 둡니다.` });
+    });
+  }
+
+  function renderAlerts(list) {
+    $('ts-alerts').innerHTML = list
+      .map(a => `<div class="ts-alert ts-alert-${a.kind}">${TS.table.esc(a.text)}</div>`).join('');
+  }
+
+  /**
+   * 규정에 쓸 순위표 { rank, live } 입니다. 올해는 실시간 순위, 아니면 저장된
+   * 순위표입니다. 실시간 순위를 못 받으면 alerts 에 알리고 저장된 순위표로 갑니다.
+   */
+  function rankNow(alerts) {
+    const M = TS.metrics, y = S.st.season;
+    if (y === S.latest && S.standings) {
+      if (!S.standings.errors.length && S.standings.teams.length) {
+        return { rank: M.rankFromStandings(S.standings.teams), live: true };
+      }
+      if (alerts) {
+        errAlerts(alerts, S.standings.errors);
+        alerts.push({ kind: 'warn', text: '실시간 순위를 받지 못해 저장된 순위표의 팀 경기 수로 규정을 셉니다. 저장된 순위표는 시즌 중 갱신이 늦을 수 있습니다.' });
+      }
+    }
+    return { rank: M.rankFor(S.refs.rank, y), live: false };
+  }
+
+  /** 지금 화면에 필요한 데이터를 받습니다. 받은 것은 기억하고, 실패한 것은 다시 받습니다. */
+  async function ensureData() {
+    const st = S.st, y = st.season, D = TS.data, base = root.KBO_API_BASE;
+    const stale = x => !x || x.errors.length > 0;
+    const jobs = [];
+    if (stale(S.season[y])) jobs.push(D.loadSeason(base, y).then(r => { S.season[y] = r; }));
+    if (st.min === 'q' && y === S.latest && stale(S.standings)) jobs.push(D.loadStandings(base).then(r => { S.standings = r; }));
+    await Promise.all(jobs);
+    // 순위표에 경기 수가 없는 팀이 있을 때만 시즌 공통 규정을 받습니다.
+    if (st.min === 'q' && stale(S.reg)) {
+      const sd = S.season[y];
+      const list = (st.tab === 'bat' ? sd.batters : sd.pitchers) || [];
+      if (needRegulation(list.map(p => p.player_team).filter(Boolean), rankNow(null).rank)) {
+        S.reg = await D.loadRegulation(base);
+      }
+    }
+  }
+
+  function fillSeasons() {
+    const el = $('season-select');
+    el.innerHTML = S.seasons.map(y => `<option value="${y}">${y}</option>`).join('');
+    el.value = String(S.st.season);
+  }
+
+  /** 팀·포지션 고르개를 채웁니다. 주소에 있던 값이 목록에 없으면 '전체'로 둡니다. */
+  function fillSelect(id, list, key) {
+    const el = $(id), esc = TS.table.esc;
+    if (S.st[key] && !list.includes(S.st[key])) S.st[key] = '';
+    el.innerHTML = '<option value="">전체</option>'
+      + list.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+    el.value = S.st[key];
+  }
+
+  function fillMin() {
+    const el = $('min-select');
+    el.innerHTML = minOptions(S.st.tab).map(o => `<option value="${o.v}">${o.label}</option>`).join('');
+    el.value = String(S.st.min);
+  }
+
+  function syncTabs() {
+    const st = S.st;
+    document.querySelectorAll('#ts-tabs [data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === st.tab));
+    document.querySelectorAll('#ts-groups [data-group]').forEach(b => b.classList.toggle('active', b.dataset.group === st.group));
+    $('group-sit').hidden = st.tab !== 'bat';
+    $('pos-group').hidden = st.tab !== 'bat';
+    $('col-panel').classList.toggle('hidden', !(st.group === 'custom' && S.panelOpen));
+  }
+
+  function renderColPanel() {
+    const tab = S.st.tab, C = TS.columns, esc = TS.table.esc;
+    const on = new Set(S.custom[tab] || C.PGROUPS[tab].dash);
+    const defs = C.PORDER[tab].map(k => C.pdef(tab, k));
+    $('col-list').innerHTML = defs.map(d => `<label class="${on.has(d.key) ? '' : 'off'}" title="${esc(d.desc)}">`
+      + `<input type="checkbox" data-col="${d.key}"${on.has(d.key) ? ' checked' : ''}>${esc(d.label)}</label>`).join('');
+    $('col-count').textContent = `${defs.filter(d => on.has(d.key)).length}개 / ${defs.length}개`;
+  }
+
+  /** 받은 데이터로 지금 탭을 그립니다. 서버를 부르지 않습니다. 데이터가 아직이면 그리지 않습니다. */
+  function render() {
+    if (!dataReady(S.st, S)) return;
+    tipHide();
+    const st = S.st, C = TS.columns, M = TS.metrics, T = TS.table;
+    const y = st.season;
+    const alerts = [];
+    errAlerts(alerts, S.seasonErrors);
+    errAlerts(alerts, S.refs.errors);
+    const sd = S.season[y];
+    errAlerts(alerts, sd.errors);
+    syncTabs();
+
+    const ix = M.indexRefs(S.refs);
+    const tbl = st.tab === 'bat' ? M.playerBatting(sd.batters, y, ix) : M.playerPitching(sd.pitchers, y, ix);
+    let qualOf = () => null;
+    let live = false;
+    if (st.min === 'q') {
+      const rk = rankNow(alerts);
+      live = rk.live;
+      const reg = S.reg && S.reg.regulation ? S.reg.regulation[String(y)] || null : null;
+      if (S.reg) errAlerts(alerts, S.reg.errors);
+      const miss = teamsOf(tbl.rows).filter(t => !(rk.rank[t] && rk.rank[t].g > 0));
+      if (miss.length && reg) {
+        alerts.push({ kind: 'info', text: `순위표에 없는 팀(${miss.join(', ')})은 그 시즌 공통 규정(${reg.qual_pa}타석, ${reg.qual_ip}이닝)으로 셉니다.` });
+      } else if (miss.length) {
+        alerts.push({ kind: 'warn', text: `규정을 셀 팀 경기 수를 몰라 ${miss.join(', ')} 선수는 규정 이상에서 빠집니다. 최소를 '전체'로 바꾸면 보입니다.` });
+      }
+      qualOf = r => M.qualFor(r.team, rk.rank, reg);
+    }
+
+    fillSelect('team-select', teamsOf(tbl.rows), 'team');
+    if (st.tab === 'bat') fillSelect('pos-select', positionsOf(tbl.rows), 'pos');
+    fillMin();
+
+    const keys = keysNow();
+    const cols = keys.map(k => C.pdef(st.tab, k));
+    const shown = filterRows(tbl.rows, st, qualOf);
+    const sort = pickSort(st, keys, tbl.rows);
+    const league = tbl.rows.length ? tbl.league : null;
+    const pg = T.pageOf(shown.length, { size: st.size, index: st.page });
+    if (pg.index !== st.page) { st.page = pg.index; writeUrl(true); }
+
+    S.last = { cols: cols, rows: shown, league: league, sort: sort, idCols: ID_COLS, all: tbl.rows };
+    $('ts-title').textContent = titleText(st, shown.length);
+    if (!tbl.rows.length) {
+      $('ts-table').innerHTML = createEmptyState('해당 시즌 기록이 없습니다.');
+    } else {
+      $('ts-table').innerHTML = (shown.length ? '' : '<p class="text-muted ts-empty">조건에 맞는 선수가 없습니다.</p>')
+        + T.renderTable({ cols: cols, rows: shown, league: league, sort: sort, idCols: ID_COLS, page: { size: st.size, index: st.page } });
+    }
+    $('ts-pager').innerHTML = shown.length ? pagerHtml(pg, shown.length, st.size) : '';
+    $('caveat-note').textContent = caveatText(st, S.latest, live);
+    renderAlerts(alerts);
+    if (!$('col-panel').classList.contains('hidden')) renderColPanel();
+  }
+
+  /** 주소를 쓰고, 필요한 데이터를 받은 뒤 그립니다. 늦게 온 이전 응답은 버립니다. */
+  async function refresh(opt) {
+    opt = opt || {};
+    const seq = ++S.seq;
+    if (!opt.noUrl) writeUrl(opt.replace);
+    $('ts-table').innerHTML = createLoadingSpinner();
+    $('ts-pager').innerHTML = '';
+    try {
+      await ensureData();
+    } catch (e) {
+      if (seq !== S.seq) return;
+      console.error(e);
+      $('ts-table').innerHTML = createErrorMessage('선수 기록을 불러오는데 실패했습니다.');
+      return;
+    }
+    if (seq !== S.seq) return;
+    render();
+  }
+
+  function downloadCsv() {
+    if (!S.last) return;
+    const csv = TS.table.toCsv(S.last);
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = csvName(S.st);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function copyLink() {
+    const btn = $('link-btn');
+    try {
+      await navigator.clipboard.writeText(location.href);
+      btn.textContent = '복사됨';
+    } catch (e) {
+      root.prompt('이 주소를 복사해 주세요', location.href);
+    }
+    setTimeout(() => { btn.textContent = '링크 복사'; }, 1500);
+  }
+
+  function bindTips() {
+    let box = null;
+    function hideTip() { if (box) box.style.display = 'none'; }
+    tipHide = hideTip;
+    window.addEventListener('scroll', hideTip, { passive: true });
+    document.addEventListener('touchstart', function (e) {
+      if (!(e.target.closest && e.target.closest('.ts-term'))) hideTip();
+    }, { passive: true });
+    document.addEventListener('mouseover', function (e) {
+      const el = e.target.closest && e.target.closest('.ts-term[data-col]');
+      if (!el) return;
+      const d = TS.columns.pdef(S.st.tab, el.dataset.col);
+      if (!d) return;
+      if (!box) {
+        box = document.createElement('div');
+        box.className = 'tip-box';
+        document.body.appendChild(box);
+      }
+      box.innerHTML = TS.table.tipHtml(d);
+      box.style.display = 'block';
+      const r = el.getBoundingClientRect();
+      box.style.left = Math.max(8, Math.min(r.left, window.innerWidth - box.offsetWidth - 12)) + 'px';
+      box.style.top = (r.bottom + 6) + 'px';
+    });
+    document.addEventListener('mouseout', function (e) {
+      if (e.target.closest && e.target.closest('.ts-term[data-col]')) hideTip();
+    });
+  }
+
+  /** 정렬·쪽을 처음으로 돌립니다(탭·묶음을 바꿀 때). */
+  function resetView() {
+    S.st.sort = '';
+    S.st.dir = '';
+    S.st.page = 0;
+  }
+
+  function bind() {
+    $('ts-tabs').addEventListener('click', function (e) {
+      const b = e.target.closest('[data-tab]');
+      if (!b || b.dataset.tab === S.st.tab) return;
+      const st = S.st;
+      st.tab = b.dataset.tab;
+      if (!GROUPS_BY_TAB[st.tab].includes(st.group)) st.group = 'dash';
+      if (typeof st.min === 'number' && !MIN_STEPS[st.tab].includes(st.min)) st.min = 'q';
+      if (st.tab !== 'bat') st.pos = '';
+      resetView();
+      refresh();
+    });
+    $('ts-groups').addEventListener('click', function (e) {
+      const b = e.target.closest('[data-group]');
+      if (!b) return;
+      const g = b.dataset.group;
+      if (g === 'custom') S.panelOpen = S.st.group === 'custom' ? !S.panelOpen : true;
+      if (g !== S.st.group) { S.st.group = g; resetView(); }
+      writeUrl();
+      render();
+    });
+    $('season-select').addEventListener('change', function (e) {
+      S.st.season = Number(e.target.value);
+      S.st.page = 0;
+      refresh();
+    });
+    $('team-select').addEventListener('change', function (e) {
+      S.st.team = e.target.value;
+      S.st.page = 0;
+      writeUrl();
+      render();
+    });
+    $('pos-select').addEventListener('change', function (e) {
+      S.st.pos = e.target.value;
+      S.st.page = 0;
+      writeUrl();
+      render();
+    });
+    $('min-select').addEventListener('change', function (e) {
+      const v = e.target.value;
+      S.st.min = v === 'q' || v === 'all' ? v : Number(v);
+      S.st.page = 0;
+      refresh();
+    });
+    $('csv-btn').addEventListener('click', downloadCsv);
+    $('link-btn').addEventListener('click', copyLink);
+    $('ts-table').addEventListener('click', function (e) {
+      const th = e.target.closest('th.sortable');
+      if (!th) return;
+      const k = th.dataset.key;
+      const cur = pickSort(S.st, keysNow(), S.last && S.last.all);
+      if (cur.key === k) S.st.dir = cur.dir === 'asc' ? 'desc' : 'asc';
+      else {
+        const d = TS.columns.pdef(S.st.tab, k);
+        S.st.dir = d && d.better === 'low' ? 'asc' : 'desc';
+      }
+      S.st.sort = k;
+      S.st.page = 0;
+      render();
+      writeUrl(true);
+    });
+    $('ts-pager').addEventListener('click', function (e) {
+      const b = e.target.closest('[data-page]');
+      if (!b || b.disabled) return;
+      S.st.page += b.dataset.page === 'next' ? 1 : -1;
+      writeUrl();
+      render();
+      // 표 위가 화면 밖이면 표 제목이 보이게 올립니다(위 고정 머리 높이만큼 띄움).
+      const top = $('ts-title').getBoundingClientRect().top;
+      if (top < 0) window.scrollBy(0, top - 80);
+    });
+    $('ts-pager').addEventListener('change', function (e) {
+      if (e.target.id !== 'page-size') return;
+      S.st.size = Number(e.target.value);
+      S.st.page = 0;
+      writeUrl();
+      render();
+    });
+    $('col-list').addEventListener('change', function (e) {
+      const k = e.target.getAttribute('data-col');
+      if (!k) return;
+      const tab = S.st.tab;
+      const on = new Set(S.custom[tab] || TS.columns.PGROUPS[tab].dash);
+      if (e.target.checked) on.add(k); else on.delete(k);
+      S.custom[tab] = TS.columns.PORDER[tab].filter(x => on.has(x));
+      writeUrl(true);
+      render();
+    });
+    document.querySelectorAll('[data-col-preset]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        const tab = S.st.tab;
+        S.custom[tab] = b.dataset.colPreset === 'all' ? TS.columns.PORDER[tab].slice() : TS.columns.PGROUPS[tab].dash.slice();
+        writeUrl(true);
+        render();
+      });
+    });
+    $('col-close').addEventListener('click', function () {
+      S.panelOpen = false;
+      syncTabs();
+    });
+    window.addEventListener('popstate', function () {
+      S.st = parseState(location.search);
+      normalize();
+      fillSeasons();
+      refresh({ noUrl: true });
+    });
+    bindTips();
+  }
+
+  async function init() {
+    try {
+      S.st = parseState(location.search);
+      $('ts-table').innerHTML = createLoadingSpinner();
+      const base = root.KBO_API_BASE;
+      const got = await Promise.all([TS.data.loadSeasons(base), TS.data.loadRefs(base)]);
+      S.seasons = got[0].seasons;
+      S.seasonErrors = got[0].errors;
+      S.refs = got[1];
+      S.latest = S.seasons[0];
+      normalize();
+      if (S.st.group === 'custom') S.panelOpen = true;
+      fillSeasons();
+      bind();
+      await refresh({ replace: true });
+    } catch (e) {
+      console.error(e);
+      $('ts-table').innerHTML = createErrorMessage('선수 기록을 불러오는데 실패했습니다.');
+    }
+  }
+
   const api = {
     ID_COLS, parseState, toSearch, visibleKeys, defaultSort, pickSort, filterRows, needRegulation,
     teamsOf, positionsOf, minOptions, minLabel, titleText, csvName, pagerHtml, caveatText, dataReady,
   };
   TS.playerPage = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
+  if (typeof document !== 'undefined' && document.getElementById('ps-page')) {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+    else init();
+  }
 })(typeof window !== 'undefined' ? window : globalThis);

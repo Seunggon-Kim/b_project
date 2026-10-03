@@ -95,3 +95,10 @@ a.tabbtn { text-decoration: none; display: inline-flex; align-items: center; }
 .ts-table thead th.ts-name { z-index: 6; background: var(--bg-tertiary); }
 .ts-table tr.ts-league td.ts-name { background: var(--bg-tertiary); }
 .ts-table th.ts-pteam, .ts-table td.ts-pteam { text-align: left; white-space: nowrap; }
+/* 선수 표 아래 쪽 넘기기 */
+.ts-pager { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem; font-size: 0.85rem; }
+.ts-pager:empty { display: none; }
+.ts-pager .tabbtn { height: 32px; padding: 0.25rem 0.75rem; box-sizing: border-box; }
+.ts-pager label { margin: 0; white-space: nowrap; }
+.ts-pager select { width: auto; max-width: 110px; }
+.ts-empty { margin: 0 0 0.6rem; font-size: 0.9rem; }
