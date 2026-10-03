@@ -59,3 +59,8 @@ database_id = "b6bf7d3e-dfef-480e-ae6f-a2c18278b77e"
 binding = "DB_2024_2026"
 database_name = "kbo-pbp-2024-2026"
 database_id = "0ee0dec0-eeac-47da-b31d-ee38426fbb92"
+
+# 읽을 DB 를 정합니다(3단계). 'd1' 이면 지금처럼 D1 을 읽고,
+# 'mysql' 이면 Hyperdrive 로 Cloud SQL MySQL 을 읽습니다.
+[vars]
+DB_BACKEND = "d1"
