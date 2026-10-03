@@ -450,12 +450,56 @@
     return { season, ix, bat, pit, rank, batTotals, pitTotals, unmatched };
   }
 
+  // /stats/team_range 칸 → 내부 키입니다. 응답에 없는 칸(RBI·ER 등)은 넣지
+  // 않습니다. 그래야 그 지표가 0 이 아니라 null 이 됩니다.
+  const RANGE_BAT = {
+    g: 'G', pa: 'PA', ab: 'AB', r: 'R', h: 'H', d2: '2B', d3: '3B', hr: 'HR',
+    bb: 'BB', hbp: 'HBP', so: 'SO', sh: 'SH', sf: 'SF', tb: 'TB',
+  };
+  const RANGE_PIT = { g: 'G', outs: 'IP_outs', h: 'H', r: 'R', bb: 'BB', so: 'SO', hr: 'HR' };
+
+  function rangeTotals(list, map) {
+    const out = {};
+    for (const x of list || []) {
+      if (!x || !x.team) continue;
+      const a = { team: x.team };
+      for (const k in map) a[k] = num(x[map[k]]);
+      out[x.team] = a;
+    }
+    return out;
+  }
+
+  /** 기간별 타격 표입니다. 리그 기준값은 같은 기간 리그 합입니다. */
+  function rangeBattingTable(resp, season, ix) {
+    return battingTable(rangeTotals(resp && resp.batting, RANGE_BAT), season, ix, Object.keys(RANGE_BAT));
+  }
+
+  /** 기간별 투구 표입니다. 피안타율은 응답의 AB_against 로 셉니다. */
+  function rangePitchingTable(resp, season, ix) {
+    const list = (resp && resp.pitching) || [];
+    const tbl = pitchingTable(rangeTotals(list, RANGE_PIT), season, ix, Object.keys(RANGE_PIT));
+    const by = {};
+    let H = 0, AB = 0;
+    for (const x of list) {
+      by[x.team] = x;
+      H += num(x.H);
+      AB += num(x.AB_against);
+    }
+    tbl.rows.forEach(function (r) {
+      const x = by[r.team];
+      r.oavg = x ? div(num(x.H), num(x.AB_against)) : null;
+    });
+    tbl.league.oavg = div(H, AB);
+    return tbl;
+  }
+
 
   const api = {
     num, div, clean, ipOuts, BAT_SUM, BAT_KEYS, sumBy, sumBatting, battingRates,
     indexRefs, pfHalf, wobaOf, sumObjects, battingTable,
     PIT_SUM, PIT_KEYS, sumPitching, pitchingRates, fipCore, pitchingTable,
     rankFor, rankFromStandings, pythag, gameSplits, recordTable, recordFromGames, seasonView,
+    RANGE_BAT, RANGE_PIT, rangeTotals, rangeBattingTable, rangePitchingTable,
   };
   TS.metrics = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
