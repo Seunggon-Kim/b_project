@@ -77,8 +77,10 @@ def main():
     if not rows:
         print("넣을 경기가 없습니다.")
         # 비시즌에는 정상입니다. 다만 시즌 중이라면 문제이므로 구분합니다.
+        # 퓨처스는 9월에 끝납니다. 10월을 시즌 중으로 보면 경기가 없는 게
+        # 정상인데도 매일 실패로 남습니다(2026-10-03 발견).
         month_now = int(months[-1][5:7])
-        return 1 if 3 <= month_now <= 10 else 0
+        return 1 if 3 <= month_now <= 9 else 0
 
     stmts = build_upserts("futures_games", COLS, ["game_id"], rows,
                           touch=None, keep=KEEP)

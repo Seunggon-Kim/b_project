@@ -159,6 +159,13 @@ jobs:
         continue-on-error: true
         run: python data_collection/team_ranks.py --current
 
+      - name: 팀 순위 결과 기록
+        if: always()
+        continue-on-error: true
+        run: |
+          python data_collection/record_job_run.py --job team_ranks \
+            --status ${{ steps.team_ranks.outcome == 'success' && 'ok' || (steps.team_ranks.outcome == 'skipped' && 'skip' || 'fail') }}
+
       # --- 3. KBO 공식 통계 (원래 02:00 KST) --------------------------
       # Selenium 으로 KBO 사이트를 읽습니다. 러너 IP 가 막히면 여기서
       # 실패합니다(설계 7장 위험 1).
@@ -244,6 +251,15 @@ jobs:
         continue-on-error: true
         run: python data_collection/add_new_players.py
 
+      # 화면의 수집 일정 표가 새 선수 추가의 마지막 실행을 따로 보여 줍니다.
+      # roster(오후)도 같은 키에 남기므로 둘 중 나중 것이 보입니다.
+      - name: 새 선수 추가 결과 기록
+        if: always()
+        continue-on-error: true
+        run: |
+          python data_collection/record_job_run.py --job add_new_players \
+            --status ${{ steps.new_players.outcome == 'success' && 'ok' || (steps.new_players.outcome == 'skipped' && 'skip' || 'fail') }}
+
       - name: 등록 현황 결과 기록
         if: always()
         continue-on-error: true
@@ -310,6 +326,13 @@ jobs:
         if: ${{ always() && steps.mysql.outcome == 'success' }}
         continue-on-error: true
         run: python -m migration.mysql.reconcile --days 3
+
+      - name: 대조 결과 기록
+        if: always()
+        continue-on-error: true
+        run: |
+          python data_collection/record_job_run.py --job reconcile \
+            --status ${{ steps.reconcile.outcome == 'success' && 'ok' || (steps.reconcile.outcome == 'skipped' && 'skip' || 'fail') }}
 
       - name: MySQL 이중 적재 실패 확인
         id: mirror_check

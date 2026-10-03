@@ -117,6 +117,14 @@ jobs:
         continue-on-error: true
         run: python data_collection/add_new_players.py
 
+      # daily 와 같은 키입니다. 화면은 둘 중 나중 실행을 보여 줍니다.
+      - name: 새 선수 추가 결과 기록
+        if: always()
+        continue-on-error: true
+        run: |
+          python data_collection/record_job_run.py --job add_new_players \
+            --status ${{ steps.newp.outcome == 'success' && 'ok' || (steps.newp.outcome == 'skipped' && 'skip' || 'fail') }}
+
       # 퓨처스 올 시즌 기록입니다. 2군 경기는 매일 있으므로 그날 것만
       # 다시 받습니다(12팀 x 타자·투수, 약 40초). 지난 시즌은 바뀌지
       # 않아 손으로 한 번 받아 둔 것으로 충분합니다.
