@@ -67,3 +67,9 @@ def test_원천_id_와_외부_API_파일이_있습니다():
     assert not bad, "sources 에 정의되지 않은 원천: %s" % bad
     for f in HAND.get("live_route_files", []):
         assert (ROOT / f).exists(), f
+
+
+def test_스크립트가_자기가_쓰는_표를_읽는다고_적지_않습니다():
+    bad = sorted("%s: %s" % (p, t) for p, s in HAND["scripts"].items()
+                 for t in set(s.get("reads", [])) & set(s.get("writes", [])))
+    assert not bad, "reads 에는 계산에 들어가는 다른 표만 적습니다: %s" % bad

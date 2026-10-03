@@ -1,37 +1,289 @@
 {
   "sources": {
-    "naver_relay": { "name": "네이버 문자중계", "url": "https://sports.naver.com/kbaseball/" },
-    "kbo_record": { "name": "KBO 기록실", "url": "https://www.koreabaseball.com/Record/" },
-    "kbo_roster": { "name": "KBO 1군 등록 현황", "url": "https://www.koreabaseball.com/Player/RegisterAll.aspx" },
-    "kbo_player_search": { "name": "KBO 선수 검색", "url": "https://www.koreabaseball.com/Player/Search.aspx" },
-    "kbo_player_detail": { "name": "KBO 선수 상세 기록", "url": "https://www.koreabaseball.com/Record/Player/HitterDetail/Basic.aspx" },
-    "kbo_futures": { "name": "KBO 퓨처스리그", "url": "https://www.koreabaseball.com/Futures/" },
-    "kbo_live": { "name": "KBO 실시간(순위·일정)", "url": "https://www.koreabaseball.com/" }
+    "naver_relay": {
+      "name": "네이버 문자중계",
+      "url": "https://sports.naver.com/kbaseball/"
+    },
+    "kbo_record": {
+      "name": "KBO 기록실",
+      "url": "https://www.koreabaseball.com/Record/"
+    },
+    "kbo_roster": {
+      "name": "KBO 1군 등록 현황",
+      "url": "https://www.koreabaseball.com/Player/RegisterAll.aspx"
+    },
+    "kbo_player_search": {
+      "name": "KBO 선수 검색",
+      "url": "https://www.koreabaseball.com/Player/Search.aspx"
+    },
+    "kbo_player_detail": {
+      "name": "KBO 선수 상세 기록",
+      "url": "https://www.koreabaseball.com/Record/Player/HitterDetail/Basic.aspx"
+    },
+    "kbo_futures": {
+      "name": "KBO 퓨처스리그",
+      "url": "https://www.koreabaseball.com/Futures/"
+    },
+    "kbo_live": {
+      "name": "KBO 실시간(순위·일정)",
+      "url": "https://www.koreabaseball.com/"
+    }
   },
   "scripts": {
-    "data_collection/daily_pbp_to_d1.py": { "sources": ["naver_relay"], "writes": ["play_by_play"], "reads": ["play_by_play"], "status_keys": { "daily": "pbp" }, "note": "문자중계를 받아 그날 행을 지우고 다시 넣습니다. 지우기 전 읽는 것은 같은 날 행뿐입니다." },
-    "data_collection/daily_games_to_d1.py": { "sources": [], "writes": ["games"], "reads": ["teams"], "status_keys": { "daily": "games" }, "note": "방금 받은 그날 문자중계 CSV 로 경기 결과를 만듭니다. 팀 목록만 DB 에서 읽습니다." },
-    "data_collection/futures_to_d1.py": { "sources": ["kbo_futures"], "writes": ["futures_games"], "reads": [], "status_keys": { "daily": "futures" } },
-    "data_collection/team_ranks.py": { "sources": ["kbo_record"], "writes": ["team_season_rank"], "reads": ["team_seasons"], "status_keys": { "daily": "team_ranks" }, "note": "옛 시즌 표기명을 team_seasons 로 프랜차이즈에 잇습니다." },
-    "data_collection/official_stats_http.py": { "sources": ["kbo_record"], "writes": [], "reads": [], "note": "공식 기록을 CSV 로 받습니다. 표에는 csv_to_d1.py 가 넣습니다." },
-    "data_collection/csv_to_d1.py": { "sources": [], "writes": ["kbo_official_batter_stats", "kbo_official_pitcher_stats"], "reads": [], "status_keys": { "daily": "official_stats" }, "note": "--table 인자로 타자·투수 표를 나눠 넣습니다." },
-    "data_collection/roster_to_d1.py": { "sources": ["kbo_roster", "kbo_futures"], "writes": ["kbo_roster", "kbo_roster_moves"], "reads": ["kbo_official_batter_stats", "kbo_official_pitcher_stats", "players"], "status_keys": { "daily": "roster", "roster": "roster_pm" }, "note": "공식 기록과 players 로 선수 번호를 찾아 명단에 붙입니다." },
-    "data_collection/sync_players_from_roster.py": { "sources": [], "writes": ["players"], "reads": ["kbo_roster", "players", "teams"], "note": "명단의 소속·등번호를 players 에 반영합니다." },
-    "data_collection/add_new_players.py": { "sources": ["kbo_player_search"], "writes": ["players", "kbo_roster", "kbo_roster_moves"], "reads": ["kbo_roster", "kbo_roster_moves", "players"], "status_keys": { "daily": "add_new_players", "roster": "add_new_players" }, "note": "새 선수를 players 에 넣고, 명단의 빈 player_id 를 채웁니다. 오늘·내일 선발은 우리 일정 API 로 봅니다." },
-    "data_collection/futures_records.py": { "sources": ["kbo_futures"], "writes": ["futures_season_stats"], "reads": [], "note": "roster 워크플로가 올 시즌 퓨처스 기록을 다시 받습니다. 따로 실행 기록 키는 없습니다." },
-    "data_collection/player_info_scraper.py": { "sources": ["kbo_player_detail"], "writes": ["players"], "reads": ["kbo_official_batter_stats", "kbo_official_pitcher_stats", "players"], "status_keys": { "monthly": "player_info" }, "note": "로컬 SQLite 의 players 를 고치고 sqlite_to_d1.py --tables players 가 올립니다." },
-    "data_collection/heal_player_photos.py": { "sources": [], "writes": ["players"], "reads": ["players", "kbo_official_batter_stats", "kbo_official_pitcher_stats"], "note": "선수 사진 주소의 연도를 최신으로 고칩니다. D1·MySQL 에 바로 UPDATE 합니다." },
-    "data_collection/record_job_run.py": { "sources": [], "writes": [], "reads": [], "note": "작업 실행 기록(meta_job_runs)만 남깁니다." },
-    "migration/mysql/reconcile.py": { "sources": [], "writes": [], "reads": [], "status_keys": { "daily": "reconcile" }, "note": "D1 과 MySQL 의 행 수·값을 견줍니다. 표는 쓰지 않습니다." },
-    "migration/mysql/mysql_to_sqlite.py": { "sources": [], "writes": [], "reads": [], "note": "주간 계산용으로 MySQL 을 로컬 SQLite 로 내려받습니다." },
-    "migration/d1_to_sqlite.py": { "sources": [], "writes": [], "reads": [], "note": "월간 작업용으로 D1 을 로컬 SQLite 로 내려받습니다." },
-    "migration/sqlite_to_d1.py": { "sources": [], "writes": [], "reads": [], "note": "계산 결과 표를 D1·MySQL 에 올립니다. 올리는 표는 계산한 스크립트에 적었습니다." },
-    "migration/export_csv.py": { "sources": [], "writes": [], "reads": [], "note": "전체 내려받기 CSV 를 만듭니다." },
-    "park_factors/truncated.py": { "sources": [], "writes": [], "reads": ["games", "play_by_play"], "note": "중간에 끊긴 경기를 가려 계산에서 뺍니다(로컬 임시 표 truncated_games 만 만들고 올리지 않습니다)." },
-    "park_factors/compute_self_park_factors.py": { "sources": [], "writes": ["self_park_factor"], "reads": ["play_by_play", "games"], "status_keys": { "weekly": "park_factors" } },
-    "park_factors/build_woba_weights.py": { "sources": [], "writes": ["kbo_woba_weights_by_season"], "reads": ["play_by_play", "games", "kbo_official_batter_stats"], "status_keys": { "weekly": "park_factors" }, "note": "리그 합계는 공식 타자 기록에서, 이벤트 가치는 build_re24_run_values 의 계산을 가져다 씁니다." },
-    "park_factors/build_wrc_plus.py": { "sources": [], "writes": ["wrc_plus_comparison", "weighted_pf_by_batter_season"], "reads": ["play_by_play", "games", "self_park_factor", "kbo_woba_weights_by_season", "kbo_official_batter_stats", "team_stadium_by_season", "stadium_dim"], "status_keys": { "weekly": "park_factors" }, "note": "team_stadium_by_season 의 올 시즌 행을 로컬에서 채우지만 sqlite_to_d1.py 가 올리지 않아 D1·MySQL 에는 반영되지 않습니다." },
-    "park_factors/build_re24_run_values.py": { "sources": [], "writes": ["re24_matrix_by_season", "kbo_run_values_by_season"], "reads": ["play_by_play", "games"], "status_keys": { "weekly": "park_factors" } }
+    "data_collection/daily_pbp_to_d1.py": {
+      "sources": [
+        "naver_relay"
+      ],
+      "writes": [
+        "play_by_play"
+      ],
+      "reads": [],
+      "status_keys": {
+        "daily": "pbp"
+      },
+      "note": "문자중계를 받아 그날 행을 지우고 다시 넣습니다."
+    },
+    "data_collection/daily_games_to_d1.py": {
+      "sources": [
+        "naver_relay"
+      ],
+      "writes": [
+        "games"
+      ],
+      "reads": [],
+      "status_keys": {
+        "daily": "games"
+      },
+      "note": "그날 문자중계 CSV 에서 경기 결과를 만듭니다(teams 는 팀 이름 확인용)."
+    },
+    "data_collection/futures_to_d1.py": {
+      "sources": [
+        "kbo_futures"
+      ],
+      "writes": [
+        "futures_games"
+      ],
+      "reads": [],
+      "status_keys": {
+        "daily": "futures"
+      }
+    },
+    "data_collection/team_ranks.py": {
+      "sources": [
+        "kbo_record"
+      ],
+      "writes": [
+        "team_season_rank"
+      ],
+      "reads": [],
+      "status_keys": {
+        "daily": "team_ranks"
+      },
+      "note": "team_seasons 는 옛 시즌 표기명을 프랜차이즈에 잇는 조회용입니다."
+    },
+    "data_collection/official_stats_http.py": {
+      "sources": [
+        "kbo_record"
+      ],
+      "writes": [],
+      "reads": [],
+      "note": "공식 기록을 CSV 로 받습니다. 표에는 csv_to_d1.py 가 넣습니다."
+    },
+    "data_collection/csv_to_d1.py": {
+      "sources": [],
+      "writes": [
+        "kbo_official_batter_stats",
+        "kbo_official_pitcher_stats"
+      ],
+      "reads": [],
+      "status_keys": {
+        "daily": "official_stats"
+      },
+      "note": "--table 인자로 타자·투수 표를 나눠 넣습니다."
+    },
+    "data_collection/roster_to_d1.py": {
+      "sources": [
+        "kbo_roster",
+        "kbo_futures"
+      ],
+      "writes": [
+        "kbo_roster",
+        "kbo_roster_moves"
+      ],
+      "reads": [],
+      "status_keys": {
+        "daily": "roster",
+        "roster": "roster_pm"
+      },
+      "note": "공식 기록·players 는 선수 번호를 찾는 조회용입니다. 퓨처스 명단도 함께 받습니다."
+    },
+    "data_collection/sync_players_from_roster.py": {
+      "sources": [],
+      "writes": [
+        "players"
+      ],
+      "reads": [
+        "kbo_roster"
+      ],
+      "note": "명단의 소속·등번호를 players 에 반영합니다(teams 는 팀 코드 확인용, players 는 비교 대상)."
+    },
+    "data_collection/add_new_players.py": {
+      "sources": [
+        "kbo_player_search"
+      ],
+      "writes": [
+        "players",
+        "kbo_roster",
+        "kbo_roster_moves"
+      ],
+      "reads": [],
+      "status_keys": {
+        "daily": "add_new_players",
+        "roster": "add_new_players"
+      },
+      "note": "명단·이동 표에서 번호 없는 이름을 찾아 새 선수를 넣고, 그 표의 빈 player_id 를 채웁니다. 오늘·내일 선발은 우리 일정 API 로 봅니다."
+    },
+    "data_collection/futures_records.py": {
+      "sources": [
+        "kbo_futures"
+      ],
+      "writes": [
+        "futures_season_stats"
+      ],
+      "reads": [],
+      "note": "roster 워크플로가 올 시즌 퓨처스 기록을 다시 받습니다. 따로 실행 기록 키는 없습니다."
+    },
+    "data_collection/player_info_scraper.py": {
+      "sources": [
+        "kbo_player_detail"
+      ],
+      "writes": [
+        "players"
+      ],
+      "reads": [],
+      "status_keys": {
+        "monthly": "player_info"
+      },
+      "note": "공식 기록은 받을 선수 번호 목록을 만드는 데만 씁니다. 로컬 SQLite 의 players 를 고치고 sqlite_to_d1.py --tables players 가 올립니다."
+    },
+    "data_collection/heal_player_photos.py": {
+      "sources": [],
+      "writes": [
+        "players"
+      ],
+      "reads": [],
+      "note": "선수 사진 주소의 연도를 최신으로 고칩니다. 공식 기록은 최신 시즌을 찾는 데만 씁니다."
+    },
+    "data_collection/record_job_run.py": {
+      "sources": [],
+      "writes": [],
+      "reads": [],
+      "note": "작업 실행 기록(meta_job_runs)만 남깁니다."
+    },
+    "migration/mysql/reconcile.py": {
+      "sources": [],
+      "writes": [],
+      "reads": [],
+      "status_keys": {
+        "daily": "reconcile"
+      },
+      "note": "D1 과 MySQL 의 행 수·값을 견줍니다. 표는 쓰지 않습니다."
+    },
+    "migration/mysql/mysql_to_sqlite.py": {
+      "sources": [],
+      "writes": [],
+      "reads": [],
+      "note": "주간 계산용으로 MySQL 을 로컬 SQLite 로 내려받습니다."
+    },
+    "migration/d1_to_sqlite.py": {
+      "sources": [],
+      "writes": [],
+      "reads": [],
+      "note": "월간 작업용으로 D1 을 로컬 SQLite 로 내려받습니다."
+    },
+    "migration/sqlite_to_d1.py": {
+      "sources": [],
+      "writes": [],
+      "reads": [],
+      "note": "계산 결과 표를 D1·MySQL 에 올립니다. 올리는 표는 계산한 스크립트에 적었습니다."
+    },
+    "migration/export_csv.py": {
+      "sources": [],
+      "writes": [],
+      "reads": [],
+      "note": "전체 내려받기 CSV 를 만듭니다."
+    },
+    "park_factors/truncated.py": {
+      "sources": [],
+      "writes": [],
+      "reads": [
+        "games",
+        "play_by_play"
+      ],
+      "note": "중간에 끊긴 경기를 가려 계산에서 뺍니다(로컬 임시 표 truncated_games 만 만들고 올리지 않습니다)."
+    },
+    "park_factors/compute_self_park_factors.py": {
+      "sources": [],
+      "writes": [
+        "self_park_factor"
+      ],
+      "reads": [
+        "play_by_play",
+        "games"
+      ],
+      "status_keys": {
+        "weekly": "park_factors"
+      }
+    },
+    "park_factors/build_woba_weights.py": {
+      "sources": [],
+      "writes": [
+        "kbo_woba_weights_by_season"
+      ],
+      "reads": [
+        "play_by_play",
+        "games",
+        "kbo_official_batter_stats"
+      ],
+      "status_keys": {
+        "weekly": "park_factors"
+      },
+      "note": "리그 합계는 공식 타자 기록에서, 이벤트 가치는 build_re24_run_values 의 계산을 가져다 씁니다."
+    },
+    "park_factors/build_wrc_plus.py": {
+      "sources": [],
+      "writes": [
+        "wrc_plus_comparison",
+        "weighted_pf_by_batter_season"
+      ],
+      "reads": [
+        "play_by_play",
+        "games",
+        "self_park_factor",
+        "kbo_woba_weights_by_season",
+        "kbo_official_batter_stats",
+        "team_stadium_by_season",
+        "stadium_dim"
+      ],
+      "status_keys": {
+        "weekly": "park_factors"
+      },
+      "note": "team_stadium_by_season 의 올 시즌 행을 로컬에서 채우지만 sqlite_to_d1.py 가 올리지 않아 D1·MySQL 에는 반영되지 않습니다."
+    },
+    "park_factors/build_re24_run_values.py": {
+      "sources": [],
+      "writes": [
+        "re24_matrix_by_season",
+        "kbo_run_values_by_season"
+      ],
+      "reads": [
+        "play_by_play",
+        "games"
+      ],
+      "status_keys": {
+        "weekly": "park_factors"
+      }
+    }
   },
   "manual_tables": {
     "franchises": "구단 계보표입니다. migration/build_franchises.py 가 KBO 기록실 팀 드롭다운을 읽어 로컬 DB 에 한 번 만들었고, 정기 작업은 없습니다.",
@@ -47,7 +299,10 @@
     "game_team_stats": "경기별 팀 기록입니다. 코드에서 이 표에 쓰는 곳을 찾지 못했습니다. 예전에 한 번 적재한 뒤 갱신하는 작업이 없습니다."
   },
   "live_route_files": [
-    "src/routes/standings.js", "src/routes/schedule.js", "src/routes/futures.js",
-    "src/routes/futuresplayer.js", "src/routes/futuresrecord.js"
+    "src/routes/standings.js",
+    "src/routes/schedule.js",
+    "src/routes/futures.js",
+    "src/routes/futuresplayer.js",
+    "src/routes/futuresrecord.js"
   ]
 }
