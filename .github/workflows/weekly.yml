@@ -235,3 +235,9 @@ jobs:
             echo "| 캐시 비우기 | ${{ steps.purge.outcome }} |"
             echo "| MySQL 이중 적재 | ${{ steps.mirror_check.outcome }} |"
           } >> $GITHUB_STEP_SUMMARY
+
+      - name: MySQL 이중 적재 판정
+        if: ${{ always() && steps.guard.outcome == 'success' && (steps.mysql.outcome != 'success' || steps.mirror_check.outcome != 'success') }}
+        run: |
+          echo "MySQL 연결 또는 이중 적재가 실패했습니다. 요약 표를 보십시오."
+          exit 1

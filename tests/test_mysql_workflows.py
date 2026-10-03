@@ -64,6 +64,8 @@ def test_weekly_pulls_from_mysql():
     assert "migration/d1_to_sqlite.py" not in t
     assert "id-token: write" in t and "id: mirror_check" in t
     assert "cryptography" in t
+    assert "name: MySQL 이중 적재 판정" in t
+    assert "steps.mirror_check.outcome != 'success'" in t
 
 def test_weekly_builds_truncated_games_before_calculations():
     import yaml
