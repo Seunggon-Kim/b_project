@@ -119,21 +119,21 @@
     return { teams: r.ok ? r.data.teams : [], errors: r.ok ? [] : [{ what: '실시간 순위', error: r.error }] };
   }
 
-  /** 공식 기록이 있는 시즌(내림차순)입니다. 실패하면 올해~1982 입니다. */
+  /** 공식 기록이 있는 시즌(내림차순)과 오류 목록입니다. 실패하면 올해~1982 와 오류 한 건을 돌려줍니다. */
   async function loadSeasons(base, opts) {
     opts = opts || {};
     const KEY = 'teamstats_seasons_v2';
     const desc = list => list.map(Number).filter(Number.isFinite).sort((a, b) => b - a);
     const hit = cacheGet(KEY, opts);
-    if (Array.isArray(hit) && hit.length) return desc(hit);
+    if (Array.isArray(hit) && hit.length) return { seasons: desc(hit), errors: [] };
     const r = await getJson(`${base}/stats/seasons`, 'seasons', opts.fetch);
     if (r.ok) {
       cacheSet(KEY, r.data.seasons, opts);
-      return desc(r.data.seasons);
+      return { seasons: desc(r.data.seasons), errors: [] };
     }
     const list = [];
     for (let y = new Date().getFullYear(); y >= 1982; y--) list.push(y);
-    return list;
+    return { seasons: list, errors: [{ what: '시즌 목록', error: r.error }] };
   }
 
   const api = { badReason, getJson, loadRefs, loadSeason, loadGames, loadRange, loadStandings, loadSeasons };

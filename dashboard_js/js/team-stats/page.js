@@ -103,7 +103,7 @@
     st: null, seasons: [], refs: { errors: [] },
     season: {}, games: {}, range: {}, standings: null,
     custom: { bat: null, pit: null }, panelOpen: false,
-    seq: 0, last: null, pbpMax: new Date().getFullYear(),
+    seasonErrors: [], seq: 0, last: null, pbpMax: new Date().getFullYear(),
   };
 
   function $(id) { return document.getElementById(id); }
@@ -271,11 +271,23 @@
     $('col-count').textContent = `${on.size}개 / ${defs.length}개`;
   }
 
-  /** 받은 데이터로 지금 탭을 그립니다. 서버를 부르지 않습니다. */
+  /** 지금 상태를 그리는 데 필요한 데이터가 다 왔는지 봅니다. */
+  function dataReady(st, store) {
+    const y = st.season;
+    if (st.start && st.end) {
+      return st.tab === 'rec' ? !!store.games[y] : !!store.range[st.start + '|' + st.end];
+    }
+    if (!store.season[y]) return false;
+    return !(st.tab === 'rec' && y >= PBP_MIN && !store.games[y]);
+  }
+
+  /** 받은 데이터로 지금 탭을 그립니다. 서버를 부르지 않습니다. 데이터가 아직이면 그리지 않습니다(받는 중인 refresh 가 그립니다). */
   function render() {
+    if (!dataReady(S.st, S)) return;
     const st = S.st, C = TS.columns, M = TS.metrics, T = TS.table, R = TS.record;
     const y = st.season, m = mode();
     const alerts = [];
+    errAlerts(alerts, S.seasonErrors);
     errAlerts(alerts, S.refs.errors);
     syncTabs();
     $('ts-title').textContent = titleText();
@@ -425,8 +437,8 @@
       const g = b.dataset.group;
       if (g === 'custom') S.panelOpen = S.st.group === 'custom' ? !S.panelOpen : true;
       if (g !== S.st.group) { S.st.group = g; S.st.sort = ''; S.st.dir = ''; }
-      render();
       writeUrl();
+      render();
     });
     $('season-select').addEventListener('change', function (e) {
       S.st.season = Number(e.target.value);
@@ -437,8 +449,8 @@
     });
     $('team-select').addEventListener('change', function (e) {
       S.st.team = e.target.value;
-      render();
       writeUrl();
+      render();
     });
     $('range-go').addEventListener('click', function () {
       const a = $('range-start').value, b = $('range-end').value;
@@ -479,15 +491,15 @@
       const on = new Set(S.custom[tab] || TS.columns.GROUPS[tab].dash);
       if (e.target.checked) on.add(k); else on.delete(k);
       S.custom[tab] = TS.columns.ORDER[tab].filter(x => on.has(x));
-      render();
       writeUrl(true);
+      render();
     });
     document.querySelectorAll('[data-col-preset]').forEach(function (b) {
       b.addEventListener('click', function () {
         const tab = S.st.tab;
         S.custom[tab] = b.dataset.colPreset === 'all' ? TS.columns.ORDER[tab].slice() : TS.columns.GROUPS[tab].dash.slice();
-        render();
         writeUrl(true);
+        render();
       });
     });
     $('col-close').addEventListener('click', function () {
@@ -510,7 +522,8 @@
       $('ts-table').innerHTML = createLoadingSpinner();
       const base = root.KBO_API_BASE;
       const got = await Promise.all([TS.data.loadSeasons(base), TS.data.loadRefs(base)]);
-      S.seasons = got[0];
+      S.seasons = got[0].seasons;
+      S.seasonErrors = got[0].errors;
       S.refs = got[1];
       S.pbpMax = S.seasons[0];
       normalize();
@@ -525,7 +538,7 @@
     }
   }
 
-  const api = { parseState, toSearch, visibleKeys, defaultSort, pickSort, csvName };
+  const api = { parseState, toSearch, visibleKeys, defaultSort, pickSort, csvName, dataReady };
   TS.page = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (typeof document !== 'undefined' && document.getElementById('ts-table')) {
