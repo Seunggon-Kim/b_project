@@ -82,12 +82,19 @@ C:/tmp/bstats-team-stats-check/
 // 저장소의 팀 통계 모듈과 시험 데이터를 불러옵니다.
 const path = require('node:path');
 const fs = require('node:fs');
+const vm = require('node:vm');
 
 const REPO_JS = 'C:/Users/김승곤/Desktop/b_project/dashboard_js/js/team-stats';
 const FIX = path.join(__dirname, '..', 'fixtures');
 
+// 저장소 package.json 이 "type": "module" 이라, require 로 부르면 Node 가
+// 이 파일들을 ES 모듈로 읽어 아무것도 내보내지 않습니다. 그래서 브라우저처럼
+// 일반 스크립트로 실행하고, 전역 TeamStats 에 붙은 모듈을 꺼냅니다.
+// 파일 이름을 .cjs 로 바꾸지 않습니다(브라우저가 .js 로 불러옵니다).
 function load(name) {
-  return require(path.join(REPO_JS, name + '.js'));
+  const file = path.join(REPO_JS, name + '.js');
+  vm.runInThisContext(fs.readFileSync(file, 'utf8'), { filename: file });
+  return globalThis.TeamStats[name];
 }
 
 function fixture(name) {
@@ -215,7 +222,7 @@ test('검증 7(타격): 2025 AVG·OBP·SLG 가 지금 페이지와 같음', () =
 - [ ] **Step 3: 테스트가 실패하는지 확인**
 
 Run: `node --test C:/tmp/bstats-team-stats-check/tests/metrics.basic.test.js`
-Expected: FAIL — `Cannot find module '.../metrics.js'`
+Expected: FAIL — `ENOENT: no such file or directory` (metrics.js 가 아직 없음)
 
 - [ ] **Step 4: metrics.js 기초 쓰기**
 
@@ -1425,7 +1432,7 @@ test('fmt', () => {
 - [ ] **Step 2: 테스트가 실패하는지 확인**
 
 Run: `node --test C:/tmp/bstats-team-stats-check/tests/columns.test.js`
-Expected: FAIL — `Cannot find module '.../columns.js'`
+Expected: FAIL — `ENOENT: no such file or directory` (columns.js 가 아직 없음)
 
 - [ ] **Step 3: columns.js 쓰기**
 
@@ -1773,7 +1780,7 @@ test('loadSeasons: 내림차순, 실패하면 올해~1982', async () => {
 - [ ] **Step 2: 테스트가 실패하는지 확인**
 
 Run: `node --test C:/tmp/bstats-team-stats-check/tests/data.test.js`
-Expected: FAIL — `Cannot find module '.../data.js'`
+Expected: FAIL — `ENOENT: no such file or directory` (data.js 가 아직 없음)
 
 - [ ] **Step 3: data.js 쓰기**
 
@@ -2030,7 +2037,7 @@ test('tipHtml·glossaryHtml', () => {
 - [ ] **Step 2: 테스트가 실패하는지 확인**
 
 Run: `node --test C:/tmp/bstats-team-stats-check/tests/table.test.js`
-Expected: FAIL — `Cannot find module '.../table.js'`
+Expected: FAIL — `ENOENT: no such file or directory` (table.js 가 아직 없음)
 
 - [ ] **Step 3: table.js 쓰기**
 
@@ -2251,7 +2258,7 @@ test('2025 실데이터로 10×10 표', () => {
 - [ ] **Step 2: 테스트가 실패하는지 확인**
 
 Run: `node --test C:/tmp/bstats-team-stats-check/tests/record.test.js`
-Expected: FAIL — `Cannot find module '.../record.js'`
+Expected: FAIL — `ENOENT: no such file or directory` (record.js 가 아직 없음)
 
 - [ ] **Step 3: record.js 쓰기**
 
@@ -2431,7 +2438,7 @@ test('csvName', () => {
 - [ ] **Step 2: 테스트가 실패하는지 확인**
 
 Run: `node --test C:/tmp/bstats-team-stats-check/tests/page.test.js`
-Expected: FAIL — `Cannot find module '.../page.js'`
+Expected: FAIL — `ENOENT: no such file or directory` (page.js 가 아직 없음)
 
 - [ ] **Step 3: page.js 쓰기**
 
