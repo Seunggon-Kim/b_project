@@ -346,8 +346,9 @@ jobs:
           # games 는 경기가 없는 날 건너뛰므로 skipped 를 실패로 보지 않습니다.
           if [ "${{ steps.games.outcome }}" = "failure" ]; then fail=1; fi
           # MySQL 이 켜져 있으면 연결·이중 적재·대조도 성공해야 합니다.
-          if [ "${{ vars.MYSQL_MIRROR }}" = "on" ]; then
-            for s in "${{ steps.mysql.outcome }}" "${{ steps.mirror_check.outcome }}"                      "${{ steps.reconcile.outcome }}"; do
+          if [ "${{ vars.MYSQL_MIRROR == 'on' }}" = "true" ]; then
+            for s in "${{ steps.mysql.outcome }}" "${{ steps.mirror_check.outcome }}" \r
+                     "${{ steps.reconcile.outcome }}"; do
               if [ "$s" != "success" ]; then fail=1; fi
             done
           fi

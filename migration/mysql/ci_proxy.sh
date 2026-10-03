@@ -23,8 +23,10 @@ echo "${SHA256}  ${BIN}" | sha256sum -c -
 chmod +x "$BIN"
 
 "$BIN" --address 127.0.0.1 --port 3307 "$CLOUDSQL_INSTANCE" > "$DIR/proxy.log" 2>&1 &
+PROXY_PID=$!
 for _ in $(seq 1 30); do
   if (echo > /dev/tcp/127.0.0.1/3307) 2>/dev/null; then break; fi
+  kill -0 "$PROXY_PID" 2>/dev/null || break
   sleep 1
 done
 if ! (echo > /dev/tcp/127.0.0.1/3307) 2>/dev/null; then

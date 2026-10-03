@@ -31,6 +31,11 @@ PBP = "play_by_play"
 FULL = {"players": ["player_id"],
         "kbo_roster": ["team", "name", "back_number"],
         "kbo_roster_moves": ["move_date", "kind", "team", "name"]}
+# 두 DB 가 일부러 다르게 쓰는 기록표입니다. meta_table_counts 는 D1 이 샤드별로,
+# MySQL 은 표 하나로 play_by_play 행 수를 적습니다(play_by_play 는 따로 견줍니다).
+COUNT_SKIP = {PBP, "meta_table_counts"}
+# D1 이 29항 UNION 을 "too many terms in compound SELECT" 로 거절했습니다.
+# 한 질의에 4항이면 안전합니다.
 D1_UNION_MAX = 4
 SKIP_COLS = {"created_at", "updated_at"}
 
@@ -116,10 +121,9 @@ def count_sql(tables, quote):
 
 def check(my, types, days):
     """다른 곳 목록과 견준 최근 경기 수를 돌려줍니다."""
-    tables = [t for t in types if t != PBP]
+    tables = [t for t in types if t not in COUNT_SKIP]
     problems = []
 
-    # D1 은 UNION 항 수를 5개쯤으로 막습니다(too many terms in compound SELECT).
     d1c = {}
     for i in range(0, len(tables), D1_UNION_MAX):
         sql = count_sql(tables[i:i + D1_UNION_MAX], lambda t: '"%s"' % t) + ";"
