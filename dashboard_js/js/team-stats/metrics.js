@@ -387,17 +387,27 @@
     return out;
   }
 
-  /** 시즌 팀 성적 표입니다. 승패는 순위표, 득실은 공식 기록 합입니다. */
+  /**
+   * 시즌 팀 성적 표입니다. 승패는 순위표입니다.
+   *
+   * 득실은 경기 결과(2008~)가 있으면 경기 점수 합입니다. 공식 선수 기록
+   * 합은 트레이드된 선수의 시즌 득점을 마지막 팀에 몰아 잡아, 트레이드한
+   * 팀의 득실이 틀립니다(2025 KIA 공식 619 vs 경기 668). 경기 결과가 없는
+   * 2007 이전만 공식 기록 합을 씁니다.
+   */
   function recordTable(rank, batTotals, pitTotals, splits) {
     return Object.keys(rank).map(function (team) {
       const k = rank[team];
       const b = batTotals && batTotals[team], p = pitTotals && pitTotals[team];
-      const r = b ? b.r : null, ra = p ? p.r : null;
-      const py = pythag(r, ra);
       const s = splits && splits[team];
+      const fromGames = !!(s && s.g > 0);
+      const r = fromGames ? s.r : (b ? b.r : null);
+      const ra = fromGames ? s.ra : (p ? p.r : null);
+      const py = pythag(r, ra);
       const expw = py === null ? null : py * (k.w + k.l);
       return Object.assign({}, k, {
         r: r, ra: ra,
+        runsFrom: fromGames ? 'games' : 'official',
         diff: r !== null && ra !== null ? r - ra : null,
         pyth: py,
         expw: expw,
