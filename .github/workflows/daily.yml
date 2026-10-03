@@ -67,7 +67,7 @@ jobs:
       - name: 의존성 설치
         run: |
           python -m pip install --upgrade pip
-          pip install beautifulsoup4 lxml requests pandas tqdm pymysql
+          pip install beautifulsoup4 lxml requests pandas tqdm pymysql cryptography
 
       # 토큰이 없으면 수집만 하고 아무것도 안 남습니다. 시간만 쓰고
       # 끝나므로 먼저 막습니다.

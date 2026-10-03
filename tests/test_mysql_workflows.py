@@ -19,6 +19,7 @@ def test_collect_workflows_have_mirror_steps():
         assert "vars.MYSQL_MIRROR == 'on'" in t, name
         assert "bash migration/mysql/ci_proxy.sh" in t, name
         assert "pymysql" in t, name
+        assert "cryptography" in t, name
         assert "id: mirror_check" in t, name
 
 
@@ -62,6 +63,7 @@ def test_weekly_pulls_from_mysql():
     assert "python -m migration.mysql.mysql_to_sqlite" in t
     assert "migration/d1_to_sqlite.py" not in t
     assert "id-token: write" in t and "id: mirror_check" in t
+    assert "cryptography" in t
 
 def test_weekly_builds_truncated_games_before_calculations():
     import yaml

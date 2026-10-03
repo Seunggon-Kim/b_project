@@ -64,7 +64,7 @@ jobs:
           node-version: '24'
 
       - name: 의존성 설치
-        run: pip install requests pymysql
+        run: pip install requests pymysql cryptography
 
       - name: 인증 확인
         run: |

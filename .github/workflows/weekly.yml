@@ -73,7 +73,7 @@ jobs:
       - name: 의존성 설치
         run: |
           python -m pip install --upgrade pip
-          pip install pandas numpy pymysql
+          pip install pandas numpy pymysql cryptography
 
       - name: 인증 확인
         run: |
