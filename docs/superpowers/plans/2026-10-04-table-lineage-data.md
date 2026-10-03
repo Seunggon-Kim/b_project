@@ -27,6 +27,7 @@
 - **데이터 탐색 페이지는 모든 표를 읽습니다.** 그 페이지를 "표 → 화면" 선에 넣으면 선이 30개 늘어 그림이 무너집니다. 결과 JSON 의 그 페이지에 `"explorer": true` 를 두고 `edges` 에서 뺍니다. `/db/tables`·`/db/table/:name` 주소도 표마다의 `routes` 에서 뺍니다(모든 표를 읽는 주소라 정보가 없음).
 - **다른 화면이 `/db/table/<이름>` 으로 특정 표를 읽는 경우**(팀 통계의 참조 표 4개)는 그 화면 소스 파일에 글자로 적힌 표 이름을 그 화면이 읽는 표로 봅니다.
 - **페이지가 싣는 `js/api.js` 의 글자는 세지 않습니다.** 그 안의 주소 틀이 모두 잡혀 페이지마다 쓰지 않는 주소가 붙습니다. `api.js` 는 페이지가 실제로 부르는 `API.<메서드>` 로만 셉니다(Task 2 구현 중 발견).
+- **`reads` 에는 계산에 들어가는 다른 표만 적습니다.** 팀 이름·ID 확인 같은 찾아보기와 자기가 쓰는 표는 빼고 `note` 에 적습니다(그림의 "계산 표" 화살표가 부풀지 않게). 표의 `kind` 는 원천에서 받는 스크립트가 하나라도 쓰면 `collected`, 원천 없이 다른 표만 읽어 계산하면 `derived` 입니다(Task 3 검토에서 정함).
 - **외부를 넘기는 API**(실시간 순위·일정·퓨처스)는 손 파일 `live_route_files` 에 적고, 그 주소를 쓰는 화면에 `source:kbo_live → page:…` 선을 긋습니다.
 
 ## 파일 구조
@@ -710,6 +711,8 @@ def test_결과_모양():
     assert daily["schedule_kst"] == "매일 03:33" and daily["stale_hours"] == 36
     tr = next(t for t in d["tables"] if t["name"] == "team_season_rank")
     assert tr["kind"] == "collected" and tr["written_by"] == ["data_collection/team_ranks.py"]
+    for name in ("games", "players", "play_by_play"):
+        assert next(t for t in d["tables"] if t["name"] == name)["kind"] == "collected", name
     wrc = next(t for t in d["tables"] if t["name"] == "wrc_plus_comparison")
     assert wrc["kind"] == "derived" and "play_by_play" in wrc["derived_from"]
     assert {"from": "job:daily", "to": "table:team_season_rank"} in d["edges"]
@@ -862,11 +865,15 @@ def build(root=ROOT):
         t_pages = {p for r in routes if r["path"] in t_routes for p in r["pages"]}
         t_pages |= {p for p, ts in page_db.items() if t in ts}
         t_pages.discard(EXPLORER_PAGE)
+        # 원천에서 받아 오는 스크립트가 하나라도 쓰면 "받아 온 표"입니다. players 는
+        # 명단(kbo_roster)에서 소속을 고치기도 하지만 기본은 KBO 선수 페이지에서
+        # 받습니다. 원천 없이 다른 표만 읽어 계산하는 표가 "계산 표"입니다.
+        collects = any(hand["scripts"][p].get("sources") for p in writers)
         if t.startswith("meta_"):
             kind = "meta"
         elif not writers and t in hand.get("manual_tables", {}):
             kind = "manual"
-        elif derived:
+        elif derived and not collects:
             kind = "derived"
         else:
             kind = "collected"
