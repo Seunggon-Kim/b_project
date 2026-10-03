@@ -130,26 +130,6 @@ CREATE TABLE IF NOT EXISTS play_by_play (
     gameID TEXT
 );
 
--- 경기별 팀 통계
-CREATE TABLE IF NOT EXISTS game_team_stats (
-    stat_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    game_id TEXT NOT NULL,
-    team_id TEXT NOT NULL,
-    runs INTEGER DEFAULT 0,
-    hits INTEGER DEFAULT 0,
-    errors INTEGER DEFAULT 0,
-    left_on_base INTEGER DEFAULT 0,
-    doubles INTEGER DEFAULT 0,
-    triples INTEGER DEFAULT 0,
-    home_runs INTEGER DEFAULT 0,
-    walks INTEGER DEFAULT 0,
-    strikeouts INTEGER DEFAULT 0,
-    stolen_bases INTEGER DEFAULT 0,
-    FOREIGN KEY (game_id) REFERENCES games(game_id),
-    FOREIGN KEY (team_id) REFERENCES teams(team_id),
-    UNIQUE(game_id, team_id)
-);
-
 -- 인덱스 생성 (조회 성능 최적화)
 CREATE INDEX IF NOT EXISTS idx_games_date ON games(game_date);
 CREATE INDEX IF NOT EXISTS idx_games_season ON games(season);
@@ -159,7 +139,6 @@ CREATE INDEX IF NOT EXISTS idx_pbp_game ON play_by_play(gameID);
 CREATE INDEX IF NOT EXISTS idx_pbp_batter ON play_by_play(batter_ID);
 CREATE INDEX IF NOT EXISTS idx_pbp_pitcher ON play_by_play(pitcher_ID);
 CREATE INDEX IF NOT EXISTS idx_players_team ON players(team_id);
-CREATE INDEX IF NOT EXISTS idx_game_stats_team ON game_team_stats(team_id);
 
 -- 샘플 팀 데이터 삽입
 INSERT OR IGNORE INTO teams (team_id, team_name, team_name_en, city, stadium) VALUES

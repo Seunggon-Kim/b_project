@@ -2,7 +2,6 @@ CREATE TABLE IF NOT EXISTS meta_table_counts (
   name TEXT PRIMARY KEY, n INTEGER NOT NULL, updated_at TEXT NOT NULL);
 INSERT OR REPLACE INTO meta_table_counts SELECT 'futures_games', COUNT(*), datetime('now') FROM "futures_games";
 INSERT OR REPLACE INTO meta_table_counts SELECT 'futures_teams', COUNT(*), datetime('now') FROM "futures_teams";
-INSERT OR REPLACE INTO meta_table_counts SELECT 'game_team_stats', COUNT(*), datetime('now') FROM "game_team_stats";
 INSERT OR REPLACE INTO meta_table_counts SELECT 'games', COUNT(*), datetime('now') FROM "games";
 INSERT OR REPLACE INTO meta_table_counts SELECT 'kbo_official_batter_stats', COUNT(*), datetime('now') FROM "kbo_official_batter_stats";
 INSERT OR REPLACE INTO meta_table_counts SELECT 'kbo_official_pitcher_stats', COUNT(*), datetime('now') FROM "kbo_official_pitcher_stats";

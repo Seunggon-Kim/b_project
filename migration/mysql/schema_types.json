@@ -235,63 +235,6 @@
   ],
   "renumber": null
  },
- "game_team_stats": {
-  "columns": [
-   [
-    "stat_id",
-    "int"
-   ],
-   [
-    "game_id",
-    "text"
-   ],
-   [
-    "team_id",
-    "text"
-   ],
-   [
-    "runs",
-    "int"
-   ],
-   [
-    "hits",
-    "int"
-   ],
-   [
-    "errors",
-    "int"
-   ],
-   [
-    "left_on_base",
-    "int"
-   ],
-   [
-    "doubles",
-    "int"
-   ],
-   [
-    "triples",
-    "int"
-   ],
-   [
-    "home_runs",
-    "int"
-   ],
-   [
-    "walks",
-    "int"
-   ],
-   [
-    "strikeouts",
-    "int"
-   ],
-   [
-    "stolen_bases",
-    "int"
-   ]
-  ],
-  "renumber": null
- },
  "games": {
   "columns": [
    [

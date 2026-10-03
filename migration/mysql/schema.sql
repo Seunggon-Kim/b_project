@@ -68,23 +68,6 @@ CREATE TABLE `futures_teams` (
   PRIMARY KEY (`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-CREATE TABLE `game_team_stats` (
-  `stat_id` INT NOT NULL AUTO_INCREMENT,
-  `game_id` VARCHAR(16) NOT NULL,
-  `team_id` VARCHAR(16) NOT NULL,
-  `runs` INT DEFAULT 0,
-  `hits` INT DEFAULT 0,
-  `errors` INT DEFAULT 0,
-  `left_on_base` INT DEFAULT 0,
-  `doubles` INT DEFAULT 0,
-  `triples` INT DEFAULT 0,
-  `home_runs` INT DEFAULT 0,
-  `walks` INT DEFAULT 0,
-  `strikeouts` INT DEFAULT 0,
-  `stolen_bases` INT DEFAULT 0,
-  PRIMARY KEY (`stat_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
 CREATE TABLE `games` (
   `game_id` VARCHAR(64) NOT NULL,
   `game_date` INT NOT NULL,

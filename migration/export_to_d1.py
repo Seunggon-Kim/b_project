@@ -35,7 +35,6 @@ TABLE_ORDER = [
     "player_history",
     # 경기·기록
     "games",
-    "game_team_stats",
     "futures_games",
     "kbo_official_batter_stats",
     "kbo_official_pitcher_stats",

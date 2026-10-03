@@ -6,7 +6,6 @@
       "tables": [
         "play_by_play",
         "games",
-        "game_team_stats",
         "futures_games",
         "kbo_roster",
         "kbo_roster_moves"
@@ -91,26 +90,6 @@
         "game_time_minutes": "경기 소요 시간(분, 미집계 시 null)",
         "weather": "경기 당시 날씨(미집계 시 null)",
         "temperature": "경기 당시 기온(섭씨, 미집계 시 null)"
-      }
-    },
-    "game_team_stats": {
-      "category": "원천 데이터",
-      "table_desc": "경기·팀 단위 박스스코어 집계 통계(game_id+team_id 단위)",
-      "update_freq": "미사용 (현재 0행)",
-      "columns": {
-        "stat_id": "행 고유 식별자(PK)",
-        "game_id": "경기 ID(games FK)",
-        "team_id": "팀 ID(teams FK)",
-        "runs": "팀 득점(R)",
-        "hits": "팀 안타(H, 단타+2루타+3루타+홈런)",
-        "errors": "팀 실책(E)",
-        "left_on_base": "잔루(LOB)",
-        "doubles": "2루타(2B)",
-        "triples": "3루타(3B)",
-        "home_runs": "홈런(HR)",
-        "walks": "볼넷(BB)",
-        "strikeouts": "삼진(SO/K)",
-        "stolen_bases": "도루(SB)"
       }
     },
     "kbo_official_batter_stats": {

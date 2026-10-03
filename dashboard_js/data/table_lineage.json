@@ -830,7 +830,6 @@
     "futures_games",
     "futures_season_stats",
     "futures_teams",
-    "game_team_stats",
     "games",
     "kbo_official_batter_stats",
     "kbo_official_pitcher_stats",
@@ -868,7 +867,6 @@
     "futures_games",
     "futures_season_stats",
     "futures_teams",
-    "game_team_stats",
     "games",
     "kbo_official_batter_stats",
     "kbo_official_pitcher_stats",
@@ -906,7 +904,6 @@
     "futures_games",
     "futures_season_stats",
     "futures_teams",
-    "game_team_stats",
     "games",
     "kbo_official_batter_stats",
     "kbo_official_pitcher_stats",
@@ -1413,7 +1410,9 @@
    "note": "--table 인자로 타자·투수 표를 나눠 넣습니다.",
    "path": "data_collection/csv_to_d1.py",
    "reads": [],
-   "sources": [],
+   "sources": [
+    "kbo_record"
+   ],
    "status_keys": {
     "daily": "official_stats"
    },
@@ -1869,17 +1868,6 @@
    "routes": [
     "/schedule/futures"
    ],
-   "written_by": []
-  },
-  {
-   "category": "원천 데이터",
-   "derived_from": [],
-   "desc": "경기·팀 단위 박스스코어 집계 통계(game_id+team_id 단위)",
-   "kind": "manual",
-   "manual_note": "경기별 팀 기록입니다. 코드에서 이 표에 쓰는 곳을 찾지 못했습니다. 예전에 한 번 적재한 뒤 갱신하는 작업이 없습니다.",
-   "name": "game_team_stats",
-   "pages": [],
-   "routes": [],
    "written_by": []
   },
   {

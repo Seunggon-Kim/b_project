@@ -90,7 +90,9 @@
       "note": "공식 기록을 CSV 로 받습니다. 표에는 csv_to_d1.py 가 넣습니다."
     },
     "data_collection/csv_to_d1.py": {
-      "sources": [],
+      "sources": [
+        "kbo_record"
+      ],
       "writes": [
         "kbo_official_batter_stats",
         "kbo_official_pitcher_stats"
@@ -304,8 +306,7 @@
     "team_logos": "팀 로고 이미지입니다. data_collection/team_logos.py 로 로컬 PNG 와 생성 배지를 한 번 넣었고, 정기 작업은 없습니다.",
     "statiz_park_factor": "STATIZ 파크팩터 참고값입니다. migration/restore_derived.py 가 다른 DB 에서 한 번 복원했고, 정기 작업은 없습니다.",
     "statiz_yearly_constants": "STATIZ 연도별 상수 참고값입니다. migration/restore_derived.py 가 다른 DB 에서 한 번 복원했고, 정기 작업은 없습니다.",
-    "korean_series_champion": "한국시리즈 우승 기록입니다. data_collection/korean_series.py 에 적은 1982~2007 값을 한 번 넣었고, 정기 작업은 없습니다.",
-    "game_team_stats": "경기별 팀 기록입니다. 코드에서 이 표에 쓰는 곳을 찾지 못했습니다. 예전에 한 번 적재한 뒤 갱신하는 작업이 없습니다."
+    "korean_series_champion": "한국시리즈 우승 기록입니다. data_collection/korean_series.py 에 적은 1982~2007 값을 한 번 넣었고, 정기 작업은 없습니다."
   },
   "no_status_ok": {},
   "job_keys_without_tables": {},

@@ -1,6 +1,4 @@
 CREATE INDEX `idx_futures_games_date` ON `futures_games` (`game_date`);
-CREATE INDEX `idx_game_stats_team` ON `game_team_stats` (`team_id`);
-CREATE UNIQUE INDEX `uq_game_team_stats_1` ON `game_team_stats` (`game_id`, `team_id`);
 CREATE INDEX `idx_games_season` ON `games` (`season`);
 CREATE INDEX `idx_games_home_team` ON `games` (`home_team_id`);
 CREATE INDEX `idx_games_date` ON `games` (`game_date`);
@@ -17,8 +15,6 @@ CREATE INDEX `idx_players_team` ON `players` (`team_id`);
 CREATE UNIQUE INDEX `uq_stadium_dim_1` ON `stadium_dim` (`full_name`);
 CREATE INDEX `idx_wpf_batter_season` ON `weighted_pf_by_batter_season` (`batter_ID`, `season`);
 CREATE INDEX `idx_wrc_season` ON `wrc_plus_comparison` (`season`);
-ALTER TABLE `game_team_stats` ADD CONSTRAINT `fk_game_team_stats_team_id` FOREIGN KEY (`team_id`) REFERENCES `teams` (`team_id`);
-ALTER TABLE `game_team_stats` ADD CONSTRAINT `fk_game_team_stats_game_id` FOREIGN KEY (`game_id`) REFERENCES `games` (`game_id`);
 ALTER TABLE `games` ADD CONSTRAINT `fk_games_away_team_id` FOREIGN KEY (`away_team_id`) REFERENCES `teams` (`team_id`);
 ALTER TABLE `games` ADD CONSTRAINT `fk_games_home_team_id` FOREIGN KEY (`home_team_id`) REFERENCES `teams` (`team_id`);
 ALTER TABLE `players` ADD CONSTRAINT `fk_players_team_id` FOREIGN KEY (`team_id`) REFERENCES `teams` (`team_id`);
