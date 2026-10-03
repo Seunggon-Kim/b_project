@@ -90,13 +90,11 @@
     const all = seasonRows(player, kind);
     const cols = pickSeasons(player, thisYear).map(function (y) {
       const rs = all.filter(function (s) { return Number(s.season) === y; });
-      return { head: String(y), team: rs.length ? teamsOf(rs) : '-', level: rs.length ? '1군' : '-', t: total(rs, kind) };
+      return { head: String(y), team: rs.length ? teamsOf(rs) : '-', t: total(rs, kind) };
     });
-    cols.push({ head: '통산', team: '-', level: all.length ? '1군' : '-', t: total(all, kind) });
-    const rows = [
-      ['팀'].concat(cols.map(function (c) { return c.team; })),
-      ['리그'].concat(cols.map(function (c) { return c.level; })),
-    ];
+    cols.push({ head: '통산', team: '-', t: total(all, kind) });
+    // 리그(1군·퓨처스) 줄은 두지 않습니다. 위의 1군·퓨처스 전환이 이미 알려 줍니다(evan 결정).
+    const rows = [['팀'].concat(cols.map(function (c) { return c.team; }))];
     ROWS[kind].forEach(function (d) {
       rows.push([d[0]].concat(cols.map(function (c) { return c.t ? cell(c.t[d[1]], d[2]) : '-'; })));
     });
@@ -112,10 +110,7 @@
     const use = (seasons || []).slice(0, 3).reverse();
     if (!use.length) return null;
     const metrics = FUT[kind] || FUT.batter;
-    const rows = [
-      ['팀'].concat(use.map(function (s) { return text(s.team); })),
-      ['리그'].concat(use.map(function () { return '퓨처스'; })),
-    ];
+    const rows = [['팀'].concat(use.map(function (s) { return text(s.team); }))];
     metrics.forEach(function (m) {
       rows.push([m].concat(use.map(function (s) { return text(s[m]); })));
     });
@@ -124,7 +119,7 @@
 
   /** 연도별 기록이 없는 퓨처스 선수의 올 시즌 요약입니다. */
   function summary(columns, cells) {
-    const rows = [['리그', '퓨처스']];
+    const rows = [];
     (columns || []).forEach(function (c, i) { rows.push([c, text(cells && cells[i])]); });
     return { head: ['시즌', '올해'], rows: rows, career: false };
   }
