@@ -39,6 +39,8 @@
 /* ---------- 카드(팬그래프 module card) ---------- */
 .pa-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
 .pa-card--ql { grid-column: span 2; }
+/* 프로필은 내용 높이만 씁니다. Quick Look 높이에 맞추면 아래에 큰 빈칸이 남습니다(evan 결정). */
+.pa-card--profile { align-self: start; }
 .pa-card-tabs { display: flex; border-bottom: 1px solid var(--border-color); background: var(--bg-secondary); }
 .pa-card-tab { padding: 0.55rem 1rem; font-size: 0.9rem; font-weight: 700; color: var(--primary); border-bottom: 2px solid var(--primary); margin-bottom: -1px; }
 .pa-card-body { flex: 1 1 auto; padding: 0.5rem 0.75rem 0.75rem; overflow-x: auto; }
