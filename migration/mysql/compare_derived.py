@@ -38,11 +38,11 @@ def compare(a, b, table):
     ca, cb = columns(a, table), columns(b, table)
     if not ca or not cb:
         return ["%s: 한쪽에 표가 없습니다 (A %s / B %s)" % (table, bool(ca), bool(cb))]
+    ca = [c for c in ca if c not in IGNORE_COLS]
+    cb = [c for c in cb if c not in IGNORE_COLS]
     if set(ca) != set(cb):
         return ["%s: 열이 다릅니다 (A만 %s / B만 %s)"
                 % (table, sorted(set(ca) - set(cb)), sorted(set(cb) - set(ca)))]
-    ca = [c for c in ca if c not in IGNORE_COLS]
-    cb = [c for c in cb if c not in IGNORE_COLS]
     cols = sorted(ca)
     ra, rb = rows(a, table, cols), rows(b, table, cols)
     only_a, only_b = ra - rb, rb - ra
