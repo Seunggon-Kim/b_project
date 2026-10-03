@@ -62,3 +62,13 @@ def test_weekly_pulls_from_mysql():
     assert "python -m migration.mysql.mysql_to_sqlite" in t
     assert "migration/d1_to_sqlite.py" not in t
     assert "id-token: write" in t and "id: mirror_check" in t
+
+def test_weekly_builds_truncated_games_before_calculations():
+    import yaml
+
+    doc = yaml.safe_load((WF / "weekly.yml").read_text(encoding="utf-8"))
+    runs = [s.get("run", "") for s in doc["jobs"]["park-factors"]["steps"]]
+    a = [i for i, r in enumerate(runs) if "park_factors/truncated.py" in r]
+    b = [i for i, r in enumerate(runs) if "compute_self_park_factors.py" in r]
+    assert a and b
+    assert a[0] < b[0]

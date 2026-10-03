@@ -60,6 +60,7 @@ ENTRYPOINTS = {
     "weekly.yml": [
         "migration/mysql/mysql_to_sqlite.py",
         "migration/mysql/ci_proxy.sh",
+        "park_factors/truncated.py",
         "park_factors/compute_self_park_factors.py",
         "park_factors/build_woba_weights.py",
         "park_factors/build_wrc_plus.py",

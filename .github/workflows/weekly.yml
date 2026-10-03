@@ -107,8 +107,16 @@ jobs:
         id: pull
         run: python -m migration.mysql.mysql_to_sqlite --out "$KBO_DB"
 
+      # 원천에서 중간에 끊긴 경기를 가려 둡니다. 아래 세 계산이 이 표로 그 경기를
+      # 뺍니다(park_factors/truncated.py). 2026-08-29 에 계산이 이 표를 쓰게 바뀌었는데
+      # 만드는 단계가 없어 주간 작업이 첫 계산에서 계속 실패했습니다.
+      - name: 잘린 경기 표 만들기
+        id: truncated
+        run: python park_factors/truncated.py
+
       - name: 파크팩터 계산
         id: pf
+        if: ${{ steps.truncated.outcome == 'success' }}
         run: python park_factors/compute_self_park_factors.py
 
       # wOBA 가중치가 먼저 있어야 wRC+ 를 계산할 수 있습니다.
@@ -219,6 +227,7 @@ jobs:
             echo "| 단계 | 결과 |"
             echo "|---|---|"
             echo "| MySQL 내려받기 | ${{ steps.pull.outcome }} |"
+            echo "| 잘린 경기 표 | ${{ steps.truncated.outcome }} |"
             echo "| 파크팩터 | ${{ steps.pf.outcome }} |"
             echo "| wRC+ | ${{ steps.wrc.outcome }} |"
             echo "| RE24 | ${{ steps.re24.outcome }} |"
