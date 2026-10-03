@@ -285,10 +285,177 @@
     return { rows: rows, league: league, ctx: { lgEra: lgR.era, cfip: cfip } };
   }
 
+  /**
+   * 그 시즌의 공식 순위표입니다. 팀-시즌 한 줄씩입니다(1982~1988 도 시즌
+   * 합계). 1999·2000 은 드림·매직 양대 리그라 승차는 리그 안 값입니다.
+   */
+  function rankFor(rankRows, season) {
+    const out = {};
+    for (const r of rankRows || []) {
+      if (num(r.season) !== season) continue;
+      const w = num(r.wins), l = num(r.losses), d = num(r.draws);
+      out[r.team_name] = {
+        team: r.team_name,
+        rank: num(r.rank),
+        league: r.league || '단일',
+        g: num(r.games),
+        w: w, l: l, d: d,
+        pct: div(w, w + l),
+        gb: r.gb === null || r.gb === undefined || r.gb === '' ? null : num(r.gb),
+      };
+    }
+    return out;
+  }
+
+  /**
+   * 실시간 순위(/standings)를 rankFor 와 같은 모양으로 바꿉니다. 올해만
+   * 씁니다. 저장된 순위표는 시즌 중 갱신이 늦을 수 있습니다(2026 은 8월
+   * 말 값에 멈춰 있었습니다).
+   */
+  function rankFromStandings(teams) {
+    const out = {};
+    for (const t of teams || []) {
+      if (!t || !t.team) continue;
+      const w = num(t.wins), l = num(t.losses), d = num(t.draws);
+      out[t.team] = {
+        team: t.team,
+        rank: num(t.rank),
+        league: '단일',
+        g: num(t.games),
+        w: w, l: l, d: d,
+        pct: div(w, w + l),
+        gb: t.gb === null || t.gb === undefined || t.gb === '' ? null : num(t.gb),
+      };
+    }
+    return out;
+  }
+
+  /** 피타고리안 기대 승률입니다. R^1.83 / (R^1.83 + RA^1.83) */
+  function pythag(r, ra) {
+    if (!(r > 0) || !(ra > 0)) return null;
+    const a = Math.pow(r, 1.83), b = Math.pow(ra, 1.83);
+    return a / (a + b);
+  }
+
+  function emptyWL() { return { w: 0, l: 0, d: 0 }; }
+  function addWL(o, my, opp) {
+    if (my > opp) o.w++;
+    else if (my < opp) o.l++;
+    else o.d++;
+  }
+
+  /**
+   * 경기 결과로 팀별 승패·득실·홈/원정·1점차·월별·상대 전적을 셉니다.
+   * 정규시즌만 셉니다. 점수가 같으면 무승부입니다.
+   * start·end 는 YYYYMMDD 숫자이고, 없으면 전체입니다.
+   * 월은 3·4월을 묶어 키 4 로 둡니다.
+   */
+  function gameSplits(games, start, end) {
+    const out = {};
+    function get(t) {
+      return out[t] || (out[t] = {
+        team: t, g: 0, w: 0, l: 0, d: 0, r: 0, ra: 0,
+        home: emptyWL(), away: emptyWL(), onerun: emptyWL(), month: {}, vs: {},
+      });
+    }
+    for (const x of games || []) {
+      if (x.game_type !== '정규시즌') continue;
+      const day = num(x.game_date);
+      if (start && day < start) continue;
+      if (end && day > end) continue;
+      if (x.home_score === null || x.home_score === undefined
+        || x.away_score === null || x.away_score === undefined) continue;
+      const hs = num(x.home_score), as = num(x.away_score);
+      const month = Math.floor(day / 100) % 100;
+      const mk = month <= 4 ? 4 : month;
+      const sides = [
+        [x.home_team_id, hs, as, 'home', x.away_team_id],
+        [x.away_team_id, as, hs, 'away', x.home_team_id],
+      ];
+      for (const s of sides) {
+        const a = get(s[0]), my = s[1], opp = s[2];
+        a.g++;
+        a.r += my;
+        a.ra += opp;
+        addWL(a, my, opp);
+        addWL(a[s[3]], my, opp);
+        if (Math.abs(my - opp) === 1) addWL(a.onerun, my, opp);
+        addWL(a.month[mk] || (a.month[mk] = emptyWL()), my, opp);
+        addWL(a.vs[s[4]] || (a.vs[s[4]] = emptyWL()), my, opp);
+      }
+    }
+    return out;
+  }
+
+  /** 시즌 팀 성적 표입니다. 승패는 순위표, 득실은 공식 기록 합입니다. */
+  function recordTable(rank, batTotals, pitTotals, splits) {
+    return Object.keys(rank).map(function (team) {
+      const k = rank[team];
+      const b = batTotals && batTotals[team], p = pitTotals && pitTotals[team];
+      const r = b ? b.r : null, ra = p ? p.r : null;
+      const py = pythag(r, ra);
+      const s = splits && splits[team];
+      const expw = py === null ? null : py * (k.w + k.l);
+      return Object.assign({}, k, {
+        r: r, ra: ra,
+        diff: r !== null && ra !== null ? r - ra : null,
+        pyth: py,
+        expw: expw,
+        luck: expw === null ? null : k.w - expw,
+        home: s ? s.home : null,
+        away: s ? s.away : null,
+        onerun: s ? s.onerun : null,
+      });
+    });
+  }
+
+  /** 기간별 팀 성적 표입니다. 모두 경기 결과에서 셉니다. */
+  function recordFromGames(splits) {
+    const rows = Object.values(splits || {}).map(function (s) {
+      const py = pythag(s.r, s.ra);
+      const expw = py === null ? null : py * (s.w + s.l);
+      return {
+        team: s.team, g: s.g, w: s.w, l: s.l, d: s.d,
+        pct: div(s.w, s.w + s.l), gb: null,
+        r: s.r, ra: s.ra, diff: s.r - s.ra,
+        pyth: py, expw: expw, luck: expw === null ? null : s.w - expw,
+        home: s.home, away: s.away, onerun: s.onerun,
+      };
+    });
+    const top = rows.slice().sort((a, b) => (b.pct || 0) - (a.pct || 0))[0];
+    rows.forEach(function (r) {
+      r.gb = top ? ((top.w - r.w) + (r.l - top.l)) / 2 : null;
+    });
+    return rows;
+  }
+
+  /** 시즌 보기 전체입니다. 팀 행의 g 는 순위표 경기 수로 바꿉니다. */
+  function seasonView(input) {
+    const season = num(input.season);
+    const ix = indexRefs(input.refs);
+    const batTotals = sumBatting(input.batters);
+    const pitTotals = sumPitching(input.pitchers);
+    const rank = input.rank || rankFor(input.refs && input.refs.rank, season);
+    const bat = battingTable(batTotals, season, ix);
+    const pit = pitchingTable(pitTotals, season, ix);
+    [bat, pit].forEach(function (tbl) {
+      tbl.rows.forEach(function (r) { r.g = rank[r.team] ? rank[r.team].g : null; });
+      const gs = tbl.rows.map(r => r.g).filter(v => v !== null);
+      tbl.league.g = gs.length ? gs.reduce((a, b) => a + b, 0) / gs.length : null;
+    });
+    const names = Object.keys(rank);
+    const unmatched = names.length
+      ? names.filter(t => !batTotals[t]).concat(Object.keys(batTotals).filter(t => !rank[t]))
+      : [];
+    return { season, ix, bat, pit, rank, batTotals, pitTotals, unmatched };
+  }
+
+
   const api = {
     num, div, clean, ipOuts, BAT_SUM, BAT_KEYS, sumBy, sumBatting, battingRates,
     indexRefs, pfHalf, wobaOf, sumObjects, battingTable,
     PIT_SUM, PIT_KEYS, sumPitching, pitchingRates, fipCore, pitchingTable,
+    rankFor, rankFromStandings, pythag, gameSplits, recordTable, recordFromGames, seasonView,
   };
   TS.metrics = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
