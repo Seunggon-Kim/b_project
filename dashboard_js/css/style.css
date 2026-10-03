@@ -2484,3 +2484,24 @@ h2 .material-symbols-outlined,
     font-size: 13px;
     color: var(--text-secondary, #5b6472);
 }
+
+/* ===================== 드롭다운 화살표 위치 =====================
+ * 브라우저 기본 화살표는 오른쪽 끝에 붙어 답답해 보입니다.
+ * 기본 화살표를 끄고 같은 모양의 화살표를 오른쪽에서 조금 안쪽에 그립니다.
+ * 페이지별 select 규칙(background·padding 단축 속성)보다 우선하도록
+ * 선택자 구체성을 높였고, 배경색은 건드리지 않습니다. */
+select:not([multiple]):not([size]:not([size="1"])) {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%236b7280' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.85rem center;
+    background-size: 0.75rem 0.5rem;
+    padding-right: 2.2rem;
+}
+
+/* 어두운 테마에서는 화살표를 밝은 색으로 그립니다. */
+html[data-theme="dark"] select:not([multiple]):not([size]:not([size="1"])) {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23cbd5e1' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
