@@ -509,7 +509,7 @@
                     <h3 class="card-title">
                         <span class="material-symbols-outlined h1-icon">schedule</span>자동 수집 스케줄 (Cron)
                     </h3>
-                    <span class="text-muted" style="font-size: 0.875rem;">총 11개 작업</span>
+                    <span class="text-muted" style="font-size: 0.875rem;">총 14개 작업</span>
                 </div>
                 <div class="card-body">
                     <p class="text-secondary mb-2" style="font-size: 0.9rem;">
@@ -518,6 +518,9 @@
                         cron은 정각을 피해 잡았습니다. GitHub 문서가 매 시각 정각은 부하로
                         지연될 수 있다고 안내하기 때문입니다. 실제 실행이 예정보다 수십 분
                         늦을 수 있습니다.
+                    </p>
+                    <p class="text-secondary mb-2" style="font-size: 0.9rem;">
+                        적재 단계는 D1에 쓴 뒤 같은 내용을 MySQL에도 씁니다(이중 적재).
                     </p>
                     <div class="dbx-cron-wrap">
                         <table class="dbx-cron-table">
@@ -559,6 +562,17 @@
                                 </tr>
                                 <tr>
                                     <td class="dbx-cron-mods">
+                                        team_ranks.py
+                                        <span class="sub">data_collection/team_ranks.py --current</span>
+                                    </td>
+                                    <td class="dbx-cron-desc">KBO 기록실 팀 순위에서 올 시즌 순위·경기 수·승패무·승률·게임차를 받아
+                                        team_season_rank에 덮어씁니다. 비시즌(그해 순위가 아직 없을 때)은
+                                        건너뜁니다. 1982~2025는 2026-08-29에 한 번 받은 값 그대로입니다.</td>
+                                    <td class="dbx-cron-kst" title="크론식(UTC): 33 18 * * *">매일 03:33<br>(퓨처스 일정 직후)</td>
+                                    <td class="dbx-cron-upd pending" data-job="futures">-</td>
+                                </tr>
+                                <tr>
+                                    <td class="dbx-cron-mods">
                                         official_stats_http.py <span class="seq">&rarr;</span>
                                         csv_to_d1.py
                                     </td>
@@ -568,11 +582,24 @@
                                     <td class="dbx-cron-upd pending" data-job="official_stats">-</td>
                                 </tr>
                                 <tr>
+                                    <td class="dbx-cron-mods">
+                                        truncated.py
+                                        <span class="sub">park_factors/truncated.py</span>
+                                    </td>
+                                    <td class="dbx-cron-desc">원천 문자중계에서 중간에 끊긴 경기를 가려 truncated_games를 만듭니다.
+                                        파크팩터·wRC+·RE24 계산에서 그 경기를 뺍니다. 계산용 임시 DB 안에서만
+                                        쓰고 D1·MySQL에는 올리지 않습니다.</td>
+                                    <td class="dbx-cron-kst" title="크론식(UTC): 47 20 * * 1">매주 화 05:47<br>(MySQL 내려받기 직후)</td>
+                                    <td class="dbx-cron-upd pending" data-job="park_factors">-</td>
+                                </tr>
+                                <tr>
                                     <td class="dbx-cron-mods">park_factors 파이프라인
                                         <span class="sub">compute_self_park_factors.py &rarr; build_wrc_plus.py &rarr; build_re24_run_values.py</span>
                                     </td>
                                     <td class="dbx-cron-desc">누적 PBP·통계로 자체 파크팩터, wOBA/wRC+, RE24·득점가치를 다시 계산합니다.
-                                        play_by_play 전체를 훑어야 하는 계산이라 주 1회로 둡니다.</td>
+                                        play_by_play 전체를 훑어야 하는 계산이라 주 1회로 둡니다.
+                                        D1 대신 MySQL에서 내려받아 계산합니다(D1 400만 행 읽기 제거).
+                                        결과 표는 D1·MySQL에 같이 올립니다.</td>
                                     <td class="dbx-cron-kst" title="크론식(UTC): 47 20 * * 1">매주 화 05:47</td>
                                     <td class="dbx-cron-upd pending" data-job="park_factors">-</td>
                                 </tr>
@@ -608,16 +635,11 @@
                                     <td class="dbx-cron-upd pending" data-job="roster">-</td>
                                 </tr>
                                 <tr>
-                                    <td class="dbx-cron-mods">
-                                        shard_backfill.py
-                                        <span class="sub">2008~2011 / 2012~2014 두 번</span>
-                                    </td>
-                                    <td class="dbx-cron-desc">옛 시즌 PBP를 하루 예산만큼 밀어 넣습니다. D1 하루 쓰기
-                                        한도가 DB 단위로 걸려서 두 샤드를 같은 날 채웁니다.
-                                        <strong>2026-08-29에 3,870경기·120만 행이 모두 들어가 끝났습니다.</strong>
-                                        이제는 "모두 끝났습니다"만 찍고 넘어갑니다.</td>
-                                    <td class="dbx-cron-kst" title="크론식(UTC): 33 18 * * *">매일 03:33</td>
-                                    <td class="dbx-cron-upd pending" data-job="pbp_backfill">-</td>
+                                    <td class="dbx-cron-mods">add_new_players.py</td>
+                                    <td class="dbx-cron-desc">1군 등록 명단(kbo_roster)에는 있는데 players에 없는 새 선수를
+                                        KBO 선수 검색으로 찾아 players에 넣습니다. D1·MySQL에 같이 적재합니다.</td>
+                                    <td class="dbx-cron-kst" title="소속·등번호 갱신 단계 직후">매일 03:33·16:07<br>(소속·등번호 갱신 직후)</td>
+                                    <td class="dbx-cron-upd pending" data-job="roster">-</td>
                                 </tr>
                                 <tr>
                                     <td class="dbx-cron-mods">futures_records.py</td>
@@ -635,6 +657,16 @@
                                         사진이 나옵니다. 선수 한 명에 요청 두 번을 넘기지 않습니다.</td>
                                     <td class="dbx-cron-kst" title="크론식(UTC): 13 4 1 * *">매월 1일 13:13</td>
                                     <td class="dbx-cron-upd pending" data-job="player_info">-</td>
+                                </tr>
+                                <tr>
+                                    <td class="dbx-cron-mods">
+                                        reconcile.py
+                                        <span class="sub">migration/mysql/reconcile.py</span>
+                                    </td>
+                                    <td class="dbx-cron-desc">최근 3일 경기를 D1과 MySQL에서 견줘 다른 곳이 없는지 봅니다.
+                                        이중 적재가 켜져 있을 때만 돕니다.</td>
+                                    <td class="dbx-cron-kst" title="크론식(UTC): 33 18 * * *">매일 03:33<br>(마지막 단계)</td>
+                                    <td class="dbx-cron-upd pending" data-job="games">-</td>
                                 </tr>
                             </tbody>
                         </table>
