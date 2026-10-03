@@ -160,3 +160,18 @@ test('뒤집힌 기간은 빈 목록입니다', () => {
   assert.deepEqual(seasonsBetween(20190501, 20170401), []);
   assert.deepEqual(seasonsBetween('a', 20170401), []);
 });
+
+test('mysql 이면 시즌을 한 묶음으로 같은 DB 에 묻습니다', async () => {
+  const db = { name: 'mysql' };
+  const env = { DB: db, DB_BACKEND: 'mysql' };
+  for (const s of SHARDS) env[s.binding] = db;
+  const groups = groupBySeason(env, [2009, 2025, 2014, 1999]);
+  assert.deepEqual(groups.map((g) => g.seasons), [[2009, 2014, 2025]]);
+  assert.equal(groups[0].db, db);
+  let calls = 0;
+  const out = await fanOut(env, [2009, 2025], async (d, seasons) => { calls += 1; return [seasons.length]; });
+  assert.equal(calls, 1);
+  assert.deepEqual(out, [2]);
+  assert.equal(shardOf(env, 2025), db);
+  assert.equal(shardOf(env, 1999), null);
+});

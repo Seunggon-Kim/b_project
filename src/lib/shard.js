@@ -10,6 +10,8 @@
 // Worker 에서 JSON 을 직접 import 하지 않는 이유는, 번들러와 node:test 가
 // import 속성을 다르게 다뤄 한쪽에서만 깨지기 때문입니다.
 
+import { isMysql } from './backendflag.js';
+
 export const SHARDS = [
   { binding: 'DB_2008_2011', seasons: [2008, 2009, 2010, 2011] },
   { binding: 'DB_2012_2014', seasons: [2012, 2013, 2014] },
@@ -34,6 +36,7 @@ export function allSeasons() {
 export function shardOf(env, season) {
   const n = Number(season);
   if (!Number.isFinite(n)) return null;
+  if (isMysql(env)) return allSeasons().includes(n) ? env.DB : null;
   for (const s of SHARDS) {
     if (s.seasons.includes(n)) return env[s.binding] || null;
   }
@@ -54,6 +57,13 @@ export function groupBySeason(env, seasons) {
   const wanted = [...new Set((seasons || []).map(Number))]
     .filter(Number.isFinite)
     .sort((a, b) => a - b);
+
+  if (isMysql(env)) {
+    // MySQL 은 play_by_play 가 한 표입니다. 샤드마다 나눠 물으면 같은 행을
+    // 여러 번 받습니다(같은 어댑터를 가리키므로).
+    const known = wanted.filter((y) => allSeasons().includes(y));
+    return known.length ? [{ binding: 'DB', db: env.DB, seasons: known }] : [];
+  }
 
   const groups = [];
   for (const s of SHARDS) {

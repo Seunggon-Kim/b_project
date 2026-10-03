@@ -3,6 +3,7 @@ import { ttlCache } from '../lib/cache.js';
 import { kstToday } from '../lib/kst.js';
 import { KBO_CODE_TO_TEAM } from './standings.js';
 import { LATEST_TEAM_SQL } from './players.js';
+import { tableColumns } from '../lib/schema.js';
 
 // KBO 경기 일정/결과 (Naver 스포츠 API 프록시).
 //
@@ -135,12 +136,12 @@ let playersColsCache = null;
 /**
  * 원본 _players_has_col 입니다. players 테이블에 컬럼이 있는지(스키마 캐시).
  * is_active 등 신규 컬럼이 없는 구버전 DB 스냅샷에서도 안전하게 동작하기
- * 위함입니다. D1 은 PRAGMA table_info 를 지원합니다.
+ * 위함입니다. 열 목록은 lib/schema.js 의 tableColumns 가 읽습니다.
  */
 async function playersHasCol(env, col) {
   if (playersColsCache === null) {
-    const { results } = await env.DB.prepare('PRAGMA table_info(players)').all();
-    playersColsCache = new Set(results.map((r) => r.name));
+    const cols = await tableColumns(env, 'players');
+    playersColsCache = new Set(cols.map((c) => c.name));
   }
   return playersColsCache.has(col);
 }

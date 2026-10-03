@@ -27,11 +27,14 @@
 
 import { SHARDS } from './shard.js';
 import { countOf } from './counts.js';
+import { isMysql } from './backendflag.js';
+import { tableColumns } from './schema.js';
 
 /** 샤드에 나뉘어 있는 표 이름입니다. */
 export const SHARDED_TABLES = new Set(['play_by_play']);
 
-export function isSharded(table) {
+export function isSharded(table, env) {
+  if (isMysql(env)) return false;
   return SHARDED_TABLES.has(table);
 }
 
@@ -88,7 +91,7 @@ export async function sliceRows(env, table, offset, limit) {
   const plan = planSlice(counts, offset, limit);
   const parts = await Promise.all(plan.map(async (p) => {
     const { results } = await p.db
-      .prepare(`SELECT * FROM "${table}" LIMIT ? OFFSET ?`)
+      .prepare(`SELECT * FROM \`${table}\` LIMIT ? OFFSET ?`)
       .bind(p.limit, p.offset).all();
     return results;
   }));
@@ -101,5 +104,5 @@ export async function sliceRows(env, table, offset, limit) {
 export async function shardTableInfo(env, table) {
   const parts = shardDbs(env);
   if (!parts.length) return { results: [] };
-  return parts[0].db.prepare(`PRAGMA table_info("${table}")`).all();
+  return { results: await tableColumns(env, table, parts[0].db) };
 }

@@ -82,3 +82,8 @@ test('나뉜 표만 특별 취급합니다', () => {
   assert.equal(isSharded('games'), false);
   assert.equal(isSharded('players'), false);
 });
+
+test('mysql 이면 play_by_play 도 나뉜 표가 아닙니다', () => {
+  assert.equal(isSharded('play_by_play', {}), true);
+  assert.equal(isSharded('play_by_play', { DB_BACKEND: 'mysql' }), false);
+});

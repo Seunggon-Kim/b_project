@@ -1,6 +1,7 @@
 import { json } from '../lib/respond.js';
 import { queryInt } from '../lib/router.js';
 import { pyRound } from './leaders.js';
+import { tableExists } from '../lib/schema.js';
 
 // K%·BB% 는 저장된 컬럼이 아니라 셀 때마다 계산합니다.
 //
@@ -90,7 +91,7 @@ export async function statsBatters(request, env) {
 
   // 원본은 wrc_plus_comparison 이 없는 DB 를 위해 NULL 폴백을 둡니다.
   // D1 에는 있으므로 조인하지만, 없을 때의 동작도 그대로 남깁니다.
-  const hasWrc = await tableExists(env.DB, 'wrc_plus_comparison');
+  const hasWrc = await tableExists(env, 'wrc_plus_comparison');
   const wrcSelect = hasWrc
     ? ', ROUND(w.wOBA, 3) AS woba, ROUND(w.wRAA_FG, 1) AS wraa, '
       + 'ROUND(w.wRC_half, 1) AS wrc_plus'
@@ -159,14 +160,3 @@ export async function statsPitchers(request, env) {
   });
 }
 
-/** 원본 _has_table (api/main.py:57-65) 입니다. */
-async function tableExists(db, name) {
-  try {
-    const row = await db.prepare(
-      "SELECT 1 AS x FROM sqlite_master WHERE type IN ('table','view') AND name = ?",
-    ).bind(name).first();
-    return Boolean(row);
-  } catch {
-    return false;
-  }
-}
