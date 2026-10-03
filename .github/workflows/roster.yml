@@ -38,6 +38,11 @@ concurrency:
   group: roster
   cancel-in-progress: false
 
+# id-token 은 GCP 키 없는 인증(Workload Identity Federation)에 필요합니다.
+permissions:
+  contents: read
+  id-token: write
+
 env:
   API_BASE: https://kbo-api.bstats-baseball.workers.dev
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -59,7 +64,7 @@ jobs:
           node-version: '24'
 
       - name: 의존성 설치
-        run: pip install requests
+        run: pip install requests pymysql
 
       - name: 인증 확인
         run: |
@@ -67,6 +72,28 @@ jobs:
             echo "CLOUDFLARE_API_TOKEN 이 없습니다."
             exit 1
           fi
+
+      # --- MySQL 이중 적재(2단계) --------------------------------------
+      # 저장소 변수 MYSQL_MIRROR 가 on 일 때만 붙습니다. 실패해도 D1 적재는
+      # 계속합니다(사이트는 아직 D1 을 읽습니다). 대신 마지막 판정이 빨갛습니다.
+      - name: GCP 인증(키 없음)
+        id: gcp
+        if: ${{ vars.MYSQL_MIRROR == 'on' }}
+        continue-on-error: true
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_LOADER_SA }}
+
+      - name: MySQL 연결
+        id: mysql
+        if: ${{ steps.gcp.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          CLOUDSQL_INSTANCE: ${{ secrets.CLOUDSQL_INSTANCE }}
+          MYSQL_LOADER_PASSWORD: ${{ secrets.MYSQL_LOADER_PASSWORD }}
+          MYSQL_SERVER_PUBKEY: ${{ secrets.MYSQL_SERVER_PUBKEY }}
+        run: bash migration/mysql/ci_proxy.sh
 
       # 1군 등록 현황 + 퓨처스 등록 명단입니다. 소속 판정의 근거라
       # 하루 두 번 받습니다.
@@ -120,6 +147,18 @@ jobs:
           cat /tmp/purge.txt; echo
           test "$code" = "200"
 
+      - name: MySQL 이중 적재 실패 확인
+        id: mirror_check
+        if: ${{ always() && steps.mysql.outcome == 'success' }}
+        continue-on-error: true
+        run: |
+          if [ -s "$BSTATS_MYSQL_FAIL_LOG" ]; then
+            echo "MySQL 에 쓰지 못한 작업이 있습니다:"
+            cat "$BSTATS_MYSQL_FAIL_LOG"
+            exit 1
+          fi
+          echo "MySQL 이중 적재 실패 없음"
+
       - name: 요약
         if: always()
         run: |
@@ -130,6 +169,8 @@ jobs:
             echo "| players 갱신 | ${{ steps.sync.outcome }} |"
             echo "| 새 선수 추가 | ${{ steps.newp.outcome }} |"
             echo "| 퓨처스 올 시즌 기록 | ${{ steps.futures.outcome }} |"
+            echo "| MySQL 연결 | ${{ steps.mysql.outcome }} |"
+            echo "| MySQL 이중 적재 | ${{ steps.mirror_check.outcome }} |"
           } >> $GITHUB_STEP_SUMMARY
 
       # 실패를 초록색으로 덮지 않습니다. 조용히 멈춘 수집을 몇 주 뒤에
@@ -138,4 +179,10 @@ jobs:
         if: steps.roster.outcome != 'success' || steps.sync.outcome != 'success'
         run: |
           echo "명단 갱신이 실패했습니다."
+          exit 1
+
+      - name: MySQL 이중 적재 판정
+        if: ${{ always() && vars.MYSQL_MIRROR == 'on' && (steps.mysql.outcome != 'success' || steps.mirror_check.outcome != 'success') }}
+        run: |
+          echo "MySQL 연결 또는 이중 적재가 실패했습니다. 요약 표를 보십시오."
           exit 1
