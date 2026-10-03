@@ -56,8 +56,9 @@ def test_매일_pbp_적재가_담당_D1_을_고릅니다():
 def test_매일_pbp_적재가_D1_이름을_넘깁니다(fn):
     """기본값이 kbo-stats 라서, 안 넘기면 공용 DB 로 갑니다."""
     src = _daily_source()
-    calls = re.findall(re.escape(fn) + r"\((.*?)\)", src, re.DOTALL)
-    # import 줄에서 걸린 것은 인자가 없습니다.
+    calls = re.findall(r"(?<!sink\.)" + re.escape(fn) + r"\((.*?)\)", src, re.DOTALL)
+    # import 줄에서 걸린 것은 인자가 없습니다. `sink.refresh_count(` 같은 MySQL 쪽
+    # 메서드 호출은 D1 함수가 아니므로 제외합니다.
     calls = [c for c in calls if c.strip()]
     assert calls, "%s 호출을 찾지 못했습니다" % fn
     for c in calls:

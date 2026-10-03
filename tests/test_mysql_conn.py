@@ -103,3 +103,36 @@ def test_proxy_path_without_key_file_omits_it(monkeypatch, tmp_path):
     seen = _capture(monkeypatch, tmp_path)
     conn.connect(_settings(tmp_path, "localhost", None))
     assert "server_public_key" not in seen
+
+
+def test_connect_retries_once_on_first_login_bug(monkeypatch, tmp_path):
+    """PyMySQL 첫 로그인 버그(caching_sha2 전체 인증)면 한 번 더 붙습니다."""
+    call_count = [0]
+    sentinel = object()
+
+    def fake_connect(**kw):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            raise AttributeError("'NoneType' object has no attribute 'is_auth_switch_request'")
+        return sentinel
+
+    monkeypatch.setattr(pymysql, "connect", fake_connect)
+    (tmp_path / "pw.txt").write_text("secret\n", encoding="ascii")
+    result = conn.connect(_settings(tmp_path, "127.0.0.1", None))
+    assert result is sentinel
+    assert call_count[0] == 2
+
+
+def test_connect_does_not_retry_other_attribute_errors(monkeypatch, tmp_path):
+    """다른 AttributeError는 재시도하지 않습니다."""
+    call_count = [0]
+
+    def fake_connect(**kw):
+        call_count[0] += 1
+        raise AttributeError("something else")
+
+    monkeypatch.setattr(pymysql, "connect", fake_connect)
+    (tmp_path / "pw.txt").write_text("secret\n", encoding="ascii")
+    with pytest.raises(AttributeError, match="something else"):
+        conn.connect(_settings(tmp_path, "127.0.0.1", None))
+    assert call_count[0] == 1

@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from d1_load import build_upserts, refresh_count, run_d1_file  # noqa: E402
 from futures_schedule import fetch_month, parse_schedule  # noqa: E402
+from mysql_sink import mirror  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -31,6 +32,13 @@ COLS = ["game_id", "game_date", "game_time", "season", "series_id",
 # 절과 같아야 합니다. 팀·시즌은 gameID 에서 나오는 값이라 바뀔 일이 없고,
 # 잘못 덮으면 지난 경기의 팀이 뒤바뀝니다.
 KEEP = ["season", "away_code", "home_code", "away_name", "home_name"]
+
+
+def mysql_write_futures(sink, rows):
+    """D1 과 같이 팀·시즌 열(KEEP)은 덮지 않습니다."""
+    n = sink.upsert("futures_games", COLS, ["game_id"], rows, touch=None, keep=KEEP)
+    sink.refresh_count("futures_games")
+    return n
 
 
 def main():
@@ -86,6 +94,7 @@ def main():
     run_d1_file(out)
     refresh_count("futures_games")
     print("D1 적재 완료")
+    mirror("futures", lambda s: mysql_write_futures(s, rows))
     return 0
 
 

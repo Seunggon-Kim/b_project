@@ -220,7 +220,8 @@ crawler/save/*.csv
 crawler/save/**/*.csv
 
 # Logs
-logs/*.loggoogle-chrome-stable_current_amd64.deb
+logs/*.log
+google-chrome-stable_current_amd64.deb
 *.deb
 *.crx
 chromedriver*
@@ -303,3 +304,7 @@ team_logo/
 # 재수집 임시 폴더입니다. 잘린 경기를 다시 받을 때만 씁니다.
 crawler/save_redo/
 crawler/save_redo2/
+
+# MySQL 이중 적제
+gha-creds-*.json
+logs/mysql_mirror_failures.jsonl

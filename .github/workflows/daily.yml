@@ -19,6 +19,7 @@ name: daily
 #   CLOUDFLARE_API_TOKEN   D1 적재
 #   CLOUDFLARE_ACCOUNT_ID  D1 적재
 #   ADMIN_TOKEN            적재 뒤 캐시 비우기 (Worker 시크릿과 같은 값)
+#   GCP_WIF_PROVIDER / GCP_LOADER_SA / CLOUDSQL_INSTANCE / MYSQL_LOADER_PASSWORD / MYSQL_SERVER_PUBKEY   MySQL 이중 적재(변수 MYSQL_MIRROR=on 일 때)
 
 on:
   # 18:33 UTC = 03:33 KST. 전날 경기가 모두 끝난 뒤입니다.
@@ -31,6 +32,11 @@ on:
 concurrency:
   group: daily-collect
   cancel-in-progress: false
+
+# id-token 은 GCP 키 없는 인증(Workload Identity Federation)에 필요합니다.
+permissions:
+  contents: read
+  id-token: write
 
 env:
   API_BASE: https://kbo-api.bstats-baseball.workers.dev
@@ -62,7 +68,7 @@ jobs:
       - name: 의존성 설치
         run: |
           python -m pip install --upgrade pip
-          pip install beautifulsoup4 lxml requests pandas tqdm
+          pip install beautifulsoup4 lxml requests pandas tqdm pymysql cryptography
 
       # 토큰이 없으면 수집만 하고 아무것도 안 남습니다. 시간만 쓰고
       # 끝나므로 먼저 막습니다.
@@ -75,6 +81,28 @@ jobs:
           fi
           npx --yes wrangler@4 d1 info kbo-stats > /dev/null
           echo "D1 접근 확인"
+
+      # --- MySQL 이중 적재(2단계) --------------------------------------
+      # 저장소 변수 MYSQL_MIRROR 가 on 일 때만 붙습니다. 실패해도 D1 적재는
+      # 계속합니다(사이트는 아직 D1 을 읽습니다). 대신 마지막 판정이 빨갛습니다.
+      - name: GCP 인증(키 없음)
+        id: gcp
+        if: ${{ vars.MYSQL_MIRROR == 'on' }}
+        continue-on-error: true
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_LOADER_SA }}
+
+      - name: MySQL 연결
+        id: mysql
+        if: ${{ steps.gcp.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          CLOUDSQL_INSTANCE: ${{ secrets.CLOUDSQL_INSTANCE }}
+          MYSQL_LOADER_PASSWORD: ${{ secrets.MYSQL_LOADER_PASSWORD }}
+          MYSQL_SERVER_PUBKEY: ${{ secrets.MYSQL_SERVER_PUBKEY }}
+        run: bash migration/mysql/ci_proxy.sh
 
       # --- 1. 어제 경기 PBP (원래 03:30 KST) -------------------------
       - name: PBP 수집·적재
@@ -267,6 +295,24 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      - name: D1·MySQL 대조
+        id: reconcile
+        if: ${{ always() && steps.mysql.outcome == 'success' }}
+        continue-on-error: true
+        run: python -m migration.mysql.reconcile --days 3
+
+      - name: MySQL 이중 적재 실패 확인
+        id: mirror_check
+        if: ${{ always() && steps.mysql.outcome == 'success' }}
+        continue-on-error: true
+        run: |
+          if [ -s "$BSTATS_MYSQL_FAIL_LOG" ]; then
+            echo "MySQL 에 쓰지 못한 작업이 있습니다:"
+            cat "$BSTATS_MYSQL_FAIL_LOG"
+            exit 1
+          fi
+          echo "MySQL 이중 적재 실패 없음"
+
       - name: 요약
         if: always()
         run: |
@@ -283,6 +329,9 @@ jobs:
             echo "| 투수 적재 | ${{ steps.load_pitcher.outcome }} |"
             echo "| 1군 등록 현황 | ${{ steps.roster.outcome }} |"
             echo "| 캐시 비우기 | ${{ steps.purge.outcome }} |"
+            echo "| MySQL 연결 | ${{ steps.mysql.outcome }} |"
+            echo "| MySQL 이중 적재 | ${{ steps.mirror_check.outcome }} |"
+            echo "| D1·MySQL 대조 | ${{ steps.reconcile.outcome }} |"
           } >> $GITHUB_STEP_SUMMARY
 
       # 실패를 초록색으로 덮지 않습니다. 조용히 멈춘 수집을 몇 주 뒤에
@@ -297,6 +346,13 @@ jobs:
           done
           # games 는 경기가 없는 날 건너뛰므로 skipped 를 실패로 보지 않습니다.
           if [ "${{ steps.games.outcome }}" = "failure" ]; then fail=1; fi
+          # MySQL 이 켜져 있으면 연결·이중 적재·대조도 성공해야 합니다.
+          if [ "${{ vars.MYSQL_MIRROR == 'on' }}" = "true" ]; then
+            for s in "${{ steps.mysql.outcome }}" "${{ steps.mirror_check.outcome }}" \
+                     "${{ steps.reconcile.outcome }}"; do
+              if [ "$s" != "success" ]; then fail=1; fi
+            done
+          fi
           if [ "$fail" = "1" ]; then
             echo "위 표에서 success 가 아닌 단계를 보십시오."
             exit 1

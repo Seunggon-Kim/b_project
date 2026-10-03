@@ -2482,7 +2482,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ### Task 9: 켜기·따라잡기·7일 지켜보기 (운영, evan 과 함께)
 
-**전제:** 2A·2C(Task 5 인덱스 포함)·2B Task 1~8 이 main 에 들어가 push 되었고(evan 허락), 시크릿 5개가 등록되었고, Task 8 Step 6 비교가 `같음` 이거나 evan 이 차이를 받아들였습니다.
+**전제:** 2A·2C(Task 5 인덱스 포함)·2B Task 1~8 이 main 에 들어가 push 되었고(evan 허락), 시크릿 5개가 등록되었고, Task 8 Step 6 비교가 `같음` 이거나 evan 이 차이를 받아들였습니다. 2B 최종 검토 보강(CI cryptography, 주간 판정 단계)이 main 에 들어가 있습니다.
 
 **시간:** 평일 10:00~15:00 KST. daily(03:33 KST)·roster(16:07 KST)·monthly(매월 1일 13:13 KST)와 겹치지 않는 때입니다.
 
@@ -2500,6 +2500,8 @@ Settings → Secrets and variables → Actions → Variables → New repository 
 Actions → roster → Run workflow(main).
 Expected: 요약 표에 `MySQL 연결 success`, `MySQL 이중 적재 success`. 실패하면 Step 2 의 변수를 지워 끄고 로그를 봅니다(D1 쪽은 그대로 돕니다).
 
+roster 는 명단 경로만 시험합니다. daily 경로(PBP·경기·퓨처스 일정·공식 기록·작업 기록·대조)는 다음 03:33 실행에서, monthly(선수 통째 바꾸기·사진)는 11/1 에서, weekly 는 Step 7 에서 처음 돕니다. 각 첫 실행의 요약 표를 따로 봅니다.
+
 - [ ] **Step 4: 공용 표 따라잡기(D1 읽기 약 6만 행, MySQL 공용 표 다시 넣기)**
 
 D1 이 정본입니다. 10/2 이후 D1 에만 들어간 공용 표 변경을 통째로 가져옵니다. 이 단계는 10분 안팎이고, 그 사이에 수집 작업이 돌지 않아야 합니다(Step 1 을 다시 봅니다).
@@ -2513,6 +2515,8 @@ BSTATS_MYSQL_SETTINGS=~/.bstats/mysql_proxy.json PYTHONUTF8=1 py -m migration.my
 ```
 
 Expected: 내려받기 29개 표, 적재가 표마다 행 수를 찍고 고아 행 0 으로 끝납니다(종료 코드 0).
+
+공용 표 다시 넣기는 MySQL meta_table_counts 의 play_by_play 행을 지웁니다. 다음 PBP 이중 적재가 다시 씁니다(대조는 이 표를 보지 않습니다). 이 단계는 PBP 가 아닌 표의 이중 적재를 놓쳤을 때의 표준 복구 방법이기도 합니다.
 
 - [ ] **Step 5: PBP 따라잡기(D1 읽기 하루 약 1,500행 × 날짜 수)**
 
@@ -2530,6 +2534,15 @@ done
 
 Expected: 날짜마다 `MySQL 적재 완료 (N행)` 또는 `D1 행이 없습니다`. 하나라도 실패하면 반복이 멈추고, 그 날짜부터 다시 돌립니다(같은 날을 다시 넣어도 결과가 같습니다).
 
+- [ ] **Step 5b: D1 2024-2026 샤드 행 수 기록 갱신(evan 승인, D1 쓰기 1행·읽기 약 69만 행)**
+
+10/1 daily 의 refresh_count 가 한도에 걸려 `kbo-pbp-2024-2026` 의 meta 가 1,339행 낡았습니다. 경기가 없는 날 daily 는 이것을 고치지 않으므로, 그대로 두면 대조의 play_by_play 전체 행 수가 계속 다릅니다. 아래로 한 번 고칩니다(D1 읽기 한도 확인 뒤).
+
+```bash
+PYTHONUTF8=1 py -m migration.mysql.d1_usage
+PYTHONUTF8=1 py -c "import sys; sys.path.insert(0,'data_collection'); from d1_load import refresh_count; refresh_count('play_by_play', db_name='kbo-pbp-2024-2026')"
+```
+
 - [ ] **Step 6: 대조**
 
 ```bash
@@ -2542,9 +2555,13 @@ Expected: `모두 같습니다.` 다르면 줄마다 원인을 찾아 고치고 
 
 2A Task 5 로 일정을 주석 처리했으면 그 주석을 풀어 `schedule: - cron: '47 20 * * 1'` 를 되살리는 커밋을 만들고(evan 허락 뒤 push), 화면에서 껐으면 Actions → weekly → Enable workflow 로 켭니다. 켠 뒤 Run workflow 로 한 번 돌려 요약 표의 `MySQL 내려받기`·`D1 적재`·`MySQL 이중 적재` 가 모두 success 인지 봅니다.
 
+첫 실행은 사이트의 wRC+·가중 파크팩터 일부를 바꾸고(승인됨, docs/mysql-migration/weekly-compare-report.md), Releases 의 CSV 도 MySQL 기준(새 pbp_id, 정수 ID, '' 대신 빈칸, 고친 포스트시즌 날짜)으로 다시 올립니다. 켜기 전에 그날 daily 의 D1·MySQL 대조가 초록인지 봅니다.
+
 - [ ] **Step 8: 7일 지켜보기**
 
 매일 daily 요약의 `D1·MySQL 대조` 가 success 인지 봅니다. 7일 연속 success 면 2단계를 마칩니다. 중간에 실패하면 원인을 고친 날부터 다시 셉니다.
+
+daily 대조뿐 아니라 roster·monthly 의 'MySQL 이중 적재 판정'과 weekly 요약도 봅니다. D1 한도 때문에 meta 갱신이 막힌 날이 생기면 Step 5b 를 다시 합니다.
 
 - [ ] **Step 9: 기록**
 
@@ -2560,5 +2577,6 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ## 되돌리기
 
 - 즉시: 저장소 변수 `MYSQL_MIRROR` 를 지웁니다. 모든 워크플로가 MySQL 에 손대지 않고, D1 은 지금처럼 돕니다. weekly 는 켜짐 확인 단계에서 멈추므로 일정을 함께 끕니다.
-- 코드: 2B 병합 커밋을 되돌립니다(`git revert -m 1 <병합>`). D1 쪽 코드는 `add_new_players.py` 의 함수 분리 외에 바뀐 것이 없습니다.
+- 코드: 2B 병합 커밋을 되돌립니다(`git revert -m 1 <병합>`). D1 쪽 코드는 `add_new_players.py` 와 `sync_players_from_roster.py` 의 함수 분리(같은 SQL) 외에 바뀐 것이 없습니다.
+- 병합을 되돌리면 weekly 가 다시 D1 400만 행 내려받기로 돌아가므로 weekly 일정은 꺼 둔 채로 둡니다.
 - GCP: `gcloud iam service-accounts delete bstats-loader@…`, `gcloud iam workload-identity-pools delete github --location=global`, MySQL `DROP USER 'bstats_loader'@'cloudsqlproxy~%'`.

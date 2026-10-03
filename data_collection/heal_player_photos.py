@@ -47,6 +47,7 @@ sys.path.insert(0, str(ROOT / "data_collection"))
 
 from d1_load import query, run_d1_file  # noqa: E402
 from photo_url import photo_url, probe_years, year_of  # noqa: E402
+from mysql_sink import mirror  # noqa: E402
 
 UA = {"User-Agent": "Mozilla/5.0"}
 
@@ -110,6 +111,14 @@ def flush(updates, dry_run):
     run_d1_file(SQL_TMP)
 
 
+def mysql_write_photos(sink, updates):
+    """D1 에 보낸 주소를 MySQL 에도 씁니다."""
+    for pid, url in updates:
+        sink.execute("UPDATE `players` SET `image_url`=%s, `updated_at`=UTC_TIMESTAMP() "
+                     "WHERE `player_id`=%s", [url, int(pid)])
+    return len(updates)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true",
@@ -130,6 +139,7 @@ def main():
     skipped = fixed = missing = 0
     probes = 0
     updates = []
+    all_updates = []
 
     for i, r in enumerate(rows, 1):
         if args.limit and i > args.limit:
@@ -159,6 +169,7 @@ def main():
 
         if found != url:
             updates.append((pid, found))
+            all_updates.append((pid, found))
             fixed += 1
             if len(updates) >= BATCH:
                 flush(updates, args.dry_run)
@@ -170,6 +181,10 @@ def main():
                      skipped, fixed, missing, probes), flush=True)
 
     flush(updates, args.dry_run)
+
+    if all_updates and not args.dry_run:
+        mirror("photos", lambda s: mysql_write_photos(s, all_updates))
+
     print("%s그대로 %d  고침 %d  못찾음 %d  요청 %d"
           % ("[미리보기] " if args.dry_run else "", skipped, fixed,
              missing, probes))

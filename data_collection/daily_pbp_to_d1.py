@@ -29,9 +29,10 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(ROOT))
 
 from d1_load import (  # noqa: E402
-    build_inserts, d1_columns, refresh_count, run_d1_file,
+    build_inserts, d1_columns, query, refresh_count, run_d1_file,
 )
 from migration import shard_plan  # noqa: E402
+from mysql_sink import mirror  # noqa: E402
 
 
 def read_csv_rows(path):
@@ -63,6 +64,52 @@ def wrong_dates(rows, day):
     return sorted(bad)
 
 
+def mysql_write_pbp(sink, day, rows):
+    """MySQL 에 하루치를 씁니다. 표 하나라 샤드를 고르지 않습니다.
+
+    D1 과 같이 그날 행을 지우고 다시 넣어, 다시 돌려도 결과가 같습니다.
+    idx_pbp_game_date 가 있어야 이 DELETE 가 400만 행을 훑지 않습니다.
+    pbp_id 는 넣지 않습니다. AUTO_INCREMENT 가 이어 붙이고, 받은 순서대로
+    넣으므로 경기 안 순서(RE24 의 ORDER BY pbp_id)가 지켜집니다.
+    """
+    cols = [c for c in sink.columns("play_by_play") if c != "pbp_id"]
+    sink.execute("DELETE FROM `play_by_play` WHERE `game_date` = %s", [int(day)])
+    n = sink.insert("play_by_play", cols, rows)
+    sink.refresh_count("play_by_play")
+    return n
+
+
+# 포스트시즌·순위결정전 시리즈 코드입니다(gameID 앞 4자리가 연도 대신 들어갑니다).
+SERIES_CODES = ("3333", "4444", "5555", "6666", "7777")
+
+
+def d1_day_rows(day, pbp_db):
+    """D1 에 이미 들어간 그날 행입니다. 따라잡기(--mysql-only)용입니다.
+
+    games 표를 거치지 않습니다. D1 일일 한도가 바닥난 날(2026-09-29, 10-01)
+    에는 play_by_play 는 들어갔는데 games 단계가 건너뛰어져 games 에 그날
+    행이 없습니다. games 로 경기를 찾으면 따라잡기가 바로 그런 날을 놓칩니다.
+
+    대신 샤드의 play_by_play 를 gameID 접두어 범위로 직접 읽습니다. 정규시즌
+    gameID 는 날짜(YYYYMMDD)로, 포스트시즌은 시리즈 코드+MMDD 로 시작합니다.
+    접두어마다 gameID 인덱스 범위 읽기라 샤드 전체를 훑지 않고, 읽는 양은
+    그날 행 수와 같습니다. 다른 해의 같은 MMDD 포스트시즌 행은 파이썬에서
+    걸러 냅니다.
+    """
+    prefixes = [day] + [code + day[4:8] for code in SERIES_CODES]
+    where = " OR ".join("(gameID >= '%s' AND gameID < '%s~')" % (p, p) for p in prefixes)
+    rows = query("SELECT * FROM play_by_play WHERE %s ORDER BY pbp_id;" % where,
+                 db_name=pbp_db)
+    out = []
+    for r in rows:
+        gid = str(r.get("gameID") or "")
+        if (gid.startswith(day)
+                or (len(gid) > 13 and gid[-4:] == day[:4])
+                or (len(gid) == 13 and int(day[:4]) <= 2015)):
+            out.append(r)
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", default=None, help="YYYYMMDD, 기본값은 어제")
@@ -71,6 +118,8 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--skip-crawl", action="store_true",
                     help="이미 받아 둔 CSV 로만 SQL 을 만듭니다")
+    ap.add_argument("--mysql-only", action="store_true",
+                    help="크롤링·D1 쓰기 없이, D1 에 이미 있는 그날 행을 MySQL 에 넣습니다(따라잡기)")
     args = ap.parse_args()
 
     # 러너는 UTC 라 그냥 어제를 잡으면 한국 날짜가 하루 어긋납니다.
@@ -91,6 +140,23 @@ def main():
         print("src/lib/shard.js 사본까지 맞춘 다음 다시 돌리십시오.")
         return 1
     print("대상 D1: %s" % pbp_db)
+
+    if args.mysql_only:
+        rows = d1_day_rows(day, pbp_db)
+        print("D1 에서 읽은 행 %s개" % format(len(rows), ","))
+        if not rows:
+            print("%s 에 D1 행이 없습니다. 넣을 것이 없습니다." % day)
+            return 0
+        bad = wrong_dates(rows, day)
+        if bad:
+            print("game_date 가 %s 이 아닌 행이 있습니다: %s" % (day, ", ".join(bad[:5])))
+            return 1
+        if args.dry_run:
+            print("[dry-run] MySQL 에 넣지 않았습니다.")
+            return 0
+        n = mirror("pbp", lambda s: mysql_write_pbp(s, day, rows), required=True)
+        print("MySQL 적재 완료 (%s행)" % format(n, ","))
+        return 0
 
     save_dir = ROOT / args.save_dir
     if not args.skip_crawl:
@@ -167,6 +233,7 @@ def main():
     # 따로 적어 두고, 화면은 네 값을 더해 보여 줍니다.
     refresh_count("play_by_play", db_name=pbp_db)
     print("행 수 메타 갱신 완료")
+    mirror("pbp", lambda s: mysql_write_pbp(s, day, rows))
     return 0
 
 

@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from d1_load import (  # noqa: E402
     build_upserts, d1_columns, refresh_count, run_d1_file,
 )
+from mysql_sink import mirror  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -50,6 +51,13 @@ def read_csv_rows(path):
 def season_from_name(path):
     m = re.search(r"_(\d{4})\.csv$", str(path))
     return m.group(1) if m else None
+
+
+def mysql_write_upsert(sink, table, columns, keys, rows, touch, keep):
+    """D1 과 같은 열·열쇠·touch·keep 으로 덮어씁니다."""
+    n = sink.upsert(table, columns, keys, rows, touch=touch, keep=keep)
+    sink.refresh_count(table)
+    return n
 
 
 def main():
@@ -184,6 +192,9 @@ def main():
     run_d1_file(out)
     refresh_count(args.table)
     print("D1 적재 완료 (%s행)" % format(len(good), ","))
+    touch = "updated_at" if "updated_at" in columns else None
+    mirror("csv:" + args.table,
+           lambda s: mysql_write_upsert(s, args.table, columns, keys, good, touch, keep))
     return 0
 
 

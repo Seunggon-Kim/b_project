@@ -40,6 +40,7 @@ TRANSITIVE = {"numpy", "dateutil", "pytz", "six"}
 # 포함합니다. 새 스크립트를 워크플로에 넣으면 여기에도 적으십시오.
 ENTRYPOINTS = {
     "daily.yml": [
+        "migration/mysql/reconcile.py",
         "data_collection/daily_pbp_to_d1.py",
         "data_collection/daily_games_to_d1.py",
         "data_collection/futures_to_d1.py",
@@ -57,7 +58,9 @@ ENTRYPOINTS = {
         "crawler/download.py",
     ],
     "weekly.yml": [
-        "migration/d1_to_sqlite.py",
+        "migration/mysql/mysql_to_sqlite.py",
+        "migration/mysql/ci_proxy.sh",
+        "park_factors/truncated.py",
         "park_factors/compute_self_park_factors.py",
         "park_factors/build_woba_weights.py",
         "park_factors/build_wrc_plus.py",
@@ -174,6 +177,10 @@ def test_워크플로가_부르는_파이썬이_진입점에_다_적혀_있습�
     for wf, listed in ENTRYPOINTS.items():
         src = (WF / wf).read_text(encoding="utf-8")
         called = set(re.findall(r"python\s+([A-Za-z0-9_/]+\.py)", src))
+        # `python -m a.b.c` 는 a/b/c.py 로 봅니다.
+        called |= {m.replace(".", "/") + ".py"
+                   for m in re.findall(r"python\s+-m\s+([A-Za-z0-9_.]+)", src)
+                   if m != "pip"}
         missing = sorted(called - set(listed))
         assert not missing, (
             "%s 가 %s 를 부르는데 ENTRYPOINTS 에 없습니다"
