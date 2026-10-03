@@ -58,7 +58,7 @@
 /players/65357
 /players/77147
 /players/77829
-/players/79430
+404 /players/79430
 /players/65543
 /players/53375
 /players/55730

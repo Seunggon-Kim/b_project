@@ -58,6 +58,10 @@ export async function currentSeason(db) {
  * 숫자면 정수로 한 번 더 찾습니다.
  */
 export async function robustPlayerLookup(db, playerId) {
+  // D1 의 선수 ID 는 숫자 글자(일부는 `.0` 꼬리)뿐입니다. 그 밖의 입력은
+  // D1 에서 어떤 행과도 맞지 않았습니다. MySQL 은 INT 열과 글자를 느슨하게
+  // 비교해 '73153x' 를 73153 으로 읽으므로, 질의 전에 같은 결과(없음)를 냅니다.
+  if (!/^\d+(\.0+)?$/.test(String(playerId))) return null;
   let row = await db.prepare('SELECT * FROM players WHERE player_id = ?')
     .bind(playerId).first();
   if (row) return row;

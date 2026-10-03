@@ -1,4 +1,5 @@
 import { json } from '../lib/respond.js';
+import { intIdOrSame } from '../lib/ids.js';
 import { queryInt, queryStr, sqlLimit } from '../lib/router.js';
 import { pyRound } from './leaders.js';
 import { fanOut, allSeasons, seasonDateRange } from '../lib/shard.js';
@@ -185,7 +186,9 @@ export async function wrcLeaderboard(request, env) {
     ORDER BY ${sortCol} DESC
     LIMIT ?
   `).bind(season, minPa, sqlLimit(n)).all();
-  return json(results);
+  // batter_ID 는 D1 에서 INTEGER 입니다. MySQL 이 글자로 준 값을 숫자로
+  // 되돌립니다(D1 은 이미 숫자라 값이 같습니다).
+  return json(results.map((r) => ({ ...r, batter_ID: intIdOrSame(r.batter_ID) })));
 }
 
 /** 원본 933-963. 방식 간 차이가 큰 순서입니다. */
@@ -218,13 +221,23 @@ export async function wrcTopChanges(request, env) {
     ORDER BY (wrc.wRC_weighted - wrc.wRC_half) ${order}
     LIMIT ?
   `).bind(season, minPa, sqlLimit(n)).all();
-  return json(results);
+  // batter_ID 는 D1 에서 INTEGER 입니다. MySQL 이 글자로 준 값을 숫자로
+  // 되돌립니다(D1 은 이미 숫자라 값이 같습니다).
+  return json(results.map((r) => ({ ...r, batter_ID: intIdOrSame(r.batter_ID) })));
 }
 
 /** 원본 966-1007. 선수 한 명의 시즌별 이력과 구장별 타석 분포입니다. */
 export async function wrcBatter(request, env, ctx, params) {
   const db = env.DB;
   const batterId = params.id;
+
+  // D1 은 INTEGER 열과 글자를 비교해 숫자 모양이 아닌 입력과 맞는 행이 없었습니다.
+  // MySQL 은 '74163x' 를 74163 으로 읽으므로 질의 전에 같은 결과(없음)를 냅니다.
+  if (!/^\d+(\.0+)?$/.test(String(batterId))) {
+    return json({
+      batter_id: batterId, player_name: null, history: [], stadium_distribution: [],
+    });
+  }
 
   const { results: history } = await db.prepare(`
     SELECT wrc.season, wrc.PA,

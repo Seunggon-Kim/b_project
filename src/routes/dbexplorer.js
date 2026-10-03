@@ -7,6 +7,7 @@ import {
   isSharded, SHARDED_TABLES, shardCounts, sliceRows, shardTableInfo,
 } from '../lib/pbpvirtual.js';
 import { columnDict, tableMeta } from '../lib/coldict.js';
+import { idFixer } from '../lib/ids.js';
 
 /**
  * 화면에 보일 표 이름 전부입니다.
@@ -125,6 +126,7 @@ export async function dbTable(request, env, ctx, params) {
       .bind(limit, offset).all();
     rows = r.results;
   }
+  rows = rows.map(idFixer(env, tableName));
 
   return json({
     table: tableName,
@@ -246,6 +248,7 @@ export async function dbTableCsv(request, env, ctx, params) {
     }, 413);
   }
 
+  const fixIds = idFixer(env, tableName);
   const encoder = new TextEncoder();
 
   let offset = startAt;
@@ -288,7 +291,8 @@ export async function dbTableCsv(request, env, ctx, params) {
 
       let chunk = '';
       for (const r of results) {
-        chunk += csvRow(columns.map((c) => r[c]), realFlags);
+        const row = fixIds(r);
+        chunk += csvRow(columns.map((c) => row[c]), realFlags);
       }
       controller.enqueue(encoder.encode(chunk));
 

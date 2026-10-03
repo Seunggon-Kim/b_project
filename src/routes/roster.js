@@ -1,6 +1,7 @@
 import { json } from '../lib/respond.js';
 import { queryInt } from '../lib/router.js';
 import { kstDateDaysAgo } from '../lib/kst.js';
+import { intIdOrSame } from '../lib/ids.js';
 
 // 1군 등록·말소 현황입니다.
 //
@@ -74,7 +75,9 @@ export async function rosterMoves(request, env) {
         team: r.team,
         name: r.name,
         position: r.position,
-        playerId: r.player_id,
+        // MySQL(Hyperdrive)은 열 정보가 없어 글자로 오므로 숫자로 되돌립니다.
+        // D1 은 이미 숫자라 intIdOrSame 이 그대로 돌려줍니다.
+        playerId: intIdOrSame(r.player_id),
       });
     }
   }
@@ -114,5 +117,8 @@ export async function roster(request, env) {
 
   const { results } = await stmt.bind(...binds).all();
   const asOf = results.length ? results[0].as_of : null;
-  return json({ team, league, asOf, count: results.length, players: results });
+  // player_id 는 D1 에서 INTEGER 입니다. MySQL 이 글자로 준 값을 숫자로
+  // 되돌립니다(D1 은 이미 숫자라 값이 같습니다).
+  const players = results.map((r) => ({ ...r, player_id: intIdOrSame(r.player_id) }));
+  return json({ team, league, asOf, count: results.length, players });
 }
