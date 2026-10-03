@@ -19,7 +19,7 @@
 - Python 테스트: `PYTHONUTF8=1 py -m pytest tests -p no:cacheprovider -q`(현재 511 통과). JS 테스트(`npm test`, 407)는 이 계획과 무관하지만 깨지면 안 됩니다.
 - 커밋 메시지 끝: `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`
 - 사용자에게 보이는 한국어(JSON 의 설명·일정 문구)는 습니다체, 이모지 금지.
-- 작업 위치: `git -C C:/Users/김승곤/Desktop/b_project worktree add C:/tmp/b_project_lin -b feat/table-lineage-data docs/table-lineage-spec` (설계서 커밋 473623a 위). Windows, Git Bash. `python` 명령은 없고 `py` 를 씁니다.
+- 작업 위치: `git worktree add <작업 폴더> -b feat/table-lineage-data docs/table-lineage-spec` (설계서 커밋 473623a 위). Windows, Git Bash. `python` 명령은 없고 `py` 를 씁니다.
 
 ## 설계서에서 다듬은 점(이 계획이 정함)
 

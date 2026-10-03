@@ -9,6 +9,7 @@ dashboard_js/data/table_lineage.json 을 씁니다. 데이터 탐색 페이지�
 
 작업·표·API·화면을 바꾸면 손 파일을 고치고 이 스크립트를 다시 돌립니다.
 잊으면 tests/test_lineage.py 가 실패합니다.
+CI 는 pytest 를 돌리지 않습니다. 다시 만든 뒤 `py -m pytest tests` 를 직접 돌리십시오.
 설계: docs/superpowers/specs/2026-10-04-table-lineage-design.md
 """
 import json
@@ -33,8 +34,9 @@ def _read(root, rel):
 
 
 def _pages(root):
+    """dashboard_js 아래 모든 HTML(하위 폴더 포함)입니다."""
     base = root / "dashboard_js"
-    return [base / "index.html", *sorted((base / "pages").glob("*.html"))]
+    return sorted(base.rglob("*.html"), key=lambda p: p.relative_to(base).as_posix())
 
 
 def build(root=ROOT):

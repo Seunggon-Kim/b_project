@@ -8,7 +8,7 @@
       "name": "KBO 기록실",
       "url": "https://www.koreabaseball.com/Record/"
     },
-    "kbo_roster": {
+    "kbo_register": {
       "name": "KBO 1군 등록 현황",
       "url": "https://www.koreabaseball.com/Player/RegisterAll.aspx"
     },
@@ -103,7 +103,7 @@
     },
     "data_collection/roster_to_d1.py": {
       "sources": [
-        "kbo_roster",
+        "kbo_register",
         "kbo_futures"
       ],
       "writes": [

@@ -288,3 +288,17 @@ def test_표를_읽는_주소는_표가_하나_이상입니다():
         "routes_without_tables 에 이유를 적으십시오." % empty)
     stale = sorted(p for p in ok if not any(r["path"] == p and not r["tables"] for r in d["routes"]))
     assert not stale, "routes_without_tables 에 있는데 표가 있거나 없는 주소: %s" % stale
+
+
+def test_화면은_dashboard_js_아래_모든_html_입니다(tmp_path):
+    base = tmp_path / "dashboard_js"
+    for rel in ("index.html", "pages/a.html", "pages/sub/b.html", "extra/c.html"):
+        (base / rel).parent.mkdir(parents=True, exist_ok=True)
+        (base / rel).write_text("<title>x</title>", encoding="utf-8")
+    got = sorted(p.relative_to(base).as_posix() for p in bl._pages(tmp_path))
+    assert got == ["extra/c.html", "index.html", "pages/a.html", "pages/sub/b.html"]
+
+
+def test_원천_id_가_표_이름과_겹치지_않습니다():
+    # 그림에서는 source:·table: 접두사로 갈리지만, 사람이 읽을 때 헷갈립니다.
+    assert not sorted(set(HAND["sources"]) & KNOWN)

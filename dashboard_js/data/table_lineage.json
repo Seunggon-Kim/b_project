@@ -117,11 +117,11 @@
    "to": "job:daily"
   },
   {
-   "from": "source:kbo_roster",
+   "from": "source:kbo_register",
    "to": "job:daily"
   },
   {
-   "from": "source:kbo_roster",
+   "from": "source:kbo_register",
    "to": "job:roster"
   },
   {
@@ -1546,7 +1546,7 @@
    "reads": [],
    "sources": [
     "kbo_futures",
-    "kbo_roster"
+    "kbo_register"
    ],
    "status_keys": {
     "daily": "roster",
@@ -1784,7 +1784,7 @@
    "url": "https://www.koreabaseball.com/Record/"
   },
   {
-   "id": "kbo_roster",
+   "id": "kbo_register",
    "name": "KBO 1군 등록 현황",
    "url": "https://www.koreabaseball.com/Player/RegisterAll.aspx"
   },
