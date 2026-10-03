@@ -1,0 +1,62 @@
+/*
+ * 선수 분석 머리 부분(헤더·Quick Look·프로필)입니다. 팬그래프 선수 페이지 모양을 따릅니다.
+ * 설계: docs/superpowers/specs/2026-10-04-player-analytics-fangraphs-header-design.md
+ *
+ * style.css 의 옛 .header-bar-*·.player-card·.stats-card 규칙은 건드리지 않습니다.
+ * 이 파일은 새 클래스(pa-hdr-*, pa-card*, pa-ql*, pa-prof*)만 씁니다.
+ */
+
+/* ---------- 헤더 ---------- */
+.player-header-bar.pa-hdr { align-items: stretch; min-height: 0; padding: 0; }
+.pa-hdr-photo { flex-shrink: 0; width: 84px; min-height: 96px; overflow: hidden; }
+.pa-hdr-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pa-hdr-info { flex: 1 1 auto; min-width: 0; padding: 0.75rem 1.1rem; display: flex; flex-direction: column; justify-content: center; gap: 0.2rem; }
+.pa-hdr-top { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.2rem 0.6rem; }
+.pa-hdr-name { font-size: 1.6rem; font-weight: 700; line-height: 1.2; color: var(--text-primary); }
+.pa-hdr-num { font-size: 1rem; font-weight: 600; color: var(--text-muted); }
+.pa-hdr-team { font-size: 1rem; color: var(--text-secondary); display: inline-flex; align-items: center; }
+.pa-hdr-data { display: flex; flex-wrap: wrap; gap: 0.1rem 1.25rem; font-size: 0.92rem; color: var(--text-primary); }
+.pa-hdr-dob { font-size: 0.85rem; color: var(--text-secondary); }
+.pa-hdr-pos { flex-shrink: 0; align-self: center; margin: 0 1.25rem; padding: 0.4rem 0.9rem; font-size: 1rem; font-weight: 800; color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 8px; white-space: nowrap; }
+.theme-applied .pa-hdr-name { color: #fff !important; }
+.theme-applied .pa-hdr-num,
+.theme-applied .pa-hdr-team,
+.theme-applied .pa-hdr-data { color: rgba(255, 255, 255, 0.85) !important; }
+.theme-applied .pa-hdr-dob { color: rgba(255, 255, 255, 0.7) !important; }
+.theme-applied .pa-hdr-pos { color: #fff !important; background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.25); }
+@media (max-width: 640px) {
+    .pa-hdr-photo { width: 64px; min-height: 84px; }
+    .pa-hdr-info { padding: 0.6rem 0.75rem; }
+    .pa-hdr-name { font-size: 1.3rem; }
+    .pa-hdr-data { font-size: 0.85rem; gap: 0.1rem 0.8rem; }
+    .pa-hdr-pos { margin: 0 0.6rem; padding: 0.3rem 0.55rem; font-size: 0.85rem; }
+}
+
+/* ---------- 카드(팬그래프 module card) ---------- */
+.pa-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.pa-card--ql { grid-column: span 2; }
+.pa-card-tabs { display: flex; border-bottom: 1px solid var(--border-color); background: var(--bg-secondary); }
+.pa-card-tab { padding: 0.55rem 1rem; font-size: 0.9rem; font-weight: 700; color: var(--primary); border-bottom: 2px solid var(--primary); margin-bottom: -1px; }
+.pa-card-body { flex: 1 1 auto; padding: 0.5rem 0.75rem 0.75rem; overflow-x: auto; }
+/* style.css 의 #player-card { height: 100%; overflow: hidden } 을 이 카드 안에서만 풉니다. */
+#player-card.pa-card-body { height: auto; overflow: visible; }
+@media (max-width: 1024px) {
+    .pa-card--ql, .pa-card--profile { grid-column: 1 / -1; }
+}
+
+/* ---------- Quick Look 표 ---------- */
+.pa-ql-wrap { overflow-x: auto; }
+.pa-ql { width: 100%; border-collapse: collapse; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.pa-ql th, .pa-ql td { padding: 0.3rem 0.6rem; text-align: right; border-bottom: 1px solid var(--border-color); white-space: nowrap; color: var(--text-primary); }
+.pa-ql thead th { font-weight: 700; border-bottom: 2px solid var(--border-color); }
+.pa-ql .pa-ql-label { text-align: left; font-weight: 600; color: var(--text-secondary); }
+.pa-ql .pa-ql-career { font-weight: 700; background: rgba(59, 130, 246, 0.08); }
+.pa-ql tbody tr:last-child td { border-bottom: 0; }
+.pa-card-body .futures-stat-head { margin-bottom: 0.4rem; }
+
+/* ---------- 프로필 ---------- */
+.pa-prof { margin: 0; }
+.pa-prof-row { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); gap: 0.5rem; padding: 0.45rem 0.1rem; border-bottom: 1px solid var(--border-color); font-size: 0.88rem; }
+.pa-prof-row:last-child { border-bottom: 0; }
+.pa-prof dt { color: var(--text-secondary); font-weight: 600; }
+.pa-prof dd { margin: 0; color: var(--text-primary); overflow-wrap: anywhere; }
