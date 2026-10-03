@@ -347,7 +347,7 @@ jobs:
           if [ "${{ steps.games.outcome }}" = "failure" ]; then fail=1; fi
           # MySQL 이 켜져 있으면 연결·이중 적재·대조도 성공해야 합니다.
           if [ "${{ vars.MYSQL_MIRROR == 'on' }}" = "true" ]; then
-            for s in "${{ steps.mysql.outcome }}" "${{ steps.mirror_check.outcome }}" \r
+            for s in "${{ steps.mysql.outcome }}" "${{ steps.mirror_check.outcome }}" \
                      "${{ steps.reconcile.outcome }}"; do
               if [ "$s" != "success" ]; then fail=1; fi
             done

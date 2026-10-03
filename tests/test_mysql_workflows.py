@@ -32,3 +32,26 @@ def test_no_secret_values_in_workflows():
         t = p.read_text(encoding="utf-8")
         assert "BEGIN PUBLIC KEY" not in t, p.name
         assert "iam.gserviceaccount.com" not in t, p.name
+
+
+def test_workflow_run_scripts_have_valid_bash_syntax():
+    import shutil
+    import subprocess
+
+    import pytest
+    import yaml
+
+    bash = shutil.which("bash")
+    if not bash:
+        pytest.skip("bash 없음")
+    for name in ("daily.yml", "roster.yml", "monthly.yml", "weekly.yml"):
+        doc = yaml.safe_load((WF / name).read_text(encoding="utf-8"))
+        for job in doc["jobs"].values():
+            for step in job.get("steps", []):
+                run = step.get("run")
+                if not run:
+                    continue
+                script = re.sub(r"\$\{\{.*?\}\}", "X", run)
+                res = subprocess.run([bash, "-n"], input=script, text=True,
+                                     capture_output=True, encoding="utf-8")
+                assert res.returncode == 0, "%s / %s: %s" % (name, step.get("name"), res.stderr)
