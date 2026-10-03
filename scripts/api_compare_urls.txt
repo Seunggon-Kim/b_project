@@ -1,4 +1,5 @@
 # 응답 대조용 URL 목록입니다(api_compare.mjs). 한 줄에 경로 하나, # 줄은 주석입니다.
+# 기대 상태가 200 이 아니면 앞에 세 자리 코드와 공백을 붙입니다(예: `404 /players/1`). 양쪽 모두 그 상태여야 통과합니다.
 # 제외: /standings /schedule* /futures*(외부 사이트를 읽어 시각마다 바뀜), /jobs/status(매번 바뀜), POST /admin/*
 # 선수·팀 ID 는 공개 데이터(kbo_official_*_stats, teams, franchises)에서 골랐습니다.
 
@@ -68,7 +69,7 @@
 /players/55730/usage?season=2026
 /players/77829/arsenal?season=2010
 /players/77829/usage?season=2010
-/players/99999999
+404 /players/99999999
 
 # 경기·명단·이동
 /games?season=2008&limit=30
@@ -111,4 +112,4 @@
 /db/table/play_by_play?limit=50&offset=2000000
 /db/table/teams/csv?limit=100
 /db/table/franchises/csv?limit=100
-/db/table/no_such_table
+404 /db/table/no_such_table
