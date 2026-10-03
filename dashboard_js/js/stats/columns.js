@@ -1,5 +1,5 @@
 /*
- * 팀 통계 표의 칸 정의입니다. 이름·형식·설명·계산식·시작 연도·기간별
+ * 팀·선수 통계 표의 칸 정의입니다. 이름·형식·설명·계산식·시작 연도·기간별
  * 가능 여부를 한 곳에 둡니다. 화면(DOM)에는 손대지 않습니다.
  *
  *   kind   값 형식(fmt 참고)
@@ -141,6 +141,48 @@
   const ORDER = { bat: Object.keys(BAT), pit: Object.keys(PIT) };
   const TABLES = { bat: BAT, pit: PIT, rec: REC };
 
+  // ===== 선수 통계 칸 =====
+  // 팀 칸을 그대로 쓰고, 뜻이 다른 칸만 설명을 바꿉니다. 팀 표는 위 BAT·PIT 를 그대로 씁니다.
+  const PBAT = Object.assign({}, BAT, {
+    g: Object.assign({}, BAT.g, { desc: '선수가 출장한 경기 수입니다.' }),
+    multi: Object.assign({}, BAT.multi, { desc: '한 경기에 안타 두 개 이상을 친 경기 수입니다.' }),
+    gw: Object.assign({}, BAT.gw, { label: '결승타', desc: '이긴 경기에서 결승점을 낸 타점의 수입니다.' }),
+    wraa: Object.assign({}, BAT.wraa, { desc: '리그 평균 타자보다 더 만든 득점입니다. 0이 평균입니다.' }),
+    wrc: Object.assign({}, BAT.wrc, { desc: 'wOBA로 잰 득점 생산량입니다.' }),
+    wrcp: Object.assign({}, BAT.wrcp, { desc: '타석당 득점 생산을 리그 평균 100에 맞춘 값입니다. 110이면 평균보다 10% 더 만듭니다. 소속팀 홈구장 영향을 반만 덜어 냅니다.' }),
+    risp: { label: '득점권', kind: 'avg3', range: false, desc: '주자가 2루나 3루에 있을 때의 타율입니다. KBO 공식 기록 값입니다.' },
+    ph: { label: '대타', kind: 'avg3', range: false, desc: '대타로 나왔을 때의 타율입니다. KBO 공식 기록 값입니다.' },
+    xr: { label: 'XR', kind: 'f1', range: false, desc: '추정 득점입니다. 안타·볼넷·도루 같은 결과마다 득점 가치를 매겨 더합니다. KBO 공식 기록 값입니다.' },
+    gpa: { label: 'GPA', kind: 'avg3', range: false, desc: '출루율에 장타율보다 큰 무게를 둔 타격 지표입니다. KBO 공식 기록 값입니다.', formula: '(1.8 × OBP + SLG) ÷ 4' },
+    ppa: { label: 'P/PA', kind: 'f2', range: false, desc: '타석당 상대한 투구 수입니다. KBO 공식 기록 값입니다.' },
+  });
+  const PPIT = Object.assign({}, PIT, {
+    g: Object.assign({}, PIT.g, { desc: '등판한 경기 수입니다.' }),
+  });
+
+  const PGROUPS = {
+    bat: {
+      dash: GROUPS.bat.dash.slice(),
+      std: GROUPS.bat.std.slice(),
+      adv: GROUPS.bat.adv.slice(),
+      sit: ['pa', 'risp', 'ph', 'gw', 'multi', 'xr', 'gpa', 'ppa'],
+    },
+    pit: {
+      dash: GROUPS.pit.dash.slice(),
+      std: GROUPS.pit.std.slice(),
+      adv: GROUPS.pit.adv.slice(),
+    },
+  };
+  const PORDER = { bat: Object.keys(PBAT), pit: Object.keys(PPIT) };
+  const PTABLES = { bat: PBAT, pit: PPIT };
+
+  /** 선수 칸 정의를 key 를 붙여 돌려줍니다. 없으면 null. */
+  function pdef(tab, key) {
+    const t = PTABLES[tab];
+    const d = t && Object.prototype.hasOwnProperty.call(t, key) ? t[key] : null;
+    return d ? Object.assign({ key: key }, d) : null;
+  }
+
   /** 칸 정의를 key 를 붙여 돌려줍니다. 없으면 null. */
   function def(tab, key) {
     const t = TABLES[tab];
@@ -186,7 +228,7 @@
     }
   }
 
-  const api = { BAT, PIT, REC, ORDER, GROUPS, REC_KEYS, def, fmt };
+  const api = { BAT, PIT, REC, ORDER, GROUPS, REC_KEYS, def, fmt, PBAT, PPIT, PGROUPS, PORDER, pdef };
   TS.columns = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

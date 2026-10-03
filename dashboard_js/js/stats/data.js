@@ -1,5 +1,5 @@
 /*
- * 팀 통계 데이터 받기입니다.
+ * 팀·선수 통계 데이터 받기입니다.
  *
  * 응답이 이상하면(HTTP 오류, detail·error 필드, 빈 목록) 가리지 않고
  * errors 에 이유를 담아 돌려줍니다. 화면은 그것을 표 위에 알립니다.
@@ -136,7 +136,18 @@
     return { seasons: list, errors: [{ what: '시즌 목록', error: r.error }] };
   }
 
-  const api = { badReason, getJson, loadRefs, loadSeason, loadGames, loadRange, loadStandings, loadSeasons };
+  /**
+   * 시즌별 공통 규정(/stats/regulation)입니다. 순위표에 없는 팀이 있을 때만
+   * 씁니다. 모양: { 'YYYY': { team_games, qual_pa, qual_ip } }
+   */
+  async function loadRegulation(base, opts) {
+    const r = await getJson(`${base}/stats/regulation`, null, (opts || {}).fetch);
+    const reg = r.ok ? r.data.regulation : null;
+    if (reg && typeof reg === 'object' && !Array.isArray(reg)) return { regulation: reg, errors: [] };
+    return { regulation: {}, errors: [{ what: '규정 기준', error: r.ok ? 'regulation 이 없습니다' : r.error }] };
+  }
+
+  const api = { badReason, getJson, loadRefs, loadSeason, loadGames, loadRange, loadStandings, loadSeasons, loadRegulation };
   TS.data = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
