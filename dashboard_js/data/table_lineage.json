@@ -752,6 +752,7 @@
     "/standings",
     "/stats/batters",
     "/stats/pitchers",
+    "/stats/regulation",
     "/stats/seasons",
     "/stats/team_range"
    ],
@@ -1158,7 +1159,8 @@
    "file": "src/routes/stats.js",
    "live": false,
    "pages": [
-    "pages/player-stats.html"
+    "pages/player-stats.html",
+    "pages/team-stats.html"
    ],
    "path": "/stats/regulation",
    "reads_all_tables": false,
