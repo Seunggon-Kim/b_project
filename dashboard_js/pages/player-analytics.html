@@ -447,23 +447,23 @@
             // 포지션만 오른쪽 끝입니다.
             return `
                     <div class="pa-hdr-photo">
-                        <img src="${imageUrl}" alt="${player.player_name}" data-local="${localImg}"
+                        <img src="${imageUrl}" alt="${escapeHtml(player.player_name)}" data-local="${localImg}"
                              onerror="var l=this.getAttribute('data-local'); if(l && this.src.indexOf('player_photos')===-1){this.src=l;} else {this.onerror=null; this.src='${PHOTO_PLACEHOLDER}';}">
                     </div>
                     <div class="pa-hdr-info">
                         <div class="pa-hdr-top">
-                            <div class="pa-hdr-name">${player.player_name}</div>
+                            <div class="pa-hdr-name">${escapeHtml(player.player_name)}</div>
                             ${player.is_active ? '<span class="pa-hdr-num">No.' + backNum + '</span>' : ''}
-                            <span class="pa-hdr-team">${team}${firstTeamBadge(player)}</span>
+                            <span class="pa-hdr-team">${escapeHtml(team)}${firstTeamBadge(player)}</span>
                         </div>
                         <div class="pa-hdr-data">
                             <span>나이: ${age ? age.years + '세' : '-'}</span>
                             <span>투타: ${formatThrowBat(player.throw, player.bat)}</span>
                             <span>${player.height ? player.height + 'cm' : '-'} / ${player.weight ? player.weight + 'kg' : '-'}</span>
                         </div>
-                        ${dob ? `<div class="pa-hdr-dob">생년월일: ${dob}${age ? ` (만 ${age.years}세 ${age.months}개월)` : ''}</div>` : ''}
+                        ${dob ? `<div class="pa-hdr-dob">생년월일: ${dob}${age ? ` <span class="pa-hdr-age">(만 ${age.years}세 ${age.months}개월)</span>` : ''}</div>` : ''}
                     </div>
-                    <div class="pa-hdr-pos">${player.position || '-'}</div>
+                    <div class="pa-hdr-pos">${escapeHtml(player.position || '-')}</div>
                 `;
         }
 
@@ -580,7 +580,7 @@
         /** 프로필 카드 본문입니다. items = [[라벨, 값], ...] */
         function profileHtml(items) {
             return '<dl class="pa-prof">' + items.map(([k, v]) =>
-                `<div class="pa-prof-row"><dt>${k}</dt><dd>${v}</dd></div>`).join('') + '</dl>';
+                `<div class="pa-prof-row"><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join('') + '</dl>';
         }
 
         /**

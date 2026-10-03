@@ -46,8 +46,8 @@
   /** 최근 3시즌입니다. 현역은 올해 기준, 은퇴는 마지막 활동 시즌 기준입니다. */
   function pickSeasons(player, thisYear) {
     const ys = [].concat(player.pitcher_seasons || [], player.batter_seasons || [])
-      .map(function (s) { return s.season; })
-      .filter(function (y) { return typeof y === 'number'; });
+      .map(function (s) { return Number(s.season); })
+      .filter(function (y) { return Number.isFinite(y); });
     const last = ys.length ? Math.max.apply(null, ys) : thisYear;
     const a = player.is_active ? thisYear : last;
     return [a - 2, a - 1, a];
@@ -89,7 +89,7 @@
     const kind = kindOf(player);
     const all = seasonRows(player, kind);
     const cols = pickSeasons(player, thisYear).map(function (y) {
-      const rs = all.filter(function (s) { return s.season === y; });
+      const rs = all.filter(function (s) { return Number(s.season) === y; });
       return { head: String(y), team: rs.length ? teamsOf(rs) : '-', level: rs.length ? '1군' : '-', t: total(rs, kind) };
     });
     cols.push({ head: '통산', team: '-', level: all.length ? '1군' : '-', t: total(all, kind) });

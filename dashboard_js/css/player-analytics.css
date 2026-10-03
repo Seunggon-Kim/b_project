@@ -16,6 +16,7 @@
 .pa-hdr-num { font-size: 1rem; font-weight: 600; color: var(--text-muted); }
 .pa-hdr-team { font-size: 1rem; color: var(--text-secondary); display: inline-flex; align-items: center; }
 .pa-hdr-data { display: flex; flex-wrap: wrap; gap: 0.1rem 1.25rem; font-size: 0.92rem; color: var(--text-primary); }
+.pa-hdr-age { white-space: nowrap; }
 .pa-hdr-dob { font-size: 0.85rem; color: var(--text-secondary); }
 .pa-hdr-pos { flex-shrink: 0; align-self: center; margin: 0 1.25rem; padding: 0.4rem 0.9rem; font-size: 1rem; font-weight: 800; color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 8px; white-space: nowrap; }
 .theme-applied .pa-hdr-name { color: #fff !important; }
@@ -30,6 +31,9 @@
     .pa-hdr-name { font-size: 1.3rem; }
     .pa-hdr-data { font-size: 0.85rem; gap: 0.1rem 0.8rem; }
     .pa-hdr-pos { margin: 0 0.6rem; padding: 0.3rem 0.55rem; font-size: 0.85rem; }
+    .pa-card .pa-ql { font-size: 0.8rem; }
+    .pa-card .pa-ql th, .pa-card .pa-ql td { padding: 0.3rem 0.25rem; }
+    .pa-card .pa-card-body { padding: 0.5rem; }
 }
 
 /* ---------- 카드(팬그래프 module card) ---------- */
