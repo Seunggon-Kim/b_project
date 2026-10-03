@@ -1561,8 +1561,8 @@ Expected: FAIL — `ENOENT: no such file or directory` (columns.js 가 아직 �
     d: { label: 'D', kind: 'int', range: true, desc: '무승부입니다.' },
     pct: { label: '승률', kind: 'avg3', range: true, desc: '승률입니다. 무승부는 뺍니다.', formula: 'W ÷ (W + L)' },
     gb: { label: '승차', kind: 'gb', range: true, better: 'low', desc: '1위와의 승차입니다. 시즌은 공식 순위표 값이고, 1999·2000년은 리그 안에서 잰 값입니다.', formula: '((1위 W − W) + (L − 1위 L)) ÷ 2' },
-    r: { label: 'R', kind: 'int', range: true, desc: '팀 득점입니다. 시즌은 공식 타자 기록 합, 기간별은 경기 점수 합입니다.' },
-    ra: { label: 'RA', kind: 'int', range: true, better: 'low', desc: '팀 실점입니다. 시즌은 공식 투수 기록 합, 기간별은 경기 점수 합입니다.' },
+    r: { label: 'R', kind: 'int', range: true, desc: '팀 득점입니다. 2008년부터는 경기 점수 합이고, 그 전은 공식 타자 기록 합입니다.' },
+    ra: { label: 'RA', kind: 'int', range: true, better: 'low', desc: '팀 실점입니다. 2008년부터는 경기 점수 합이고, 그 전은 공식 투수 기록 합입니다.' },
     diff: { label: '득실차', kind: 'signed0', range: true, desc: '득점에서 실점을 뺀 값입니다.', formula: 'R − RA' },
     pyth: { label: '피타고리안', kind: 'avg3', range: true, desc: '득점과 실점만으로 계산한 기대 승률입니다.', formula: 'R^1.83 ÷ (R^1.83 + RA^1.83)' },
     expw: { label: '기대 승', kind: 'f1', range: true, desc: '피타고리안 승률로 본 기대 승수입니다.', formula: '피타고리안 × (W + L)' },
@@ -2547,7 +2547,7 @@ Expected: FAIL — `ENOENT: no such file or directory` (page.js 가 아직 없�
   const SEASON_CAVEAT = '출처: KBO 공식 선수 기록을 팀별로 합산해 계산합니다. 비율 지표는 성분에서 다시 계산합니다. 시즌 중 트레이드된 선수는 그 시즌 기록 전체가 한 팀으로 잡혀 팀 합산이 조금 어긋날 수 있습니다. 진행 중인 시즌은 최신 일일 갱신 기준이라 KBO 실시간과 1~2경기 차이가 날 수 있습니다.';
   const OLD_CAVEAT = ' 2007년 이전은 파크팩터가 없어 OPS+·ERA-·FIP-를 구장 보정 없이 계산했고, wOBA·wRC+는 2008년부터 있습니다.';
   const RANGE_CAVEAT = '선택한 기간 안에 끝난 경기의 경기 기록(PBP)을 집계합니다. 시즌 누적과 산출 방식이 달라 수치가 다를 수 있습니다.';
-  const REC_CAVEAT = '승패는 공식 순위표, 득점·실점은 공식 선수 기록 합계입니다. 홈·원정·1점차·월별·상대 전적은 정규시즌 경기 결과에서 셉니다(2008년부터).';
+  const REC_CAVEAT = '승패는 공식 순위표입니다. 득점·실점과 홈·원정·1점차·월별·상대 전적은 정규시즌 경기 결과에서 셉니다(2008년부터). 2007년 이전 득점·실점은 공식 선수 기록 합계입니다.';
   const REC_RANGE_CAVEAT = '선택한 기간의 정규시즌 경기 결과로 승패·득실을 셉니다.';
   const LEAGUE2_CAVEAT = ' 1999·2000년은 드림·매직 양대 리그라 승차는 리그 안에서 잰 값입니다.';
   const LIVE_CAVEAT = ' 올해 승패와 경기 수는 KBO 실시간 순위입니다.';
@@ -3410,3 +3410,136 @@ evan 에게 보고합니다:
 - 검증 1~7 숫자 요약(Task 2~4 콘솔 출력)
 - `git log origin/main..main --oneline` 결과(옆 세션 커밋이 섞여 있는지)
 - push·배포는 하지 않고 허락을 기다린다는 것. 배포 명령은 `npx --yes wrangler@4 pages deploy dashboard_js --project-name bstats --branch main` 이고, 배포 직전 `git status dashboard_js` 로 내 변경만 있는지 확인합니다.
+
+---
+
+### Task 12: 2008년부터 팀 득실을 경기 점수로(evan 결정, 2026-10-03)
+
+Task 4·6 이 끝난 뒤 추가한 단계입니다. **Task 8 보다 먼저 실행합니다.**
+
+배경: games 표의 끝내기 득점 누락이 고쳐졌습니다(DB 세션 cbb3e64, 2015~2026 정규시즌 657경기). 그 뒤 2025 를 비교하니 공식 선수 기록 합과 경기 점수 합이 트레이드한 팀에서만 다릅니다(KIA 619 vs 668, NC 760 vs 732, 한화 710 vs 684, 나머지 0~10). 공식 기록은 트레이드된 선수의 시즌 득점을 마지막 팀에 몰아 잡기 때문입니다. evan 이 "2008년부터 경기 점수, 그 전은 공식 기록 합"을 골랐습니다.
+
+**Files:**
+- Modify: `dashboard_js/js/team-stats/metrics.js` (`recordTable` 만)
+- Modify: `dashboard_js/js/team-stats/columns.js` (`REC.r`·`REC.ra` 설명 두 줄만)
+- Modify: `C:/tmp/bstats-team-stats-check/tests/metrics.record.test.js`
+
+**Interfaces:**
+- Consumes: `recordTable(rank, batTotals, pitTotals, splits)` (Task 4), `gameSplits` 결과의 `r`·`ra`·`g`
+- Produces: `recordTable` 의 행에 `runsFrom: 'games' | 'official'` 가 더해집니다. `splits` 에 그 팀이 있고 `g > 0` 이면 `r`·`ra` 는 경기 점수 합, 아니면 공식 기록 합입니다. 나머지 모양은 그대로입니다.
+
+- [ ] **Step 1: 테스트 고치고 더하기**
+
+`metrics.record.test.js` 의 `seasonView 2025` 테스트에서 아래 두 줄을
+
+```js
+  assert.equal(lg.r, v.batTotals.LG.r);
+  assert.equal(lg.ra, v.pitTotals.LG.r);
+```
+
+이렇게 바꿉니다(같은 테스트 위쪽 `const rec = M.recordTable(...)` 줄 바로 앞에 `const sp = M.gameSplits(games);` 를 넣고, 그 줄의 `M.gameSplits(games)` 를 `sp` 로 바꿉니다):
+
+```js
+  assert.equal(lg.r, sp.LG.r);
+  assert.equal(lg.ra, sp.LG.ra);
+  assert.equal(lg.runsFrom, 'games');
+```
+
+그리고 파일 끝에 테스트를 더합니다:
+
+```js
+test('recordTable: 경기 결과가 있으면 득실은 경기 점수, 없으면 공식 기록 합', () => {
+  const rank = { A: { team: 'A', g: 10, w: 6, l: 4, d: 0, pct: 0.6, gb: 0, rank: 1, league: '단일' } };
+  const bat = { A: { team: 'A', r: 50 } }, pit = { A: { team: 'A', r: 40 } };
+  const splits = { A: { team: 'A', g: 10, r: 47, ra: 41, home: { w: 3, l: 2, d: 0 }, away: { w: 3, l: 2, d: 0 }, onerun: { w: 1, l: 1, d: 0 } } };
+  const withGames = M.recordTable(rank, bat, pit, splits)[0];
+  assert.equal(withGames.r, 47);
+  assert.equal(withGames.ra, 41);
+  assert.equal(withGames.runsFrom, 'games');
+  assert.ok(near(withGames.pyth, M.pythag(47, 41)));
+  const official = M.recordTable(rank, bat, pit, null)[0];
+  assert.equal(official.r, 50);
+  assert.equal(official.ra, 40);
+  assert.equal(official.runsFrom, 'official');
+  assert.equal(official.home, null);
+  const noGamesForTeam = M.recordTable(rank, bat, pit, { B: splits.A })[0];
+  assert.equal(noGamesForTeam.runsFrom, 'official');
+});
+
+test('검증 6b: 2008 이후 시즌 득실은 경기 점수 합(트레이드 영향 없음)', () => {
+  const v = M.seasonView({ batters: fixture('batters_2025').batters, pitchers: fixture('pitchers_2025').pitchers, refs: R, season: 2025 });
+  const sp = M.gameSplits(games);
+  const rec = M.recordTable(v.rank, v.batTotals, v.pitTotals, sp);
+  const kia = rec.find(r => r.team === 'KIA');
+  assert.equal(kia.r, sp.KIA.r);
+  assert.notEqual(kia.r, v.batTotals.KIA.r);
+  const totalR = rec.reduce((a, r) => a + r.r, 0), totalRA = rec.reduce((a, r) => a + r.ra, 0);
+  assert.equal(totalR, totalRA);
+});
+```
+
+- [ ] **Step 2: 테스트가 실패하는지 확인**
+
+Run: `node --test C:/tmp/bstats-team-stats-check/tests/metrics.record.test.js`
+Expected: FAIL — `lg.r` 가 공식 합이라 `sp.LG.r` 와 다름, `runsFrom` undefined
+
+- [ ] **Step 3: recordTable 고치기**
+
+`metrics.js` 의 `recordTable` 전체를 아래로 바꿉니다:
+
+```js
+  /**
+   * 시즌 팀 성적 표입니다. 승패는 순위표입니다.
+   *
+   * 득실은 경기 결과(2008~)가 있으면 경기 점수 합입니다. 공식 선수 기록
+   * 합은 트레이드된 선수의 시즌 득점을 마지막 팀에 몰아 잡아, 트레이드한
+   * 팀의 득실이 틀립니다(2025 KIA 공식 619 vs 경기 668). 경기 결과가 없는
+   * 2007 이전만 공식 기록 합을 씁니다.
+   */
+  function recordTable(rank, batTotals, pitTotals, splits) {
+    return Object.keys(rank).map(function (team) {
+      const k = rank[team];
+      const b = batTotals && batTotals[team], p = pitTotals && pitTotals[team];
+      const s = splits && splits[team];
+      const fromGames = !!(s && s.g > 0);
+      const r = fromGames ? s.r : (b ? b.r : null);
+      const ra = fromGames ? s.ra : (p ? p.r : null);
+      const py = pythag(r, ra);
+      const expw = py === null ? null : py * (k.w + k.l);
+      return Object.assign({}, k, {
+        r: r, ra: ra,
+        runsFrom: fromGames ? 'games' : 'official',
+        diff: r !== null && ra !== null ? r - ra : null,
+        pyth: py,
+        expw: expw,
+        luck: expw === null ? null : k.w - expw,
+        home: s ? s.home : null,
+        away: s ? s.away : null,
+        onerun: s ? s.onerun : null,
+      });
+    });
+  }
+```
+
+- [ ] **Step 4: columns.js 설명 두 줄 고치기**
+
+`REC` 의 `r`·`ra` 를 이렇게 바꿉니다:
+
+```js
+    r: { label: 'R', kind: 'int', range: true, desc: '팀 득점입니다. 2008년부터는 경기 점수 합이고, 그 전은 공식 타자 기록 합입니다.' },
+    ra: { label: 'RA', kind: 'int', range: true, better: 'low', desc: '팀 실점입니다. 2008년부터는 경기 점수 합이고, 그 전은 공식 투수 기록 합입니다.' },
+```
+
+- [ ] **Step 5: 전체 테스트**
+
+Run: `node --test "C:/tmp/bstats-team-stats-check/tests/*.test.js"`
+Expected: PASS
+
+- [ ] **Step 6: 커밋**
+
+```bash
+cd C:/Users/김승곤/Desktop/b_project
+git status --short
+git add dashboard_js/js/team-stats/metrics.js dashboard_js/js/team-stats/columns.js
+git commit -m "feat(team-stats): 2008년부터 팀 득실을 경기 점수로 셈(트레이드 영향 없앰)" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
