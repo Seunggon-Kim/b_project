@@ -53,7 +53,7 @@
     const btn = k => `<button type="button" class="lin-sum-btn${active === k ? ' on' : ''}" data-state="${k}" data-tooltip="${esc(tip(k))}">`
       + `<span class="lin-dot lin-${k}"></span>${STATE_LABEL[k]} <b>${sum[k]}</b></button>`;
     return ['ok', 'fail', 'stale', 'none'].map(btn).join('')
-      + `<span class="lin-sum-manual" data-tooltip="${esc(SUM_TIP.manual)}">기준 표 <b>${sum.manual}</b></span>`;
+      + `<span class="lin-sum-manual" tabindex="0" data-tooltip="${esc(SUM_TIP.manual)}">기준 표 <b>${sum.manual}</b></span>`;
   }
 
   /** 상자 안 상태 표시(점 또는 '기준')입니다. 표·작업만 붙입니다. */
@@ -93,7 +93,7 @@
     let h = `<div class="lin-layers" style="width:${lay.width}px">`;
     m.LAYERS.forEach(function (ly) {
       const i = m.COLS.indexOf(ly.col);
-      h += `<div class="lin-layer lin-layer-${ly.id}" style="left:${Math.round(i * lay.colW)}px;width:${lay.boxW}px" data-tooltip="${esc(ly.tip)}">${esc(ly.label)}</div>`;
+      h += `<div class="lin-layer lin-layer-${ly.id}" style="left:${Math.round(i * lay.colW)}px;width:${lay.boxW}px" tabindex="0" data-tooltip="${esc(ly.label + ': ' + ly.tip)}">${esc(ly.label)}</div>`;
     });
     h += `</div><div class="lin-heads" style="width:${lay.width}px">`;
     m.COLS.forEach(function (c, i) {
@@ -121,7 +121,7 @@
     let h = '';
     m.COLS.forEach(function (c) {
       const ly = m.LAYERS.find(x => x.col === c && x.label !== m.COL_LABEL[c]);
-      const tag = ly ? ` <span class="lin-layer-tag" data-tooltip="${esc(ly.tip)}">${esc(ly.label)}</span>` : '';
+      const tag = ly ? ` <span class="lin-layer-tag" tabindex="0" data-tooltip="${esc(ly.label + ': ' + ly.tip)}">${esc(ly.label)}</span>` : '';
       h += `<section class="lin-list-col"><h4>${esc(m.COL_LABEL[c])}${tag}</h4><ul class="lin-list">`;
       graph.cols[c].forEach(function (n) {
         const out = graph.edges.filter(e => e.from === n.id).map(e => label(e.to));
@@ -387,14 +387,14 @@
       show(el, el.getAttribute('data-tooltip'));
     });
     scope.addEventListener('focusin', function (e) {
-      const el = e.target.closest && e.target.closest('.lin-box[data-tooltip], .lin-sum-btn[data-tooltip]');
+      const el = e.target.closest && e.target.closest('.lin-box[data-tooltip], .lin-sum-btn[data-tooltip], .lin-sum-manual[data-tooltip], .lin-layer[data-tooltip], .lin-layer-tag[data-tooltip]');
       if (!el || !scope.contains(el)) return;
       try { if (!el.matches(':focus-visible')) return; } catch (err) { /* :focus-visible 미지원이면 그대로 보임 */ }
       const mark = el.querySelector('.lin-dot[data-tooltip], .lin-tag[data-tooltip]');
       show(el, joinTips(el.getAttribute('data-tooltip'), mark && mark.getAttribute('data-tooltip')));
     });
     scope.addEventListener('focusout', function (e) {
-      if (e.target.closest && e.target.closest('.lin-box, .lin-sum-btn')) hide();
+      if (e.target.closest && e.target.closest('.lin-box, .lin-sum-btn, .lin-sum-manual, .lin-layer, .lin-layer-tag')) hide();
     });
     scope.addEventListener('mouseout', function (e) {
       if (e.target.closest && e.target.closest('[data-tooltip]')) hide();
