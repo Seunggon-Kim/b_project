@@ -77,3 +77,10 @@
     .lin-dl { grid-template-columns: 1fr; gap: 0.15rem; }
     .lin-dl dd { margin-bottom: 0.5rem; }
 }
+
+/* 상세 카드 제목 줄 버튼 묶음(데이터 보기·닫기) */
+.lin-actions { display: flex; align-items: center; gap: 0.4rem; }
+
+/* 데이터 탐색 탭의 수집 일정 표(schedule.js): 실패한 실행, 불러오기 실패 줄 */
+.dbx-run.fail { color: var(--danger); }
+.dbx-cron-error { color: var(--text-secondary); padding: 0.8rem; }

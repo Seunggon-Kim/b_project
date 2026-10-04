@@ -214,8 +214,11 @@
       body += `<dt>읽는 표·원천</dt><dd>${listOrDash(ins.map(id => `<li>${esc(label(id))}</li>`))}</dd>`;
       body += '</dl>';
     }
+    const dataBtn = node.kind === 'collected' || node.kind === 'derived' || node.kind === 'manual'
+      ? `<button type="button" class="lin-close" data-show-table="${esc(node.ref.name)}">데이터 보기</button>`
+      : '';
     return `<div class="card-header"><h3 class="card-title">${title}</h3>`
-      + '<button type="button" class="lin-close" data-close="1">닫기</button></div>'
+      + `<span class="lin-actions">${dataBtn}<button type="button" class="lin-close" data-close="1">닫기</button></span></div>`
       + `<div class="card-body">${body}</div>`;
   }
 
@@ -230,12 +233,22 @@
 
   function $(id) { return document.getElementById(id); }
 
+  let linOnce = null;
+  /**
+   * 계보 파일을 한 번만 받습니다. 데이터 탐색 탭의 수집 일정 표(schedule.js)도 이것을 씁니다.
+   * 반환 Promise<{ ok, data } | { ok: false, error }>
+   */
+  function loadLineage() {
+    if (!linOnce) linOnce = root.TeamStats.data.getJson('../data/table_lineage.json', 'tables');
+    return linOnce;
+  }
+
   /** 계보 파일과 운영 정보 두 가지(행 수·실행 기록)를 받습니다. 실패는 이유를 남깁니다. */
   async function load() {
     const D = root.TeamStats.data;
     const base = root.KBO_API_BASE;
     const res = await Promise.all([
-      D.getJson('../data/table_lineage.json', 'tables'),
+      loadLineage(),
       D.getJson(`${base}/db/tables`, 'tables'),
       D.getJson(`${base}/jobs/status`, null),
     ]);
@@ -392,6 +405,12 @@
         applyFocus(`.lin-sum-btn[data-state="${k}"]`);
         return;
       }
+      // 표 상세 카드의 '데이터 보기': 페이지(database-explorer.html)가 받아 데이터 탐색 탭에서 그 표를 엽니다.
+      const show = e.target.closest('[data-show-table]');
+      if (show) {
+        root.dispatchEvent(new CustomEvent('lineage:show-table', { detail: { name: show.getAttribute('data-show-table') } }));
+        return;
+      }
       if (e.target.closest('[data-close]')) {
         S.sel = null;
         applyFocus();
@@ -435,12 +454,26 @@
     bindTips(tab);
   }
 
+  /** 다른 탭에서 넘어올 때 표 하나를 고른 채 엽니다. 손 작업 표면 묶음을 펼칩니다. */
+  function select(id) {
+    const t = (S.lin.tables || []).find(x => 'table:' + x.name === id);
+    if (!t || t.kind === 'meta') return;
+    if (t.kind === 'manual') S.manualOpen = true;
+    S.filter = null;
+    S.sel = id;
+    render();
+    const box = document.querySelector(`#lin-graph .lin-box[data-id="${root.CSS && root.CSS.escape ? root.CSS.escape(id) : id}"]`);
+    if (box) box.scrollIntoView({ block: 'center', inline: 'center' });
+  }
+
   /**
    * 탭을 열 때 부릅니다(database-explorer.html 의 switchTab). 처음이면 데이터를 받아
-   * 그리고, 다시 열면 그사이 폭이 바뀌었을 때만 다시 그립니다.
+   * 그립니다. selectId('table:<이름>')를 주면 그 표를 고른 채 엽니다. 그 밖에 다시 열면
+   * 그사이 폭이 바뀌었을 때만 다시 그립니다.
    */
-  function open() {
-    if (!S.loading) {
+  function open(selectId) {
+    const first = !S.loading;
+    if (first) {
       bind();
       $('lin-graph').innerHTML = typeof root.createLoadingSpinner === 'function' ? root.createLoadingSpinner() : '';
       S.loading = load().then(render).catch(function (e) {
@@ -448,15 +481,18 @@
         S.linError = String((e && e.message) || e);
         render();
       });
-      return S.loading;
     }
     return S.loading.then(function () {
+      if (selectId && S.lin) {
+        select(selectId);
+        return;
+      }
       const box = $('lin-graph');
-      if (S.lin && box && box.clientWidth !== S.width) render();
+      if (!first && S.lin && box && box.clientWidth !== S.width) render();
     });
   }
 
-  const api = { esc, pageHref, statusMap, summaryHtml, graphHtml, listHtml, detailHtml, boxTip, joinTips, open, STATE_LABEL, SUM_TIP };
+  const api = { esc, pageHref, statusMap, summaryHtml, graphHtml, listHtml, detailHtml, boxTip, joinTips, loadLineage, open, STATE_LABEL, SUM_TIP };
   L.view = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
