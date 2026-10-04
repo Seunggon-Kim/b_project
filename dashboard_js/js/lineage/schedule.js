@@ -123,7 +123,7 @@
       const det = js && js.ok && js.data && js.data.details && typeof js.data.details === 'object' ? js.data.details : null;
       const rows = scheduleRows(lin.data);
       tbody.innerHTML = scheduleHtml(rows, det);
-      if (opts.summary && js && js.ok) opts.summary.textContent = scheduleSummary(rows, lin.data);
+      if (opts.summary) opts.summary.textContent = scheduleSummary(rows, lin.data);
     } catch (e) {
       console.error(e);
       tbody.innerHTML = `<tr><td colspan="4" class="dbx-cron-error">수집 일정을 불러오지 못했습니다 (${esc(String((e && e.message) || e))}).</td></tr>`;
