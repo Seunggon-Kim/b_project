@@ -387,3 +387,132 @@ test('시점 전환 단추', () => {
 - [ ] **Step 5: 확인** — 시험 모두 PASS. 캡처: 65933 포수 시점·투수 시점(CDP 로 `.pa-mv-view-btn[data-view=pitcher]` 클릭) 두 장, 그림이 좌우로 뒤집히고 표 수평 부호가 바뀌는지, 툴팁 글자가 바뀌는지(`#pa-move-help` 의 data-tip). 투수 시점 상태에서 연도를 2019 로 바꿔도 투수 시점이 유지되는지.
 
 - [ ] **Step 6: 커밋** — `git commit -m "feat(player-analytics): 무브먼트 포수·투수 시점 전환" -- dashboard_js/js/player-analytics/movement.js dashboard_js/pages/player-analytics.html dashboard_js/css/player-analytics.css`
+
+---
+
+### Task 3: 투수 Quick Look 지표 더하기 (evan 의견: 빈칸 없애기)
+
+**Files:** `dashboard_js/js/player-analytics/quicklook.js`, 시험 `C:/tmp/bstats-player-analytics-check/tests/quicklook.test.js`
+
+- [ ] **Step 1: 시험 먼저** — `build 투수(구창모)` 시험의 줄 목록 기대값을 바꾸고 값 시험을 더합니다:
+
+```js
+  assert.deepEqual(m.rows.map(r => r[0]), ['팀', 'W', 'L', 'SV', 'HLD', 'G', 'GS', 'IP', 'K%', 'BB%', 'K-BB%', 'K/9', 'BB/9', 'HR/9', 'BABIP', 'ERA', 'WHIP']);
+  assert.deepEqual(row(m, 'K-BB%'), ['K-BB%', '-', '25.4%', '12.1%', '14.9%']);
+  assert.deepEqual(row(m, 'K/9'), ['K/9', '-', '11.30', '7.39', '8.76']);
+  assert.deepEqual(row(m, 'BB/9'), ['BB/9', '-', '1.88', '2.68', '3.10']);
+  assert.deepEqual(row(m, 'HR/9'), ['HR/9', '-', '0.63', '1.19', '1.03']);
+  assert.deepEqual(row(m, 'BABIP'), ['BABIP', '-', '.351', '.302', '.304']);
+```
+
+(타자 줄 목록은 그대로입니다.) Run → FAIL.
+
+- [ ] **Step 2: ROWS.pit** — `quicklook.js` 의 `ROWS.pit` 에서 `['BB%', 'bbpct', 'pct'],` 다음에 넣습니다:
+
+```js
+      ['K-BB%', 'kbbpct', 'pct'], ['K/9', 'k9', 'f2'], ['BB/9', 'bb9', 'f2'], ['HR/9', 'hr9', 'f2'], ['BABIP', 'babip', 'avg3'],
+```
+
+(값은 공용 `pitchingRates` 가 이미 셉니다.) ROWS 위 주석에 "투수는 무브먼트 카드 높이에 맞춰 줄을 더 둡니다(evan 의견)"를 적습니다.
+
+- [ ] **Step 3: 통과·커밋** — 전체 시험 PASS. `git commit -m "feat(player-analytics): 투수 Quick Look 에 K-BB%·K/9·BB/9·HR/9·BABIP" -- dashboard_js/js/player-analytics/quicklook.js`
+
+---
+
+### Task 4: 같은 손 투수 리그 평균 (API 세션의 /stats/movement_avg)
+
+API: `GET /stats/movement_avg?season=YYYY` → `{season, rows:[{throws:'R'|'L', pitch_type, n, pfx_x, pfx_z, speed}]}` (인치·포수 시점, speed 는 null 가능). 운영 Worker 배포 전에는 404 → 페이지는 평균 없이 지금처럼 그립니다. 표시: 그림에 빗금 원, 표에 `좌투 평균`/`우투 평균` 줄. **n ≥ 100** 만.
+
+**Files:** `movement.js`, `pages/player-analytics.html`, `css/player-analytics.css`, `js/api.js`, `database/lineage_writes.json`(unused_routes 에서 `/stats/movement_avg` 한 줄 빼기), `dashboard_js/data/table_lineage.json`(다시 만들어진 것), 시험 두 개
+
+- [ ] **Step 1: 시험 먼저** — `movement.test.js` 끝에:
+
+```js
+const AVG = { rows: [
+  { throws: 'L', pitch_type: '직구', n: 22991, pfx_x: 7.4, pfx_z: 11, speed: 144.7 },
+  { throws: 'L', pitch_type: '커브', n: 50, pfx_x: -3, pfx_z: -5, speed: 118 },
+  { throws: 'R', pitch_type: '직구', n: 63588, pfx_x: -5.1, pfx_z: 10.5, speed: 147.1 },
+] };
+
+test('avgFor: 손으로 고르고 100구 미만은 뺌, cm', () => {
+  const a = M.avgFor(AVG, 'L');
+  assert.deepEqual(Object.keys(a), ['직구']);
+  assert.ok(Math.abs(a['직구'].x - 18.796) < 1e-9 && Math.abs(a['직구'].z - 27.94) < 1e-9);
+  assert.equal(a['직구'].speed, 144.7);
+  assert.deepEqual(M.avgFor(AVG, 'S'), {});
+  assert.deepEqual(M.avgFor(null, 'L'), {});
+  assert.equal(M.handLabel('L'), '좌투');
+  assert.equal(M.handLabel('R'), '우투');
+  assert.equal(M.handLabel('S'), null);
+});
+
+test('리그 평균: 빗금 원·표 평균 줄, 투수 시점은 수평 뒤집음', () => {
+  const s = M.summarize(P);
+  const ctx = { map: M.avgFor(AVG, 'L'), label: '좌투' };
+  const svg = M.svgHtml(P, s, 'catcher', ctx);
+  assert.ok(svg.includes('<pattern id="pa-mv-hatch"'));
+  assert.equal((svg.match(/class="pa-mv-lg"/g) || []).length, 1);
+  assert.ok(svg.includes('cx="256.4" cy="116.2"'));
+  assert.ok(svg.includes('<title>좌투 평균 직구 · 수직 27.9cm · 수평 18.8cm</title>'));
+  assert.ok(M.svgHtml(P, s, 'pitcher', ctx).includes('cx="143.6" cy="116.2"'));
+  const lg = M.legendHtml(s, 'catcher', ctx);
+  assert.ok(lg.includes('<tr class="pa-mv-avg-row"><td>좌투 평균</td><td></td><td>144.7</td><td>27.9</td><td>18.8</td></tr>'));
+  assert.equal((lg.match(/pa-mv-avg-row/g) || []).length, 1);
+  assert.ok(M.legendHtml(s, 'pitcher', ctx).includes('<td>좌투 평균</td><td></td><td>144.7</td><td>27.9</td><td>-18.8</td>'));
+  assert.ok(M.bodyHtml(P, 8, 'catcher', ctx).includes('pa-mv-lg'));
+  assert.ok(!M.bodyHtml(P, 8, 'catcher').includes('pa-mv-lg'), 'ctx 없으면 평균 없음');
+});
+```
+
+`page-html.test.js` 끝에:
+
+```js
+test('리그 평균 연결', () => {
+  for (const used of ['API.getMovementAvg(season)', 'M.avgFor(', 'M.handLabel(']) assert.ok(html.includes(used), used);
+});
+```
+
+Run → FAIL.
+
+- [ ] **Step 2: movement.js**
+  - `const MIN_AVG_N = 100;`
+  - `handLabel(t)`: `'L'` → `'좌투'`, `'R'` → `'우투'`, 그 밖 `null`.
+  - `avgFor(data, throws)`: `data.rows` 중 `throws` 가 같고 `n ≥ MIN_AVG_N` 이고 pfx 값이 숫자인 줄을 `{ [pitch_type]: { x: pfx_x*IN2CM, z: pfx_z*IN2CM, speed: num(speed), n } }` 로. 손이 R/L 이 아니면 `{}`.
+  - `svgHtml(pitches, summary, view, ctx)`: `ctx` 가 있으면 `<defs>` 안에 `<pattern id="pa-mv-hatch" patternUnits="userSpaceOnUse" width="6" height="6"><path class="pa-mv-hatch-line" d="M-1,1 l2,-2 M0,6 l6,-6 M5,7 l2,-2"/></pattern>` 를 넣고, 선수 평균 원을 그리기 **전에** summary 의 구종 중 `ctx.map` 에 있는 것마다 `<circle class="pa-mv-lg" cx=… cy=… r="11" fill="url(#pa-mv-hatch)" stroke="<구종 색>"><title>{label} 평균 {구종} · 수직 {z}cm · 수평 {x·flip}cm</title></circle>` (좌표는 점과 같은 식, 수평은 flip). 구종 이름은 esc.
+  - `legendHtml(summary, view, ctx)`: 각 구종 줄 바로 다음, `ctx.map` 에 그 구종이 있으면 `<tr class="pa-mv-avg-row"><td>{label} 평균</td><td></td><td>{speed f1 또는 -}</td><td>{z f1}</td><td>{x·flip f1}</td></tr>`.
+  - `bodyHtml(pitches, total, view, ctx)` 는 ctx 를 넘깁니다. `api` 에 `avgFor, handLabel` 추가.
+
+- [ ] **Step 3: api.js** — `getPitchUsage` 다음에(덧붙이기):
+
+```js
+    /**
+     * 투수 손별 리그 평균 무브먼트(/stats/movement_avg). 없거나 실패하면 rows 가 빈 배열입니다.
+     */
+    static async getMovementAvg(season) {
+        try {
+            const response = await fetch(`${API_BASE_URL}/stats/movement_avg?season=${encodeURIComponent(season)}`);
+            if (!response.ok) return { rows: [] };
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching movement average:', error);
+            return { rows: [] };
+        }
+    }
+```
+
+- [ ] **Step 4: 페이지** — `usageCache` 옆에 `const avgCache = {};` 와 `let mvHand = null;`. `setupMovementCard` 에서 `mvHand = player.throw || null;`. `loadMovement` 에서 시즌 평균을 함께 부릅니다(`Promise.all` 배열에 세 번째로 `avgCache[season] ? null : API.getMovementAvg(season)`, 빈 결과는 저장 안 함, 키는 시즌). 그리기 직전에 `const label = M.handLabel(mvHand); const ctx = label ? { map: M.avgFor(avg, mvHand), label } : null;` 를 만들고 `mvLast = { pitches, total, ctx };`, `M.bodyHtml(pitches, total, mvView, ctx)`. 시점 전환 처리도 `mvLast.ctx` 를 넘깁니다. (재검토 지적: `setupMovementCard` 시작에서 `mvLast = null;` 로 이전 선수 그림이 시점 전환 때 다시 그려지지 않게 합니다.)
+
+- [ ] **Step 5: CSS** — 끝에:
+
+```css
+.pa-mv-lg { stroke-width: 1.5; opacity: 0.9; }
+.pa-mv-hatch-line { stroke: var(--text-muted); stroke-width: 1; }
+.pa-mv-avg-row td { padding-top: 0; color: var(--text-muted); font-size: 0.7rem; }
+.pa-mv-avg-row td:first-child { padding-left: 1.1rem; }
+```
+
+- [ ] **Step 6: 계보** — `database/lineage_writes.json` 의 `unused_routes` 에서 `"/stats/movement_avg"` 한 줄을 지우고(다른 줄 손대지 않음), `PYTHONUTF8=1 py scripts/build_lineage.py` → `PYTHONUTF8=1 py -m pytest tests -q`. 둘 다 통과해야 합니다. `dashboard_js/data/table_lineage.json` 이 바뀌면 이번 커밋에 함께 넣습니다(API 세션 안내).
+
+- [ ] **Step 7: 확인** — 운영 API 는 아직 404 일 수 있습니다. CDP 로 `fetch` 를 가로채 `/stats/movement_avg` 에 AVG 와 같은 모양(2026 좌투 직구·슬라이더·포크·커브, n ≥ 100)을 돌려주는 확인용 스크립트(저장소 밖)로 캡처합니다. 빗금 원·평균 줄이 보이는지, 404 일 때는 평균 없이 지금처럼 보이는지 둘 다 확인합니다.
+
+- [ ] **Step 8: 커밋** — `git commit -m "feat(player-analytics): 같은 손 투수 리그 평균(빗금 원·표 평균 줄)" -- dashboard_js/js/player-analytics/movement.js dashboard_js/pages/player-analytics.html dashboard_js/css/player-analytics.css dashboard_js/js/api.js database/lineage_writes.json dashboard_js/data/table_lineage.json`
