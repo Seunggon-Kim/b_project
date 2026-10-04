@@ -661,13 +661,15 @@
             const body = document.getElementById('pa-move-body');
             const usageBox = document.getElementById('pa-usage');
             const token = ++mvToken;
+            mvLast = null;  // 새 시즌을 부르는 동안 시점 전환이 이전 시즌을 다시 그리지 않게
             const key = playerId + ':' + season;
             let pitches = mvCache[key];
             let usage = usageCache[key];
             let avg = avgCache[season];
             if (!pitches || !usage || !avg) {
-                body.innerHTML = createLoadingSpinner();
-                if (usageBox) usageBox.innerHTML = createLoadingSpinner();
+                // 데이터가 없는 칸에만 로딩을 보입니다(평균만 없으면 어느 칸도 가리지 않습니다).
+                if (!pitches) body.innerHTML = createLoadingSpinner();
+                if (!usage && usageBox) usageBox.innerHTML = createLoadingSpinner();
                 const [a, u, av] = await Promise.all([
                     pitches ? null : API.getPitchArsenal(playerId, season),
                     usage ? null : API.getPitchUsage(playerId, season),
@@ -675,7 +677,7 @@
                 ]);
                 if (!pitches) { pitches = (a && a.arsenal) || []; if (pitches.length) mvCache[key] = pitches; }
                 if (!usage) { usage = u || { usage: [] }; if ((usage.usage || []).length) usageCache[key] = usage; }
-                if (!avg) { avg = av || { rows: [] }; if ((avg.rows || []).length) avgCache[season] = avg; }
+                if (!avg) { avg = av || { rows: [] }; avgCache[season] = avg; }  // 리그 평균은 비어 있어도 저장합니다(없으면 이 페이지에선 평균 없음)
             }
             if (token !== mvToken) return;  // 그사이 다른 선수·시즌을 골랐습니다.
             const label = M.handLabel(mvHand);
@@ -1374,9 +1376,16 @@
         (function () {
             const help = document.getElementById('pa-move-help');
             if (!help) return;
-            help.addEventListener('click', () => help.classList.toggle('open'));
-            help.addEventListener('blur', () => help.classList.remove('open'));
-            help.addEventListener('keydown', (e) => { if (e.key === 'Escape') help.classList.remove('open'); });
+            // 일부 브라우저는 누르면 버튼에 포커스가 가서 :focus-visible 이 아니어도 닫기 표시가 필요합니다.
+            help.addEventListener('click', () => {
+                const opened = help.classList.toggle('open');
+                if (opened) help.classList.remove('dismissed');
+                else help.classList.add('dismissed');  // 포커스가 남아 있어도 닫힌 채로 둡니다.
+            });
+            help.addEventListener('blur', () => { help.classList.remove('open'); help.classList.remove('dismissed'); });
+            help.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') { help.classList.remove('open'); help.classList.add('dismissed'); }
+            });
         })();
 
         window.addEventListener('popstate', () => {

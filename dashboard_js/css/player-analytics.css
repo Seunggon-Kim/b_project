@@ -105,7 +105,7 @@
 .pa-card-tabs-left { display: inline-flex; align-items: center; }
 .pa-help { position: static; margin-left: 0.35rem; width: 1.15rem; height: 1.15rem; padding: 0; border: 1px solid var(--border-color); border-radius: 50%; background: var(--bg-card); color: var(--text-secondary); font: inherit; font-size: 0.72rem; font-weight: 700; line-height: 1; cursor: help; }
 .pa-help::after { content: attr(data-tip); position: absolute; top: calc(100% + 6px); left: 0.5rem; right: 0.5rem; z-index: 20; padding: 0.5rem 0.6rem; border-radius: 6px; background: var(--text-primary); color: var(--bg-card); font-size: 0.75rem; font-weight: 400; line-height: 1.45; text-align: left; white-space: pre-line; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.12s; }
-.pa-help:hover::after, .pa-help:focus::after, .pa-help.open::after { opacity: 1; visibility: visible; }
+.pa-help:not(.dismissed):hover::after, .pa-help:not(.dismissed):focus-visible::after, .pa-help.open:not(.dismissed)::after { opacity: 1; visibility: visible; }
 .pa-usage { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color); }
 .pa-usage-title { margin-bottom: 0.5rem; font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); }
 .pa-usage-head, .pa-usage-row { display: grid; grid-template-columns: 3rem minmax(0, 1fr) 6.5rem minmax(0, 1fr) 3rem; align-items: center; gap: 0.35rem; }

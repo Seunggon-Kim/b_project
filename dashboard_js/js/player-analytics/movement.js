@@ -65,7 +65,7 @@
   /** 구종별 요약입니다. 많이 던진 순, 같으면 구종 이름 순입니다. */
   function summarize(pitches) {
     const vs = valid(pitches);
-    const by = {};
+    const by = Object.create(null);
     vs.forEach(function (p) {
       const g = by[p.pitch_type] || (by[p.pitch_type] = { type: p.pitch_type, n: 0, sx: 0, sz: 0, sv: 0, nv: 0 });
       g.n++;
@@ -124,8 +124,10 @@
   }
 
   function f1(v) { return v.toFixed(1); }
+  /** 소수 한 자리로 반올림하고 -0.0 을 0.0 으로 만듭니다(화면 표시용). */
+  function fd(v) { const r = Math.round(v * 10) / 10; return (r === 0 ? 0 : r).toFixed(1); }
   /** 수평 값을 시점에 맞춰 글자로 만듭니다(-0.0 방지). */
-  function fx(v, view) { return f1(v * flipOf(view) + 0); }
+  function fx(v, view) { return fd(v * flipOf(view)); }
   function px(cmX, view) { return f1(C + cmX * flipOf(view) * PX_PER_CM); }
   function py(cmZ) { return f1(C - cmZ * PX_PER_CM); }
 
@@ -154,24 +156,24 @@
     });
     if (ctx) {
       (summary || []).forEach(function (g) {
-        const a = ctx.map && ctx.map[g.type];
+        const a = ctx.map && Object.prototype.hasOwnProperty.call(ctx.map, g.type) ? ctx.map[g.type] : null;
         if (!a) return;
         s += '<circle class="pa-mv-lg" cx="' + px(a.x, view) + '" cy="' + py(a.z) + '" r="11" fill="url(#pa-mv-hatch)" stroke="' + g.color + '">'
-          + '<title>' + esc(ctx.label) + ' 평균 ' + esc(g.type) + ' · 수직 ' + f1(a.z) + 'cm · 수평 ' + fx(a.x, view) + 'cm</title></circle>';
+          + '<title>' + esc(ctx.label) + ' 평균 ' + esc(g.type) + ' · 수직 ' + fd(a.z) + 'cm · 수평 ' + fx(a.x, view) + 'cm</title></circle>';
       });
     }
     (summary || []).forEach(function (g) {
       s += '<circle class="pa-mv-avg" cx="' + px(g.x, view) + '" cy="' + py(g.z) + '" r="9" fill="' + g.color + '">'
-        + '<title>' + esc(g.type) + ' ' + f1(g.pct) + '% · 수직 ' + f1(g.z) + 'cm · 수평 ' + fx(g.x, view) + 'cm</title></circle>';
+        + '<title>' + esc(g.type) + ' ' + f1(g.pct) + '% · 수직 ' + fd(g.z) + 'cm · 수평 ' + fx(g.x, view) + 'cm</title></circle>';
     });
     return s + '</g></svg>';
   }
 
   function avgRow(g, view, ctx) {
-    const a = ctx && ctx.map && ctx.map[g.type];
+    const a = ctx && ctx.map && Object.prototype.hasOwnProperty.call(ctx.map, g.type) ? ctx.map[g.type] : null;
     if (!a) return '';
     return '<tr class="pa-mv-avg-row"><td>' + esc(ctx.label) + ' 평균</td><td></td><td>' + (a.speed === null ? '-' : f1(a.speed))
-      + '</td><td>' + f1(a.z) + '</td><td>' + fx(a.x, view) + '</td></tr>';
+      + '</td><td>' + fd(a.z) + '</td><td>' + fx(a.x, view) + '</td></tr>';
   }
 
   /** 구종 표입니다. 빈 배열이면 빈 글자입니다. */
@@ -181,7 +183,7 @@
       + summary.map(function (g) {
         return '<tr><td><span class="pa-mv-dot" style="background:' + g.color + '"></span>' + esc(g.type) + '</td>'
           + '<td>' + f1(g.pct) + '%</td><td>' + (g.speed === null ? '-' : f1(g.speed)) + '</td>'
-          + '<td>' + f1(g.z) + '</td><td>' + fx(g.x, view) + '</td></tr>'
+          + '<td>' + fd(g.z) + '</td><td>' + fx(g.x, view) + '</td></tr>'
           + avgRow(g, view, ctx);
       }).join('')
       + '</tbody></table>';
