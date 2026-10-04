@@ -1,16 +1,17 @@
-// CPU 를 줄이려고 MySQL 에서만 다르게 읽는 곳(/stats/batters·pitchers)이
-// D1 길과 같은 응답을 내는지 SQLite 로 봅니다.
+// CPU 를 줄이려고 MySQL 에서만 다르게 읽는 곳(leaders, /stats/batters·
+// pitchers)이 D1 길과 같은 응답을 내는지 SQLite 로 봅니다.
 //
 // 같은 SQLite 표에 대고 env.DB_BACKEND 만 바꿔 두 길을 돌립니다. MySQL 길의
 // SQL(창 함수 ROW_NUMBER, JSON_ARRAY)은 SQLite 도 받습니다.
 // SQLite 와 MySQL 의 정렬·숫자 글자 차이는 여기서 보지 않고, 실제 MySQL 은
 // 스테이징 ↔ 운영 응답 대조(scripts/api_compare.mjs)로 확인합니다. 이 시험은
-// 두 길의 JS 조립(행 순서·열 순서·이름 겹침)이 같은지 봅니다.
+// 두 길의 JS 조립(순위 꺼내기·열 순서·이름 겹침)이 같은지 봅니다.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
+import { leaders, batterTopsOnce, wrcTopsOnce, BATTER_TOP_COLUMNS } from '../src/routes/leaders.js';
 import {
   statsBatters, statsPitchers, BATTER_STAT_COLUMNS, PITCHER_STAT_COLUMNS,
 } from '../src/routes/stats.js';
@@ -156,6 +157,39 @@ const D1 = { DB };
 const warnings = [];
 console.warn = (...a) => warnings.push(a.join(' '));
 test.afterEach(() => assert.deepEqual(warnings.splice(0), []));
+
+test('leaders: MySQL 한 번 읽기(창 함수)가 D1 의 LIMIT 5 질의들과 같은 Top5 를 냅니다', async () => {
+  const qual = 300;
+  const tops = await batterTopsOnce(DB, 2025, qual);
+  for (const [i, c] of BATTER_TOP_COLUMNS.entries()) {
+    const { results } = await DB.prepare(
+      `SELECT b.player_id AS player_id, b.${c} AS v FROM kbo_official_batter_stats b `
+      + `WHERE b.season=? AND b.plate_appearance >= ? ORDER BY b.${c} DESC, b.player_id LIMIT 5`,
+    ).bind(2025, qual).all();
+    assert.deepEqual(tops[i].map((d) => [d.player_id, d[`v${i}`]]), results.map((d) => [d.player_id, d.v]), c);
+  }
+  const [wrc, woba] = await wrcTopsOnce(DB, 2025, qual);
+  for (const [rows, col] of [[wrc, 'wRC_half'], [woba, 'wOBA']]) {
+    const { results } = await DB.prepare(
+      `SELECT CAST(w.batter_ID AS CHAR) AS player_id FROM wrc_plus_comparison w WHERE w.season=? AND w.PA >= ? `
+      + `ORDER BY w.${col} DESC, w.batter_ID LIMIT 5`,
+    ).bind(2025, qual).all();
+    assert.deepEqual(rows.map((d) => d.player_id), results.map((d) => d.player_id), col);
+  }
+});
+
+test('leaders: MySQL 길과 D1 길의 응답이 같습니다', async () => {
+  // 시즌 캐시(10분)가 있어 같은 값을 넣은 두 시즌을 하나씩 씁니다.
+  const my = await (await leaders(new Request('https://x/leaders?season=2024'), MY)).json();
+  const d1Body = await (await leaders(new Request('https://x/leaders?season=2025'), D1)).json();
+  for (const b of [my, d1Body]) {
+    delete b.season;
+    delete b.wrc_pf_season;
+  }
+  assert.ok(my.batter.avg.length === 5 && my.pitcher.kpct.length === 5);
+  assert.deepEqual(my, d1Body);
+  assert.equal(JSON.stringify(my), JSON.stringify(d1Body));
+});
 
 test('stats: MySQL 의 JSON 배열 길이 D1 의 b.*·ps.* 질의와 같은 응답(열 순서·이름 겹침 포함)을 냅니다', async () => {
   const urls = [

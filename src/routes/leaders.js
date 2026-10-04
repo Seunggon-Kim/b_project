@@ -1,6 +1,8 @@
 import { json, dbError } from '../lib/respond.js';
 import { ttlCache } from '../lib/cache.js';
 import { KBO_TEAM_CODE } from './standings.js';
+import { isMysql } from '../lib/backendflag.js';
+import { jsonRowsOnce } from '../lib/jsonrows.js';
 
 const cache = ttlCache(600); // 원본 _LEADERS_TTL = 600
 
@@ -107,6 +109,74 @@ function fmt1(val) {
   return Number(val).toFixed(1);
 }
 
+// 타율·출루율·장타율·OPS 순위의 열입니다. 응답의 avg·obp·slg·ops 순서입니다.
+export const BATTER_TOP_COLUMNS = [
+  'batting_average', 'on_base_percentage', 'slugging_percentage', 'on_base_plus_slugging',
+];
+
+/**
+ * 묶은 결과 행에서 지표 하나의 Top5 를 순위 차례로 꺼냅니다.
+ *
+ * 행에는 지표마다 `r<i>`(ROW_NUMBER) 가 있습니다. 5 이하인 행만 순위대로
+ * 돌려줍니다. 순위는 SQL 의 ORDER BY 가 정했으므로 여기서 값을 다시 견주지
+ * 않습니다.
+ */
+export function topByRank(rows, i, n = 5) {
+  const key = `r${i}`;
+  return rows.filter((d) => Number(d[key]) <= n)
+    .sort((a, b) => Number(a[key]) - Number(b[key]));
+}
+
+/**
+ * 타율·출루율·장타율·OPS Top5 를 질의 한 번으로 읽습니다(MySQL).
+ *
+ * D1 길은 지표마다 `ORDER BY 지표 DESC, player_id LIMIT 5` 를 네 번
+ * 보냅니다. 여기서는 같은 정렬을 ROW_NUMBER() 창 함수 넷으로 매기고 어느
+ * 하나라도 5 이하인 행만 받습니다. (season, player_id) 가 기본 키라 정렬이
+ * 하나로 정해져, 순위와 동점 순서가 LIMIT 5 질의와 같습니다. Worker CPU 를
+ * 줄이려는 것입니다. 질의마다 열 정보 해석·행 해석기 만들기가 되풀이됩니다.
+ *
+ * 돌려주는 것은 지표 순서의 배열 넷이고, 행의 값 열은 `v<i>` 입니다.
+ */
+export async function batterTopsOnce(db, season, qualPa) {
+  const cols = BATTER_TOP_COLUMNS;
+  const { results } = await db.prepare(
+    'SELECT * FROM (SELECT b.player_id AS player_id, '
+    + 'COALESCE(p.player_name, b.player_name) AS name, '
+    + 'COALESCE(b.player_team, p.team_id) AS team, '
+    + cols.map((c, i) => `b.${c} AS v${i}`).join(', ') + ', '
+    + cols.map((c, i) => `ROW_NUMBER() OVER (ORDER BY b.${c} DESC, b.player_id) AS r${i}`).join(', ')
+    + ' FROM kbo_official_batter_stats b LEFT JOIN players p ON b.player_id=p.player_id '
+    + 'WHERE b.season=? AND b.plate_appearance >= ?) AS t '
+    + 'WHERE ' + cols.map((_, i) => `r${i} <= 5`).join(' OR '),
+  ).bind(season, qualPa).all();
+  return cols.map((_, i) => topByRank(results, i));
+}
+
+/**
+ * wRC+·wOBA Top5 를 질의 한 번으로 읽습니다(MySQL). batterTopsOnce 와 같은
+ * 방식이고, 조인과 반올림은 D1 길의 wrcTopBy 와 같습니다. 순위는 반올림
+ * 전 값과 batter_ID 로 매깁니다.
+ *
+ * 돌려주는 것은 [wRC+ 행들, wOBA 행들] 이고 값 열은 각각 wrc·woba 입니다.
+ */
+export async function wrcTopsOnce(db, season, qualPa) {
+  const { results } = await db.prepare(
+    'SELECT * FROM (SELECT CAST(w.batter_ID AS CHAR) AS player_id, '
+    + 'COALESCE(b.player_name, p.player_name) AS name, '
+    + 'COALESCE(b.player_team, p.team_id) AS team, '
+    + 'ROUND(w.wRC_half, 1) AS wrc, ROUND(w.wOBA, 3) AS woba, '
+    + 'ROW_NUMBER() OVER (ORDER BY w.wRC_half DESC, w.batter_ID) AS r0, '
+    + 'ROW_NUMBER() OVER (ORDER BY w.wOBA DESC, w.batter_ID) AS r1 '
+    + 'FROM wrc_plus_comparison w '
+    + 'LEFT JOIN players p ON p.player_id = CAST(w.batter_ID AS CHAR) '
+    + 'LEFT JOIN kbo_official_batter_stats b '
+    + 'ON b.player_id = CAST(w.batter_ID AS CHAR) AND b.season = w.season '
+    + 'WHERE w.season=? AND w.PA >= ?) AS t WHERE r0 <= 5 OR r1 <= 5',
+  ).bind(season, qualPa).all();
+  return [topByRank(results, 0), topByRank(results, 1)];
+}
+
 /**
  * 원본 get_leaders (api/main.py:1594-1742) 입니다.
  *
@@ -187,10 +257,21 @@ export async function leaders(request, env) {
       }));
     };
 
-    const avgTop = await batterTop('batting_average');
-    const obpTop = await batterTop('on_base_percentage');
-    const slgTop = await batterTop('slugging_percentage');
-    const opsTop = await batterTop('on_base_plus_slugging');
+    const mysql = isMysql(env);
+    const [avgTop, obpTop, slgTop, opsTop] = mysql
+      ? (await batterTopsOnce(env.DB, season, qualPa)).map((rows, i) => rows.map((d) => ({
+        player_id: d.player_id ?? null,
+        name: d.name,
+        team: d.team,
+        code: teamCode(d.team),
+        value: fmt3(d[`v${i}`]),
+      })))
+      : [
+        await batterTop('batting_average'),
+        await batterTop('on_base_percentage'),
+        await batterTop('slugging_percentage'),
+        await batterTop('on_base_plus_slugging'),
+      ];
 
     // wRC+ 와 wOBA 는 wrc_plus_comparison(자체 파크팩터 3년 산식, half-PF)
     // 에서 직접 Top5 를 뽑습니다. 'wRC+ 강건성' 페이지와 동일 출처입니다.
@@ -218,7 +299,11 @@ export async function leaders(request, env) {
       return results;
     };
 
-    const wrcTop = (await wrcTopBy('wRC_half', 1, 'wrc')).map((d) => ({
+    const [wrcRows, wobaRows] = mysql
+      ? await wrcTopsOnce(env.DB, season, qualPa)
+      : [await wrcTopBy('wRC_half', 1, 'wrc'), await wrcTopBy('wOBA', 3, 'woba')];
+
+    const wrcTop = wrcRows.map((d) => ({
       player_id: d.player_id ?? null,
       name: d.name,
       team: d.team,
@@ -226,7 +311,7 @@ export async function leaders(request, env) {
       value: fmt1(d.wrc),
     }));
 
-    const wobaTop = (await wrcTopBy('wOBA', 3, 'woba')).map((d) => ({
+    const wobaTop = wobaRows.map((d) => ({
       player_id: d.player_id ?? null,
       name: d.name,
       team: d.team,
@@ -236,29 +321,45 @@ export async function leaders(request, env) {
 
     // 투수는 지표마다 정렬 기준이 달라 원본처럼 전 행을 받아 여기서 고릅니다.
     // 타자 쪽과 같은 이유로 시즌 행의 값을 먼저 쓰고 LEFT 로 조인합니다.
-    const pitRows = (await env.DB.prepare(
-      'SELECT ps.player_id AS player_id, COALESCE(p.player_name, ps.player_name) AS name, '
-      + 'COALESCE(ps.player_team, p.team_id) AS team, ps.earned_run_average AS era, '
-      + 'ps.innings_pitched AS ip, ps.strikeout AS k, '
-      // K%·BB% 는 저장된 컬럼이 아니라 여기서 셉니다.
-      //
-      // `strikeout_per_pa`·`base_on_balls_per_pa` 는 **2025 에만 값이
-      // 있습니다.** 나머지 열한 시즌은 전부 NULL 입니다. KBO 기록실이
-      // 이 값을 주지 않아 수집기가 채울 수 없고(셀레니움 때도 없었습니다),
-      // 2025 값은 옛 파이프라인이 남긴 것입니다. 그래서 K%·BB%·K-BB%
-      // 순위가 2025 말고는 전부 비어 있었습니다.
-      //
-      // 상대타자(TBF)로 나누면 그대로 나옵니다. 2025 저장값과 대조해
-      // 확인했습니다(폰세 36.2 vs 36.155, 라일리 30.5 vs 30.465).
-      // 컬럼을 새로 채우지 않는 이유는 team_id·is_active 와 같습니다.
-      // 아무도 갱신하지 않는 컬럼은 곧 낡습니다.
-      + 'CASE WHEN ps.total_batters_faced > 0 '
-      + 'THEN ps.strikeout * 100.0e0 / ps.total_batters_faced END AS kpct, '
-      + 'CASE WHEN ps.total_batters_faced > 0 '
-      + 'THEN ps.base_on_balls * 100.0e0 / ps.total_batters_faced END AS bbpct '
-      + 'FROM kbo_official_pitcher_stats ps LEFT JOIN players p ON ps.player_id=p.player_id '
-      + 'WHERE ps.season=? ORDER BY ps.player_id',
-    ).bind(season).all()).results;
+    //
+    // K%·BB% 는 저장된 컬럼이 아니라 여기서 셉니다.
+    //
+    // `strikeout_per_pa`·`base_on_balls_per_pa` 는 **2025 에만 값이
+    // 있습니다.** 나머지 열한 시즌은 전부 NULL 입니다. KBO 기록실이
+    // 이 값을 주지 않아 수집기가 채울 수 없고(셀레니움 때도 없었습니다),
+    // 2025 값은 옛 파이프라인이 남긴 것입니다. 그래서 K%·BB%·K-BB%
+    // 순위가 2025 말고는 전부 비어 있었습니다.
+    //
+    // 상대타자(TBF)로 나누면 그대로 나옵니다. 2025 저장값과 대조해
+    // 확인했습니다(폰세 36.2 vs 36.155, 라일리 30.5 vs 30.465).
+    // 컬럼을 새로 채우지 않는 이유는 team_id·is_active 와 같습니다.
+    // 아무도 갱신하지 않는 컬럼은 곧 낡습니다.
+    const KPCT = 'CASE WHEN ps.total_batters_faced > 0 '
+      + 'THEN ps.strikeout * 100.0e0 / ps.total_batters_faced END';
+    const BBPCT = 'CASE WHEN ps.total_batters_faced > 0 '
+      + 'THEN ps.base_on_balls * 100.0e0 / ps.total_batters_faced END';
+    const PIT_FROM = 'FROM kbo_official_pitcher_stats ps LEFT JOIN players p ON ps.player_id=p.player_id '
+      + 'WHERE ps.season=? ORDER BY ps.player_id';
+    // MySQL 은 모든 행을 JSON 배열로 이은 한 칸으로 받습니다(lib/jsonrows.js
+    // jsonRowsOnce, 순서는 기본 키 player_id). 나눗셈으로 만든 K%·BB% 는
+    // 글자로 받아 mysql2 와 같은 값으로 읽습니다(float).
+    const pitRows = mysql
+      ? await jsonRowsOnce(env.DB, [
+        { expr: 'ps.player_id', name: 'player_id' },
+        { expr: 'COALESCE(p.player_name, ps.player_name)', name: 'name' },
+        { expr: 'COALESCE(ps.player_team, p.team_id)', name: 'team' },
+        { expr: 'ps.earned_run_average', name: 'era' },
+        { expr: 'ps.innings_pitched', name: 'ip' },
+        { expr: 'ps.strikeout', name: 'k' },
+        { expr: KPCT, name: 'kpct', float: true },
+        { expr: BBPCT, name: 'bbpct', float: true },
+      ], PIT_FROM, [season], 'ps.player_id')
+      : (await env.DB.prepare(
+        'SELECT ps.player_id AS player_id, COALESCE(p.player_name, ps.player_name) AS name, '
+        + 'COALESCE(ps.player_team, p.team_id) AS team, ps.earned_run_average AS era, '
+        + `ps.innings_pitched AS ip, ps.strikeout AS k, ${KPCT} AS kpct, ${BBPCT} AS bbpct `
+        + PIT_FROM,
+      ).bind(season).all()).results;
 
     const pit = pitRows.map((d) => {
       const era = pyFloat(d.era);
