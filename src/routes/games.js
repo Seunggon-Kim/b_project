@@ -30,7 +30,7 @@ export async function games(request, env) {
     LEFT JOIN teams t1 ON g.home_team_id = t1.team_id
     LEFT JOIN teams t2 ON g.away_team_id = t2.team_id
     WHERE g.season = ?
-    ORDER BY g.game_date DESC
+    ORDER BY g.game_date DESC, g.game_id
     LIMIT ?
   `).bind(season, sqlLimit(limit)).all();
 

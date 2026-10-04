@@ -159,7 +159,7 @@ async function seasonRows(db, franchiseId) {
            r.wins, r.losses, r.draws, r.pct, r.gb
       FROM team_season_rank r
      WHERE r.franchise_id = ?
-     ORDER BY r.season DESC, r.league`).bind(franchiseId).all();
+     ORDER BY r.season DESC, r.league, r.team_name`).bind(franchiseId).all();
   return results || [];
 }
 
@@ -246,7 +246,7 @@ export async function teamRecord(request, env, ctx, params) {
   // 이름 변천입니다. 같은 이름이 이어지는 구간을 하나로 묶습니다.
   const { results: names } = await db.prepare(
     'SELECT season, team_name FROM team_seasons '
-    + 'WHERE franchise_id = ? ORDER BY season',
+    + 'WHERE franchise_id = ? ORDER BY season, team_name',
   ).bind(id).all();
   const eras = [];
   for (const r of names || []) {
@@ -265,7 +265,7 @@ export async function teamRecord(request, env, ctx, params) {
       'SELECT s.season, s.stadium FROM team_stadium_by_season s '
       + 'JOIN team_seasons t ON t.season = s.season '
       + ' AND t.team_name = s.player_team '
-      + 'WHERE t.franchise_id = ? ORDER BY s.season',
+      + 'WHERE t.franchise_id = ? ORDER BY s.season, s.stadium',
     ).bind(id).all();
     stadiums = results || [];
   } catch {
@@ -287,7 +287,7 @@ export async function teamRecord(request, env, ctx, params) {
       'SELECT c.season, c.note FROM korean_series_champion c '
       + 'JOIN team_seasons t ON t.season = c.season '
       + ' AND t.team_name = c.team_name '
-      + 'WHERE t.franchise_id = ? ORDER BY c.season',
+      + 'WHERE t.franchise_id = ? ORDER BY c.season, c.team_name',
     ).bind(id).all();
     champions = championsOf(results, scopedYears);
   } catch {

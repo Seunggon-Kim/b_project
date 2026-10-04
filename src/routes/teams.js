@@ -27,7 +27,7 @@ export async function teams(request, env) {
   const season = new URL(request.url).searchParams.get('season');
   if (!season || !/^\d{4}$/.test(season)) {
     const { results } = await env.DB
-      .prepare('SELECT * FROM teams ORDER BY team_name')
+      .prepare('SELECT * FROM teams ORDER BY team_name, team_id')
       .all();
     return json({ teams: results });
   }
@@ -45,14 +45,14 @@ export async function teams(request, env) {
     JOIN franchises f ON f.franchise_id = ts.franchise_id
     LEFT JOIN teams t ON t.team_id = f.current_name
     WHERE ts.season = ?
-    ORDER BY ts.team_name
+    ORDER BY ts.team_name, ts.franchise_id
   `).bind(Number(season)).all();
 
   // 그 시즌 표가 없으면(아직 안 채운 시즌) 현재 팀으로 물러섭니다.
   // 빈 목록을 주면 필터가 통째로 비어 아무것도 못 고릅니다.
   if (!results.length) {
     const all = await env.DB
-      .prepare('SELECT * FROM teams ORDER BY team_name').all();
+      .prepare('SELECT * FROM teams ORDER BY team_name, team_id').all();
     return json({ teams: all.results, season: Number(season), fallback: true });
   }
   return json({ teams: results, season: Number(season) });

@@ -113,7 +113,7 @@ export async function statsBatters(request, env) {
     FROM kbo_official_batter_stats b
     LEFT JOIN players p ON b.player_id = p.player_id${wrcJoin}
     WHERE b.season = ? AND b.plate_appearance >= ?${team.sql}
-    ORDER BY b.batting_average DESC LIMIT ?`;
+    ORDER BY b.batting_average DESC, b.player_id LIMIT ?`;
 
   const { results } = await env.DB.prepare(sql)
     .bind(season, minPa, ...team.binds, sqlLimit(limit)).all();
@@ -147,7 +147,7 @@ export async function statsPitchers(request, env) {
     FROM kbo_official_pitcher_stats ps
     LEFT JOIN players p ON ps.player_id = p.player_id
     WHERE ps.season = ? AND CAST(ps.innings_pitched AS DOUBLE) >= ?${team.sql}
-    ORDER BY ps.earned_run_average ASC LIMIT ?`;
+    ORDER BY ps.earned_run_average ASC, ps.player_id LIMIT ?`;
 
   const { results } = await env.DB.prepare(sql)
     .bind(season, minIp, ...team.binds, sqlLimit(limit)).all();

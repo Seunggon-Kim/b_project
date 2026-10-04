@@ -15,7 +15,7 @@ export const LATEST_TEAM_SQL = `
     UNION ALL
     SELECT season, player_team FROM kbo_official_pitcher_stats
      WHERE player_id = p.player_id AND player_team IS NOT NULL
-  ) AS lt ORDER BY season DESC LIMIT 1`;
+  ) AS lt ORDER BY season DESC, player_team LIMIT 1`;
 
 /** 바깥 `p` 행이 마지막으로 기록을 남긴 시즌입니다. */
 export const LATEST_SEASON_SQL = `
@@ -94,7 +94,8 @@ export async function playersSearch(request, env) {
     .prepare(
       `SELECT p.*, COALESCE((${LATEST_TEAM_SQL}), p.team_id) AS team_id,
               CASE WHEN (${LATEST_SEASON_SQL}) >= ? THEN 1 ELSE 0 END AS is_active
-       FROM players p WHERE p.player_name LIKE ? LIMIT 50`)
+       FROM players p WHERE p.player_name LIKE ?
+       ORDER BY p.player_name, p.player_id LIMIT 50`)
     .bind(cur == null ? 9999 : cur, `%${q}%`)
     .all();
   return json({ players: results });
@@ -119,12 +120,12 @@ export async function playerDetail(request, env, ctx, params) {
   // 원본이 SELECT * 에 별칭 컬럼을 덧붙입니다. hits 와 ops, whip 입니다.
   const batter = await db.prepare(
     'SELECT *, single as hits, on_base_plus_slugging as ops '
-    + 'FROM kbo_official_batter_stats WHERE player_id = ? ORDER BY season DESC',
+    + 'FROM kbo_official_batter_stats WHERE player_id = ? ORDER BY season DESC, player_team',
   ).bind(dbPid).all();
 
   const pitcher = await db.prepare(
     'SELECT *, walks_plus_hits_per_inning_pitched as whip '
-    + 'FROM kbo_official_pitcher_stats WHERE player_id = ? ORDER BY season DESC',
+    + 'FROM kbo_official_pitcher_stats WHERE player_id = ? ORDER BY season DESC, player_team',
   ).bind(dbPid).all();
 
   // `players.team_id` 는 **아무 작업도 채우지 않는 컬럼**입니다.
@@ -356,8 +357,10 @@ export function summarizeUsage(rows) {
 
   // 원본: result.sort(key=lambda x: x['usage_all'], reverse=True)
   // 파이썬 sort 는 안정 정렬이라 동률이면 넣은 순서가 유지됩니다.
-  // JS sort 도 안정 정렬이라 같습니다.
-  result.sort((a, b) => b.usage_all - a.usage_all);
+  // 다만 넣은 순서는 DB 가 준 행 순서에 달려 있어 엔진마다 다를 수 있습니다.
+  // 그래서 동률이면 구종 이름 순으로 고정합니다.
+  result.sort((a, b) => (b.usage_all - a.usage_all)
+    || (a.pitch_type < b.pitch_type ? -1 : a.pitch_type > b.pitch_type ? 1 : 0));
 
   return { result, totalAll, totalL, totalR };
 }

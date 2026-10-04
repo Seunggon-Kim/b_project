@@ -407,7 +407,7 @@ export async function futuresPlayer(request, env, ctx, params) {
           + '   UNION ALL'
           + '   SELECT season, player_team FROM kbo_official_pitcher_stats'
           + '    WHERE player_id = p.player_id AND player_team IS NOT NULL'
-          + ' ) AS lt ORDER BY season DESC LIMIT 1) AS stats_team'
+          + ' ) AS lt ORDER BY season DESC, player_team LIMIT 1) AS stats_team'
           + ' FROM players p WHERE p.player_id = ? LIMIT 1',
         ).bind(id).first();
         if (row) {
@@ -430,7 +430,7 @@ export async function futuresPlayer(request, env, ctx, params) {
       try {
         const { results } = await env.DB.prepare(
           'SELECT * FROM futures_season_stats '
-          + 'WHERE player_id = ? AND kind = ? ORDER BY season DESC',
+          + 'WHERE player_id = ? AND kind = ? ORDER BY season DESC, team',
         ).bind(id, kind).all();
         seasons = results || [];
       } catch {

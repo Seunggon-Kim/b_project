@@ -153,7 +153,7 @@ export async function wrcByStadium(request, env) {
     LEFT JOIN stadium_dim sd ON sd.full_name = wpf.home_stadium
     WHERE wrc.PA >= ? AND wrc.season = ?
     GROUP BY wpf.home_stadium, sd.primary_team
-    ORDER BY mean_half DESC
+    ORDER BY mean_half DESC, wpf.home_stadium, sd.primary_team
   `).bind(minPa, season).all();
   return json(results);
 }
@@ -183,7 +183,7 @@ export async function wrcLeaderboard(request, env) {
            ROUND(wrc.wRC_weighted - wrc.wRC_half, 2) AS delta_methods
     ${WRC_JOIN}
     WHERE wrc.season = ? AND wrc.PA >= ?
-    ORDER BY ${sortCol} DESC
+    ORDER BY ${sortCol} DESC, wrc.batter_ID
     LIMIT ?
   `).bind(season, minPa, sqlLimit(n)).all();
   // batter_ID 는 D1 에서 INTEGER 입니다. MySQL 이 글자로 준 값을 숫자로
@@ -218,7 +218,7 @@ export async function wrcTopChanges(request, env) {
            ROUND(wrc.wRC_weighted - wrc.wRC_half, 2) AS delta
     ${WRC_JOIN}
     WHERE wrc.season = ? AND wrc.PA >= ?
-    ORDER BY (wrc.wRC_weighted - wrc.wRC_half) ${order}
+    ORDER BY (wrc.wRC_weighted - wrc.wRC_half) ${order}, wrc.batter_ID
     LIMIT ?
   `).bind(season, minPa, sqlLimit(n)).all();
   // batter_ID 는 D1 에서 INTEGER 입니다. MySQL 이 글자로 준 값을 숫자로
@@ -275,7 +275,7 @@ export async function wrcBatter(request, env, ctx, params) {
       FROM play_by_play
       WHERE batter_ID = ? AND game_date >= ? AND game_date < ?
       GROUP BY season, stadium
-      ORDER BY season, pa DESC
+      ORDER BY season, pa DESC, stadium
     `).bind(batterId, from, to).all();
     return results;
   });
@@ -305,7 +305,7 @@ export async function wrcBatterSearch(request, env) {
     sql += ' AND b.season = ?';
     binds.push(season);
   }
-  sql += ' ORDER BY b.season DESC, b.player_name LIMIT 50';
+  sql += ' ORDER BY b.season DESC, b.player_name, b.player_id, b.player_team LIMIT 50';
 
   const { results } = await env.DB.prepare(sql).bind(...binds).all();
   return json(results);

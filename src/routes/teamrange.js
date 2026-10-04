@@ -117,6 +117,13 @@ export function ipText(outs) {
   return outs % 3 ? `${whole} ${outs % 3}/3` : `${whole}`;
 }
 
+/** 정렬 동률을 깰 때 쓰는 팀 코드 비교입니다. */
+function cmpTeam(a, b) {
+  const x = String(a.team);
+  const y = String(b.team);
+  return x < y ? -1 : x > y ? 1 : 0;
+}
+
 /** 원본 565-592 의 파생 지표 계산과 정렬입니다. */
 export function buildTeamRange(teams) {
   const batting = [];
@@ -159,7 +166,8 @@ export function buildTeamRange(teams) {
     const an = a.OPS === null ? 1 : 0;
     const bn = b.OPS === null ? 1 : 0;
     if (an !== bn) return an - bn;
-    return (b.OPS || 0) - (a.OPS || 0);
+    // 동률이면 팀 코드 순으로 고정합니다(팀 등장 순서는 DB 행 순서에 달려 있습니다).
+    return ((b.OPS || 0) - (a.OPS || 0)) || cmpTeam(a, b);
   });
 
   // 원본: pitching.sort(key=lambda x: (x["IP_outs"] == 0, x["RA9"] or 9e9))
@@ -170,7 +178,8 @@ export function buildTeamRange(teams) {
     if (az !== bz) return az - bz;
     const ar = a.RA9 === null ? 9e9 : a.RA9;
     const br = b.RA9 === null ? 9e9 : b.RA9;
-    return ar - br;
+    // 동률이면 팀 코드 순으로 고정합니다.
+    return (ar - br) || cmpTeam(a, b);
   });
 
   return { batting, pitching };

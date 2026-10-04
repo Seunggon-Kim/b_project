@@ -176,7 +176,7 @@ export async function leaders(request, env) {
         + 'COALESCE(b.player_team, p.team_id) AS team, b.' + orderCol + ' AS val '
         + 'FROM kbo_official_batter_stats b LEFT JOIN players p ON b.player_id=p.player_id '
         + 'WHERE b.season=? AND b.plate_appearance >= ? '
-        + 'ORDER BY b.' + orderCol + ' DESC LIMIT 5',
+        + 'ORDER BY b.' + orderCol + ' DESC, b.player_id LIMIT 5',
       ).bind(season, qualPa).all();
       return results.map((d) => ({
         player_id: d.player_id ?? null,
@@ -213,7 +213,7 @@ export async function leaders(request, env) {
         + 'LEFT JOIN kbo_official_batter_stats b '
         + 'ON b.player_id = CAST(w.batter_ID AS CHAR) AND b.season = w.season '
         + 'WHERE w.season=? AND w.PA >= ? '
-        + 'ORDER BY w.' + metricCol + ' DESC LIMIT 5',
+        + 'ORDER BY w.' + metricCol + ' DESC, w.batter_ID LIMIT 5',
       ).bind(season, qualPa).all();
       return results;
     };
@@ -257,7 +257,7 @@ export async function leaders(request, env) {
       + 'CASE WHEN ps.total_batters_faced > 0 '
       + 'THEN ps.base_on_balls * 100.0e0 / ps.total_batters_faced END AS bbpct '
       + 'FROM kbo_official_pitcher_stats ps LEFT JOIN players p ON ps.player_id=p.player_id '
-      + 'WHERE ps.season=?',
+      + 'WHERE ps.season=? ORDER BY ps.player_id',
     ).bind(season).all()).results;
 
     const pit = pitRows.map((d) => {

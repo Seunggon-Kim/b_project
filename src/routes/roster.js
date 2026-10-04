@@ -40,7 +40,7 @@ export async function rosterMoves(request, env) {
     const { results: rows } = await env.DB.prepare(
       `SELECT ${COLS} FROM kbo_roster_moves `
       + 'WHERE move_date = (SELECT MAX(move_date) FROM kbo_roster_moves) '
-      + 'ORDER BY kind DESC, team LIMIT ?',
+      + 'ORDER BY kind DESC, team, name LIMIT ?',
     ).bind(limit).all();
     results = rows;
   } else {
@@ -49,7 +49,7 @@ export async function rosterMoves(request, env) {
     const { results: rows } = await env.DB.prepare(
       `SELECT ${COLS} FROM kbo_roster_moves `
       + 'WHERE move_date >= ? '
-      + 'ORDER BY move_date DESC, kind DESC, team LIMIT ?',
+      + 'ORDER BY move_date DESC, kind DESC, team, name LIMIT ?',
     ).bind(kstDateDaysAgo(days), limit).all();
     results = rows;
   }
@@ -112,7 +112,7 @@ export async function roster(request, env) {
     // 포지션 순서를 투수·포수·내야수·외야수로 고정합니다. 사전순으로
     // 두면 내야수가 맨 앞에 와서 야구 화면답지 않습니다.
     + "ORDER BY team, CASE role WHEN '투수' THEN 1 WHEN '포수' THEN 2 "
-    + "WHEN '내야수' THEN 3 ELSE 4 END, CAST(back_number AS SIGNED)",
+    + "WHEN '내야수' THEN 3 ELSE 4 END, CAST(back_number AS SIGNED), name, player_id",
   );
 
   const { results } = await stmt.bind(...binds).all();
