@@ -158,6 +158,18 @@ D1 의 깨진 포스트시즌 행은 고치지 않음, 키 대신 WIF, 보강 4�
 - 외래키가 생긴 표에 `INSERT OR REPLACE` 를 `REPLACE` 로 옮기면 실패하므로 `ON DUPLICATE KEY UPDATE` 를 씁니다.
 - 자유 글자 열 VARCHAR 가 관측 최대의 2배라 빠듯합니다(수집기 이전 때 넓히기 검토).
 
+### 3단계 결과
+
+상세 계획서는 `2026-10-03-mysql-phase3-api.md` 입니다. 위 원래 목록과 달리 샤드 계층은 걷어내지 않고 `DB_BACKEND` 스위치로 D1 경로를 남겼습니다(되돌리기용, 5단계에서 걷어냄).
+
+- **전환: 2026-10-04 01시경(KST), 계획보다 앞당김.** 10/3(UTC) D1 하루 읽기가 646만 행(한도 500만)이 되어 운영 API 가 UTC 자정까지 500 을 냈습니다. 그중 약 276만 행은 빠진 경기 채우기 스크립트가 샤드 행 수를 COUNT(*) 로 네 번 센 것입니다. evan 결정으로 MySQL 스테이징을 점검(대조 목록 102개 중 100개 정상, 나머지 2개는 목록 오류·잘못된 주소)한 뒤 운영을 MySQL 로 바꿨습니다. 운영 배포는 evan 이 직접 실행했습니다(버전 02a2fc15 → 전환 뒤 보정 75e488d6 → 설명 사전 2ce5251c).
+- 구성: Hyperdrive `bstats-mysql`(VERIFY_CA, Cloud SQL 서버 CA 업로드), Cloud SQL 허용 네트워크 = Cloudflare 공개 IPv4 15개 대역, 읽기 전용 계정 `bstats_api`(SELECT 만, SSL 필수). `wrangler.toml` 의 `DB_BACKEND` 기본값은 `"mysql"`. 되돌리기는 `"d1"` 로 다시 배포하거나 `wrangler rollback`.
+- 하루 질의: 전환 전 7일 D1 질의 최대 269건/일 → Hyperdrive 무료 10만/일과 거리가 멉니다.
+- 대조(2026-10-04, `docs/mysql-migration/api-compare-phase3.md`): 스테이징-D1 ↔ 운영(MySQL) 101개 주소. 엄격 44개 차이 → 순서 무시 23개 → 모두 동률 순서·동률 경계·기록 시각(이중 적재 몇 초)·1단계 데이터 수정·표 타입 표시·D1 옛 사본으로 설명됩니다. **계산 차이 0.** 동률 순서는 ORDER BY 끝에 고유 열을 더해 고정했습니다.
+- 확인 목록 결과: (1) TEXT→INT 로 바뀐 ID 는 어댑터가 글자로 되돌립니다. Hyperdrive 가 mysql2 열 정보(`orgTable`)를 주지 않아 열 이름 규칙으로 물러서므로, D1 에서 INTEGER 였던 곳(`/roster`, `/roster/moves`, `/wrc/leaderboard`, `/wrc/top-changes`, 데이터 탐색)은 `src/lib/ids.js` 로 숫자로 되돌립니다. (2) `''`→NULL 과 (3) 포스트시즌 날짜 수정은 받아들인 차이입니다. (4) 정렬 규칙(ai_ci) 때문에 생긴 차이는 대조에서 보이지 않았습니다. 숫자 아닌 선수 ID 는 MySQL 이 느슨하게 맞추므로 질의 전에 404 로 막았습니다.
+- 함께 고친 것: DB 연결 실패는 503·no-store(0 이 한 시간 캐시되지 않게), 음수 LIMIT 은 "제한 없음"으로, CSV 만 본문 끝까지 연결 유지.
+- 남은 것(5단계): D1 쓰기 중지, 샤드 코드·바인딩 걷어내기, 스테이징 Worker 두 개(`kbo-api-stg-d1`, `kbo-api-stg-my`) 삭제, D1 2주 보관 뒤 삭제.
+
 ### 4단계: 빅쿼리 연결 (상세 계획서는 3단계 뒤)
 
 - BigQuery Connection API 로 Cloud SQL 연결을 만들고, 데이터셋은 같은
