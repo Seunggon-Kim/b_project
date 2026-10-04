@@ -756,7 +756,8 @@
     "/players/:id",
     "/players/:id/arsenal",
     "/players/:id/usage",
-    "/players/search"
+    "/players/search",
+    "/stats/movement_avg"
    ],
    "title": "선수 분석 - Bstats"
   },
@@ -1178,7 +1179,9 @@
   {
    "file": "src/routes/movementAvg.js",
    "live": false,
-   "pages": [],
+   "pages": [
+    "pages/player-analytics.html"
+   ],
    "path": "/stats/movement_avg",
    "reads_all_tables": false,
    "tables": [

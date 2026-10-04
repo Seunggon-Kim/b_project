@@ -23,6 +23,7 @@
   const PX_PER_CM = 3;     // 60cm 가 반지름 180px
   const RINGS = [15, 30, 45, 60];
   const FIRST_SEASON = 2016;
+  const MIN_AVG_N = 100;   // 리그 평균은 이 공 수 이상인 구종만
 
   function colorOf(type) {
     return Object.prototype.hasOwnProperty.call(COLORS, type) ? COLORS[type] : FALLBACK;
@@ -106,6 +107,22 @@
   /** 투수 시점이면 수평을 뒤집습니다(포수 시점 기준 값에 곱함). */
   function flipOf(view) { return view === 'pitcher' ? -1 : 1; }
 
+  /** 투수 손 글자입니다. L/R 이 아니면 null. */
+  function handLabel(t) { return t === 'L' ? '좌투' : t === 'R' ? '우투' : null; }
+
+  /** /stats/movement_avg 응답에서 같은 손·100구 이상 구종만 { 구종: {x,z,speed,n} }(cm)로 만듭니다. */
+  function avgFor(data, throws) {
+    const out = {};
+    if (throws !== 'L' && throws !== 'R') return out;
+    ((data && data.rows) || []).forEach(function (r) {
+      if (!r || r.throws !== throws || !r.pitch_type) return;
+      const n = num(r.n), x = num(r.pfx_x), z = num(r.pfx_z);
+      if (n === null || n < MIN_AVG_N || x === null || z === null) return;
+      out[r.pitch_type] = { x: x * IN2CM, z: z * IN2CM, speed: num(r.speed), n: n };
+    });
+    return out;
+  }
+
   function f1(v) { return v.toFixed(1); }
   /** 수평 값을 시점에 맞춰 글자로 만듭니다(-0.0 방지). */
   function fx(v, view) { return f1(v * flipOf(view) + 0); }
@@ -113,12 +130,14 @@
   function py(cmZ) { return f1(C - cmZ * PX_PER_CM); }
 
   /** 원형 무브먼트 그림입니다. 유효한 공이 없으면 빈 글자입니다. */
-  function svgHtml(pitches, summary, view) {
+  function svgHtml(pitches, summary, view, ctx) {
     const vs = valid(pitches);
     if (!vs.length) return '';
     const R = RINGS[RINGS.length - 1] * PX_PER_CM;
     let s = '<svg class="pa-mv-svg" viewBox="0 0 400 400" role="img" aria-label="구종별 무브먼트">'
-      + '<defs><clipPath id="pa-mv-clip"><circle cx="200" cy="200" r="' + R + '"/></clipPath></defs>'
+      + '<defs><clipPath id="pa-mv-clip"><circle cx="200" cy="200" r="' + R + '"/></clipPath>'
+      + (ctx ? '<pattern id="pa-mv-hatch" patternUnits="userSpaceOnUse" width="6" height="6"><path class="pa-mv-hatch-line" d="M-1,1 l2,-2 M0,6 l6,-6 M5,7 l2,-2"/></pattern>' : '')
+      + '</defs>'
       + '<circle class="pa-mv-bg" cx="200" cy="200" r="' + R + '"/>';
     RINGS.forEach(function (cm) {
       s += '<circle class="pa-mv-ring' + (cm % 30 ? ' pa-mv-ring--minor' : '') + '" cx="200" cy="200" r="' + cm * PX_PER_CM + '"/>';
@@ -133,6 +152,14 @@
       s += '<circle class="pa-mv-pt" cx="' + px(num(p.pfx_x) * IN2CM, view) + '" cy="' + py(num(p.pfx_z) * IN2CM)
         + '" r="2.5" fill="' + colorOf(p.pitch_type) + '"/>';
     });
+    if (ctx) {
+      (summary || []).forEach(function (g) {
+        const a = ctx.map && ctx.map[g.type];
+        if (!a) return;
+        s += '<circle class="pa-mv-lg" cx="' + px(a.x, view) + '" cy="' + py(a.z) + '" r="11" fill="url(#pa-mv-hatch)" stroke="' + g.color + '">'
+          + '<title>' + esc(ctx.label) + ' 평균 ' + esc(g.type) + ' · 수직 ' + f1(a.z) + 'cm · 수평 ' + fx(a.x, view) + 'cm</title></circle>';
+      });
+    }
     (summary || []).forEach(function (g) {
       s += '<circle class="pa-mv-avg" cx="' + px(g.x, view) + '" cy="' + py(g.z) + '" r="9" fill="' + g.color + '">'
         + '<title>' + esc(g.type) + ' ' + f1(g.pct) + '% · 수직 ' + f1(g.z) + 'cm · 수평 ' + fx(g.x, view) + 'cm</title></circle>';
@@ -140,27 +167,35 @@
     return s + '</g></svg>';
   }
 
+  function avgRow(g, view, ctx) {
+    const a = ctx && ctx.map && ctx.map[g.type];
+    if (!a) return '';
+    return '<tr class="pa-mv-avg-row"><td>' + esc(ctx.label) + ' 평균</td><td></td><td>' + (a.speed === null ? '-' : f1(a.speed))
+      + '</td><td>' + f1(a.z) + '</td><td>' + fx(a.x, view) + '</td></tr>';
+  }
+
   /** 구종 표입니다. 빈 배열이면 빈 글자입니다. */
-  function legendHtml(summary, view) {
+  function legendHtml(summary, view, ctx) {
     if (!summary || !summary.length) return '';
     return '<table class="pa-mv-legend"><thead><tr><th>구종</th><th>비율</th><th>구속(km/h)</th><th>수직(cm)</th><th>수평(cm)</th></tr></thead><tbody>'
       + summary.map(function (g) {
         return '<tr><td><span class="pa-mv-dot" style="background:' + g.color + '"></span>' + esc(g.type) + '</td>'
           + '<td>' + f1(g.pct) + '%</td><td>' + (g.speed === null ? '-' : f1(g.speed)) + '</td>'
-          + '<td>' + f1(g.z) + '</td><td>' + fx(g.x, view) + '</td></tr>';
+          + '<td>' + f1(g.z) + '</td><td>' + fx(g.x, view) + '</td></tr>'
+          + avgRow(g, view, ctx);
       }).join('')
       + '</tbody></table>';
   }
 
   /** 카드 본문입니다. 그림 + 추적 비율 줄 + 표. 데이터가 없으면 안내 문구입니다. 설명은 카드 제목 옆 툴팁(HELP)에 있습니다. */
-  function bodyHtml(pitches, total, view) {
+  function bodyHtml(pitches, total, view, ctx) {
     const vs = valid(pitches);
     if (!vs.length) return '<p class="pa-mv-empty">이 시즌은 투구 추적 데이터가 없습니다.</p>';
     const summary = summarize(vs);
-    return svgHtml(vs, summary, view)
+    return svgHtml(vs, summary, view, ctx)
       + '<p class="pa-mv-note">공 ' + comma(vs.length) + '개 추적'
       + (total > 0 ? ' (정규시즌 ' + comma(total) + '구 대비 ' + Math.min(100, Math.round(vs.length * 100 / total)) + '%)' : '') + '</p>'
-      + legendHtml(summary, view);
+      + legendHtml(summary, view, ctx);
   }
 
   function pct1(v) {
@@ -192,7 +227,7 @@
       + '</div>';
   }
 
-  const api = { COLORS, colorOf, summarize, seasonsFor, totalsFor, svgHtml, legendHtml, bodyHtml, HELP, helpFor, usageHtml };
+  const api = { COLORS, colorOf, summarize, seasonsFor, totalsFor, svgHtml, legendHtml, bodyHtml, avgFor, handLabel, HELP, helpFor, usageHtml };
   PA.movement = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

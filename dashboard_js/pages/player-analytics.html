@@ -607,9 +607,11 @@
         // 저장하지 않아 다음에 다시 시도합니다.
         const mvCache = {};
         const usageCache = {};
+        const avgCache = {};  // 시즌별 리그 평균(선수와 무관)
+        let mvHand = null;    // 현재 선수의 투구 손('L'/'R')
         let mvToken = 0;
         let mvView = 'catcher';
-        let mvLast = null;  // 마지막으로 그린 {pitches, total}(시점만 바꿀 때 다시 부르지 않음)
+        let mvLast = null;  // 마지막으로 그린 {pitches, total, ctx}(시점만 바꿀 때 다시 부르지 않음)
 
         // 툴팁 글자를 시점에 맞춰 바꿉니다(눈에 보이는 툴팁 + 스크린리더용 숨은 글자).
         function setMovementHelp() {
@@ -632,6 +634,8 @@
 
         function setupMovementCard(player, playerId) {
             const M = window.PlayerAnalytics.movement;
+            mvLast = null;  // 이전 선수 그림이 시점 전환 때 다시 그려지지 않게
+            mvHand = player.throw || null;
             setMovementHelp();
             const seasons = player.position === '투수' ? M.seasonsFor(player) : [];
             const totals = M.totalsFor(player);
@@ -660,19 +664,24 @@
             const key = playerId + ':' + season;
             let pitches = mvCache[key];
             let usage = usageCache[key];
-            if (!pitches || !usage) {
+            let avg = avgCache[season];
+            if (!pitches || !usage || !avg) {
                 body.innerHTML = createLoadingSpinner();
                 if (usageBox) usageBox.innerHTML = createLoadingSpinner();
-                const [a, u] = await Promise.all([
+                const [a, u, av] = await Promise.all([
                     pitches ? null : API.getPitchArsenal(playerId, season),
                     usage ? null : API.getPitchUsage(playerId, season),
+                    avg ? null : API.getMovementAvg(season),
                 ]);
                 if (!pitches) { pitches = (a && a.arsenal) || []; if (pitches.length) mvCache[key] = pitches; }
                 if (!usage) { usage = u || { usage: [] }; if ((usage.usage || []).length) usageCache[key] = usage; }
+                if (!avg) { avg = av || { rows: [] }; if ((avg.rows || []).length) avgCache[season] = avg; }
             }
             if (token !== mvToken) return;  // 그사이 다른 선수·시즌을 골랐습니다.
-            mvLast = { pitches, total };
-            body.innerHTML = M.bodyHtml(pitches, total, mvView);
+            const label = M.handLabel(mvHand);
+            const ctx = label ? { map: M.avgFor(avg, mvHand), label } : null;
+            mvLast = { pitches, total, ctx };
+            body.innerHTML = M.bodyHtml(pitches, total, mvView, ctx);
             if (usageBox) usageBox.innerHTML = M.usageHtml(usage, season);
         }
 
@@ -1358,7 +1367,7 @@
                 b.setAttribute('aria-pressed', on ? 'true' : 'false');
             });
             setMovementHelp();
-            if (mvLast) document.getElementById('pa-move-body').innerHTML = M.bodyHtml(mvLast.pitches, mvLast.total, mvView);
+            if (mvLast) document.getElementById('pa-move-body').innerHTML = M.bodyHtml(mvLast.pitches, mvLast.total, mvView, mvLast.ctx);
         });
 
         // 무브먼트 `?` 툴팁: 터치에서는 눌러 열고, 다른 곳을 누르거나 Esc 로 닫습니다.

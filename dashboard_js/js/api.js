@@ -140,6 +140,20 @@ class API {
     }
 
     /**
+     * 투수 손별 리그 평균 무브먼트(/stats/movement_avg). 없거나 실패하면 rows 가 빈 배열입니다.
+     */
+    static async getMovementAvg(season) {
+        try {
+            const response = await fetch(`${API_BASE_URL}/stats/movement_avg?season=${encodeURIComponent(season)}`);
+            if (!response.ok) return { rows: [] };
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching movement average:', error);
+            return { rows: [] };
+        }
+    }
+
+    /**
      * Get available seasons (시즌 통계가 존재하는 시즌 목록)
      */
     static async getSeasons() {

@@ -125,3 +125,8 @@
 .pa-mv-view-btn:first-child { border-radius: 6px 0 0 6px; }
 .pa-mv-view-btn:last-child { border-radius: 0 6px 6px 0; border-left: 0; }
 .pa-mv-view-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+.pa-mv-lg { stroke-width: 1.5; opacity: 0.9; }
+.pa-mv-hatch-line { stroke: var(--text-muted); stroke-width: 1; }
+.pa-mv-avg-row td { padding-top: 0; color: var(--text-muted); font-size: 0.7rem; }
+.pa-mv-avg-row td:first-child { padding-left: 1.1rem; }
