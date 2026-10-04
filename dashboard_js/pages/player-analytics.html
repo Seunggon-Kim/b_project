@@ -169,6 +169,7 @@
     <script src="../js/stats/metrics.js"></script>
     <script src="../js/stats/columns.js"></script>
     <script src="../js/player-analytics/quicklook.js"></script>
+    <script src="../js/player-analytics/percentile.js"></script>
     <script src="../js/player-analytics/movement.js"></script>
     <script>
 
@@ -786,8 +787,70 @@
             }
         }
 
+        // 백분위 색: 시즌별 리그 투수 기록은 페이지 안에서 한 번만 받습니다.
+        const pctSeasonCache = new Map();
+        let pctToken = 0;
+        function getLeaguePitchers(season) {
+            if (!pctSeasonCache.has(season)) {
+                pctSeasonCache.set(season, API.getPitcherStats(season, 2000, 0)
+                    .then(res => (res && res.pitchers) || null)
+                    .catch(() => null));
+            }
+            return pctSeasonCache.get(season);
+        }
+
+        // Standard·Advanced 표를 다 그린 뒤에 비동기로 칠합니다. 실패한 시즌은 색 없이 둡니다.
+        async function paintPercentileColors(player, token) {
+            const P = window.PlayerAnalytics.percentile;
+            const tables = ['detailed-stats-content', 'advanced-stats-content']
+                .map(id => document.querySelector('#' + id + ' table')).filter(Boolean);
+            if (!tables.length) return;
+            const seasons = [...new Set(player.pitcher_seasons.map(s => Number(s.season)).filter(Number.isFinite))];
+            const pools = new Map();
+            let next = 0;
+            const worker = async () => {
+                while (next < seasons.length) {
+                    const season = seasons[next++];
+                    const rows = await getLeaguePitchers(season);
+                    if (rows) pools.set(season, P.pool(rows));
+                }
+            };
+            await Promise.all([worker(), worker(), worker()]);
+            if (token !== pctToken || currentPlayer !== player) return;
+
+            tables.forEach(table => {
+                const heads = [...table.querySelectorAll('thead th')].map(th => th.textContent.trim());
+                const cols = [];
+                heads.forEach((h, i) => { if (P.METRICS[h]) cols.push([h, i]); });
+                table.querySelectorAll('tbody tr').forEach(tr => {
+                    const tds = tr.children;
+                    const season = Number(tds[0] && tds[0].textContent.trim());
+                    const team = tds[1] ? tds[1].textContent.trim() : '';
+                    const pool = pools.get(season);
+                    if (!pool) return;
+                    const row = player.pitcher_seasons.find(s => Number(s.season) === season && (s.player_team || '-') === team);
+                    if (!row) return;
+                    const v = P.rowValues(row);
+                    if (!(v.outs >= P.MIN_OUTS)) return;
+                    cols.forEach(([h, i]) => {
+                        const pct = P.percentile(v[h], pool[h], P.METRICS[h].better);
+                        const t = P.tier(pct);
+                        if (!t || !tds[i]) return;
+                        tds[i].classList.add('pa-pct', 'pa-pct--' + t);
+                        tds[i].title = '그해 ' + (pct >= 50 ? '상위 ' + Math.max(1, Math.round(100 - pct)) : '하위 ' + Math.max(1, Math.round(pct))) + '%';
+                    });
+                });
+            });
+            // 안내 줄: Advanced 표 아래(없으면 Standard 아래)
+            document.querySelectorAll('.pa-pct-note').forEach(n => n.remove());
+            const host = document.getElementById('advanced-stats-content');
+            const anchor = host && host.querySelector('table') ? host : document.getElementById('detailed-stats-content');
+            anchor.insertAdjacentHTML('beforeend', '<p class="pa-pct-note">색: 그해 30이닝 이상 투수 중 상위 10%는 빨강, 하위 10%는 파랑입니다. 5% 안쪽은 더 진합니다.</p>');
+        }
+
         // Load player info
         async function loadPlayerInfo(playerId) {
+            pctToken++;
             const section = document.getElementById('player-info-section');
             const cardDiv = document.getElementById('player-card');
             const statsDiv = document.getElementById('player-stats');
@@ -966,6 +1029,7 @@
 
                     advancedSection.classList.remove('hidden');
                     advancedContent.innerHTML = createTable(advancedHeaders, advancedTableRows);
+                    paintPercentileColors(player, pctToken).catch(err => console.warn('percentile paint failed:', err));
 
                     // --- Pitch Arsenal Section (Pitching) ---
                     console.log("Fetching Arsenal data...");

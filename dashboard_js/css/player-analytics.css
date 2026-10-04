@@ -144,3 +144,10 @@
 .pa-mv-key { fill: var(--text-secondary); font-size: 13px; font-weight: 600; }
 .pa-mv-key-own { fill: var(--text-muted); stroke: var(--bg-card); stroke-width: 2; }
 .pa-mv-key-lg { stroke: var(--text-secondary); stroke-width: 2; }
+
+/* 백분위 색: 그해 30이닝 이상 투수 중 상위 10% 빨강, 하위 10% 파랑(5% 안쪽은 더 진함) */
+.pa-pct--top1 { background: rgba(220, 38, 38, 0.16); }
+.pa-pct--top2 { background: rgba(220, 38, 38, 0.32); }
+.pa-pct--bot1 { background: rgba(37, 99, 235, 0.16); }
+.pa-pct--bot2 { background: rgba(37, 99, 235, 0.32); }
+.pa-pct-note { margin: 0.5rem 0 0; font-size: 0.75rem; color: var(--text-secondary); }
