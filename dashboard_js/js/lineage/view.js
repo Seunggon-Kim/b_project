@@ -90,7 +90,12 @@
   /** 넓은 화면 그림입니다(칸 제목 + 선 SVG + 상자). */
   function graphHtml(graph, lay, lin, status) {
     const m = M();
-    let h = `<div class="lin-heads" style="width:${lay.width}px">`;
+    let h = `<div class="lin-layers" style="width:${lay.width}px">`;
+    m.LAYERS.forEach(function (ly) {
+      const i = m.COLS.indexOf(ly.col);
+      h += `<div class="lin-layer lin-layer-${ly.id}" style="left:${Math.round(i * lay.colW)}px;width:${lay.boxW}px" data-tooltip="${esc(ly.tip)}">${esc(ly.label)}</div>`;
+    });
+    h += `</div><div class="lin-heads" style="width:${lay.width}px">`;
     m.COLS.forEach(function (c, i) {
       h += `<div class="lin-head" style="left:${Math.round(i * lay.colW)}px;width:${lay.boxW}px">${esc(m.COL_LABEL[c])}</div>`;
     });
@@ -115,7 +120,9 @@
     const label = id => (graph.nodes[id] ? graph.nodes[id].label : id);
     let h = '';
     m.COLS.forEach(function (c) {
-      h += `<section class="lin-list-col"><h4>${esc(m.COL_LABEL[c])}</h4><ul class="lin-list">`;
+      const ly = m.LAYERS.find(x => x.col === c && x.label !== m.COL_LABEL[c]);
+      const tag = ly ? ` <span class="lin-layer-tag" data-tooltip="${esc(ly.tip)}">${esc(ly.label)}</span>` : '';
+      h += `<section class="lin-list-col"><h4>${esc(m.COL_LABEL[c])}${tag}</h4><ul class="lin-list">`;
       graph.cols[c].forEach(function (n) {
         const out = graph.edges.filter(e => e.from === n.id).map(e => label(e.to));
         const inn = graph.edges.filter(e => e.to === n.id).map(e => label(e.from));

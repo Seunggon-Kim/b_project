@@ -12,6 +12,13 @@
   // 그림의 칸 순서입니다.
   const COLS = ['source', 'job', 'table', 'derived', 'page'];
   const COL_LABEL = { source: '원천', job: '수집 작업', table: '표', derived: '계산 표', page: '화면' };
+  // 칸 위 층 띠입니다(evan 결정 2026-10-04, 설계 §3-1). 칸 이름은 그대로 두고 층에 해당하는 칸 위에만 그립니다.
+  // 경계: 우리 공식으로 계산했으면 마트, 받은 것을 정리만 했으면 웨어하우스입니다(games·players 는 웨어하우스).
+  const LAYERS = [
+    { id: 'source', col: 'source', label: '원천', tip: '데이터를 받아 오는 바깥 사이트입니다(KBO 기록실, 네이버 중계 등). 우리 데이터베이스 밖에 있습니다.' },
+    { id: 'dw', col: 'table', label: '데이터 웨어하우스', tip: '원천에서 받아 온 그대로이거나 정리만 한 표와, 손으로 관리하는 기준표(팀·구장 등)입니다. 우리 공식으로 계산하지 않은 표는 여기에 둡니다.' },
+    { id: 'mart', col: 'derived', label: '데이터 마트', tip: '웨어하우스 표로 우리 공식(wOBA 가중치, wRC+, RE24, 파크팩터 등)을 계산해 저장한 표입니다. 화면 숫자 가운데 많은 수는 저장된 표 없이 API 주소가 웨어하우스 표를 바로 계산해 만들므로 이 칸에 다 나오지는 않습니다.' },
+  ];
   const GROUP_ID = 'group:manual';
 
   function nodeType(id) { return String(id).slice(0, String(id).indexOf(':')); }
@@ -328,7 +335,7 @@
   }
 
   const api = {
-    COLS, COL_LABEL, GROUP_ID, RANK, BOX_H, GAP, MIN_BOX_W, COL_PAD,
+    COLS, COL_LABEL, LAYERS, GROUP_ID, RANK, BOX_H, GAP, MIN_BOX_W, COL_PAD,
     nodeType, nodeName, pageLabel, buildGraph, reach,
     kstMs, keyState, tableStatus, jobStatus, summarize, shortTime, hoursText, staleRuleText, itemText, dotText,
     layout, edgePath,
