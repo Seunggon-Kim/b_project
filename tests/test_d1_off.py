@@ -308,14 +308,6 @@ def test_대조는_꺼져_있으면_MySQL_에_붙기_전에_멈춥니다(d1_off,
         reconcile.main()
 
 
-def test_D1_내려받기는_꺼져_있으면_멈춥니다(d1_off, monkeypatch, tmp_path):
-    from migration import d1_to_sqlite
-    monkeypatch.setattr(sys, "argv", ["d1_to_sqlite", "--out", str(tmp_path / "x.db"),
-                                      "--tables", "players"])
-    with pytest.raises(SystemExit, match="D1 이 꺼져"):
-        d1_to_sqlite.main()
-
-
 def test_결과_표_올리기는_꺼져_있으면_MySQL_에만_씁니다(d1_off, monkeypatch, tmp_path, capsys):
     from migration import sqlite_to_d1 as m
     db = tmp_path / "k.db"

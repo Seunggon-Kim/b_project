@@ -81,7 +81,7 @@ class TestSaveStem:
         assert save_stem('55551021OBSS0', 2008) == '20081021OBSS0'
 
     def test_파일명_앞_여덟_자리는_늘_경기_날짜입니다(self):
-        # shard_backfill 이 f.stem[:8] 로 날짜를 고릅니다.
+        # 파일 이름 앞 8자리(f.stem[:8])로 날짜를 고르는 도구가 있었습니다(옛 shard_backfill).
         for gid, year, ymd in [
             ('20080418SKOB0', 2008, '20080418'),
             ('33331008SSLT0', 2008, '20081008'),

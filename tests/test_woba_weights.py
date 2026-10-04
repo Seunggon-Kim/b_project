@@ -152,7 +152,7 @@ def test_wRC_단계가_가중치_성공에_걸려_있습니다():
 
 
 @pytest.mark.parametrize("mod,var", [
-    ("migration/d1_to_sqlite.py", "PIPELINE_TABLES"),
+    ("migration/mysql/mysql_to_sqlite.py", "PIPELINE_TABLES"),
     ("migration/sqlite_to_d1.py", "DERIVED_TABLES"),
 ])
 def test_가중치_표가_내려받기와_올리기_목록에_있습니다(mod, var):

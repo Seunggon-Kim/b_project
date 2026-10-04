@@ -16,8 +16,8 @@
 ## 어떻게 고치나
 
 MySQL 의 PBP 로 (플레이 전 점수 + 그 플레이에서 공격 팀이 낸 점수)의
-최댓값을 셉니다. D1 PBP 와 같은 값이고(매일 대조), D1 하루 읽기 한도를
-쓰지 않습니다. 값이 다른 경기만 D1 과 MySQL 에 같이 씁니다.
+최댓값을 셉니다. 값이 다른 경기만 MySQL 에 씁니다(2026-10-03 에 한 번
+돌렸습니다. D1 은 2026-10-04 에 걷어냈습니다).
 
 2008~2014 는 바꾸지 않습니다. 그 시즌 games 는 다른 출처에서 받아 이미
 공식 무승부 수와 맞습니다.
@@ -37,12 +37,10 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "data_collection"))
 
-from d1_load import run_d1_file, sql_literal  # noqa: E402
 from mysql_sink import mirror  # noqa: E402
 from migration.fix_games_from_naver import PBP_INCOMPLETE  # noqa: E402
 
 FIRST_SEASON = 2015
-APPLY_SQL = ROOT / "migration" / "_fix_games_final_score.sql"
 ROLLBACK_SQL = ROOT / "migration" / "_fix_games_final_score.rollback.sql"
 
 # games_from_pbp.derive_games 와 같은 규칙입니다.
@@ -75,10 +73,19 @@ def changes(cur):
             and r[0] not in PBP_INCOMPLETE]
 
 
+def literal(v):
+    """되돌리기 SQL 의 값 하나입니다. 점수는 정수, 경기 ID 는 글자입니다."""
+    if v is None:
+        return "NULL"
+    if isinstance(v, int):
+        return str(v)
+    return "'" + str(v).replace("'", "''") + "'"
+
+
 def update_sql(rows, home, away):
     return "\n".join(
         "UPDATE games SET home_score = %s, away_score = %s WHERE game_id = %s;"
-        % (sql_literal(r[home]), sql_literal(r[away]), sql_literal(r["game_id"]))
+        % (literal(r[home]), literal(r[away]), literal(r["game_id"]))
         for r in rows) + "\n"
 
 
@@ -116,10 +123,7 @@ def main():
 
     ROLLBACK_SQL.write_text(update_sql(rows, "old_home", "old_away"),
                             encoding="utf-8", newline="\n")
-    APPLY_SQL.write_text(update_sql(rows, "home", "away"), encoding="utf-8", newline="\n")
     print("되돌리기 SQL: %s" % ROLLBACK_SQL)
-    run_d1_file(APPLY_SQL)
-    print("D1 반영 %d경기" % len(rows))
     mirror("fix_games_final_score", lambda sink: mysql_write(sink, rows), required=True)
     return 0
 

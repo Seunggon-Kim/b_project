@@ -1644,16 +1644,6 @@
    ]
   },
   {
-   "desc": null,
-   "jobs": [],
-   "note": "D1 을 로컬 SQLite 로 내려받는 손 도구입니다. 워크플로는 더 부르지 않습니다(월간도 MySQL 에서 받음).",
-   "path": "migration/d1_to_sqlite.py",
-   "reads": [],
-   "sources": [],
-   "status_keys": {},
-   "writes": []
-  },
-  {
    "desc": "전체 내려받기용 CSV 파일을 만듭니다.",
    "jobs": [
     "weekly"

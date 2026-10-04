@@ -23,7 +23,9 @@ PBP 는 원천에 없어 채울 수 없습니다. 경기 결과만 네이버 경
 되돌리지 않게 `PBP_INCOMPLETE` 를 건너뜁니다.
 
     py migration/fix_games_from_naver.py            # 미리보기
-    py migration/fix_games_from_naver.py --write    # D1·MySQL 에 넣기
+    py migration/fix_games_from_naver.py --write    # MySQL 에 넣기
+
+2026-10-03 에 한 번 돌렸습니다. D1 은 2026-10-04 에 걷어내 이제 MySQL 에만 씁니다.
 """
 import argparse
 import sys
@@ -35,7 +37,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "data_collection"))
 
-from d1_load import build_upserts, query, refresh_count, run_d1_file  # noqa: E402
+from d1_load import query  # noqa: E402
 from daily_games_to_d1 import GAME_COLS  # noqa: E402
 from mysql_sink import mirror  # noqa: E402
 
@@ -47,7 +49,6 @@ GAMES = ["20170923SSHH02017", "20190601SSLT02019", "20190605KTLG02019",
 PBP_INCOMPLETE = {"20240404LTHH02024", "20240724WOOB02024"}
 
 API = "https://api-gw.sports.naver.com/schedule/games/"
-SQL_TMP = ROOT / "migration" / "_fix_games_from_naver.sql"
 
 
 def season_name(season, current):
@@ -105,11 +106,6 @@ def main():
         print("[미리보기] 쓰지 않았습니다.")
         return 0
 
-    SQL_TMP.write_text("\n".join(build_upserts("games", GAME_COLS, ["game_id"], rows)) + "\n",
-                       encoding="utf-8", newline="\n")
-    run_d1_file(SQL_TMP)
-    refresh_count("games")
-    print("D1 games %d경기" % len(rows))
     mirror("fix_games_from_naver", lambda s: mysql_write(s, rows), required=True)
     return 0
 

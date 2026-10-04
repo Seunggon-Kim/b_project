@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """MySQL 로 옮길 표와 옮기지 않을 표를 가릅니다.
 
-내려받기(`migration/d1_to_sqlite.py --all-tables`)와 스키마 생성
-(`migration/mysql/ddl.py`)이 같은 기준을 써야 합니다. 한쪽만 고치면
-받아 놓고 안 옮기거나, 옮기려는데 안 받은 표가 생깁니다.
+MySQL 이관 1단계에서 D1 내려받기(지금은 지운 `migration/d1_to_sqlite.py
+--all-tables`)와 스키마 생성(`migration/mysql/ddl.py`)이 같은 기준을 썼습니다.
+지금은 ddl.py 가 씁니다.
 """
 import re
 
-# sqlite_* 와 _cf_* 는 SQLite·D1 내부 표입니다. d1_migrations 는 wrangler
+# sqlite_* 와 _cf_* 는 SQLite·D1 내부 표입니다. d1_migrations 는 D1
 # 마이그레이션 기록입니다. _bak 은 손으로 만든 백업입니다.
 _SKIP = re.compile(r"^(sqlite_|_cf_)|^d1_migrations$|_bak($|_)")
 

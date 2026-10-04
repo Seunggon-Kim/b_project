@@ -1,38 +1,41 @@
-# D1 이관 절차
+# migration/
 
-로컬 SQLite(`database/kbo_stats.db`)를 Cloudflare D1으로 옮깁니다.
+데이터 저장소를 옮기며 쓴 도구와, 지금도 쓰는 MySQL(Cloud SQL) 도구가 있습니다.
 
-- 설계: `docs/superpowers/specs/2026-08-17-cloudflare-migration-design.md`
-- 계획: `docs/superpowers/plans/2026-08-17-plan-a-data-foundation.md`
+- 2026-08: 로컬 SQLite → Cloudflare D1
+- 2026-10: D1 → Cloud SQL(MySQL). 사이트가 MySQL 을 읽고, 수집도 MySQL 에만 씁니다.
+- 2026-10-04: 수집 쪽에서 D1 을 걷어냈습니다. D1 에 쓰거나 D1 을 읽던 도구
+  (`d1_to_sqlite.py`, `load_to_d1.py`, `export_to_d1.py`, `shard_*.py`,
+  `verify_d1.py` 등)는 지웠습니다. 필요하면 git 기록에서 찾으십시오.
 
-## D1 정보
+## 지금 쓰는 것
 
-| 항목 | 값 |
+| 파일 | 하는 일 | 누가 부르나 |
+|---|---|---|
+| `mysql/ci_proxy.sh` | 러너에서 Cloud SQL Auth Proxy 를 띄우고 접속 파일을 만듭니다 | 네 워크플로 |
+| `mysql/mysql_to_sqlite.py` | MySQL 표를 러너의 임시 SQLite 로 내려받습니다(`PIPELINE_TABLES`) | weekly·monthly |
+| `sqlite_to_d1.py` | 임시 SQLite 에서 계산한 표를 MySQL 에 통째로 바꿔 넣습니다(이름은 예전 그대로) | weekly·monthly |
+| `export_csv.py` | 전체 내려받기 CSV 를 만듭니다 | weekly |
+| `mysql/conn.py` | MySQL 접속(`BSTATS_MYSQL_SETTINGS`) | 위 도구들 |
+| `mysql/schema.sql` 외 | MySQL 표 정의와 1단계 적재 도구(`ddl.py`, `load.py`, `verify.py`, `repair.py`) | 손 |
+
+## 손 도구(MySQL 에만 씁니다)
+
+| 파일 | 하는 일 |
 |---|---|
-| 데이터베이스 이름 | `kbo-stats` |
-| database_id | `505c67f5-45ff-42ee-bce9-2f5f00cf90e7` |
-| 리전 | APAC |
-| 바인딩 이름 | `DB` |
+| `fill_games_from_pbp_day.py` | 문자중계는 있는데 games 가 안 만들어진 날을 채웁니다 |
+| `fill_missing_games.py` | 처음 수집 때 빠진 정규시즌 경기 4개를 다시 받아 넣었습니다(2026-10-03) |
+| `fix_games_final_score.py` | games 최종 점수를 끝내기 득점까지 넣어 고쳤습니다(2026-10-03) |
+| `fix_games_from_naver.py` | PBP 가 없거나 끊긴 경기 7개의 결과를 네이버 값으로 넣었습니다(2026-10-03) |
 
-설정은 저장소 루트의 `wrangler.toml` 에 있습니다.
-
-## 순서
-
-```powershell
-py migration/restore_derived.py --write  # 파생·마스터 테이블 복원 (최초 1회)
-py migration/export_schema.py            # 스키마 SQL 생성
-npx wrangler d1 execute kbo-stats --remote --file=migration/out/00_schema.sql
-py migration/export_to_d1.py             # 테이블별 INSERT 청크 생성
-py migration/load_to_d1.py               # D1 적재
-py migration/verify_d1.py                # 행 수 대조
-```
+모두 미리보기가 기본이고 `--write` 를 줘야 씁니다.
 
 ## 로컬 DB 에 대해 알아둘 것
 
 `database/kbo_stats.db` 는 전체 스냅샷이 아니라 **2025 시즌 원천만** 담고 있습니다.
-2015~2024 와 2026 원천은 EC2 에만 있었고 지금은 되찾을 수 없습니다.
+2015~2024 와 2026 원천은 EC2 에만 있었고 지금은 되찾을 수 없습니다. 원본은 MySQL 입니다.
 
-`restore_derived.py` 는 API 가 서빙에 쓰는 파생·마스터 테이블을 다른 사본에서 되살립니다.
+`restore_derived.py` 는 API 가 서빙에 쓰는 파생·마스터 테이블을 다른 사본에서 로컬에 되살립니다.
 
 | 테이블 | 출처 | 범위 |
 |---|---|---|
@@ -43,70 +46,17 @@ py migration/verify_d1.py                # 행 수 대조
 | `statiz_yearly_constants` | 같은 DB | 2011~2026 |
 | `stadium_dim` | 스크립트 내 시드 | 고정 마스터 |
 
-덕분에 wRC+ 화면은 전 시즌이 살아 있고, PBP·공식기록에 기대는 화면만 2025 로 제한됩니다.
+로컬 DB 를 대상으로 `park_factors/build_wrc_plus.py` 와 `build_re24_run_values.py` 를
+돌리지 마십시오. 둘 다 `DELETE` 후 재삽입이라, 원천이 2025 뿐인 로컬에서 돌리면 복원해 둔
+과거 시즌이 사라집니다. 정기 계산은 weekly 가 MySQL 에서 내려받아 합니다.
 
-`park_factors/build_wrc_plus.py` 와 `build_re24_run_values.py` 는 **실행하지 마십시오.**
-둘 다 `DELETE` 후 재삽입이라, 원천이 2025 뿐인 지금 돌리면 복원해 둔 과거 시즌이 사라집니다.
-원천을 다시 수집한 뒤에 실행합니다.
+## 남겨 둔 것
 
-## D1 무료 한도
-
-| 항목 | 한도 | 대응 |
-|---|---|---|
-| 쓰기 | 100,000행/일 | 인덱스 3개라 행당 4쓰기. 하루 25,000행씩 약 10일 |
-| 읽기 | 5,000,000행/일 | 인덱스로 스캔량을 줄입니다 |
-| SQL 문 길이 | 100,000바이트 | 행 크기가 제각각이라 90KB 기준 적응 분할 |
-
-### 인덱스를 먼저 만들고 적재합니다
-
-D1 은 인덱스 하나당 쓰기 행을 하나 더 셉니다. 실측값입니다.
-
-| 실측 | 결과 |
-|---|---|
-| 인덱스 6개 상태로 `play_by_play` 1,000행 삽입 | `rows_written` 7,007 |
-| 1,000행 테이블에 `CREATE INDEX` 하나 | `rows_written` 1,001 |
-
-두 번째 값 때문에 "인덱스 없이 적재하고 나중에 만들기"를 쓸 수 없습니다. 229,667행에
-인덱스를 만들면 단일 DDL 하나가 하루 한도를 넘는데, DDL 은 며칠에 나눌 수 없습니다.
-인덱스를 먼저 만들어 두면 비용이 행 단위로 쪼개져 여러 날에 나뉩니다.
-
-`play_by_play` 인덱스는 `gameID`·`batter_ID`·`pitcher_ID` 세 개만 둡니다.
-`api/main.py` 는 시즌을 전부 `substr(gameID,1,4)` 로 거르므로 `game_date` 인덱스는
-한 번도 쓰이지 않습니다.
-| DB 크기 | 500MB | 현재 127.5MB(2025 한 시즌). 시즌당 약 120MB씩 증가합니다 |
-
-원천을 2015~2026 으로 되채우면 약 1.5GB 가 되어 **DB당 500MB 한도를 넘습니다.**
-그때는 시즌별로 D1 을 나눠야 합니다(계정 총량은 5GB, Worker 는 D1 바인딩을 여러 개 가질 수 있습니다).
-계획 D 에서 다룹니다.
-
-한도는 UTC 자정에 초기화됩니다. 한국 시간 오전 9시 이후에 재개하십시오.
-
-## 재개 방법
-
-`load_to_d1.py` 는 적재에 성공한 청크 파일명을 `migration/out/.progress` 에 한 줄씩 기록합니다.
-중단 후 같은 명령을 다시 실행하면 기록에 없는 청크부터 이어서 넣습니다.
-`--budget` 은 그날 쓸 쓰기 행 수 상한입니다. `manifest.json` 의 행 수에 테이블별 인덱스 수를
-곱해 예산을 세므로, 한도에 부딪혀 실패하는 대신 미리 멈춥니다.
-
-```powershell
-# 오늘치만 넣기 (기본 예산 95,000 쓰기)
-py migration/load_to_d1.py
-
-# 남은 것 전부 넣기 (한도 무시, 실패하면 그 지점부터 재개)
-py migration/load_to_d1.py --budget 0
-```
-
-## 되돌리기
-
-작업 전 백업이 `database/kbo_stats.db.bak_YYYYMMDD` 에 있습니다.
-
-D1을 비우려면 스키마 파일을 다시 실행합니다. 이 파일은 `DROP TABLE IF EXISTS` 로 시작합니다.
-
-```powershell
-npx wrangler d1 execute kbo-stats --remote --file=migration/out/00_schema.sql
-```
+- `shard_plan.json`: D1 시절 play_by_play 샤드 배정표입니다. Worker 쪽 사본(`src/lib/shard.js`)과
+  맞는지 `test/shard.test.js` 가 봅니다. Worker 에서 D1 을 걷어낼 때 함께 지웁니다.
+- `*.sql`(`add_indexes.sql`, `delete_*.sql`, `fix_game_type_2016_2017.sql`, `roster_schema.sql`):
+  D1 시절 손으로 한 번 돌린 SQL 기록입니다. 코드는 이 파일들을 읽지 않습니다.
 
 ## 이 디렉터리에 대하여
 
-`migration/` 은 이관 전용입니다. 이전이 끝나면 통째로 제거할 수 있도록 앱 코드와 분리했습니다.
 산출물인 `migration/out/` 과 `migration/golden/` 은 git 비추적입니다.

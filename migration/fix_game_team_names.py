@@ -25,9 +25,8 @@
 
 바꿀 값이 없거나(모르는 팀) 이미 맞으면 건드리지 않습니다.
 
-**되돌릴 수 있게 백업을 먼저 뜨십시오.**
-
-    npx wrangler d1 export kbo-stats --remote --table games --output games.sql
+로컬 SQLite(`KBO_DB`, 기본 `database/kbo_stats.db`)의 games 를 고칩니다.
+**되돌릴 수 있게 그 파일을 먼저 복사해 두십시오.**
 
     py migration/fix_game_team_names.py            # 미리보기
     py migration/fix_game_team_names.py --write    # 반영

@@ -19,11 +19,11 @@ games 도 만들어지지 않았습니다. 팀 승패가 공식 순위표와 1�
 ## 어떻게 넣나
 
 그날을 통째로 지우고 다시 넣는 daily 와 달리 **그 경기 행만** 넣습니다.
-같은 날 다른 경기는 건드리지 않습니다. 이미 D1 이나 MySQL 에 그 경기가
-있으면 아무것도 쓰지 않고 멈춥니다.
+같은 날 다른 경기는 건드리지 않습니다. 이미 MySQL 에 그 경기가 있으면
+아무것도 쓰지 않고 멈춥니다.
 
     py migration/fill_missing_games.py            # 미리보기(받기만)
-    py migration/fill_missing_games.py --write    # D1·MySQL 에 넣기
+    py migration/fill_missing_games.py --write    # MySQL 에 넣기
 """
 import argparse
 import subprocess
@@ -35,17 +35,13 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "data_collection"))
 
-from d1_load import (  # noqa: E402
-    build_inserts, build_upserts, d1_columns, query, refresh_count, run_d1_file,
-)
+from d1_load import query  # noqa: E402
 from daily_games_to_d1 import GAME_COLS, memory_db  # noqa: E402
 from daily_pbp_to_d1 import read_csv_rows, wrong_dates  # noqa: E402
 from games_from_pbp import derive_games  # noqa: E402
-from migration import shard_plan  # noqa: E402
 from mysql_sink import mirror  # noqa: E402
 
 GAMES = ["20150612LTSK0", "20200725LTWO02020", "20200726NCKT02020", "20210429HHHT02021"]
-SQL_TMP = ROOT / "migration" / "_fill_missing_games.sql"
 
 
 def crawl(gid, out_dir):
@@ -63,10 +59,10 @@ def crawl(gid, out_dir):
     return rows
 
 
-def d1_has(gid, pbp_db):
-    """gameID 인덱스 범위로 셉니다. 샤드 전체를 읽지 않습니다."""
+def already_has(gid):
+    """MySQL 에 그 경기의 PBP·games 행이 몇 개 있는지 셉니다(gameID 인덱스 범위)."""
     pbp = query("SELECT COUNT(*) AS n FROM play_by_play WHERE gameID >= '%s' AND gameID < '%s~';"
-                % (gid, gid), db_name=pbp_db)[0]["n"]
+                % (gid, gid))[0]["n"]
     games = query("SELECT COUNT(*) AS n FROM games WHERE game_id = '%s';" % gid)[0]["n"]
     return pbp, games
 
@@ -122,28 +118,14 @@ def main():
                                        g["away_score"], g["home_score"], g["home_team_id"]))
 
     for gid in GAMES:
-        pbp_db = shard_plan.db_of(gid[:4])
-        n_pbp, n_games = d1_has(gid, pbp_db)
+        n_pbp, n_games = already_has(gid)
         if n_pbp or n_games:
-            raise SystemExit("D1 에 이미 %s 가 있습니다(PBP %d, games %d)" % (gid, n_pbp, n_games))
+            raise SystemExit("MySQL 에 이미 %s 가 있습니다(PBP %d, games %d)" % (gid, n_pbp, n_games))
 
     if not args.write:
         print("[미리보기] 쓰지 않았습니다.")
         return 0
 
-    for gid, rows in by_game.items():
-        pbp_db = shard_plan.db_of(gid[:4])
-        cols = [c for c in d1_columns("play_by_play", db_name=pbp_db) if c != "pbp_id"]
-        SQL_TMP.write_text("\n".join(build_inserts("play_by_play", cols, rows)) + "\n",
-                           encoding="utf-8", newline="\n")
-        run_d1_file(SQL_TMP, db_name=pbp_db)
-        refresh_count("play_by_play", db_name=pbp_db)
-        print("D1 %s <- %s" % (pbp_db, gid))
-    SQL_TMP.write_text("\n".join(build_upserts("games", GAME_COLS, ["game_id"], game_rows))
-                       + "\n", encoding="utf-8", newline="\n")
-    run_d1_file(SQL_TMP)
-    refresh_count("games")
-    print("D1 games %d경기" % len(game_rows))
     mirror("fill_missing_games", lambda s: mysql_write(s, by_game, game_rows), required=True)
     return 0
 

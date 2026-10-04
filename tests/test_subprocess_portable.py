@@ -32,8 +32,6 @@ WORKFLOW_CODE = [
     "data_collection/futures_to_d1.py",
     "data_collection/player_info_scraper.py",
     "data_collection/record_job_run.py",
-    "migration/d1_to_sqlite.py",
-    "migration/shard_backfill.py",
     "migration/sqlite_to_d1.py",
 ]
 
@@ -124,7 +122,7 @@ def test_리스트에_shell_True_를_같이_쓰지_않습니다(rel):
 
 def test_고친_두_파일이_플랫폼을_봅니다():
     """되돌아가지 않게 못을 박습니다."""
-    for rel in ("data_collection/d1_load.py", "migration/d1_to_sqlite.py"):
+    for rel in ("data_collection/d1_load.py",):
         src = (ROOT / rel).read_text(encoding="utf-8")
         assert 'USE_SHELL = os.name == "nt"' in src, \
             "%s 에 USE_SHELL 정의가 없습니다" % rel

@@ -222,12 +222,6 @@
       "note": "주간 계산과 월간 선수 프로필 수집용으로 MySQL 을 로컬 SQLite 로 내려받습니다.",
       "desc": "주간 계산과 월간 선수 프로필 수집에 쓸 표를 MySQL 에서 러너의 임시 SQLite 로 내려받습니다."
     },
-    "migration/d1_to_sqlite.py": {
-      "sources": [],
-      "writes": [],
-      "reads": [],
-      "note": "D1 을 로컬 SQLite 로 내려받는 손 도구입니다. 워크플로는 더 부르지 않습니다(월간도 MySQL 에서 받음)."
-    },
     "migration/sqlite_to_d1.py": {
       "sources": [],
       "writes": [],

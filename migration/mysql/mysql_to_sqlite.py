@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 """MySQL 의 표를 로컬 SQLite 로 내려받습니다. 주간 파생 지표 계산용입니다.
 
-d1_to_sqlite.py 를 대신합니다. D1 에서 내려받으면 play_by_play 400만 행을
-읽어 하루 무료 한도(500만)를 거의 다 씁니다. MySQL 은 읽기 한도가 없습니다.
+예전 d1_to_sqlite.py(D1 에서 내려받기)를 대신합니다. D1 에서 받으면
+play_by_play 400만 행을 읽어 하루 무료 한도(500만)를 거의 다 썼습니다.
+MySQL 은 읽기 한도가 없습니다. D1 은 2026-10-04 에 걷어냈습니다.
 
-만드는 SQLite 는 d1_to_sqlite 결과와 같은 모양을 따릅니다.
-- play_by_play 는 기본키 없이 둡니다(d1_to_sqlite.drop_primary_key 와 같게).
+만드는 SQLite 는 파이프라인이 기대하던 모양을 따릅니다.
+- play_by_play 는 기본키 없이 둡니다(NO_PK). 파크팩터 계열은 pbp_id 를 한
+  시즌 안의 정렬 키로만 씁니다.
 - 날짜는 'YYYY-MM-DD', 일시는 'YYYY-MM-DD HH:MM:SS' 글자로 둡니다.
 - 인덱스는 MySQL 에 있는 것을 따라 만듭니다.
 - 모든 표를 한 시점(일관된 스냅샷)에서 읽습니다. 내려받는 동안 수집이 돌아도
@@ -25,12 +27,37 @@ from pathlib import Path
 
 import pymysql
 
-from migration.d1_to_sqlite import PIPELINE_TABLES
 from migration.mysql import conn as myconn
 from migration.mysql.ddl import OUT_DIR, q
 
 SQLITE_TYPES = {"int": "INTEGER", "double": "REAL", "text": "TEXT",
                 "date": "TEXT", "datetime": "TEXT", "blob": "BLOB"}
+
+# 파크팩터 파이프라인이 읽는 표입니다. 계산에 쓰이지 않는 표까지
+# 받을 이유가 없어 필요한 것만 적습니다.
+PIPELINE_TABLES = [
+    "play_by_play",
+    "games",
+    "teams",
+    "kbo_official_batter_stats",
+    "kbo_official_pitcher_stats",
+    "team_stadium_by_season",
+    "stadium_dim",
+    "statiz_park_factor",
+    "statiz_yearly_constants",
+    "self_park_factor",
+    # wOBA 가중치입니다. build_woba_weights.py 가 다시 만들지만,
+    # 만들기 전에 표가 있어야 롤링 백업(_bak)을 뜰 수 있습니다.
+    "kbo_woba_weights_by_season",
+    "wrc_plus_comparison",
+    "weighted_pf_by_batter_season",
+    # RE24 산출물입니다. build_re24_run_values.py 가 다시 만들지만,
+    # 만들기 전에 롤링 백업(_bak)을 뜨느라 표가 먼저 있어야 합니다.
+    # 이것을 빠뜨려 주간 워크플로가 `no such table` 로 죽었습니다.
+    "kbo_run_values_by_season",
+    "re24_matrix_by_season",
+]
+
 NO_PK = {"play_by_play"}
 BATCH = 5000
 
@@ -100,7 +127,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
     ap.add_argument("--tables", default=None,
-                    help="쉼표로 구분. 기본값은 주간 계산에 쓰는 표(d1_to_sqlite.PIPELINE_TABLES)")
+                    help="쉼표로 구분. 기본값은 주간 계산에 쓰는 표(PIPELINE_TABLES)")
     args = ap.parse_args()
 
     tables = ([t.strip() for t in args.tables.split(",") if t.strip()]
