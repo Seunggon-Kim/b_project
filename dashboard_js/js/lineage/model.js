@@ -243,6 +243,7 @@
 
   /** 기준 시간 글자입니다. 48시간 미만은 '36시간', 이상은 '8일'(나누어떨어지지 않으면 '7.5일'). */
   function hoursText(h) {
+    if (h === null || h === undefined || h === '' || !isFinite(Number(h))) return '';
     h = Number(h);
     if (!(h >= 48)) return `${h}시간`;
     return `${Math.round(h / 24 * 10) / 10}일`;
@@ -255,9 +256,21 @@
     if (it.state === 'stale') {
       if (it.unknown) return `${it.job} · ${it.key}: 알 수 없는 상태(${it.status}) ${shortTime(it.at)}`;
       const j = jobById(lin, it.job);
-      return `${it.job} · ${it.key}: ${hoursText(it.staleHours)} 넘게 갱신이 없습니다(기준: ${j ? j.schedule_kst : ''} 실행) · 마지막 ${shortTime(it.at)}`;
+      const ht = hoursText(it.staleHours);
+      return `${it.job} · ${it.key}: ${ht ? ht + ' 넘게' : '기준 시간을 넘겨'} 갱신이 없습니다(기준: ${j ? j.schedule_kst : ''} 실행) · 마지막 ${shortTime(it.at)}`;
     }
     return `${it.job} · ${it.key}: 마지막 갱신 ${shortTime(it.at)} · ${STATE_WORD[it.status] || it.status}`;
+  }
+
+  /** 오래됨 기준 규칙 글자입니다. 같은 기준 시간끼리 작업 id 를 묶어 기준이 짧은 것부터 씁니다. */
+  function staleRuleText(lin) {
+    const groups = {};
+    ((lin && lin.jobs) || []).forEach(j => {
+      if (!hoursText(j.stale_hours)) return;
+      (groups[Number(j.stale_hours)] = groups[Number(j.stale_hours)] || []).push(j.id);
+    });
+    return Object.keys(groups).map(Number).sort((a, b) => a - b)
+      .map(h => `${groups[h].sort().join('·')} ${hoursText(h)}`).join(', ');
   }
 
   /** 점에 붙일 설명 문구입니다. st = tableStatus/jobStatus 결과. manualNote 는 손 작업 표 설명. */
@@ -317,7 +330,7 @@
   const api = {
     COLS, COL_LABEL, GROUP_ID, RANK, BOX_H, GAP, MIN_BOX_W, COL_PAD,
     nodeType, nodeName, pageLabel, buildGraph, reach,
-    kstMs, keyState, tableStatus, jobStatus, summarize, shortTime, hoursText, itemText, dotText,
+    kstMs, keyState, tableStatus, jobStatus, summarize, shortTime, hoursText, staleRuleText, itemText, dotText,
     layout, edgePath,
   };
   L.model = api;

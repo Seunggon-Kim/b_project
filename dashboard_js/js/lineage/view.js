@@ -45,9 +45,12 @@
   }
 
   /** 요약 줄입니다. sum 이 없으면(운영 정보 없음) 빈 글자. active 는 켜진 상태 이름. */
-  function summaryHtml(sum, active) {
+  function summaryHtml(sum, active, lin) {
     if (!sum) return '';
-    const btn = k => `<button type="button" class="lin-sum-btn${active === k ? ' on' : ''}" data-state="${k}" data-tooltip="${esc(SUM_TIP[k])}">`
+    const rule = lin ? M().staleRuleText(lin) : '';
+    const tip = k => (k === 'stale' && rule)
+      ? `기준 시간(${rule})보다 오래 갱신되지 않은 표입니다.` : SUM_TIP[k];
+    const btn = k => `<button type="button" class="lin-sum-btn${active === k ? ' on' : ''}" data-state="${k}" data-tooltip="${esc(tip(k))}">`
       + `<span class="lin-dot lin-${k}"></span>${STATE_LABEL[k]} <b>${sum[k]}</b></button>`;
     return ['ok', 'fail', 'stale', 'none'].map(btn).join('')
       + `<span class="lin-sum-manual" data-tooltip="${esc(SUM_TIP.manual)}">손 작업 <b>${sum.manual}</b></span>`;
@@ -69,8 +72,7 @@
 
   /** 상자에 마우스를 올렸을 때 보이는 설명입니다. */
   function boxTip(n) {
-    if (n.kind === 'collected' || n.kind === 'derived' || n.kind === 'manual') return `${n.label}
-${n.ref.desc || ''}`;
+    if (n.kind === 'collected' || n.kind === 'derived' || n.kind === 'manual') return n.ref.desc ? `${n.label}\n${n.ref.desc}` : n.label;
     if (n.kind === 'job') return `${n.label}: ${n.sub} 실행`;
     if (n.kind === 'page') return `${n.label} (${n.sub})`;
     if (n.kind === 'group') return n.sub === '접기' ? '누르면 손 작업 표를 접습니다.' : '누르면 손 작업 표를 펼칩니다.';
@@ -190,7 +192,7 @@ ${n.ref.desc || ''}`;
       });
       body += '<dl class="lin-dl">';
       body += `<dt>실행 시각</dt><dd>${esc(j.schedule_kst)} (GitHub Actions <code>${esc(j.workflow)}</code>)</dd>`;
-      body += `<dt>기준 시간</dt><dd>${esc(m.hoursText(j.stale_hours))} 넘게 갱신이 없으면 오래됨으로 봅니다.</dd>`;
+      if (m.hoursText(j.stale_hours)) body += `<dt>기준 시간</dt><dd>${esc(m.hoursText(j.stale_hours))} 넘게 갱신이 없으면 오래됨으로 봅니다.</dd>`;
       body += `<dt>마지막 실행</dt><dd>${st ? (st.items.length ? `<ul>${st.items.map(it => statusLine(lin, it)).join('')}</ul>` : '-') : '운영 정보 없음'}</dd>`;
       body += `<dt>단계</dt><dd>${listOrDash(steps)}</dd>`;
       body += `<dt>원천</dt><dd>${listOrDash(ins.map(id => `<li>${esc(label(id))}</li>`))}</dd>`;
@@ -281,7 +283,14 @@ ${n.ref.desc || ''}`;
     const m = M();
     S.graph = m.buildGraph(S.lin, { manualOpen: S.manualOpen });
     if (S.sel && !S.graph.nodes[S.sel]) S.sel = null;
-    S.status = statusMap(S.lin, S.details, Date.now());
+    try {
+      S.status = statusMap(S.lin, S.details, Date.now());
+    } catch (e) {
+      console.error(e);
+      S.status = null;
+      const msg = `상태 계산: ${(e && e.message) || e}`;
+      if (S.opsErrors.indexOf(msg) < 0) S.opsErrors.push(msg);
+    }
     if (!S.status) S.filter = null;
     S.mobile = root.matchMedia('(max-width: 640px)').matches;
     S.width = box.clientWidth;
@@ -312,7 +321,7 @@ ${n.ref.desc || ''}`;
     box.classList.toggle('lin-focus', focus);
     box.querySelectorAll('.lin-box[data-id]').forEach(b => b.classList.toggle('on', focus && on.has(b.dataset.id)));
     box.querySelectorAll('.lin-edge').forEach(p => p.classList.toggle('on', focus && onEdges.has(Number(p.dataset.i))));
-    $('lin-summary').innerHTML = summaryHtml(S.status && S.status.sum, S.filter);
+    $('lin-summary').innerHTML = summaryHtml(S.status && S.status.sum, S.filter, S.lin);
     const card = $('lin-detail');
     if (S.sel) {
       card.innerHTML = detailHtml(S.graph.nodes[S.sel], S.lin, { graph: S.graph, status: S.status, rows: S.rows });
@@ -327,26 +336,43 @@ ${n.ref.desc || ''}`;
     }
   }
 
+  /** 설명 글 두 개를 줄바꿈으로 잇습니다(비면 건너뜀). 키보드 포커스 때 상자 설명에 점 설명을 덧붙입니다. */
+  function joinTips(a, b) {
+    return [a, b].filter(Boolean).join('\n');
+  }
+
   function bindTips(scope) {
     let box = null;
     function hide() { if (box) box.style.display = 'none'; }
     tipHide = hide;
     root.addEventListener('scroll', hide, { passive: true });
     $('lin-graph').addEventListener('scroll', hide, { passive: true });
-    scope.addEventListener('mouseover', function (e) {
-      const el = e.target.closest && e.target.closest('[data-tooltip]');
-      if (!el || !scope.contains(el)) return;
+    function show(el, text) {
       if (!box) {
         box = document.createElement('div');
         box.className = 'lin-tip';
         document.body.appendChild(box);
       }
-      box.textContent = el.getAttribute('data-tooltip');
+      box.textContent = text;
       box.style.display = 'block';
       const r = el.getBoundingClientRect();
       box.style.left = Math.max(8, Math.min(r.left, root.innerWidth - box.offsetWidth - 12)) + 'px';
       const below = r.bottom + 6;
       box.style.top = (below + box.offsetHeight > root.innerHeight ? Math.max(8, r.top - box.offsetHeight - 6) : below) + 'px';
+    }
+    scope.addEventListener('mouseover', function (e) {
+      const el = e.target.closest && e.target.closest('[data-tooltip]');
+      if (!el || !scope.contains(el)) return;
+      show(el, el.getAttribute('data-tooltip'));
+    });
+    scope.addEventListener('focusin', function (e) {
+      const el = e.target.closest && e.target.closest('.lin-box[data-tooltip], .lin-sum-btn[data-tooltip]');
+      if (!el || !scope.contains(el)) return;
+      const mark = el.querySelector('.lin-dot[data-tooltip], .lin-tag[data-tooltip]');
+      show(el, joinTips(el.getAttribute('data-tooltip'), mark && mark.getAttribute('data-tooltip')));
+    });
+    scope.addEventListener('focusout', function (e) {
+      if (e.target.closest && e.target.closest('.lin-box, .lin-sum-btn')) hide();
     });
     scope.addEventListener('mouseout', function (e) {
       if (e.target.closest && e.target.closest('[data-tooltip]')) hide();
@@ -428,7 +454,7 @@ ${n.ref.desc || ''}`;
     });
   }
 
-  const api = { esc, pageHref, statusMap, summaryHtml, graphHtml, listHtml, detailHtml, open, STATE_LABEL, SUM_TIP };
+  const api = { esc, pageHref, statusMap, summaryHtml, graphHtml, listHtml, detailHtml, boxTip, joinTips, open, STATE_LABEL, SUM_TIP };
   L.view = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
