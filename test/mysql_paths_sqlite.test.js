@@ -1,17 +1,18 @@
-// CPU 를 줄이려고 MySQL 에서만 다르게 읽는 곳(leaders, /stats/batters·
-// pitchers)이 D1 길과 같은 응답을 내는지 SQLite 로 봅니다.
+// CPU 를 줄이려고 MySQL 에서만 다르게 읽는 세 곳(leaders, /wrc/seasons,
+// /stats/batters·pitchers)이 D1 길과 같은 응답을 내는지 SQLite 로 봅니다.
 //
 // 같은 SQLite 표에 대고 env.DB_BACKEND 만 바꿔 두 길을 돌립니다. MySQL 길의
-// SQL(창 함수 ROW_NUMBER, JSON_ARRAY)은 SQLite 도 받습니다.
+// SQL(창 함수 ROW_NUMBER, UNION ALL, JSON_ARRAY)은 SQLite 도 받습니다.
 // SQLite 와 MySQL 의 정렬·숫자 글자 차이는 여기서 보지 않고, 실제 MySQL 은
 // 스테이징 ↔ 운영 응답 대조(scripts/api_compare.mjs)로 확인합니다. 이 시험은
-// 두 길의 JS 조립(순위 꺼내기·열 순서·이름 겹침)이 같은지 봅니다.
+// 두 길의 JS 조립(순위 꺼내기·열 순서·이름 겹침·시즌별 나누기)이 같은지 봅니다.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
 import { leaders, batterTopsOnce, wrcTopsOnce, BATTER_TOP_COLUMNS } from '../src/routes/leaders.js';
+import { wrcSeasons, deltasBySeason } from '../src/routes/wrc.js';
 import {
   statsBatters, statsPitchers, BATTER_STAT_COLUMNS, PITCHER_STAT_COLUMNS,
 } from '../src/routes/stats.js';
@@ -189,6 +190,22 @@ test('leaders: MySQL 길과 D1 길의 응답이 같습니다', async () => {
   assert.ok(my.batter.avg.length === 5 && my.pitcher.kpct.length === 5);
   assert.deepEqual(my, d1Body);
   assert.equal(JSON.stringify(my), JSON.stringify(d1Body));
+});
+
+test('wrc/seasons: UNION ALL 한 번이 시즌마다 따로 읽은 값 순서와 같습니다', async () => {
+  const rows = SEASONS.map((season) => ({ season, min_pa: 200 }));
+  const merged = await deltasBySeason(DB, rows);
+  for (const r of rows) {
+    const { results } = await DB.prepare(
+      'SELECT (wRC_weighted - wRC_half) AS d FROM wrc_plus_comparison WHERE PA>=? AND season=?',
+    ).bind(r.min_pa, r.season).all();
+    assert.deepEqual(merged.get(r.season), results.map((x) => x.d));
+  }
+  for (const q of ['', '?min_pa=0', '?min_pa=450', '?min_pa=10000']) {
+    const a = await (await wrcSeasons(new Request(`https://x/wrc/seasons${q}`), MY)).text();
+    const b = await (await wrcSeasons(new Request(`https://x/wrc/seasons${q}`), D1)).text();
+    assert.equal(a, b, q);
+  }
 });
 
 test('stats: MySQL 의 JSON 배열 길이 D1 의 b.*·ps.* 질의와 같은 응답(열 순서·이름 겹침 포함)을 냅니다', async () => {

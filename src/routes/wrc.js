@@ -3,6 +3,7 @@ import { intIdOrSame } from '../lib/ids.js';
 import { queryInt, queryStr, sqlLimit } from '../lib/router.js';
 import { pyRound } from './leaders.js';
 import { fanOut, allSeasons, seasonDateRange } from '../lib/shard.js';
+import { isMysql } from '../lib/backendflag.js';
 
 // wRC+ 계열 여섯 개입니다. 모두 wrc_plus_comparison 과 규정타석 계산을
 // 공유해 한 파일에 둡니다.
@@ -88,6 +89,32 @@ const WRC_JOIN = `
   LEFT JOIN kbo_official_batter_stats b
     ON b.player_id = CAST(wrc.batter_ID AS CHAR) AND b.season = wrc.season`;
 
+/**
+ * 시즌마다 (wRC_weighted - wRC_half) 목록입니다(MySQL). 시즌 -> 값 배열.
+ *
+ * rows 는 {season, min_pa} 들입니다. 시즌마다 예전 질의
+ * `... WHERE PA>=? AND season=?` 를 그대로 조각으로 두고 UNION ALL 로
+ * 잇습니다. 조각마다 season 열을 붙여 결과를 시즌별로 나눕니다.
+ */
+export async function deltasBySeason(db, rows) {
+  const part = 'SELECT season, (wRC_weighted - wRC_half) AS d FROM wrc_plus_comparison '
+    + 'WHERE PA>=? AND season=?';
+  const sql = rows.map(() => part).join(' UNION ALL ');
+  const binds = rows.flatMap((r) => [r.min_pa, r.season]);
+  const { results } = await db.prepare(sql).bind(...binds).all();
+  const out = new Map();
+  for (const x of results) {
+    const s = Number(x.season);
+    let list = out.get(s);
+    if (!list) {
+      list = [];
+      out.set(s, list);
+    }
+    list.push(x.d);
+  }
+  return out;
+}
+
 /** 원본 829-867. 시즌 목록과 요약입니다. **배열**을 돌려줍니다. */
 export async function wrcSeasons(request, env) {
   const url = new URL(request.url);
@@ -120,6 +147,17 @@ export async function wrcSeasons(request, env) {
 
   // 원본은 행마다 쿼리를 한 번 더 날려 편차 목록을 받아 표준편차를 냅니다.
   // 시즌 수만큼이라(최대 12) D1 의 호출당 50개 한도 안입니다.
+  //
+  // MySQL 은 같은 질의들을 UNION ALL 로 이어 한 번에 보냅니다. Worker CPU 를
+  // 줄이려는 것입니다(질의마다 열 정보 해석·행 해석기 만들기가 되풀이됨).
+  // 시즌마다 조각 하나이고 조각 안의 SQL·묶는 값은 예전 질의와 같아, 조각
+  // 안 행 순서(표준편차를 더하는 순서)도 예전과 같습니다(min_pa 여섯 가지 x
+  // 12시즌의 값 순서를 실제로 대조, 차이 0). 시즌 열로 나눕니다.
+  if (isMysql(env) && rows.length) {
+    const deltas = await deltasBySeason(db, rows);
+    for (const r of rows) r.std_delta = stdDelta(deltas.get(Number(r.season)) || []);
+    return json(rows);
+  }
   for (const r of rows) {
     const { results } = await db.prepare(
       'SELECT (wRC_weighted - wRC_half) AS d FROM wrc_plus_comparison '
