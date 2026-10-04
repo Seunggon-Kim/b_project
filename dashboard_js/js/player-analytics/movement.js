@@ -279,8 +279,21 @@
     '커브': 'CU', '체인지업': 'CH', '포크': 'FS', '스플리터': 'FS', '슬러브': 'SV', '너클볼': 'KN',
   };
   function pitchCode(name) { return CODES[name] || name; }
+  /** 구종 색 바탕에서 더 잘 보이는 글자색(검정 #111 또는 흰색)입니다. WCAG 대비로 고릅니다. */
+  function textOn(hex) {
+    const ch = [1, 3, 5].map(function (i) {
+      const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    });
+    const L = 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+    return (1.05 / (L + 0.05)) >= ((L + 0.05) / 0.05) ? '#fff' : '#111';
+  }
+  /** 구사율 칸 이름: 구종 색 동그라미 안에 약자(evan), 마우스를 올리면 한글 이름. */
   function usageNameHtml(name, pct) {
-    return '<span class="pa-usage-name" title="' + esc(name) + '">' + esc(pitchCode(name)) + ' <b>' + pct + '%</b></span>';
+    const c = colorOf(name);
+    return '<span class="pa-usage-name" title="' + esc(name) + '">'
+      + '<span class="pa-usage-code" style="background:' + c + ';color:' + textOn(c) + '">' + esc(pitchCode(name)) + '</span>'
+      + ' <b>' + pct + '%</b></span>';
   }
 
   function usageHtml(data, season, pv) {

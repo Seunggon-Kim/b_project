@@ -115,6 +115,7 @@
 .pa-usage-pct:first-child { text-align: right; }
 .pa-usage-name { text-align: center; white-space: nowrap; cursor: help; }
 .pa-usage-name b { font-weight: 700; color: var(--text-secondary); font-size: 0.75rem; }
+.pa-usage-code { display: inline-flex; align-items: center; justify-content: center; min-width: 1.55rem; height: 1.55rem; padding: 0 0.2rem; border-radius: 999px; font-size: 0.68rem; font-weight: 800; line-height: 1; vertical-align: middle; letter-spacing: 0.02em; }  /* 구종 색 동그라미(evan) */
 .pa-usage-bar { display: flex; height: 0.95rem; box-sizing: border-box; background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 999px; overflow: hidden;
   background-image: linear-gradient(to right, transparent calc(25% - 0.5px), var(--border-color) calc(25% - 0.5px), var(--border-color) calc(25% + 0.5px), transparent calc(25% + 0.5px)),
     linear-gradient(to right, transparent calc(50% - 0.5px), var(--border-color) calc(50% - 0.5px), var(--border-color) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
