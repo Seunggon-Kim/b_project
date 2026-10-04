@@ -693,7 +693,8 @@
                 ]);
                 if (!pitches) { pitches = (a && a.arsenal) || []; if (pitches.length) mvCache[key] = pitches; }
                 if (!usage) { usage = u || { usage: [] }; if ((usage.usage || []).length) usageCache[key] = usage; }
-                if (!pv) { pv = pvr || { rows: [] }; if ((pv.rows || []).length) pvCache[key] = pv; }
+                // 구종 가치는 비어 있어도(404·2016 이전) 이 페이지 동안 저장합니다. 연도를 바꿀 때마다 다시 부르지 않게.
+                if (!pv) { pv = pvr || { rows: [] }; pvCache[key] = pv; }
                 if (!avg) { avg = av || { rows: [] }; avgCache[season] = avg; }  // 리그 평균은 비어 있어도 저장합니다(없으면 이 페이지에선 평균 없음)
             }
             if (token !== mvToken) return;  // 그사이 다른 선수·시즌을 골랐습니다.
