@@ -68,7 +68,7 @@ def build(root=ROOT):
             "path": path, "jobs": sorted(script_jobs.get(path, [])),
             "sources": sorted(s.get("sources", [])), "writes": sorted(s.get("writes", [])),
             "reads": sorted(s.get("reads", [])), "status_keys": s.get("status_keys", {}),
-            "note": s.get("note"),
+            "note": s.get("note"), "desc": s.get("desc"),
         })
 
     # API 주소 → 표

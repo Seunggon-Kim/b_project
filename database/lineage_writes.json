@@ -41,7 +41,8 @@
       "status_keys": {
         "daily": "pbp"
       },
-      "note": "문자중계를 받아 그날 행을 지우고 다시 넣습니다."
+      "note": "문자중계를 받아 그날 행을 지우고 다시 넣습니다.",
+      "desc": "어제 경기의 PBP(투구·타석 단위) 데이터를 받아 MySQL play_by_play 에 넣습니다. 같은 날짜를 다시 넣어도 결과가 같습니다(날짜 단위로 지우고 넣습니다)."
     },
     "data_collection/daily_games_to_d1.py": {
       "sources": [
@@ -54,7 +55,8 @@
       "status_keys": {
         "daily": "games"
       },
-      "note": "그날 문자중계 CSV 에서 경기 결과를 만듭니다(teams 는 팀 이름 확인용)."
+      "note": "그날 문자중계 CSV 에서 경기 결과를 만듭니다(teams 는 팀 이름 확인용).",
+      "desc": "넣어 둔 PBP 에서 경기 정보(games)를 만들어 MySQL 에 넣습니다. 팀 별칭 해석과 포스트시즌 판정은 games_from_pbp.py 규칙을 그대로 씁니다."
     },
     "data_collection/futures_to_d1.py": {
       "sources": [
@@ -66,7 +68,8 @@
       "reads": [],
       "status_keys": {
         "daily": "futures"
-      }
+      },
+      "desc": "퓨처스리그(2군) 일정·결과를 KBO Schedule.asmx 에서 받아 MySQL futures_games 를 갱신합니다. 화면의 퓨처스 일정은 실시간 스코어보드를 그때그때 읽으므로 이 표를 기다리지 않습니다."
     },
     "data_collection/team_ranks.py": {
       "sources": [
@@ -79,7 +82,8 @@
       "status_keys": {
         "daily": "team_ranks"
       },
-      "note": "team_seasons 는 옛 시즌 표기명을 프랜차이즈에 잇는 조회용입니다."
+      "note": "team_seasons 는 옛 시즌 표기명을 프랜차이즈에 잇는 조회용입니다.",
+      "desc": "KBO 기록실 팀 순위에서 올 시즌 순위·경기 수·승패무·승률·게임차를 받아 MySQL team_season_rank 에 덮어씁니다. 비시즌(그해 순위가 아직 없을 때)은 건너뜁니다. 1982~2025는 2026-08-29에 한 번 받은 값 그대로입니다."
     },
     "data_collection/official_stats_http.py": {
       "sources": [
@@ -87,7 +91,8 @@
       ],
       "writes": [],
       "reads": [],
-      "note": "공식 기록을 CSV 로 받습니다. 표에는 csv_to_d1.py 가 넣습니다."
+      "note": "공식 기록을 CSV 로 받습니다. 표에는 csv_to_d1.py 가 넣습니다.",
+      "desc": "KBO 공식 타자·투수 통계를 CSV 로 받습니다. 표에는 바로 뒤 단계의 csv_to_d1.py 가 넣습니다."
     },
     "data_collection/csv_to_d1.py": {
       "sources": [
@@ -101,7 +106,8 @@
       "status_keys": {
         "daily": "official_stats"
       },
-      "note": "--table 인자로 타자·투수 표를 나눠 넣습니다."
+      "note": "--table 인자로 타자·투수 표를 나눠 넣습니다.",
+      "desc": "official_stats_http.py 가 받은 CSV 를 MySQL kbo_official_batter_stats·kbo_official_pitcher_stats 에 넣습니다(있으면 고치고, 없으면 더합니다)."
     },
     "data_collection/roster_to_d1.py": {
       "sources": [
@@ -117,7 +123,8 @@
         "daily": "roster",
         "roster": "roster_pm"
       },
-      "note": "공식 기록·players 는 선수 번호를 찾는 조회용입니다. 퓨처스 명단도 함께 받습니다."
+      "note": "공식 기록·players 는 선수 번호를 찾는 조회용입니다. 퓨처스 명단도 함께 받습니다.",
+      "desc": "1군 등록 현황과 퓨처스 등록 명단을 함께 받아 MySQL kbo_roster 에 넣고, 그날 등록·말소를 kbo_roster_moves 에 쌓습니다. KBO 는 오늘 것만 보여 줘서 우리가 매일 받아야 하고 소급이 안 됩니다. 소속 판정은 이 명단 하나로 합니다(1군 339명 + 퓨처스 289명). 하루 두 번 받습니다. 등말소는 경기 2~4시간 전에 갱신되므로 새벽 실행은 전날 것만 봅니다. 오후에 한 번 더 받아 그날 것을 채웁니다."
     },
     "data_collection/sync_players_from_roster.py": {
       "sources": [],
@@ -127,7 +134,8 @@
       "reads": [
         "kbo_roster"
       ],
-      "note": "명단의 소속·등번호를 players 에 반영합니다(teams 는 팀 코드 확인용, players 는 비교 대상)."
+      "note": "명단의 소속·등번호를 players 에 반영합니다(teams 는 팀 코드 확인용, players 는 비교 대상).",
+      "desc": "등록 명단의 소속·등번호를 MySQL players 에 반영합니다. 바뀐 행만 고칩니다."
     },
     "data_collection/add_new_players.py": {
       "sources": [
@@ -143,7 +151,8 @@
         "daily": "add_new_players",
         "roster": "add_new_players"
       },
-      "note": "명단·이동 표에서 번호 없는 이름을 찾아 새 선수를 넣고, 그 표의 빈 player_id 를 채웁니다. 오늘·내일 선발은 우리 일정 API 로 봅니다."
+      "note": "명단·이동 표에서 번호 없는 이름을 찾아 새 선수를 넣고, 그 표의 빈 player_id 를 채웁니다. 오늘·내일 선발은 우리 일정 API 로 봅니다.",
+      "desc": "1군 등록 명단(kbo_roster)에는 있는데 players 에 없는 새 선수를 KBO 선수 검색으로 찾아 MySQL players 에 넣습니다."
     },
     "data_collection/futures_records.py": {
       "sources": [
@@ -156,7 +165,8 @@
       "status_keys": {
         "roster": "futures_records"
       },
-      "note": "roster 워크플로가 올 시즌 퓨처스 기록을 다시 받습니다."
+      "note": "roster 워크플로가 올 시즌 퓨처스 기록을 다시 받습니다.",
+      "desc": "퓨처스(2군) 시즌 기록을 KBO 기록실에서 받아 MySQL futures_season_stats 에 넣습니다. 팀을 골라야 규정 미달 선수까지 나옵니다. 올 시즌만 매일 다시 받습니다. 지난 시즌은 바뀌지 않아 2010~2025는 한 번 받아 둔 것으로 충분합니다. 전체 13,036행입니다."
     },
     "data_collection/player_info_scraper.py": {
       "sources": [
@@ -169,7 +179,8 @@
       "status_keys": {
         "monthly": "player_info"
       },
-      "note": "공식 기록은 받을 선수 번호 목록을 만드는 데만 씁니다. 로컬 SQLite 의 players 를 고치고 sqlite_to_d1.py --tables players 가 올립니다."
+      "note": "공식 기록은 받을 선수 번호 목록을 만드는 데만 씁니다. 로컬 SQLite 의 players 를 고치고 sqlite_to_d1.py --tables players 가 올립니다.",
+      "desc": "선수 상세 프로필(소속·연봉·경력·사진)을 다시 받아 MySQL players 를 고칩니다. 예전에는 players 에 이미 있는 선수를 건너뛰어 한 번 넣은 값이 영영 낡았습니다(2026-08 실행은 1,749명 중 4명만 처리). 이제 --refresh 로 올 시즌 기록이 있는 선수를 전부 다시 봅니다."
     },
     "data_collection/heal_player_photos.py": {
       "sources": [],
@@ -177,13 +188,15 @@
         "players"
       ],
       "reads": [],
-      "note": "선수 사진 주소의 연도를 최신으로 고칩니다. 공식 기록은 최신 시즌을 찾는 데만 씁니다."
+      "note": "선수 사진 주소의 연도를 최신으로 고칩니다. 공식 기록은 최신 시즌을 찾는 데만 씁니다.",
+      "desc": "선수 사진 주소를 최신 연도로 맞춥니다. KBO 이미지 주소에 연도 폴더가 들어 있어서, 겨울에 이적한 선수는 그대로 두면 전 소속팀 유니폼 사진이 나옵니다. 선수 한 명에 요청 두 번을 넘기지 않습니다."
     },
     "data_collection/record_job_run.py": {
       "sources": [],
       "writes": [],
       "reads": [],
-      "note": "작업 실행 기록(meta_job_runs)만 남깁니다."
+      "note": "작업 실행 기록(meta_job_runs)만 남깁니다.",
+      "desc": "각 작업이 끝날 때 실행 결과(성공·실패, 시각, 메모)를 MySQL meta_job_runs 에 남깁니다. 화면의 작업 상태가 이 기록을 읽습니다."
     },
     "migration/mysql/reconcile.py": {
       "sources": [],
@@ -192,19 +205,22 @@
       "status_keys": {
         "daily": "reconcile"
       },
-      "note": "D1 과 MySQL 의 행 수·값을 견줍니다. D1 을 켰을 때(D1_WRITE=on)만 돕니다. 표는 쓰지 않습니다."
+      "note": "D1 과 MySQL 의 행 수·값을 견줍니다. D1 을 켰을 때(D1_WRITE=on)만 돕니다. 표는 쓰지 않습니다.",
+      "desc": "D1 과 MySQL 의 최근 경기를 견주던 도구입니다. D1 을 끈 뒤로는 돌지 않고, D1 을 지우면서 빠집니다."
     },
     "migration/mysql/ci_proxy.sh": {
       "sources": [],
       "writes": [],
       "reads": [],
-      "note": "러너에서 Cloud SQL 프록시를 띄워 뒤 단계가 MySQL 에 쓰게 합니다. 표는 쓰지 않습니다."
+      "note": "러너에서 Cloud SQL 프록시를 띄워 뒤 단계가 MySQL 에 쓰게 합니다. 표는 쓰지 않습니다.",
+      "desc": "깃허브 러너에서 Cloud SQL 프록시를 띄워 뒤 단계들이 MySQL 에 붙게 합니다. 표는 쓰지 않습니다."
     },
     "migration/mysql/mysql_to_sqlite.py": {
       "sources": [],
       "writes": [],
       "reads": [],
-      "note": "주간 계산과 월간 선수 프로필 수집용으로 MySQL 을 로컬 SQLite 로 내려받습니다."
+      "note": "주간 계산과 월간 선수 프로필 수집용으로 MySQL 을 로컬 SQLite 로 내려받습니다.",
+      "desc": "주간 계산과 월간 선수 프로필 수집에 쓸 표를 MySQL 에서 러너의 임시 SQLite 로 내려받습니다."
     },
     "migration/d1_to_sqlite.py": {
       "sources": [],
@@ -216,13 +232,15 @@
       "sources": [],
       "writes": [],
       "reads": [],
-      "note": "계산 결과 표를 MySQL 에 올립니다(D1 은 켜져 있을 때만). 올리는 표는 계산한 스크립트에 적었습니다."
+      "note": "계산 결과 표를 MySQL 에 올립니다(D1 은 켜져 있을 때만). 올리는 표는 계산한 스크립트에 적었습니다.",
+      "desc": "러너에서 계산한 결과 표를 MySQL 에 올립니다. 계산한 표만 올리고 원천 표는 건드리지 않습니다."
     },
     "migration/export_csv.py": {
       "sources": [],
       "writes": [],
       "reads": [],
-      "note": "전체 내려받기 CSV 를 만듭니다."
+      "note": "전체 내려받기 CSV 를 만듭니다.",
+      "desc": "전체 내려받기용 CSV 파일을 만듭니다."
     },
     "park_factors/truncated.py": {
       "sources": [],
@@ -231,7 +249,8 @@
         "games",
         "play_by_play"
       ],
-      "note": "중간에 끊긴 경기를 가려 계산에서 뺍니다(로컬 임시 표 truncated_games 만 만들고 올리지 않습니다)."
+      "note": "중간에 끊긴 경기를 가려 계산에서 뺍니다(로컬 임시 표 truncated_games 만 만들고 올리지 않습니다).",
+      "desc": "원천 문자중계에서 중간에 끊긴 경기를 가려 truncated_games 를 만듭니다. 파크팩터·wRC+·RE24 계산에서 그 경기를 뺍니다. 계산용 임시 DB 안에서만 쓰고 MySQL 에는 올리지 않습니다. 실행 기록은 파크팩터 작업과 같이 남습니다."
     },
     "park_factors/compute_self_park_factors.py": {
       "sources": [],
@@ -244,7 +263,8 @@
       ],
       "status_keys": {
         "weekly": "park_factors"
-      }
+      },
+      "desc": "누적 PBP 로 구장별 자체 파크팩터(self_park_factor)를 다시 계산합니다. play_by_play 전체를 훑어야 하는 계산이라 주 1회 돕니다. MySQL 에서 내려받아 계산하고, 결과 표는 sqlite_to_d1.py 가 MySQL 에 올립니다."
     },
     "park_factors/build_woba_weights.py": {
       "sources": [],
@@ -259,7 +279,8 @@
       "status_keys": {
         "weekly": "park_factors"
       },
-      "note": "리그 합계는 공식 타자 기록에서, 이벤트 가치는 build_re24_run_values 의 계산을 가져다 씁니다."
+      "note": "리그 합계는 공식 타자 기록에서, 이벤트 가치는 build_re24_run_values 의 계산을 가져다 씁니다.",
+      "desc": "리그 합계와 이벤트별 득점 가치로 시즌별 wOBA 가중치(kbo_woba_weights_by_season)를 다시 계산합니다. 주 1회 파크팩터 계산과 함께 돌고, 결과 표는 MySQL 에 올립니다."
     },
     "park_factors/build_wrc_plus.py": {
       "sources": [],
@@ -279,7 +300,8 @@
       "status_keys": {
         "weekly": "park_factors"
       },
-      "note": "team_stadium_by_season 의 올 시즌 행을 로컬에서 채우지만 sqlite_to_d1.py 가 올리지 않아 D1·MySQL 에는 반영되지 않습니다."
+      "note": "team_stadium_by_season 의 올 시즌 행을 로컬에서 채우지만 sqlite_to_d1.py 가 올리지 않아 D1·MySQL 에는 반영되지 않습니다.",
+      "desc": "wOBA 가중치와 자체 파크팩터로 타자별 wRC+ 와 구장 보정값(wrc_plus_comparison·weighted_pf_by_batter_season)을 다시 계산합니다. 주 1회 돌고, 결과 표는 MySQL 에 올립니다."
     },
     "park_factors/build_re24_run_values.py": {
       "sources": [],
@@ -293,7 +315,8 @@
       ],
       "status_keys": {
         "weekly": "park_factors"
-      }
+      },
+      "desc": "누적 PBP 로 시즌별 RE24 표와 이벤트별 득점 가치(re24_matrix_by_season·kbo_run_values_by_season)를 다시 계산합니다. 주 1회 돌고, 결과 표는 MySQL 에 올립니다."
     }
   },
   "manual_tables": {

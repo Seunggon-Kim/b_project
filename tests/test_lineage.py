@@ -302,3 +302,14 @@ def test_화면은_dashboard_js_아래_모든_html_입니다(tmp_path):
 def test_원천_id_가_표_이름과_겹치지_않습니다():
     # 그림에서는 source:·table: 접두사로 갈리지만, 사람이 읽을 때 헷갈립니다.
     assert not sorted(set(HAND["sources"]) & KNOWN)
+
+
+def test_예약_작업이_부르는_스크립트마다_설명이_있습니다():
+    # 데이터 탐색 탭의 '자동 수집 스케줄' 표가 scripts[].desc 를 설명 칸에 씁니다.
+    d = bl.build(ROOT)
+    missing = [s["path"] for s in d["scripts"] if s["jobs"] and not (s["desc"] or "").strip()]
+    assert not missing, "database/lineage_writes.json 에 desc 가 없는 스크립트: %s" % missing
+    for s in d["scripts"]:
+        if s["desc"]:
+            assert re.search(r"니다\)?\.$", s["desc"].rstrip()), s["path"]
+            assert "D1_WRITE" not in s["desc"], s["path"]
