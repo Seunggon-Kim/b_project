@@ -218,7 +218,191 @@
 
   // ===== 화면(브라우저에서만) =====
 
-  const api = { esc, pageHref, statusMap, summaryHtml, graphHtml, listHtml, detailHtml, STATE_LABEL, SUM_TIP };
+  const S = {
+    lin: null, rows: null, details: null, linError: null, opsErrors: [],
+    graph: null, status: null, sel: null, filter: null, manualOpen: false,
+    loading: null, width: 0, mobile: false,
+  };
+  let tipHide = function () {};
+
+  function $(id) { return document.getElementById(id); }
+
+  /** 계보 파일과 운영 정보 두 가지(행 수·실행 기록)를 받습니다. 실패는 이유를 남깁니다. */
+  async function load() {
+    const D = root.TeamStats.data;
+    const base = root.KBO_API_BASE;
+    const res = await Promise.all([
+      D.getJson('../data/table_lineage.json', 'tables'),
+      D.getJson(`${base}/db/tables`, 'tables'),
+      D.getJson(`${base}/jobs/status`, null),
+    ]);
+    if (res[0].ok) S.lin = res[0].data;
+    else S.linError = res[0].error;
+    if (res[1].ok) {
+      S.rows = {};
+      res[1].data.tables.forEach(t => { S.rows[t.name] = t.rows; });
+    } else {
+      S.opsErrors.push(`행 수: ${res[1].error}`);
+    }
+    const det = res[2].ok ? res[2].data.details : null;
+    if (det && typeof det === 'object' && !Array.isArray(det)) S.details = det;
+    else S.opsErrors.push(`실행 기록: ${res[2].ok ? 'details 가 없습니다' : res[2].error}`);
+  }
+
+  /** 지금 상태로 그림 전체를 다시 그립니다(데이터를 다시 받지 않음). */
+  function render() {
+    const box = $('lin-graph');
+    if (!box) return;
+    tipHide();
+    if (S.linError || !S.lin) {
+      $('lin-alerts').innerHTML = '';
+      $('lin-summary').innerHTML = '';
+      $('lin-detail').classList.add('hidden');
+      box.innerHTML = `<div class="lin-alert">계보 자료를 불러오지 못했습니다 (${esc(S.linError || '빈 응답')}).</div>`;
+      return;
+    }
+    const m = M();
+    S.graph = m.buildGraph(S.lin, { manualOpen: S.manualOpen });
+    if (S.sel && !S.graph.nodes[S.sel]) S.sel = null;
+    S.status = statusMap(S.lin, S.details, Date.now());
+    if (!S.status) S.filter = null;
+    S.mobile = root.matchMedia('(max-width: 640px)').matches;
+    S.width = box.clientWidth;
+    $('lin-alerts').innerHTML = S.opsErrors.length
+      ? `<div class="lin-alert">운영 정보 일부를 불러오지 못했습니다 (${esc(S.opsErrors.join(' / '))}). 받지 못한 정보(상태 점·행 수)는 감춥니다.</div>`
+      : '';
+    box.innerHTML = S.mobile
+      ? listHtml(S.graph, S.lin, S.status)
+      : graphHtml(S.graph, m.layout(S.graph, S.width), S.lin, S.status);
+    applyFocus();
+  }
+
+  /** 누른 상자·요약 숫자에 맞춰 진하게/흐리게와 상세 카드를 바꿉니다. */
+  function applyFocus() {
+    const box = $('lin-graph');
+    let on = null, onEdges = null;
+    if (S.sel) {
+      const r = M().reach(S.graph, S.lin, S.sel);
+      on = r.nodes;
+      onEdges = r.edges;
+    } else if (S.filter && S.status) {
+      const by = S.status.sum.byTable;
+      on = new Set(Object.keys(by).filter(n => by[n] === S.filter).map(n => 'table:' + n));
+      onEdges = new Set();
+    }
+    const focus = !!on;
+    box.classList.toggle('lin-focus', focus);
+    box.querySelectorAll('.lin-box[data-id]').forEach(b => b.classList.toggle('on', focus && on.has(b.dataset.id)));
+    box.querySelectorAll('.lin-edge').forEach(p => p.classList.toggle('on', focus && onEdges.has(Number(p.dataset.i))));
+    $('lin-summary').innerHTML = summaryHtml(S.status && S.status.sum, S.filter);
+    const card = $('lin-detail');
+    if (S.sel) {
+      card.innerHTML = detailHtml(S.graph.nodes[S.sel], S.lin, { graph: S.graph, status: S.status, rows: S.rows });
+      card.classList.remove('hidden');
+    } else {
+      card.classList.add('hidden');
+      card.innerHTML = '';
+    }
+  }
+
+  function bindTips(scope) {
+    let box = null;
+    function hide() { if (box) box.style.display = 'none'; }
+    tipHide = hide;
+    root.addEventListener('scroll', hide, { passive: true });
+    $('lin-graph').addEventListener('scroll', hide, { passive: true });
+    scope.addEventListener('mouseover', function (e) {
+      const el = e.target.closest && e.target.closest('[data-tooltip]');
+      if (!el || !scope.contains(el)) return;
+      if (!box) {
+        box = document.createElement('div');
+        box.className = 'lin-tip';
+        document.body.appendChild(box);
+      }
+      box.textContent = el.getAttribute('data-tooltip');
+      box.style.display = 'block';
+      const r = el.getBoundingClientRect();
+      box.style.left = Math.max(8, Math.min(r.left, root.innerWidth - box.offsetWidth - 12)) + 'px';
+      const below = r.bottom + 6;
+      box.style.top = (below + box.offsetHeight > root.innerHeight ? Math.max(8, r.top - box.offsetHeight - 6) : below) + 'px';
+    });
+    scope.addEventListener('mouseout', function (e) {
+      if (e.target.closest && e.target.closest('[data-tooltip]')) hide();
+    });
+  }
+
+  function bind() {
+    const tab = $('tab-lineage');
+    tab.addEventListener('click', function (e) {
+      const sum = e.target.closest('.lin-sum-btn');
+      if (sum) {
+        const k = sum.dataset.state;
+        S.sel = null;
+        S.filter = S.filter === k ? null : k;
+        applyFocus();
+        return;
+      }
+      if (e.target.closest('[data-close]')) {
+        S.sel = null;
+        applyFocus();
+        return;
+      }
+      const b = e.target.closest('.lin-box[data-id]');
+      if (b) {
+        const id = b.dataset.id;
+        if (id === M().GROUP_ID) {
+          S.manualOpen = !S.manualOpen;
+          render();
+          return;
+        }
+        S.filter = null;
+        S.sel = S.sel === id ? null : id;
+        applyFocus();
+        if (S.sel && S.mobile) $('lin-detail').scrollIntoView({ block: 'nearest' });
+        return;
+      }
+      // 그림의 빈 곳을 누르면 처음으로 돌아갑니다.
+      if (e.target.closest('.lin-canvas')) {
+        S.sel = null;
+        S.filter = null;
+        applyFocus();
+      }
+    });
+    let t = null;
+    root.addEventListener('resize', function () {
+      clearTimeout(t);
+      t = setTimeout(function () {
+        const box = $('lin-graph');
+        if (!S.lin || !box || $('tab-lineage').classList.contains('hidden')) return;
+        const mob = root.matchMedia('(max-width: 640px)').matches;
+        if (box.clientWidth !== S.width || mob !== S.mobile) render();
+      }, 150);
+    });
+    bindTips(tab);
+  }
+
+  /**
+   * 탭을 열 때 부릅니다(database-explorer.html 의 switchTab). 처음이면 데이터를 받아
+   * 그리고, 다시 열면 그사이 폭이 바뀌었을 때만 다시 그립니다.
+   */
+  function open() {
+    if (!S.loading) {
+      bind();
+      $('lin-graph').innerHTML = typeof root.createLoadingSpinner === 'function' ? root.createLoadingSpinner() : '';
+      S.loading = load().then(render).catch(function (e) {
+        console.error(e);
+        S.linError = String((e && e.message) || e);
+        render();
+      });
+      return S.loading;
+    }
+    return S.loading.then(function () {
+      const box = $('lin-graph');
+      if (S.lin && box && box.clientWidth !== S.width) render();
+    });
+  }
+
+  const api = { esc, pageHref, statusMap, summaryHtml, graphHtml, listHtml, detailHtml, open, STATE_LABEL, SUM_TIP };
   L.view = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

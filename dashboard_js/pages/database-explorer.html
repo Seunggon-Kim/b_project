@@ -20,6 +20,7 @@
 
     <!-- Styles + 전역 테마 토글 (light 기본 / dark 토글, nav에 버튼 자동 주입) -->
     <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/lineage.css">
     <script src="../js/config.js"></script>
     <script src="../js/theme-toggle.js"></script>
     <script src="../js/nav.js"></script>
@@ -486,6 +487,7 @@
         <div class="atabs">
             <button class="atab active" type="button" data-tab="explorer">데이터 탐색</button>
             <button class="atab" type="button" data-tab="sitemap">사이트맵</button>
+            <button class="atab" type="button" data-tab="lineage">테이블 계보</button>
         </div>
 
         <!-- ===== 탭: 데이터 탐색 ===== -->
@@ -764,11 +766,31 @@
             </div>
         </section>
         </div>
+
+        <!-- ===== 탭: 테이블 계보 ===== -->
+        <div id="tab-lineage" class="atab-panel hidden">
+        <h1 class="fade-in"><span class="material-symbols-outlined h1-icon">schema</span>테이블 계보</h1>
+        <p class="text-secondary mb-3">KBO 원천에서 받은 데이터가 어떤 수집 작업을 거쳐 어느 표에 쌓이고, 어느 화면에 쓰이는지 보여 줍니다.
+            선을 따라가면 숫자가 어디서 왔는지 보입니다. 상자를 누르면 이어진 경로만 진하게 보이고, 그림 아래에 자세한 정보가 나옵니다.</p>
+        <div id="lin-alerts"></div>
+        <div id="lin-summary" class="lin-summary"></div>
+        <section>
+            <div class="card lin-card">
+                <div class="card-body">
+                    <div id="lin-graph" class="lin-graph"></div>
+                </div>
+            </div>
+            <div id="lin-detail" class="card lin-detail hidden"></div>
+        </section>
+        </div>
     </main>
 
     <!-- Scripts -->
     <script src="../js/api.js"></script>
     <script src="../js/components.js"></script>
+    <script src="../js/stats/data.js"></script>
+    <script src="../js/lineage/model.js"></script>
+    <script src="../js/lineage/view.js"></script>
     <script>
         // 상태
         const state = { table: null, limit: 50, offset: 0, total: 0 };
@@ -975,15 +997,18 @@
             }
         }
 
-        // ── 페이지 탭: 데이터 탐색 / 사이트맵 ──
+        // ── 페이지 탭: 데이터 탐색 / 사이트맵 / 테이블 계보 ──
+        const TABS = ['explorer', 'sitemap', 'lineage'];
         function switchTab(tab) {
+            if (!TABS.includes(tab)) tab = 'explorer';
             document.querySelectorAll('.atab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-            document.getElementById('tab-explorer').classList.toggle('hidden', tab !== 'explorer');
-            document.getElementById('tab-sitemap').classList.toggle('hidden', tab !== 'sitemap');
+            TABS.forEach(t => document.getElementById('tab-' + t).classList.toggle('hidden', t !== tab));
             if (history.replaceState) {
                 history.replaceState(null, '',
-                    tab === 'sitemap' ? '#sitemap' : window.location.pathname + window.location.search);
+                    tab === 'explorer' ? window.location.pathname + window.location.search : '#' + tab);
             }
+            // 계보 탭은 처음 열 때 데이터를 받아 그립니다(보이는 폭에 맞춰 그리므로 탭을 보인 뒤에 부름).
+            if (tab === 'lineage' && window.Lineage && window.Lineage.view) window.Lineage.view.open();
         }
         document.querySelectorAll('.atab').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
 
@@ -1046,7 +1071,7 @@
         loadCronStatus();
         loadDashboardStats();
         buildSitemap();
-        if (window.location.hash === '#sitemap') switchTab('sitemap');
+        if (window.location.hash === '#sitemap' || window.location.hash === '#lineage') switchTab(window.location.hash.slice(1));
     </script>
 </body>
 
