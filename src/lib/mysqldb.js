@@ -16,7 +16,19 @@ export const MYSQL_OPTIONS = {
   decimalNumbers: true,
   supportBigNumbers: true,
   bigNumberStrings: false,
+  // 행을 객체가 아니라 열 순서의 배열로 받습니다. 객체는 아래 rowsOf 가
+  // 질의마다 한 번 정한 열 이름으로 만듭니다. Worker CPU 를 줄이려는
+  // 것입니다(무료 플랜은 요청당 10ms). mysql2 가 객체를 만든 뒤 shape 가
+  // 행을 다시 펼쳐 복사하던 일을 한 번의 반복으로 합칩니다. 값은 mysql2 가
+  // 객체 모드에서 주던 것과 같습니다(같은 열 해석기를 씁니다).
+  rowsAsArray: true,
 };
+
+// mysql2 가 객체 키로 쓰기를 거절하는 열 이름입니다(helpers.fieldEscape).
+// 배열로 받으면 mysql2 가 이 확인을 하지 않아 여기서 같은 오류를 냅니다.
+const PRIVATE_OBJECT_PROPS = new Set([
+  '__defineGetter__', '__defineSetter__', '__lookupGetter__', '__lookupSetter__', '__proto__',
+]);
 
 // D1 에서 TEXT 였다가 MySQL 에서 정수가 된 ID 열입니다(1단계 스키마).
 // 응답 모양을 지키려고 글자로 되돌립니다.
@@ -50,26 +62,44 @@ class Statement {
     return this;
   }
 
-  async all() {
+  /** 질의를 보내고 mysql2 가 준 [행, 열 정보] 를 그대로 돌려줍니다. */
+  async _query() {
     const conn = await this.db.connection();
-    let rows;
-    let fields;
     try {
-      [rows, fields] = await conn.query(this.sql, this.params);
+      return await conn.query(this.sql, this.params);
     } catch (err) {
       // 연결이 끊긴 오류(mysql2 가 fatal 로 표시)만 남깁니다. 표가 없는
       // 것(ER_NO_SUCH_TABLE) 같은 보통 오류는 라우트가 물러설 길로 씁니다.
       if (err && err.fatal === true) this.db.fail(err);
       throw err;
     }
+  }
+
+  async all() {
+    const [rows, fields] = await this._query();
     // 글자로 바꿀 키는 질의마다 한 번 정합니다(행마다 열 정보를 보지 않음).
     const keys = this.db.textKeysOf(fields);
-    return { results: rows.map((r) => this.db.shape(r, keys)) };
+    return { results: this.db.rowsOf(rows, fields, keys) };
   }
 
   async first() {
-    const { results } = await this.all();
-    return results.length ? results[0] : null;
+    const [rows, fields] = await this._query();
+    // 첫 행만 객체로 만듭니다. 나머지 행은 버리므로 만들 필요가 없습니다.
+    if (!rows.length) return null;
+    const keys = this.db.textKeysOf(fields);
+    return this.db.rowsOf(rows.slice(0, 1), fields, keys)[0];
+  }
+
+  /**
+   * D1 의 raw() 처럼 행을 열 순서 배열로 돌려줍니다. `{ columnNames: true }`
+   * 이면 첫 원소가 열 이름 배열입니다. 값 바꾸기(글자 ID·BLOB)는 all() 과
+   * 같습니다. 객체를 만들지 않아 CSV 처럼 행이 아주 많은 곳의 CPU 를 줄입니다.
+   */
+  async raw({ columnNames = false } = {}) {
+    const [rows, fields] = await this._query();
+    const keys = this.db.textKeysOf(fields);
+    const out = this.db.arraysOf(rows, fields, keys);
+    return columnNames ? [fields.map((f) => f.name), ...out] : out;
   }
 }
 
@@ -144,6 +174,79 @@ export class MysqlDb {
       else keys.delete(f.name);
     }
     return keys;
+  }
+
+  /**
+   * mysql2 가 준 행들을 D1 과 같은 모양의 객체 배열로 바꿉니다.
+   *
+   * 행이 배열이면(MYSQL_OPTIONS.rowsAsArray) 열 이름·글자 ID 여부를 질의마다
+   * 한 번 정하고, 행마다 한 번의 반복으로 객체를 만듭니다. 이름이 겹치면
+   * 뒤 열이 앞 열 값을 덮고 키 자리는 처음 자리에 남습니다. mysql2 가 객체
+   * 모드에서 `result[name] = value` 를 열 순서로 하던 것과 같습니다. 바꾸는
+   * 규칙(글자 ID·BLOB)은 shape 와 같습니다.
+   *
+   * 행이 객체이면(rowsAsArray 를 끈 연결) 예전처럼 shape 를 씁니다.
+   */
+  rowsOf(rows, fields, keys = null) {
+    if (!rows.length || !Array.isArray(rows[0])) return rows.map((r) => this.shape(r, keys));
+    const text = keys || this.textColumns;
+    const n = fields.length;
+    const names = new Array(n);
+    const toText = new Array(n);
+    for (let i = 0; i < n; i += 1) {
+      const { name } = fields[i];
+      if (PRIVATE_OBJECT_PROPS.has(name)) {
+        throw new Error(`The field name (${name}) can't be the same as an object's private property.`);
+      }
+      names[i] = name;
+      toText[i] = text.has(name);
+    }
+    const out = new Array(rows.length);
+    for (let r = 0; r < rows.length; r += 1) {
+      const a = rows[r];
+      const o = {};
+      for (let i = 0; i < n; i += 1) {
+        let v = a[i];
+        if (typeof v === 'number') {
+          if (toText[i]) v = String(v);
+        } else if (v instanceof Uint8Array) {
+          // BLOB 입니다. shape 의 같은 자리 설명을 보십시오.
+          v = Array.from(v);
+        }
+        o[names[i]] = v;
+      }
+      out[r] = o;
+    }
+    return out;
+  }
+
+  /**
+   * mysql2 가 준 행들을 열 순서 배열(D1 raw() 모양)로 돌려줍니다.
+   *
+   * 값 바꾸기는 rowsOf·shape 와 같습니다(이름이 글자 ID 인 열의 숫자는
+   * 글자로, BLOB 은 숫자 배열로). 배열 행은 그 자리에서 고칩니다.
+   */
+  arraysOf(rows, fields, keys = null) {
+    if (!rows.length) return [];
+    if (!Array.isArray(rows[0])) {
+      return rows.map((r) => {
+        const o = this.shape(r, keys);
+        return fields.map((f) => o[f.name]);
+      });
+    }
+    const text = keys || this.textColumns;
+    const toText = fields.map((f) => text.has(f.name));
+    for (const a of rows) {
+      for (let i = 0; i < a.length; i += 1) {
+        const v = a[i];
+        if (typeof v === 'number') {
+          if (toText[i]) a[i] = String(v);
+        } else if (v instanceof Uint8Array) {
+          a[i] = Array.from(v);
+        }
+      }
+    }
+    return rows;
   }
 
   shape(row, keys = null) {

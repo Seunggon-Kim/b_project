@@ -197,3 +197,146 @@ test('BLOB(Buffer·Uint8Array)은 D1 처럼 숫자 배열로 돌려줍니다', a
   // CSV 칸도 D1 과 같게 쉼표로 이은 숫자가 됩니다.
   assert.equal(String(row.image), '137,80,78,71');
 });
+
+// --- 행을 배열로 받기(MYSQL_OPTIONS.rowsAsArray) -------------------------
+//
+// Worker CPU 를 줄이려고 mysql2 가 행을 배열로 주게 했습니다. 객체는
+// rowsOf 가, 배열 행(raw)은 arraysOf 가 만듭니다. 아래 시험은 배열 길이
+// 예전 객체 길(mysql2 객체 + shape)과 같은 결과를 내는지 봅니다.
+
+test('연결 옵션은 행을 배열로 받습니다', () => {
+  assert.equal(MYSQL_OPTIONS.rowsAsArray, true);
+});
+
+/** 객체 행을 mysql2 의 rowsAsArray 모양(열 순서 배열)으로 바꿉니다. */
+function asArrays(rows, fields) {
+  return rows.map((r) => fields.map((f) => r[f.name]));
+}
+
+const MIXED_FIELDS = [
+  field('player_id', 'players'),
+  field('batter_ID', 'wrc_plus_comparison'),
+  field('season', 'kbo_official_batter_stats'),
+  field('name', 'players', 'player_name'),
+  field('image', 'team_logos'),
+  field('pitcher_ID'),
+];
+const MIXED_ROWS = () => [
+  { player_id: 72133, batter_ID: 74163, season: 2025, name: '김', image: Buffer.from([1, 2]), pitcher_ID: 5 },
+  { player_id: null, batter_ID: null, season: 2026, name: null, image: null, pitcher_ID: null },
+];
+
+test('배열 행은 객체 행과 같은 결과(글자 ID·BLOB·null)를 냅니다', async () => {
+  const byObj = await new MysqlDb(async () => fakeConn(MIXED_ROWS(), MIXED_FIELDS)).prepare('SELECT 1').all();
+  const byArr = await new MysqlDb(async () => fakeConn(asArrays(MIXED_ROWS(), MIXED_FIELDS), MIXED_FIELDS))
+    .prepare('SELECT 1').all();
+  assert.deepEqual(byArr.results, byObj.results);
+  assert.deepEqual(byArr.results[0], {
+    player_id: '72133', batter_ID: 74163, season: 2025, name: '김', image: [1, 2], pitcher_ID: '5',
+  });
+  // 키 순서도 같습니다(JSON 바이트가 같아야 합니다).
+  assert.equal(JSON.stringify(byArr.results), JSON.stringify(byObj.results));
+});
+
+test('raw 는 all 과 같은 값을 열 순서 배열로 줍니다(열 이름 줄 선택)', async () => {
+  const db = new MysqlDb(async () => fakeConn(asArrays(MIXED_ROWS(), MIXED_FIELDS), MIXED_FIELDS));
+  const { results } = await new MysqlDb(async () => fakeConn(MIXED_ROWS(), MIXED_FIELDS))
+    .prepare('SELECT 1').all();
+  const names = MIXED_FIELDS.map((f) => f.name);
+  const want = results.map((o) => names.map((n) => o[n]));
+  assert.deepEqual(await db.prepare('SELECT 1').raw(), want);
+  const db2 = new MysqlDb(async () => fakeConn(asArrays(MIXED_ROWS(), MIXED_FIELDS), MIXED_FIELDS));
+  assert.deepEqual(await db2.prepare('SELECT 1').raw({ columnNames: true }), [names, ...want]);
+  // 연결이 rowsAsArray 를 끈 경우(객체 행)에도 같습니다.
+  const db3 = new MysqlDb(async () => fakeConn(MIXED_ROWS(), MIXED_FIELDS));
+  assert.deepEqual(await db3.prepare('SELECT 1').raw(), want);
+  // 빈 결과도 열 이름 줄은 있습니다(D1 과 같음).
+  const db4 = new MysqlDb(async () => fakeConn([], MIXED_FIELDS));
+  assert.deepEqual(await db4.prepare('SELECT 1').raw({ columnNames: true }), [names]);
+});
+
+test('배열 행에서 이름이 겹치면 뒤 열 값이 앞 키 자리에 남습니다', async () => {
+  const fields = [field('player_id', 'kbo_roster'), field('n'), field('player_id', 'players')];
+  const db = new MysqlDb(async () => fakeConn([[1, 2, 3]], fields));
+  const row = await db.prepare('SELECT 1').first();
+  assert.deepEqual(row, { player_id: '3', n: 2 });
+  assert.deepEqual(Object.keys(row), ['player_id', 'n']);
+});
+
+test('first 는 배열 행에서 첫 행만 객체로 만듭니다', async () => {
+  const fields = [field('a'), field('player_id')];
+  const db = new MysqlDb(async () => fakeConn([[1, 10], [2, 20]], fields));
+  assert.deepEqual(await db.prepare('SELECT 1').first(), { a: 1, player_id: '10' });
+  const empty = new MysqlDb(async () => fakeConn([], fields));
+  assert.equal(await empty.prepare('SELECT 1').first(), null);
+});
+
+test('배열 행에서도 객체 내부 이름(__proto__ 등) 열은 mysql2 처럼 거절합니다', async () => {
+  const db = new MysqlDb(async () => fakeConn([[1]], [field('__proto__')]));
+  await assert.rejects(db.prepare('SELECT 1').all(), /private property/);
+  assert.equal(db.failed, null);
+});
+
+// mysql2 의 실제 열 해석기(disableEval 일 때 쓰는 정적 해석기)로 객체 모드와
+// 배열 모드를 돌려, 어댑터를 거친 결과가 같은지 봅니다.
+test('mysql2 정적 해석기: 배열 모드 + rowsOf/arraysOf 가 객체 모드 + shape 와 같습니다', async () => {
+  const { createRequire } = await import('node:module');
+  const path = await import('node:path');
+  const require = createRequire(import.meta.url);
+  const root = path.dirname(require.resolve('mysql2'));
+  const Packet = require(path.join(root, 'lib/packets/packet.js'));
+  const staticParser = require(path.join(root, 'lib/parsers/static_text_parser.js'));
+  const Types = require(path.join(root, 'lib/constants/types.js'));
+
+  const col = (name, columnType, characterSet, orgTable = '') => ({
+    name, orgName: orgTable ? name : '', orgTable, columnType, characterSet,
+    encoding: characterSet === 63 ? 'binary' : 'utf8', flags: 0, decimals: 0,
+  });
+  const fields = [
+    col('player_id', Types.LONG, 63, 'players'),
+    col('season', Types.LONG, 63),
+    col('pbp_id', Types.LONGLONG, 63),
+    col('name', Types.VAR_STRING, 255),
+    col('speed', Types.DOUBLE, 63),
+    col('avg', Types.NEWDECIMAL, 63),
+    col('game_date', Types.DATE, 63),
+    col('image', Types.BLOB, 63),
+    col('batter_ID', Types.LONG, 63),
+    col('season', Types.LONG, 63),
+  ];
+  const cell = (s) => {
+    if (s === null) return Buffer.from([0xfb]);
+    const b = Buffer.isBuffer(s) ? s : Buffer.from(s, 'utf8');
+    return Buffer.concat([Buffer.from([b.length]), b]);
+  };
+  const data = [
+    ['72133', '2025', '9007199254740993', '이용규', '145.5', '0.275', '2025-04-01', Buffer.from([137, 80]), '74163', '2026'],
+    [null, '2008', '1', null, '-0.1', null, null, null, null, null],
+  ];
+  const packets = data.map((cells) => Buffer.concat([Buffer.alloc(4), ...cells.map(cell)]));
+  const parse = (rowsAsArray) => {
+    const opts = { ...MYSQL_OPTIONS, rowsAsArray };
+    const p = staticParser(fields, opts, MYSQL_OPTIONS);
+    return packets.map((b) => {
+      const pk = new Packet(0, b, 0, b.length);
+      pk.offset = 4;
+      return p.next(pk, fields, opts);
+    });
+  };
+  const db = new MysqlDb(async () => null);
+  const keys = db.textKeysOf(fields);
+  const viaShape = parse(false).map((r) => db.shape(r, keys));
+  const viaArray = db.rowsOf(parse(true), fields, keys);
+  assert.ok(Array.isArray(parse(true)[0]));
+  assert.deepEqual(viaArray, viaShape);
+  assert.equal(JSON.stringify(viaArray), JSON.stringify(viaShape));
+  assert.equal(viaArray[0].player_id, '72133');
+  assert.equal(viaArray[0].season, 2026);
+  assert.deepEqual(viaArray[0].image, [137, 80]);
+  // raw(arraysOf) 는 이름이 겹치지 않는 열에서 객체 값과 같습니다.
+  const raws = db.arraysOf(parse(true), fields, keys);
+  const names = fields.map((f) => f.name);
+  raws.forEach((a, r) => names.forEach((n, i) => {
+    if (n !== 'season') assert.deepEqual(a[i], viaShape[r][n], `${r}.${n}`);
+  }));
+});
