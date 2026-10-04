@@ -611,17 +611,18 @@
         function setupMovementCard(player, playerId) {
             const M = window.PlayerAnalytics.movement;
             const seasons = player.position === '투수' ? M.seasonsFor(player) : [];
+            const totals = M.totalsFor(player);
             if (!seasons.length) { hideMovementCard(); return; }
             const select = document.getElementById('pa-move-season');
             select.innerHTML = seasons.map(y => `<option value="${y}">${y}</option>`).join('');
             select.value = String(seasons[0]);
-            select.onchange = () => loadMovement(playerId, Number(select.value));
+            select.onchange = () => loadMovement(playerId, Number(select.value), totals[Number(select.value)]);
             document.getElementById('pa-move-card').classList.remove('hidden');
             document.querySelector('.player-details-grid').classList.add('pa-3col');
-            loadMovement(playerId, seasons[0]);
+            loadMovement(playerId, seasons[0], totals[seasons[0]]);
         }
 
-        async function loadMovement(playerId, season) {
+        async function loadMovement(playerId, season, total) {
             const M = window.PlayerAnalytics.movement;
             const body = document.getElementById('pa-move-body');
             const token = ++mvToken;
@@ -634,7 +635,7 @@
                 if (pitches.length) mvCache[key] = pitches;
             }
             if (token !== mvToken) return;  // 그사이 다른 선수·시즌을 골랐습니다.
-            body.innerHTML = M.bodyHtml(pitches);
+            body.innerHTML = M.bodyHtml(pitches, total);
         }
 
         /**
@@ -736,6 +737,7 @@
             const headerBar = document.getElementById('player-header-bar');
 
             section.classList.remove('hidden');
+            hideMovementCard();
             headerBar.innerHTML = '';
             cardDiv.innerHTML = createLoadingSpinner();
             statsDiv.innerHTML = createLoadingSpinner();

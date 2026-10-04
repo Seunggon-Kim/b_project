@@ -22,7 +22,7 @@
   const C = 200;           // 그림 중심(px)
   const PX_PER_CM = 3;     // 60cm 가 반지름 180px
   const RINGS = [15, 30, 45, 60];
-  const FIRST_SEASON = 2008;
+  const FIRST_SEASON = 2016;
 
   function colorOf(type) {
     return Object.prototype.hasOwnProperty.call(COLORS, type) ? COLORS[type] : FALLBACK;
@@ -39,6 +39,20 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
     });
   }
+
+  /** 시즌별 전체 투구 수입니다. pitcher_seasons 의 number_of_pitchers 합. 값 없는 시즌은 뺍니다. */
+  function totalsFor(player) {
+    const out = {};
+    ((player && player.pitcher_seasons) || []).forEach(function (s) {
+      const y = Number(s.season);
+      const n = s.number_of_pitchers;
+      if (!Number.isFinite(y) || n === null || n === undefined || n === '' || !Number.isFinite(Number(n))) return;
+      out[y] = (out[y] || 0) + Number(n);
+    });
+    return out;
+  }
+
+  function comma(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
 
   /** 무브먼트 값이 있는 공만 고릅니다. */
   function valid(pitches) {
@@ -70,7 +84,7 @@
     });
   }
 
-  /** 연도 고르기 목록입니다. 1군 투수 기록 시즌 중 2008 이상, 최신순. */
+  /** 연도 고르기 목록입니다. 1군 투수 기록 시즌 중 2016 이상(그 앞은 추적 데이터 없음), 최신순. */
   function seasonsFor(player) {
     const out = [];
     ((player && player.pitcher_seasons) || []).forEach(function (s) {
@@ -125,16 +139,18 @@
   }
 
   /** 카드 본문입니다. 그림 + 안내 줄 + 표. 데이터가 없으면 안내 문구입니다. */
-  function bodyHtml(pitches) {
+  function bodyHtml(pitches, total) {
     const vs = valid(pitches);
     if (!vs.length) return '<p class="pa-mv-empty">이 시즌은 투구 추적 데이터가 없습니다.</p>';
     const summary = summarize(vs);
     return svgHtml(vs, summary)
-      + '<p class="pa-mv-note">포수 시점 · 수평 +는 1루 쪽 · 수직 +는 위 · 공 ' + vs.length + '개</p>'
+      + '<p class="pa-mv-note">포수 시점 · 수평 +는 1루 쪽 · 수직 +는 위</p>'
+      + '<p class="pa-mv-note">공 ' + comma(vs.length) + '개 추적'
+      + (total > 0 ? ' (전체 ' + comma(total) + '구의 ' + Math.min(100, Math.round(vs.length * 100 / total)) + '%)' : '') + '</p>'
       + legendHtml(summary);
   }
 
-  const api = { COLORS, colorOf, summarize, seasonsFor, svgHtml, legendHtml, bodyHtml };
+  const api = { COLORS, colorOf, summarize, seasonsFor, totalsFor, svgHtml, legendHtml, bodyHtml };
   PA.movement = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
