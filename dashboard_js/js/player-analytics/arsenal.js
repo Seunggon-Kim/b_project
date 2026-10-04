@@ -63,6 +63,7 @@
     const y = (Z_TOP - pz) * K;
     return [x, y];
   }
+  function inRange(xy) { return xy[0] >= 0 && xy[0] <= SIZE && xy[1] >= 0 && xy[1] <= SIZE; }
   /** 보이는 범위 밖 공은 가장자리(3px 안쪽)에 붙여 둡니다. 빼지 않습니다. */
   function clampXY(xy) {
     const m = 3;
@@ -109,28 +110,35 @@
         const op = 0.12 + 0.68 * (i + 1) / n;
         s += '<path class="pa-ars-contour" d="' + ringsPath(c.coordinates) + '" fill="' + g.color + '" fill-opacity="' + op.toFixed(2) + '"/>';
       });
-    } else {
-      (g.pitches || []).forEach(function (p) {
-        const px = num(p.px), pz = num(p.pz);
-        if (px === null || pz === null) return;
-        const raw = toXY(px, pz, view), xy = clampXY(raw);
-        const edge = xy[0] !== raw[0] || xy[1] !== raw[1];
-        s += '<circle class="pa-ars-pt" cx="' + r1(xy[0]) + '" cy="' + r1(xy[1]) + '" r="3" fill="' + g.color + '"' + (edge ? ' class="pa-ars-pt pa-ars-pt--edge" stroke="currentColor"' : '') + '/>';
-      });
     }
+    (g.pitches || []).forEach(function (p) {
+      const px = num(p.px), pz = num(p.pz);
+      if (px === null || pz === null) return;
+      const raw = toXY(px, pz, view);
+      const out = !inRange(raw);
+      if (useContour && !out) return;  // 등고선 모드에선 범위 밖 공만 표시
+      const xy = clampXY(raw);
+      s += '<circle class="pa-ars-pt' + (out ? ' pa-ars-pt--edge' : '') + '" cx="' + r1(xy[0]) + '" cy="' + r1(xy[1]) + '" r="3" fill="' + g.color + '"/>';
+    });
     return s + '</svg>';
   }
 
-  /** d3.contourDensity 로 등고선을 계산합니다(d3 없거나 공이 적으면 null → 점). */
+  /** 밀도 계산용 좌표입니다. 보이는 범위 안의 공만(가장자리에 붙인 공은 넣지 않습니다). */
+  function densityData(g, view) {
+    return g.pitches.map(function (p) { return toXY(num(p.px), num(p.pz), view); }).filter(inRange);
+  }
+
+  /** d3.contourDensity 로 등고선을 계산합니다(d3 없거나 범위 안 공이 적으면 null → 점). */
   function contours(g, view, d3) {
-    if (!d3 || !d3.contourDensity || g.n < MIN_CONTOUR_N) return null;
-    const data = g.pitches.map(function (p) { return clampXY(toXY(num(p.px), num(p.pz), view)); });
+    if (!d3 || !d3.contourDensity) return null;
+    const data = densityData(g, view);
+    if (data.length < MIN_CONTOUR_N) return null;
     const out = d3.contourDensity().x(function (d) { return d[0]; }).y(function (d) { return d[1]; })
       .size([SIZE, SIZE]).bandwidth(9).thresholds(LEVELS + 1)(data);
     return out.length > LEVELS ? out.slice(out.length - LEVELS) : out;
   }
 
-  const api = { groups, zone, toXY, scale, cardSvg, titleHtml, contours, MIN_CONTOUR_N };
+  const api = { groups, zone, toXY, scale, cardSvg, titleHtml, contours, densityData, MIN_CONTOUR_N };
   PA.arsenal = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
