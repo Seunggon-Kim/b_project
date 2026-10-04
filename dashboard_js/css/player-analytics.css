@@ -140,3 +140,7 @@
     .pa-hide-sm { display: none; }
     .pa-card--move .pa-help::after { top: calc(100% + 2.9rem); }
 }
+
+.pa-mv-key { fill: var(--text-secondary); font-size: 14px; font-weight: 600; }
+.pa-mv-key-own { fill: var(--text-muted); stroke: var(--bg-card); stroke-width: 2; }
+.pa-mv-key-lg { stroke: var(--text-secondary); stroke-width: 2; }

@@ -156,6 +156,13 @@
       + '<text class="pa-mv-dir" x="194" y="374" text-anchor="end">더 떨어짐</text>'
       + '<text class="pa-mv-dir" x="26" y="214">' + sideL + '</text>'
       + '<text class="pa-mv-dir" x="374" y="214" text-anchor="end">' + sideR + '</text>';
+    // 모서리 범례(고정 자리, 투수 시점에도 안 바뀝니다)
+    s += '<circle class="pa-mv-key-own" cx="318" cy="18" r="7"/>'
+      + '<text class="pa-mv-key" x="394" y="23" text-anchor="end">선수 평균</text>';
+    if (ctx) {
+      s += '<circle class="pa-mv-key-lg" cx="318" cy="382" r="8" fill="url(#pa-mv-hatch)"/>'
+        + '<text class="pa-mv-key" x="394" y="387" text-anchor="end">' + esc(ctx.label) + ' 평균</text>';
+    }
     s += '<g clip-path="url(#pa-mv-clip)">';
     vs.forEach(function (p) {
       s += '<circle class="pa-mv-pt" cx="' + px(num(p.pfx_x) * IN2CM, view) + '" cy="' + py(num(p.pfx_z) * IN2CM)
