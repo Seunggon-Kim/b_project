@@ -1,13 +1,16 @@
 import { json } from '../lib/respond.js';
 import { queryInt } from '../lib/router.js';
-import { csvExportPlan, csvRow, isRealType } from '../lib/csv.js';
+import {
+  csvExportPlan, csvRow, csvRowsFromArrays, isRealType,
+} from '../lib/csv.js';
 import { countOf, countsOf } from '../lib/counts.js';
 import { tableNames, tableColumns } from '../lib/schema.js';
 import {
   isSharded, SHARDED_TABLES, shardCounts, sliceRows, shardTableInfo,
 } from '../lib/pbpvirtual.js';
 import { columnDict, tableMeta } from '../lib/coldict.js';
-import { idFixer } from '../lib/ids.js';
+import { idFixer, idFixFlags, intIdOrSame } from '../lib/ids.js';
+import { isMysql } from '../lib/backendflag.js';
 
 /**
  * 화면에 보일 표 이름 전부입니다.
@@ -251,6 +254,14 @@ export async function dbTableCsv(request, env, ctx, params) {
   const fixIds = idFixer(env, tableName);
   const encoder = new TextEncoder();
 
+  // MySQL 은 행을 배열로 받아(raw) 객체를 만들지 않고 곧장 CSV 로 씁니다.
+  // 2만 행이면 칸이 150만 개라, 행마다 객체를 만들고 다시 열 이름으로 꺼내는
+  // 일이 Worker CPU 의 큰 몫이었습니다(무료 플랜은 요청당 10ms). 칸 값은 객체
+  // 길과 같습니다: 어댑터가 같은 규칙으로 값을 바꾸고(lib/mysqldb.js), ID 되돌리기도
+  // idFixer 와 같은 열에만 씁니다(idFixFlags).
+  const rawMode = isMysql(env) && !sharded;
+  const fixFlags = idFixFlags(env, tableName, columns);
+
   let offset = startAt;
   let sent = 0;
   let done = false;
@@ -274,31 +285,42 @@ export async function dbTableCsv(request, env, ctx, params) {
         }
       }
 
-      // 나뉜 표는 샤드 경계를 넘어 읽습니다. 한 페이지가 두 샤드에
-      // 걸치면 두 곳에서 나눠 읽어 이어붙입니다.
-      const results = sharded
-        ? await sliceRows(env, tableName, offset, take)
-        : (await db
+      let n;
+      let chunk = '';
+      if (rawMode) {
+        const [names, ...rows] = await db
           .prepare(`SELECT * FROM \`${tableName}\` LIMIT ? OFFSET ?`)
           .bind(take, offset)
-          .all()).results;
+          .raw({ columnNames: true });
+        n = rows.length;
+        chunk = csvRowsFromArrays(names, rows, columns, realFlags, fixFlags, intIdOrSame);
+      } else {
+        // 나뉜 표는 샤드 경계를 넘어 읽습니다. 한 페이지가 두 샤드에
+        // 걸치면 두 곳에서 나눠 읽어 이어붙입니다.
+        const results = sharded
+          ? await sliceRows(env, tableName, offset, take)
+          : (await db
+            .prepare(`SELECT * FROM \`${tableName}\` LIMIT ? OFFSET ?`)
+            .bind(take, offset)
+            .all()).results;
+        n = results.length;
+        for (const r of results) {
+          const row = fixIds(r);
+          chunk += csvRow(columns.map((c) => row[c]), realFlags);
+        }
+      }
 
-      if (!results.length) {
+      if (!n) {
         controller.close();
         done = true;
         return;
       }
 
-      let chunk = '';
-      for (const r of results) {
-        const row = fixIds(r);
-        chunk += csvRow(columns.map((c) => row[c]), realFlags);
-      }
       controller.enqueue(encoder.encode(chunk));
 
-      offset += results.length;
-      sent += results.length;
-      if (results.length < take) {
+      offset += n;
+      sent += n;
+      if (n < take) {
         controller.close();
         done = true;
       }

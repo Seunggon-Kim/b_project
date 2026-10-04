@@ -47,6 +47,28 @@ export function csvRow(cells, realFlags) {
 }
 
 /**
+ * 배열 행(열 이름 `names` 순서)을 `columns` 순서의 CSV 줄들로 씁니다.
+ *
+ * 행마다 객체를 만들어 `columns.map((c) => row[c])` 로 꺼내던 것과 같은
+ * 글자를 냅니다. 이름이 겹치면 객체처럼 뒤 열이 이기고, 없는 열은 빈
+ * 칸입니다. `fixFlags[j]` 가 참인 열은 값에 `fix` 를 씁니다(ID 되돌리기).
+ * MySQL CSV 내려받기에서 객체를 만들지 않아 Worker CPU 를 줄이려는 것입니다.
+ */
+export function csvRowsFromArrays(names, rows, columns, realFlags, fixFlags = [], fix = (v) => v) {
+  const at = columns.map((c) => names.lastIndexOf(c));
+  const cells = new Array(columns.length);
+  let out = '';
+  for (const a of rows) {
+    for (let j = 0; j < at.length; j += 1) {
+      const v = at[j] < 0 ? undefined : a[at[j]];
+      cells[j] = fixFlags[j] ? fix(v) : v;
+    }
+    out += csvRow(cells, realFlags);
+  }
+  return out;
+}
+
+/**
  * CSV 를 내보내기 전에 몇 행을 보낼지, 한도를 넘는지 계산합니다.
  *
  * 스트림을 연 뒤에는 HTTP 상태를 되돌릴 수 없으므로 열기 전에 판단해야

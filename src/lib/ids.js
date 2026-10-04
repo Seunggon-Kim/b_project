@@ -33,6 +33,19 @@ export function intIdRow(row) {
  * 행을 건드리지 않는 항등 함수입니다.
  */
 export function idFixer(env, tableName) {
-  if (!isMysql(env) || TEXT_ID_TABLES.has(tableName)) return (r) => r;
+  if (!needsIdFix(env, tableName)) return (r) => r;
   return intIdRow;
+}
+
+function needsIdFix(env, tableName) {
+  return isMysql(env) && !TEXT_ID_TABLES.has(tableName);
+}
+
+/**
+ * idFixer 를 배열 행에 쓰는 판입니다. `columns` 와 같은 순서로, 그 열 값에
+ * intIdOrSame 을 써야 하면 참입니다. idFixer 가 항등이면 모두 거짓입니다.
+ */
+export function idFixFlags(env, tableName, columns) {
+  const on = needsIdFix(env, tableName);
+  return columns.map((c) => on && TEXT_ID_COLUMNS.has(c));
 }
