@@ -97,6 +97,15 @@
                     <div class="pa-card-body" id="player-card"></div>
                 </div>
 
+                <!-- Savant 식 무브먼트 카드입니다. 1군 투수만 켭니다(setupMovementCard). -->
+                <div class="pa-card pa-card--move hidden" id="pa-move-card">
+                    <div class="pa-card-tabs">
+                        <span class="pa-card-tab">무브먼트 (Induced Break)</span>
+                        <select id="pa-move-season" class="pa-move-season" aria-label="무브먼트 시즌"></select>
+                    </div>
+                    <div class="pa-card-body" id="pa-move-body"></div>
+                </div>
+
                 <!-- 퓨처스 최근 경기입니다. 전체 폭을 씁니다.
                      시즌별 성적 칸에 같이 넣었더니 표가 길어지면서
                      옆의 상세 프로필까지 늘어났습니다(align-items:
@@ -178,6 +187,7 @@
     <script src="../js/stats/metrics.js"></script>
     <script src="../js/stats/columns.js"></script>
     <script src="../js/player-analytics/quicklook.js"></script>
+    <script src="../js/player-analytics/movement.js"></script>
     <script>
 
         // ===== Theme-aware chart helpers =====
@@ -583,6 +593,50 @@
                 `<div class="pa-prof-row"><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join('') + '</dl>';
         }
 
+        // --- 무브먼트 카드(Savant 참고) ---------------------------------
+        // 1군 투수만 보입니다. 연도를 바꾸면 그 시즌 투구를 불러옵니다.
+        // 같은 선수·시즌은 다시 부르지 않습니다. 빈 결과(오류 포함)는
+        // 저장하지 않아 다음에 다시 시도합니다.
+        const mvCache = {};
+        let mvToken = 0;
+
+        function hideMovementCard() {
+            mvToken++;  // 아직 오는 중인 응답을 버립니다.
+            const card = document.getElementById('pa-move-card');
+            if (card) card.classList.add('hidden');
+            const grid = document.querySelector('.player-details-grid');
+            if (grid) grid.classList.remove('pa-3col');
+        }
+
+        function setupMovementCard(player, playerId) {
+            const M = window.PlayerAnalytics.movement;
+            const seasons = player.position === '투수' ? M.seasonsFor(player) : [];
+            if (!seasons.length) { hideMovementCard(); return; }
+            const select = document.getElementById('pa-move-season');
+            select.innerHTML = seasons.map(y => `<option value="${y}">${y}</option>`).join('');
+            select.value = String(seasons[0]);
+            select.onchange = () => loadMovement(playerId, Number(select.value));
+            document.getElementById('pa-move-card').classList.remove('hidden');
+            document.querySelector('.player-details-grid').classList.add('pa-3col');
+            loadMovement(playerId, seasons[0]);
+        }
+
+        async function loadMovement(playerId, season) {
+            const M = window.PlayerAnalytics.movement;
+            const body = document.getElementById('pa-move-body');
+            const token = ++mvToken;
+            const key = playerId + ':' + season;
+            let pitches = mvCache[key];
+            if (!pitches) {
+                body.innerHTML = createLoadingSpinner();
+                const res = await API.getPitchArsenal(playerId, season);
+                pitches = (res && res.arsenal) || [];
+                if (pitches.length) mvCache[key] = pitches;
+            }
+            if (token !== mvToken) return;  // 그사이 다른 선수·시즌을 골랐습니다.
+            body.innerHTML = M.bodyHtml(pitches);
+        }
+
         /**
          * 퓨처스(2군) 화면입니다.
          *
@@ -600,6 +654,7 @@
             cardDiv.innerHTML = createLoadingSpinner();
             statsDiv.innerHTML = createLoadingSpinner();
             hidePbpSections();
+            hideMovementCard();
 
             const f = await API.getFuturesPlayer(playerId);
             if (!f) {
@@ -724,6 +779,8 @@
                 statsDiv.innerHTML = Q.tableHtml(Q.build(player, new Date().getFullYear()));
                 // 프로필 아래 최근 시즌 타일입니다. 두 카드 높이를 맞출 때 남는 자리를 채웁니다.
                 cardDiv.insertAdjacentHTML('beforeend', Q.tilesHtml(Q.seasonTiles(player)));
+                // 무브먼트 카드(1군 투수만). 타자면 끕니다.
+                setupMovementCard(player, playerId);
 
                 // Detailed Stats Section (Pitching)
                 const detailedSection = document.getElementById('detailed-stats-section');

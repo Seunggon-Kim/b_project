@@ -108,10 +108,12 @@ class API {
 
     /**
      * Get Pitch Arsenal
+     * season 을 주면 그 시즌, 안 주면 서버 기본(올해)입니다.
      */
-    static async getPitchArsenal(playerId) {
+    static async getPitchArsenal(playerId, season) {
         try {
-            const response = await fetch(`${API_BASE_URL}/players/${playerId}/arsenal`);
+            const q = season ? `?season=${encodeURIComponent(season)}` : '';
+            const response = await fetch(`${API_BASE_URL}/players/${playerId}/arsenal${q}`);
             if (!response.ok) throw new Error('Failed to fetch pitch arsenal');
             return await response.json();
         } catch (error) {

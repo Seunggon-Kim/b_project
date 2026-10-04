@@ -38,7 +38,10 @@
 
 /* ---------- 카드(팬그래프 module card) ---------- */
 .pa-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.pa-card.hidden { display: none; }
 .pa-card--ql { grid-column: span 2; }
+/* 1군 투수는 무브먼트 카드까지 3칸입니다. Quick Look 을 1칸으로 줄입니다. */
+.player-details-grid.pa-3col > .pa-card--ql { grid-column: span 1; }
 /* 두 카드 높이는 같습니다(그리드 stretch). 프로필 줄은 촘촘히 두고, 남는 높이는
    아래 시즌 타일이 채웁니다(evan 결정). */
 .pa-card--profile .pa-card-body { display: flex; flex-direction: column; }
@@ -54,7 +57,7 @@
 /* style.css 의 #player-card { height: 100%; overflow: hidden } 을 이 카드 안에서만 풉니다. */
 #player-card.pa-card-body { height: auto; overflow: visible; }
 @media (max-width: 1024px) {
-    .pa-card--ql, .pa-card--profile { grid-column: 1 / -1; }
+    .pa-card--ql, .pa-card--profile, .pa-card--move { grid-column: 1 / -1; }
 }
 
 /* ---------- Quick Look 표 ---------- */
@@ -73,3 +76,23 @@
 .pa-prof-row:last-child { border-bottom: 0; }
 .pa-prof dt { color: var(--text-secondary); font-weight: 600; }
 .pa-prof dd { margin: 0; color: var(--text-primary); overflow-wrap: anywhere; }
+
+/* ---------- 무브먼트(Savant Movement Profile 참고) ---------- */
+.pa-card--move .pa-card-tabs { align-items: center; justify-content: space-between; padding-right: 0.5rem; }
+.pa-move-season { font: inherit; font-size: 0.85rem; padding: 0.2rem 1.8rem 0.2rem 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; background-color: var(--bg-card); color: var(--text-primary); }
+.pa-mv-svg { display: block; width: 100%; max-width: 340px; height: auto; margin: 0.25rem auto 0; }
+.pa-mv-bg { fill: var(--bg-secondary); }
+.pa-mv-ring { fill: none; stroke: var(--text-muted); stroke-width: 0.8; opacity: 0.55; }
+.pa-mv-ring--minor { stroke-dasharray: 3 3; }
+.pa-mv-axis { stroke: var(--text-muted); stroke-width: 0.8; opacity: 0.55; }
+.pa-mv-tick { fill: var(--text-muted); font-size: 11px; }
+.pa-mv-pt { opacity: 0.35; }
+.pa-mv-avg { stroke: var(--bg-card); stroke-width: 2.5; }
+.pa-mv-note { margin: 0.25rem 0 0.5rem; font-size: 0.75rem; color: var(--text-secondary); text-align: center; }
+.pa-mv-legend { width: 100%; border-collapse: collapse; font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.pa-mv-legend th, .pa-mv-legend td { padding: 0.25rem 0.4rem; text-align: right; border-bottom: 1px solid var(--border-color); white-space: nowrap; color: var(--text-primary); }
+.pa-mv-legend th { font-weight: 600; color: var(--text-secondary); }
+.pa-mv-legend th:first-child, .pa-mv-legend td:first-child { text-align: left; }
+.pa-mv-legend tbody tr:last-child td { border-bottom: 0; }
+.pa-mv-dot { display: inline-block; width: 0.6rem; height: 0.6rem; margin-right: 0.35rem; border-radius: 50%; vertical-align: middle; }
+.pa-mv-empty { padding: 1rem 0; font-size: 0.85rem; color: var(--text-secondary); text-align: center; }
