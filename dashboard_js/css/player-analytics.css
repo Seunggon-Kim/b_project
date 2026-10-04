@@ -107,7 +107,7 @@
 .pa-help:not(.dismissed):hover::after, .pa-help:not(.dismissed):focus-visible::after, .pa-help.open:not(.dismissed)::after { opacity: 1; visibility: visible; }
 .pa-usage { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color); }
 .pa-usage-title { margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 700; color: var(--text-secondary); }
-.pa-usage-head, .pa-usage-row { display: grid; grid-template-columns: 3rem minmax(0, 1fr) 9rem minmax(0, 1fr) 3rem; align-items: center; gap: 0.35rem; }
+.pa-usage-head, .pa-usage-row { display: grid; grid-template-columns: 3rem minmax(0, 1fr) 6.5rem minmax(0, 1fr) 3rem; align-items: center; gap: 0.35rem; }
 .pa-usage-head { margin-bottom: 0.25rem; font-size: 0.7rem; font-weight: 600; color: var(--text-muted); }
 .pa-usage-head span:first-child { text-align: right; }
 .pa-usage-head span:nth-child(3) { text-align: center; }
@@ -133,7 +133,7 @@
 .pa-mv-hatch-line { stroke: var(--text-secondary); stroke-width: 1.2; }
 
 /* 구종 가치(7칸) */
-.pa-usage-grid--rv .pa-usage-head, .pa-usage-grid--rv .pa-usage-row { grid-template-columns: 2.7rem minmax(0, 1fr) 2rem 9rem 2rem minmax(0, 1fr) 2.7rem; }
+.pa-usage-grid--rv .pa-usage-head, .pa-usage-grid--rv .pa-usage-row { grid-template-columns: 2.7rem minmax(0, 1fr) 2rem 6rem 2rem minmax(0, 1fr) 2.7rem; }
 .pa-usage-grid--rv .pa-usage-head span:nth-child(3), .pa-usage-grid--rv .pa-usage-head span:nth-child(4), .pa-usage-grid--rv .pa-usage-head span:nth-child(5) { text-align: center; }
 .pa-usage-grid--rv .pa-usage-head span:nth-child(1) { grid-column: 1 / 3; text-align: left; white-space: nowrap; }
 .pa-usage-grid--rv .pa-usage-head span:nth-child(2), .pa-usage-grid--rv .pa-usage-head span:nth-child(6) { display: none; }
@@ -146,15 +146,6 @@
 .pa-rv-h { cursor: help; text-decoration: underline dotted; }
 .pa-usage-grid--dense .pa-usage-row { padding: 0.2rem 0; }
 .pa-usage-grid--dense .pa-usage-bar { height: 0.75rem; }
-/* 구종 이름이 길어졌습니다(포심 패스트볼). 휴대폰에서는 비율을 이름 아래 줄로 내리고 칸을 줄입니다(가치 7칸은 아래 640px 규칙이 칸을 정합니다). */
-@media (max-width: 480px) {
-  .pa-usage-head, .pa-usage-row { grid-template-columns: 2.3rem minmax(0, 1fr) 5.6rem minmax(0, 1fr) 2.3rem; gap: 0.3rem; }
-  .pa-usage-row { font-size: 0.78rem; }
-  .pa-usage-name { font-size: 0.74rem; line-height: 1.2; }
-  .pa-usage-name b { display: block; font-size: 0.72rem; }
-  .pa-rv { font-size: 0.7rem; }
-}
-}
 
 /* 휴대폰: 무브먼트 제목을 줄여 한 줄에 두고, 툴팁은 시점 단추 줄 아래로 내립니다. */
 @media (max-width: 640px) {

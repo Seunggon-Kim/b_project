@@ -273,6 +273,9 @@
    * 좌타 상대 % · 왼쪽 막대 · 구종(전체 %) · 오른쪽 막대 · 우타 상대 %. 전체 비율 큰 순.
    * data 는 /players/{id}/usage 응답입니다. 투구 수 합계 줄은 두지 않습니다(evan 의견).
    */
+  /** 구종 구사율 칸에서만 쓰는 짧은 이름입니다(막대 자리를 남기려고, evan 결정). */
+  function usageLabel(name) { return name === '포심 패스트볼' ? '포심' : name; }
+
   function usageHtml(data, season, pv) {
     const title = '<div class="pa-usage-title">' + esc(season) + ' 구종 구사율</div>';
     const rows = mergeUsage((data && data.usage) || []).sort(function (a, b) { return pct1(b.usage_all) - pct1(a.usage_all); });
@@ -286,7 +289,7 @@
         return '<div class="pa-usage-row">'
           + '<span class="pa-usage-pct">' + f1(l) + '%</span>'
           + '<span class="pa-usage-bar pa-usage-bar--l"><i style="width:' + f1(l) + '%;background:' + c + '"></i></span>'
-          + '<span class="pa-usage-name">' + esc(u.pitch_type) + ' <b>' + f1(pct1(u.usage_all)) + '%</b></span>'
+          + '<span class="pa-usage-name">' + esc(usageLabel(u.pitch_type)) + ' <b>' + f1(pct1(u.usage_all)) + '%</b></span>'
           + '<span class="pa-usage-bar"><i style="width:' + f1(r) + '%;background:' + c + '"></i></span>'
           + '<span class="pa-usage-pct">' + f1(r) + '%</span>'
           + '</div>';
@@ -322,7 +325,7 @@
           + '<span class="pa-usage-pct">' + f1(l) + '%</span>'
           + '<span class="pa-usage-bar pa-usage-bar--l"><i style="width:' + f1(l) + '%;background:' + c + '"></i></span>'
           + rvCell(p, 'l')
-          + '<span class="pa-usage-name">' + esc(u.pitch_type) + ' <b>' + f1(pct1(u.usage_all)) + '%</b></span>'
+          + '<span class="pa-usage-name">' + esc(usageLabel(u.pitch_type)) + ' <b>' + f1(pct1(u.usage_all)) + '%</b></span>'
           + rvCell(p, 'r')
           + '<span class="pa-usage-bar"><i style="width:' + f1(r) + '%;background:' + c + '"></i></span>'
           + '<span class="pa-usage-pct">' + f1(r) + '%</span>'
