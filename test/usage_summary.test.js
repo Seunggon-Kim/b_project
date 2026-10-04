@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { summarizeUsage } from '../src/routes/players.js';
+import { summarizeUsage, playerUsage } from '../src/routes/players.js';
+import { regularSeasonSql } from '../src/lib/gametype.js';
 
 const p = (pitch_type, stands, throws) => ({ pitch_type, stands, throws });
 
@@ -83,4 +84,56 @@ test('좌우 합이 전체와 같습니다', () => {
   const { totalAll, totalL, totalR } = summarizeUsage(rows);
   assert.equal(totalL + totalR, totalAll);
   assert.equal(totalAll, 4);
+});
+
+// --- DB 가 묶은 행(2026-10-04) ---
+
+test('묶은 행은 n 개로 셉니다', () => {
+  const { result, totalAll, totalL, totalR } = summarizeUsage([
+    { pitch_type: '직구', stands: '우', throws: '우', n: 3 },
+    { pitch_type: '직구', stands: '좌', throws: '우', n: '2' },
+    { pitch_type: '슬라이더', stands: '양', throws: '우', n: 5 },
+  ]);
+  assert.equal(totalAll, 10);
+  assert.equal(totalL, 7); // 좌타 2 + 우투수 상대 양타 5
+  assert.equal(totalR, 3);
+  assert.equal(result[0].pitch_type, '슬라이더');
+  assert.equal(result[0].usage_all, 50);
+});
+
+test('묶은 행과 한 공씩 받은 행의 결과가 같습니다', () => {
+  const one = (pt, st, th, k) => Array.from({ length: k }, () => p(pt, st, th));
+  const flat = [...one('직구', '우', '우', 4), ...one('커브', '좌', '우', 2), ...one('직구', '양', '좌', 1)];
+  const grouped = [
+    { pitch_type: '직구', stands: '우', throws: '우', n: 4 },
+    { pitch_type: '커브', stands: '좌', throws: '우', n: 2 },
+    { pitch_type: '직구', stands: '양', throws: '좌', n: 1 },
+  ];
+  assert.deepEqual(summarizeUsage(grouped), summarizeUsage(flat));
+});
+
+test('usage 질의는 DB 에서 묶고 정규시즌 공만 셉니다', async () => {
+  const seen = [];
+  const db = {
+    prepare(sql) {
+      return {
+        bind() { return this; },
+        async first() {
+          return sql.includes('FROM players') ? { player_id: '65933' } : null;
+        },
+        async all() {
+          seen.push(sql);
+          return { results: [{ pitch_type: '직구', stands: '우', throws: '좌', n: 7 }] };
+        },
+      };
+    },
+  };
+  const env = { DB: db, DB_BACKEND: 'mysql' };
+  const res = await playerUsage(new Request('https://x/players/65933/usage?season=2026'), env, {}, { id: '65933' });
+  const body = await res.json();
+  assert.equal(body.total_pitches, 7);
+  const sql = seen.find((s) => s.includes('FROM play_by_play'));
+  assert.match(sql, /COUNT\(\*\) AS n/);
+  assert.match(sql, /GROUP BY pbp\.pitch_type, pbp\.stands, pbp\.throws/);
+  assert.ok(sql.includes(regularSeasonSql('pbp')));
 });

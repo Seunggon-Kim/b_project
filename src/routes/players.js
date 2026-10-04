@@ -315,6 +315,9 @@ const PITCH_ABBR = {
  *
  * 그리고 `좌` 가 아닌 것은 전부 우타로 셉니다. 값이 비었거나 모르는
  * 문자열이어도 우타입니다. 원본의 else 분기를 그대로 옮긴 것입니다.
+ *
+ * 행에 `n` 이 있으면 그 행을 공 n 개로 셉니다(DB 가 미리 묶은 행). 없으면
+ * 공 하나입니다.
  */
 export function summarizeUsage(rows) {
   const counts = new Map();
@@ -326,6 +329,7 @@ export function summarizeUsage(rows) {
     const ptype = row.pitch_type;
     const stands = row.stands || '우';
     const throws = row.throws || '우';
+    const n = row.n === undefined || row.n === null ? 1 : Number(row.n);
 
     let actual = stands;
     if (stands === '양') {
@@ -335,15 +339,15 @@ export function summarizeUsage(rows) {
 
     if (!counts.has(ptype)) counts.set(ptype, { L: 0, R: 0, Total: 0 });
     const c = counts.get(ptype);
-    c.Total += 1;
-    totalAll += 1;
+    c.Total += n;
+    totalAll += n;
 
     if (actual === '좌') {
-      c.L += 1;
-      totalL += 1;
+      c.L += n;
+      totalL += n;
     } else {
-      c.R += 1;
-      totalR += 1;
+      c.R += n;
+      totalR += n;
     }
   }
 
@@ -395,13 +399,21 @@ export async function playerUsage(request, env, ctx, params) {
       return json({ player_id: playerId, usage: [] });
     }
 
+    // 구종·타석·투구 손으로 DB 에서 묶어 공 수만 받습니다(2026-10-04).
+    // 공마다 한 행씩 받으면 한 투수 시즌이 수천 행이고, Workers 에서는
+    // mysql2 가 eval 없이 행을 해석해 CPU 를 26~50ms 썼습니다. 무료 한도
+    // (10ms)에 걸려 503(exceededCpu)이 났습니다. 묶으면 수십 행입니다.
+    // 정규시즌 공만 셉니다. 구종 카드(arsenal)와 같은 기준입니다.
     const { results } = await pdb.prepare(`
-      SELECT pbp.pitch_type, pbp.stands, pbp.throws
+      SELECT pbp.pitch_type AS pitch_type, pbp.stands AS stands,
+             pbp.throws AS throws, COUNT(*) AS n
       FROM play_by_play pbp
       WHERE pbp.pitcher_ID = ?
       AND pbp.game_date >= ? AND pbp.game_date < ?
+      AND ${regularSeasonSql('pbp')}
       AND pbp.pitch_type IS NOT NULL
       AND pbp.pitch_type NOT IN ('', '-', 'null')
+      GROUP BY pbp.pitch_type, pbp.stands, pbp.throws
     `).bind(player.player_id, range.from, range.to).all();
 
     // 원본은 행이 없으면 usage 만 있는 짧은 응답을 돌려줍니다.
