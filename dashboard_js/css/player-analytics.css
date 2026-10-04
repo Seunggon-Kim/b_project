@@ -80,7 +80,7 @@
 /* ---------- 무브먼트(Savant Movement Profile 참고) ---------- */
 .pa-card--move .pa-card-tabs { align-items: center; justify-content: space-between; padding-right: 0.5rem; position: relative; }
 .pa-move-season { font: inherit; font-size: 0.85rem; padding: 0.2rem 1.8rem 0.2rem 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; background-color: var(--bg-card); color: var(--text-primary); }
-.pa-mv-svg { display: block; width: 100%; max-width: 300px; height: auto; margin: 0 auto; }
+.pa-mv-svg { display: block; width: 100%; max-width: 300px; height: auto; margin: 0 auto; overflow: visible; }  /* 범례가 그림 오른쪽 끝을 살짝 넘어도 보이게 */
 .pa-mv-bg { fill: var(--bg-secondary); }
 .pa-mv-ring { fill: none; stroke: var(--text-muted); stroke-width: 0.8; opacity: 0.55; }
 .pa-mv-ring--minor { stroke-dasharray: 3 3; }
