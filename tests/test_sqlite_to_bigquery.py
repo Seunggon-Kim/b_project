@@ -10,6 +10,7 @@ import io
 import re
 import sqlite3
 import sys
+import types
 from pathlib import Path
 
 import pyarrow.parquet as pq
@@ -123,15 +124,17 @@ SPECS = {
     "teams": [("team_id", "varchar", "varchar(16)", None, None)],
     "players": [("player_id", "int", "int unsigned", 10, 0)],
     "team_stadium_by_season": [("season", "int", "int", 10, 0)],
+    "self_park_factor": [("season", "int", "int", 10, 0)],
 }
 
 
 def test_MySQL_표는_모두_복사하고_읽을_곳을_고릅니다():
     local = {"games", "teams", "truncated_games", "kbo_woba_weights_by_season_bak",
-             "team_stadium_by_season"}
+             "team_stadium_by_season", "self_park_factor"}
     copy, skipped = m.plan(SPECS, local)
-    assert copy == [("games", "sqlite"),
+    assert copy == [("games", "sqlite"),                  # 받은 그대로인 표
                     ("players", "mysql"),                  # 로컬에 없는 표
+                    ("self_park_factor", "mysql"),         # 다시 계산해 MySQL 에 올린 표
                     ("team_stadium_by_season", "mysql"),   # 로컬에서만 고친 표
                     ("teams", "sqlite")]
     # MySQL 표가 아닌 계산용 표만 건너뜁니다.
@@ -410,12 +413,25 @@ class FakeJob:
 
 
 class FakeClient:
-    """load_table_from_file·get_table·update_table 만 흉내 냅니다."""
+    """load_table_from_file·get_table·update_table·list_tables 만 흉내 냅니다.
 
-    def __init__(self, rows_delta=0, fail=()):
+    existing 은 이미 데이터셋에 있는 (표 이름, 종류) 입니다.
+    """
+
+    def __init__(self, rows_delta=0, fail=(), existing=()):
         self.loads, self.updates = [], []
         self.rows_delta, self.fail = rows_delta, set(fail)
         self.loaded = {}
+        self.existing = list(existing)
+        self.deleted = []
+
+    def list_tables(self, dataset):
+        assert dataset == "bstats-kbo.bstats"
+        names = [(t.split(".")[-1], "TABLE") for t in self.loaded] + self.existing
+        return [types.SimpleNamespace(table_id=n, table_type=k) for n, k in names]
+
+    def delete_table(self, *a, **k):
+        self.deleted.append(a)
 
     def load_table_from_file(self, f, table_id, job_config=None, location=None):
         data = f.read()
@@ -506,7 +522,7 @@ def test_적재_오류가_나도_나머지_표는_마저_합니다(tmp_path):
     client = FakeClient(fail={"mixed"})
     res = m.copy_tables(sq, my, specs, ALL3, client, tmp_path)
     assert "적재 실패" in res[0].error and res[1].error is None and res[2].error is None
-    assert m.summary_note(res) == "2개 표 5행, 실패 mixed"
+    assert m.summary_note(res) == "2개 표 5행, 실패 1/3: mixed"
 
 
 def test_dry_run_은_올리지_않습니다(tmp_path, capsys):
@@ -549,7 +565,61 @@ def test_main_은_모든_MySQL_표를_복사하고_메모를_남깁니다(tmp_pa
 
 def test_main_은_행_수가_다르면_0_이_아닙니다(tmp_path, monkeypatch):
     code, note, _ = run_main(tmp_path, monkeypatch, FakeClient(rows_delta=1))
-    assert code == 1 and "실패 mixed, players, teams" in note
+    assert code == 1 and "실패 3/3: mixed, players, teams" in note
+
+
+def test_main_은_MySQL_에_없는_빅쿼리_표를_경고만_하고_지우지_않습니다(tmp_path, monkeypatch, capsys):
+    client = FakeClient(existing=[("old_table", "TABLE"), ("my_view", "VIEW")])
+    code, _, _ = run_main(tmp_path, monkeypatch, client)
+    assert code == 0
+    out = capsys.readouterr().out
+    warns = [ln for ln in out.splitlines() if ln.startswith("경고:")]
+    assert len(warns) == 1 and "bstats.old_table 는 MySQL 에 없는 표입니다" in warns[0]
+    assert client.deleted == []
+
+
+def test_빅쿼리_표_목록을_못_읽어도_복사_결과는_그대로입니다(capsys):
+    class Broken:
+        def list_tables(self, dataset):
+            raise RuntimeError("권한 없음")
+    assert m.warn_stale(Broken(), {"teams": []}) == []
+    assert "경고: 빅쿼리 표 목록을 읽지 못했습니다" in capsys.readouterr().out
+
+
+ALL_31 = ["franchises", "futures_games", "futures_season_stats", "futures_teams", "games",
+          "kbo_official_batter_stats", "kbo_official_pitcher_stats", "kbo_roster",
+          "kbo_roster_moves", "kbo_run_values_by_season", "kbo_woba_weights_by_season",
+          "korean_series_champion", "meta_backfill", "meta_job_runs", "meta_table_counts",
+          "pitch_run_value", "play_by_play", "players", "re24_matrix_by_season",
+          "run_expectancy", "self_park_factor", "stadium_dim", "statiz_park_factor",
+          "statiz_yearly_constants", "team_logos", "team_season_rank", "team_seasons",
+          "team_stadium_by_season", "teams", "weighted_pf_by_batter_season",
+          "wrc_plus_comparison"]
+
+
+def test_메모는_31개_표가_모두_실패해도_128자를_넘지_않습니다():
+    assert len(ALL_31) == 31
+    res = [m.Result(t, "mysql", None, 1.0, "RuntimeError: 권한 없음") for t in ALL_31]
+    note = m.summary_note(res)
+    assert len(note) <= 128 == m.NOTE_MAX
+    assert note.startswith("0개 표 0행, 실패 31/31: franchises, futures_games")
+    assert re.search(r" 외 \d+개$", note), note
+    # 큰 행 수와 긴 이름이 섞여도 넘지 않습니다.
+    res = ([m.Result("play_by_play", "sqlite", 4_180_000, 1.0, None)]
+           + [m.Result(t, "mysql", None, 1.0, "x") for t in ALL_31[:-1]])
+    assert len(m.summary_note(res)) <= 128
+    # 다 들어가면 줄이지 않습니다.
+    res = [m.Result("teams", "sqlite", 14, 1.0, None), m.Result("players", "mysql", None, 1.0, "x")]
+    assert m.summary_note(res) == "1개 표 14행, 실패 1/2: players"
+
+
+def test_실행_기록도_메모를_128자로_자릅니다():
+    sys.path.insert(0, str(ROOT / "data_collection"))
+    import record_job_run as rj
+    row = rj.job_row("bq_copy", "2026-10-06 05:47", "fail", "가" * 300, None)
+    assert len(row["note"]) == 128 and row["note"].endswith("…")
+    assert rj.job_row("x", "t", "ok", "짧음", None)["note"] == "짧음"
+    assert rj.job_row("x", "t", "ok", None, None)["note"] is None
 
 
 def test_main_은_MySQL_에_없는_표를_고르면_멈춥니다(tmp_path, monkeypatch):
@@ -589,12 +659,13 @@ def weekly_park_scripts():
                                  WEEKLY.read_text(encoding="utf-8"))))
 
 
-def test_주간_계산이_로컬에서만_고치는_MySQL_표는_MySQL_에서_읽습니다():
-    """로컬에서 고친 표를 MySQL 에 올리지 않으면 SQLite 와 MySQL 이 다릅니다.
+def test_주간_작업이_SQLite_에서_바꾸는_MySQL_표는_MySQL_에서_읽습니다():
+    """주간 계산이 SQLite 에서 고친 표는 SQLite 값이 MySQL 과 다를 수 있습니다.
 
-    그런 표를 SQLite 에서 복사하면 MySQL 에 없는 값이 빅쿼리에 들어갑니다.
-    sqlite_to_d1.DERIVED_TABLES(올림)에 있거나, LOCAL_ONLY_EDITS 에 있어 MySQL 에서
-    읽어야 합니다. 건너뛰지 않습니다.
+    올리지 않는 표(team_stadium_by_season)는 물론이고, 올리는 표도 올릴 때
+    ''·'-' 가 NULL 로 바뀝니다. 그래서 그런 표는 모두 MySQL 에서 읽습니다.
+    sqlite_to_d1.DERIVED_TABLES(올림)나 LOCAL_ONLY_EDITS(올리지 않음)에 있어야 하고,
+    둘 다 WEEKLY_CHANGED 로 MySQL 에서 읽습니다. 건너뛰지 않습니다.
     """
     known = lx.schema_tables((ROOT / "migration" / "mysql" / "schema.sql").read_text(encoding="utf-8"))
     scripts = weekly_park_scripts()
@@ -604,13 +675,16 @@ def test_주간_계산이_로컬에서만_고치는_MySQL_표는_MySQL_에서_�
         src = (ROOT / rel).read_text(encoding="utf-8")
         edited |= {t for t in WRITE_SQL.findall(src) + TO_SQL.findall(src) if t in known}
     assert "team_stadium_by_season" in edited       # 검사가 헛돌지 않습니다
-    local_only = edited - set(sqlite_to_d1.DERIVED_TABLES)
-    loose = sorted(local_only - set(m.LOCAL_ONLY_EDITS))
+    assert set(sqlite_to_d1.DERIVED_TABLES) <= edited  # 올리는 표도 잡힙니다
+    loose = sorted(edited - set(sqlite_to_d1.DERIVED_TABLES) - set(m.LOCAL_ONLY_EDITS))
     assert not loose, "주간 계산이 고치지만 올리지 않는데 LOCAL_ONLY_EDITS 에도 없는 표: %s" % loose
+    # 읽을 곳 규칙은 올리는 표 목록(DERIVED_TABLES)에서 옵니다. 손으로 따로 적지 않습니다.
+    assert m.WEEKLY_CHANGED == set(sqlite_to_d1.DERIVED_TABLES) | set(m.LOCAL_ONLY_EDITS)
     # SQLite 에 있어도 MySQL 에서 읽고, 건너뛰지 않습니다.
-    specs = {t: [("x", "int", "int", 10, 0)] for t in local_only}
-    copy, skipped = m.plan(specs, set(local_only))
-    assert copy == [(t, "mysql") for t in sorted(local_only)] and skipped == []
+    specs = {t: [("x", "int", "int", 10, 0)] for t in edited | {"play_by_play"}}
+    copy, skipped = m.plan(specs, edited | {"play_by_play"})
+    assert dict(copy) == dict({t: "mysql" for t in edited}, play_by_play="sqlite")
+    assert skipped == []
     # 올리게 되면 MySQL 과 같아지므로 목록에서 지웁니다(SQLite 에서 읽어도 됩니다).
     assert not set(m.LOCAL_ONLY_EDITS) & set(sqlite_to_d1.DERIVED_TABLES)
 

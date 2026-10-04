@@ -42,8 +42,14 @@ KNOWN_JOBS = known_jobs()
 
 JOB_COLS = ["job", "last_run_at", "status", "note", "duration_sec"]
 
+# meta_job_runs.note 는 VARCHAR(128) 입니다. 넘으면 MySQL 엄격 모드가 쓰기를
+# 거부해 실행 기록이 남지 않고 "MySQL 적재 실패"로 잘못 보입니다. 잘라서 씁니다.
+NOTE_MAX = 128
+
 
 def job_row(job, now, status, note, duration):
+    if note is not None and len(note) > NOTE_MAX:
+        note = note[:NOTE_MAX - 1] + "…"
     return {"job": job, "last_run_at": now, "status": status, "note": note,
             "duration_sec": duration}
 

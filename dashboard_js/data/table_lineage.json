@@ -1741,11 +1741,11 @@
    "writes": []
   },
   {
-   "desc": "MySQL 의 모든 표를 빅쿼리 bstats 데이터셋(asia-northeast3)에 매주 통째로 복사합니다. 결과 표를 MySQL 에 올린 뒤에 돌고, 주간 작업이 받아 둔 표는 러너의 SQLite 에서, 나머지는 MySQL 에서 바로 읽습니다. 정본은 MySQL 이며 빅쿼리는 길게는 한 주 늦은 읽기용 사본입니다.",
+   "desc": "MySQL 의 모든 표를 빅쿼리 bstats 데이터셋(asia-northeast3)에 매주 통째로 복사합니다. 결과 표를 MySQL 에 올린 뒤에 돌고, 주간 작업이 받아 두고 바꾸지 않은 표(play_by_play 등)는 러너의 SQLite 에서, 나머지는 MySQL 에서 바로 읽습니다. 정본은 MySQL 이며 빅쿼리는 길게는 한 주 늦은 읽기용 사본입니다.",
    "jobs": [
     "weekly"
    ],
-   "note": "빅쿼리 표는 MySQL 표가 아니라 writes 에 적지 않습니다. MySQL 의 모든 표를 읽으므로 reads 에도 하나씩 적지 않습니다. 주간 작업이 내려받은 표는 러너의 SQLite 에서, 나머지 표와 로컬에서만 고치는 team_stadium_by_season 은 MySQL 에서 읽습니다.",
+   "note": "빅쿼리 표는 MySQL 표가 아니라 writes 에 적지 않습니다. MySQL 의 모든 표를 읽으므로 reads 에도 하나씩 적지 않습니다. 주간 작업이 받아 두고 바꾸지 않은 표는 러너의 SQLite 에서, 다시 계산해 올린 결과 표와 로컬에서만 고치는 team_stadium_by_season, 받아 두지 않은 표는 MySQL 에서 읽습니다.",
    "path": "migration/mysql/sqlite_to_bigquery.py",
    "reads": [],
    "sources": [],

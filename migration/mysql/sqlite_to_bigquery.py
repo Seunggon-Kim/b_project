@@ -15,14 +15,18 @@ MySQL 이고, 빅쿼리는 길게는 한 주 늦은 읽기용 사본입니다.
   표를 하나도 빼지 않고 복사합니다. SQLite 에만 있는 계산용 표(truncated_games,
   _bak 백업)는 MySQL 표가 아니라 복사하지 않습니다.
 - 표마다 행을 어디서 읽을지 고릅니다(plan).
-  - sqlite: 주간 작업의 로컬 SQLite(`$KBO_DB`)에 있는 표입니다. `mysql_to_sqlite`
-    가 MySQL 에서 내려받았고, 주간 계산이 다시 만든 결과 표는 "결과 표 적재"가
-    MySQL 에 올렸으므로 MySQL 과 같습니다. play_by_play 처럼 큰 표를 MySQL 에서
+  - sqlite: 주간 작업이 MySQL 에서 내려받고 고치지 않은 표입니다(play_by_play
+    등). 받은 그대로라 MySQL 과 같습니다. play_by_play 처럼 큰 표를 MySQL 에서
     한 번 더 읽지 않으려는 것입니다.
-  - mysql: SQLite 에 없는 표(주간 작업은 계산에 쓰는 표만 내려받습니다)와,
-    주간 계산이 로컬에서만 고치고 MySQL 에 올리지 않는 표(LOCAL_ONLY_EDITS)는
-    MySQL 에서 바로 읽습니다. MySQL 에서 읽는 표는 모두 한 시점(일관된
-    스냅샷)에서 읽습니다.
+  - mysql: 그 밖의 표는 MySQL 에서 바로 읽습니다.
+    - SQLite 에 없는 표(주간 작업은 계산에 쓰는 표만 내려받습니다).
+    - 주간 작업이 다시 계산해 MySQL 에 올린 표(`sqlite_to_d1.DERIVED_TABLES`).
+      올릴 때 ''·'-' 가 NULL 로 바뀌므로 SQLite 값과 MySQL 값이 다를 수
+      있습니다. MySQL 에서 읽어야 빅쿼리가 MySQL 과 똑같습니다.
+    - 주간 계산이 로컬에서만 고치고 올리지 않는 표(LOCAL_ONLY_EDITS).
+    MySQL 에서 읽는 표는 모두 한 시점(일관된 스냅샷)에서 읽습니다.
+- 다 올린 뒤 빅쿼리 데이터셋에 MySQL 에 없는 표가 있으면(지우거나 이름을 바꾼
+  표의 낡은 사본) 경고를 찍습니다. 지우지는 않습니다.
 
 ## 어떻게
 
@@ -83,6 +87,7 @@ import pymysql
 from google.cloud import bigquery
 
 from migration.mysql.typemap import EMPTY_TEXT, INT_LIKE, NUM_LIKE
+from migration.sqlite_to_d1 import DERIVED_TABLES
 
 PROJECT = "bstats-kbo"
 DATASET = "bstats"
@@ -99,7 +104,15 @@ LOCAL_ONLY_EDITS = {
         "build_wrc_plus.py 가 올 시즌 행을 로컬에서만 채우고 MySQL 에 올리지 않습니다",
 }
 
+# 주간 작업이 SQLite 에서 바꾸는 표입니다. SQLite 에 있어도 MySQL 에서 읽습니다.
+# DERIVED_TABLES 는 "결과 표 적재"(sqlite_to_d1.py, weekly 는 --tables 없이 부름)가
+# MySQL 에 올리는 표입니다.
+WEEKLY_CHANGED = frozenset(DERIVED_TABLES) | frozenset(LOCAL_ONLY_EDITS)
+
 SQLITE, MYSQL = "sqlite", "mysql"
+
+# meta_job_runs.note 가 VARCHAR(128) 입니다. 넘으면 실행 기록이 실패합니다.
+NOTE_MAX = 128
 
 INT_TYPES = {"tinyint", "smallint", "mediumint", "int", "integer", "bigint", "year", "bit"}
 FLOAT_TYPES = {"float", "double", "real"}
@@ -367,8 +380,8 @@ def plan(specs, local, wanted=None):
     """복사할 표와 읽을 곳, 건너뛸 표(까닭)를 고릅니다.
 
     specs 는 MySQL 표 -> 열 목록, local 은 SQLite 표 이름들입니다. wanted 를 주면
-    그 표만 봅니다. MySQL 표는 모두 복사합니다. SQLite 에 있고 주간 계산이 로컬에서만
-    고치지 않는 표는 SQLite 에서, 나머지는 MySQL 에서 읽습니다.
+    그 표만 봅니다. MySQL 표는 모두 복사합니다. SQLite 에 있고 주간 작업이 바꾸지
+    않는 표(WEEKLY_CHANGED 밖)는 SQLite 에서, 나머지는 MySQL 에서 읽습니다.
     돌려주는 값: ([(표, "sqlite"|"mysql")], [(건너뛴 표, 까닭)])
     """
     names = wanted if wanted else sorted(set(specs) | set(local))
@@ -376,7 +389,7 @@ def plan(specs, local, wanted=None):
     for t in names:
         if t not in specs:
             skipped.append((t, "MySQL 에 없는 표입니다(로컬 계산용)"))
-        elif t in local and t not in LOCAL_ONLY_EDITS:
+        elif t in local and t not in WEEKLY_CHANGED:
             copy.append((t, SQLITE))
         else:
             copy.append((t, MYSQL))
@@ -556,13 +569,45 @@ def open_mysql():
     return myconn.connect()
 
 
-def summary_note(results):
+def summary_note(results, limit=NOTE_MAX):
+    """실행 기록 메모입니다. limit 글자를 넘지 않습니다(meta_job_runs.note).
+
+    실패한 표가 많으면 앞의 몇 개만 적고 "외 N개" 로 줄입니다.
+    """
     ok = [r for r in results if not r.error]
     note = "%d개 표 %s행" % (len(ok), format(sum(r.rows for r in ok), ","))
     bad = [r.table for r in results if r.error]
-    if bad:
-        note += ", 실패 %s" % ", ".join(bad)
-    return note
+    if not bad:
+        return note[:limit]
+    head = "%s, 실패 %d/%d" % (note, len(bad), len(results))
+    for k in range(len(bad), 0, -1):
+        rest = len(bad) - k
+        text = head + ": " + ", ".join(bad[:k]) + (" 외 %d개" % rest if rest else "")
+        if len(text) <= limit:
+            return text
+    return head[:limit]
+
+
+def stale_bq_tables(client, specs, dataset="%s.%s" % (PROJECT, DATASET)):
+    """빅쿼리 데이터셋에 있는데 MySQL 에 없는 표입니다(뷰는 뺍니다)."""
+    return sorted(t.table_id for t in client.list_tables(dataset)
+                  if t.table_type == "TABLE" and t.table_id not in specs)
+
+
+def warn_stale(client, specs):
+    """MySQL 에 없는 빅쿼리 표마다 경고 한 줄을 찍습니다. 지우지 않습니다.
+
+    목록을 못 읽어도 복사 결과는 바꾸지 않습니다(경고만 찍습니다).
+    """
+    try:
+        stale = stale_bq_tables(client, specs)
+    except Exception as e:  # noqa: BLE001
+        print("경고: 빅쿼리 표 목록을 읽지 못했습니다: %s" % one_line(e))
+        return []
+    for t in stale:
+        print("경고: 빅쿼리 %s.%s 는 MySQL 에 없는 표입니다. 지우거나 이름을 바꾼 표의 "
+              "낡은 사본일 수 있습니다. 지우지 않았습니다." % (DATASET, t))
+    return stale
 
 
 def main(argv=None):
@@ -590,7 +635,8 @@ def main(argv=None):
             cur.execute("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY")
         sq = sqlite3.connect(db.resolve().as_uri() + "?mode=ro", uri=True)
         try:
-            tables, skipped = plan(specs, sqlite_tables(sq), wanted)
+            local = sqlite_tables(sq)
+            tables, skipped = plan(specs, local, wanted)
             for t, why in skipped:
                 print("건너뜀: %-32s %s" % (t, why))
             if wanted and skipped:
@@ -603,12 +649,15 @@ def main(argv=None):
             print("복사할 표 %d개: SQLite 에서 %d개, MySQL 에서 %d개"
                   % (len(tables), len(tables) - len(from_mysql), len(from_mysql)))
             for t in from_mysql:
-                if t in LOCAL_ONLY_EDITS:
-                    print("  %s 는 MySQL 에서 읽습니다: %s" % (t, LOCAL_ONLY_EDITS[t]))
+                if t in local:
+                    print("  %s 는 SQLite 에 있지만 MySQL 에서 읽습니다: %s" % (
+                        t, LOCAL_ONLY_EDITS.get(t) or "주간 작업이 다시 계산해 MySQL 에 올린 표입니다"))
             client = None if args.dry_run else make_client(args.token_env)
             with tempfile.TemporaryDirectory(prefix="bq_copy_") as work:
                 results = copy_tables(sq, my, specs, tables, client, work,
                                       dry_run=args.dry_run)
+            if not args.dry_run:
+                warn_stale(client, specs)
         finally:
             sq.close()
         my.rollback()
