@@ -25,6 +25,7 @@ import { futuresPlayer, futuresSearch } from './routes/futuresplayer.js';
 import { logo } from './routes/logo.js';
 import { statsTeamRange } from './routes/teamrange.js';
 import { movementAvg } from './routes/movementAvg.js';
+import { pitchValues } from './routes/pitchValues.js';
 import {
   wrcSeasons, wrcByStadium, wrcLeaderboard,
   wrcTopChanges, wrcBatter, wrcBatterSearch, wrcDistribution,
@@ -71,6 +72,8 @@ router.add('GET', '/players/search', playersSearch);
 router.add('GET', '/players/:id', playerDetail);
 router.add('GET', '/players/:id/arsenal', playerArsenal);
 router.add('GET', '/players/:id/usage', playerUsage);
+// 투수의 구종 가치(기대 득점 변화). 매일 pitch_run_value.py 가 MySQL 표에 미리 계산해 둡니다.
+router.add('GET', '/players/:id/pitch_values', pitchValues);
 router.add('GET', '/stats/team_range', statsTeamRange);
 // 투수 손별 리그 평균 무브먼트입니다. 선수 분석 무브먼트 카드의 비교 기준입니다.
 // 캐시 수명은 라우트가 시즌을 보고 직접 붙입니다(지난 시즌 30일, 올해 하루).

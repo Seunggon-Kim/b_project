@@ -334,12 +334,14 @@
   "no_status_ok": {},
   "job_keys_without_tables": {},
   "unused_routes": {
+    "/players/:id/pitch_values": "투수 구종 가치(2026-10-04). 선수 분석 화면이 곧 부릅니다. 화면이 부르기 시작하면 이 줄을 지웁니다.",
     "/": "API 가 살아 있는지 알려 주는 인라인 응답입니다. 화면은 부르지 않습니다.",
     "/teams": "선수 통계 개편(2026-10-04) 뒤로 어느 화면도 API.getTeams 를 부르지 않습니다. 다시 쓰면 이 줄을 지웁니다.",
     "/wrc/batter-search": "옛 FastAPI(api/main.py)에서 옮겨 온 주소입니다. 지금 어느 화면도 부르지 않습니다.",
     "/wrc/batter/:id": "옛 FastAPI(api/main.py)에서 옮겨 온 주소입니다. 지금 어느 화면도 부르지 않습니다."
   },
   "routes_without_tables": {
+    "/players/:id/pitch_values": "MySQL 전용 표 pitch_run_value 를 읽습니다. 표를 schema.sql·계보에 넣는 일은 daily 단계와 함께 합니다(DB 세션 5-B 뒤). 그때 이 줄을 지웁니다.",
     "/jobs/status": "작업 실행 기록(meta_job_runs)만 읽습니다. meta_ 표는 계보에서 뺍니다."
   },
   "live_route_files": [

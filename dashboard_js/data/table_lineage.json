@@ -1065,6 +1065,14 @@
    ]
   },
   {
+   "file": "src/routes/pitchValues.js",
+   "live": false,
+   "pages": [],
+   "path": "/players/:id/pitch_values",
+   "reads_all_tables": false,
+   "tables": []
+  },
+  {
    "file": "src/routes/players.js",
    "live": false,
    "pages": [
