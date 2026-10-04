@@ -14,6 +14,14 @@ name: weekly
 #
 # 계산 결과는 Cloud SQL(MySQL)에만 씁니다. D1 은 2026-10-04 에 걷어냈습니다.
 #
+# ## 빅쿼리 사본
+#
+# 결과 표를 MySQL 에 올린 뒤, 러너의 SQLite 에 있는 MySQL 표를 빅쿼리
+# `bstats` 데이터셋(asia-northeast3)에 통째로 복사합니다(빅쿼리 복사 단계).
+# 빅쿼리 EXTERNAL_QUERY 는 MySQL 8.4 를 읽지 못해서 이렇게 합니다. 정본은
+# MySQL 이고 빅쿼리는 길게는 한 주 늦은 사본입니다. 복사가 실패해도 MySQL
+# 적재는 그대로이고, 마지막 판정이 실행을 빨간색으로 끝냅니다.
+#
 # ## 필요한 시크릿
 #
 #   GCP_WIF_PROVIDER / GCP_LOADER_SA / CLOUDSQL_INSTANCE / MYSQL_LOADER_PASSWORD / MYSQL_SERVER_PUBKEY   MySQL 적재
@@ -61,13 +69,15 @@ jobs:
       - name: 의존성 설치
         run: |
           python -m pip install --upgrade pip
-          pip install pandas numpy pymysql cryptography
+          pip install pandas numpy pymysql cryptography google-cloud-bigquery pyarrow
 
       # 러너 디스크는 14GB 입니다. 12시즌 DB 가 1.3GB 라 들어갑니다.
       # 다만 여유를 확인하고 시작합니다.
       - name: 디스크 확인
         run: df -h /tmp | tail -1
 
+      # 자격 파일을 만들고 GOOGLE_APPLICATION_CREDENTIALS 를 내보냅니다
+      # (create_credentials_file 기본값 true). 프록시와 빅쿼리 복사가 씁니다.
       - name: GCP 인증(키 없음)
         uses: google-github-actions/auth@v3
         with:
@@ -177,6 +187,16 @@ jobs:
           cat /tmp/purge.txt; echo
           test "$code" = "200"
 
+      # MySQL 에 결과를 올린 뒤에만 돕니다. CSV·캐시 단계가 실패해도 돕니다.
+      # 실패해도 앞의 MySQL 적재는 그대로이고 뒤 단계도 계속 돕니다
+      # (continue-on-error). 대신 마지막 "빅쿼리 복사 판정"이 실행을 빨갛게 끝냅니다.
+      - name: 빅쿼리 복사
+        id: bq_copy
+        if: ${{ !cancelled() && steps.push.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 40
+        run: python -m migration.mysql.sqlite_to_bigquery --db "$KBO_DB"
+
       - name: 결과 기록
         if: always()
         continue-on-error: true
@@ -184,6 +204,18 @@ jobs:
           python data_collection/record_job_run.py --job park_factors \
             --status ${{ steps.push.outcome == 'success' && 'ok' || 'fail' }} \
             --note "내려받기 ${{ steps.pull.outcome }} / 계산 ${{ steps.re24.outcome }}"
+
+      # 복사하지 못한 주(앞 단계 실패로 건너뜀 포함)도 fail 로 남깁니다. 빅쿼리가
+      # 그 주에 갱신되지 않았다는 뜻입니다. 메모는 복사 단계가 남긴 표·행 수입니다.
+      - name: 빅쿼리 복사 기록
+        if: always()
+        continue-on-error: true
+        env:
+          NOTE: ${{ steps.bq_copy.outputs.note || format('빅쿼리 복사 {0}', steps.bq_copy.outcome) }}
+        run: |
+          python data_collection/record_job_run.py --job bq_copy \
+            --status ${{ steps.bq_copy.outcome == 'success' && 'ok' || 'fail' }} \
+            --note "$NOTE"
 
       - name: MySQL 적재 실패 확인
         id: mirror_check
@@ -212,6 +244,7 @@ jobs:
             echo "| RE24 | ${{ steps.re24.outcome }} |"
             echo "| 결과 표 적재 | ${{ steps.push.outcome }} |"
             echo "| 캐시 비우기 | ${{ steps.purge.outcome }} |"
+            echo "| 빅쿼리 복사 | ${{ steps.bq_copy.outcome }} |"
             echo "| MySQL 적재 | ${{ steps.mirror_check.outcome }} |"
           } >> $GITHUB_STEP_SUMMARY
 
@@ -219,4 +252,10 @@ jobs:
         if: ${{ always() && (steps.mysql.outcome != 'success' || steps.mirror_check.outcome != 'success') }}
         run: |
           echo "MySQL 연결 또는 적재가 실패했습니다. 요약 표를 보십시오."
+          exit 1
+
+      - name: 빅쿼리 복사 판정
+        if: ${{ always() && steps.bq_copy.outcome == 'failure' }}
+        run: |
+          echo "빅쿼리 복사가 실패했습니다. MySQL 적재는 끝났습니다. 빅쿼리 복사 단계 기록을 보십시오."
           exit 1

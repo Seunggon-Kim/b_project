@@ -31,6 +31,8 @@ PIP_TO_IMPORT = {
     "webdriver-manager": "webdriver_manager",
     "python-dateutil": "dateutil",
     "pillow": "PIL",
+    # `from google.cloud import bigquery`, `google.oauth2` 은 import 이름이 google 입니다.
+    "google-cloud-bigquery": "google",
 }
 
 # pandas 가 끌고 오는 것들입니다. 따로 적지 않아도 깔립니다.
@@ -69,6 +71,8 @@ ENTRYPOINTS = {
         "park_factors/build_re24_run_values.py",
         "migration/sqlite_to_d1.py",
         "migration/export_csv.py",
+        # 결과 표를 MySQL 에 올린 뒤 빅쿼리에 통째로 복사합니다.
+        "migration/mysql/sqlite_to_bigquery.py",
         "data_collection/record_job_run.py",
     ],
     "roster.yml": [

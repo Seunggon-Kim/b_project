@@ -712,7 +712,17 @@
      "status_key": null
     },
     {
+     "name": "빅쿼리 복사",
+     "script": "migration/mysql/sqlite_to_bigquery.py",
+     "status_key": "bq_copy"
+    },
+    {
      "name": "결과 기록",
+     "script": "data_collection/record_job_run.py",
+     "status_key": null
+    },
+    {
+     "name": "빅쿼리 복사 기록",
      "script": "data_collection/record_job_run.py",
      "status_key": null
     }
@@ -1728,6 +1738,20 @@
    "reads": [],
    "sources": [],
    "status_keys": {},
+   "writes": []
+  },
+  {
+   "desc": "주간 작업이 MySQL 에서 내려받아 계산을 마친 표를 빅쿼리 bstats 데이터셋(asia-northeast3)에 매주 통째로 복사합니다. 결과 표를 MySQL 에 올린 뒤에 돌고, 정본은 MySQL 이며 빅쿼리는 길게는 한 주 늦은 읽기용 사본입니다.",
+   "jobs": [
+    "weekly"
+   ],
+   "note": "빅쿼리 표는 MySQL 표가 아니라 writes 에 적지 않습니다. 주간 작업이 내려받은 표(계산에 쓰는 표와 그 결과 표)만 복사하고, 로컬에서만 고친 team_stadium_by_season 은 뺍니다.",
+   "path": "migration/mysql/sqlite_to_bigquery.py",
+   "reads": [],
+   "sources": [],
+   "status_keys": {
+    "weekly": "bq_copy"
+   },
    "writes": []
   },
   {

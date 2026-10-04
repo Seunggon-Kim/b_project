@@ -226,6 +226,16 @@
       "note": "전체 내려받기 CSV 를 만듭니다.",
       "desc": "전체 내려받기용 CSV 파일을 만듭니다."
     },
+    "migration/mysql/sqlite_to_bigquery.py": {
+      "sources": [],
+      "writes": [],
+      "reads": [],
+      "status_keys": {
+        "weekly": "bq_copy"
+      },
+      "note": "빅쿼리 표는 MySQL 표가 아니라 writes 에 적지 않습니다. 주간 작업이 내려받은 표(계산에 쓰는 표와 그 결과 표)만 복사하고, 로컬에서만 고친 team_stadium_by_season 은 뺍니다.",
+      "desc": "주간 작업이 MySQL 에서 내려받아 계산을 마친 표를 빅쿼리 bstats 데이터셋(asia-northeast3)에 매주 통째로 복사합니다. 결과 표를 MySQL 에 올린 뒤에 돌고, 정본은 MySQL 이며 빅쿼리는 길게는 한 주 늦은 읽기용 사본입니다."
+    },
     "park_factors/truncated.py": {
       "sources": [],
       "writes": [],
