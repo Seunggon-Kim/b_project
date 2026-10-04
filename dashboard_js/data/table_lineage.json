@@ -1176,6 +1176,16 @@
    ]
   },
   {
+   "file": "src/routes/movementAvg.js",
+   "live": false,
+   "pages": [],
+   "path": "/stats/movement_avg",
+   "reads_all_tables": false,
+   "tables": [
+    "play_by_play"
+   ]
+  },
+  {
    "file": "src/routes/stats.js",
    "live": false,
    "pages": [
@@ -2118,6 +2128,7 @@
     "/players/:id/arsenal",
     "/players/:id/usage",
     "/players/search",
+    "/stats/movement_avg",
     "/stats/team_range",
     "/wrc/batter-search",
     "/wrc/batter/:id",

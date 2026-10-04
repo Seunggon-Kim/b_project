@@ -24,6 +24,7 @@ import { futuresStandings, futuresLeaders } from './routes/futuresrecord.js';
 import { futuresPlayer, futuresSearch } from './routes/futuresplayer.js';
 import { logo } from './routes/logo.js';
 import { statsTeamRange } from './routes/teamrange.js';
+import { movementAvg } from './routes/movementAvg.js';
 import {
   wrcSeasons, wrcByStadium, wrcLeaderboard,
   wrcTopChanges, wrcBatter, wrcBatterSearch, wrcDistribution,
@@ -71,6 +72,9 @@ router.add('GET', '/players/:id', playerDetail);
 router.add('GET', '/players/:id/arsenal', playerArsenal);
 router.add('GET', '/players/:id/usage', playerUsage);
 router.add('GET', '/stats/team_range', statsTeamRange);
+// 투수 손별 리그 평균 무브먼트입니다. 선수 분석 무브먼트 카드의 비교 기준입니다.
+// 캐시 수명은 라우트가 시즌을 보고 직접 붙입니다(지난 시즌 30일, 올해 하루).
+router.add('GET', '/stats/movement_avg', movementAvg);
 router.add('GET', '/stats/batters', statsBatters);
 router.add('GET', '/stats/pitchers', statsPitchers);
 router.add('GET', '/games', games);
