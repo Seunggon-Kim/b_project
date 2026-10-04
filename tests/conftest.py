@@ -7,6 +7,7 @@ class FakeSink:
     def __init__(self):
         self.calls = []
         self.answers = {}
+        self.raw = {}
 
     def columns(self, table):
         from data_collection import mysql_sink
@@ -32,8 +33,9 @@ class FakeSink:
         self.calls.append(("insert", table, list(columns), rows))
         return len(rows)
 
-    def upsert(self, table, columns, keys, rows, touch=None, keep=(), batch=None):
+    def upsert(self, table, columns, keys, rows, touch=None, keep=(), batch=None, raw=()):
         rows = list(rows)
+        self.raw[table] = tuple(raw)
         self.calls.append(("upsert", table, list(columns), list(keys), rows, touch, tuple(keep)))
         return len(rows)
 

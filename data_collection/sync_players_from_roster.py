@@ -61,6 +61,10 @@ def same_number(db_value, kbo_value):
     등번호가 실제로 갈려야 하는 곳(같은 팀 동명이인 투수)은 `kbo_roster`
     를 봅니다. 그 표는 TEXT 라 `00` 이 그대로 남습니다.
     """
+    if not str(kbo_value or "").strip():
+        # 명단에 등번호가 없으면(2026-10-04 퓨처스 한화 노석진) 판단할 것이
+        # 없습니다. players 의 등번호를 지우지 않습니다.
+        return True
     if db_value is None:
         return False
     try:
@@ -102,6 +106,13 @@ def split_known(rows, known):
     return keep, skip
 
 
+def new_number(sink, r):
+    """players 에 넣을 등번호입니다. 명단에 등번호가 없으면 지금 값을 둡니다."""
+    if not str(r["rb"] or "").strip():
+        return r["pb"]
+    return sink.value("players", "back_number", r["rb"])
+
+
 def mysql_write_sync(sink):
     """MySQL 의 명단·선수 표로 판단해 반영합니다.
 
@@ -117,7 +128,7 @@ def mysql_write_sync(sink):
         sink.execute(
             "UPDATE `players` SET `team_id`=%s, `back_number`=%s, "
             "`updated_at`=UTC_TIMESTAMP() WHERE `player_id`=%s",
-            [r["rt"], sink.value("players", "back_number", r["rb"]), int(r["pid"])])
+            [r["rt"], new_number(sink, r), int(r["pid"])])
     return len(rows)
 
 

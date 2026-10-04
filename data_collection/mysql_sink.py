@@ -79,12 +79,14 @@ class Sink:
     def columns(self, table):
         return table_columns(table)
 
-    def value(self, table, column, v):
+    def value(self, table, column, v, raw=False):
+        """raw 면 ''·'-' 를 값 없음으로 바꾸지 않습니다(기본 키 열처럼 NULL 을
+        못 받는 열에 부르는 쪽이 고릅니다)."""
         kinds = dict(table_spec(table)["columns"])
         if column not in kinds:
             raise KeyError("%s 에 없는 열입니다: %s" % (table, column))
         try:
-            return tm.normalize(blank(v), kinds[column])
+            return tm.normalize(v if raw else blank(v), kinds[column])
         except ValueError as e:
             raise ValueError("%s.%s: %s" % (table, column, e)) from None
 
@@ -99,7 +101,7 @@ class Sink:
             names = [d[0] for d in cur.description]
             return [dict(zip(names, r)) for r in cur.fetchall()]
 
-    def _write(self, table, columns, rows, tail, batch):
+    def _write(self, table, columns, rows, tail, batch, raw=()):
         rows = list(rows)
         head = "INSERT INTO %s (%s) VALUES " % (q(table), ", ".join(q(c) for c in columns))
         one = "(%s)" % ", ".join(["%s"] * len(columns))
@@ -107,19 +109,20 @@ class Sink:
             chunk = rows[i:i + batch]
             params = []
             for r in chunk:
-                params.extend(self.value(table, c, r.get(c)) for c in columns)
+                params.extend(self.value(table, c, r.get(c), c in raw) for c in columns)
             self.execute(head + ", ".join([one] * len(chunk)) + tail, params)
         return len(rows)
 
     def insert(self, table, columns, rows, batch=BATCH):
         return self._write(table, columns, rows, "", batch)
 
-    def upsert(self, table, columns, keys, rows, touch=None, keep=(), batch=BATCH):
+    def upsert(self, table, columns, keys, rows, touch=None, keep=(), batch=BATCH, raw=()):
         """있으면 고치고 없으면 넣습니다.
 
         열쇠·keep·touch 를 뺀 열을 새 값으로 덮고, touch 열은 지금 UTC 시각으로
         둡니다. keep 열(보통 created_at)은 넣을 때만 쓰고 고칠 때는 두어,
-        "언제부터 있던 선수인지"를 잃지 않습니다.
+        "언제부터 있던 선수인지"를 잃지 않습니다. raw 열은 빈 글자를 그대로
+        넣습니다(Sink.value).
         """
         keyset = set(keys) | set(keep) | ({touch} if touch else set())
         updatable = [c for c in columns if c not in keyset]
@@ -129,7 +132,7 @@ class Sink:
         if touch:
             sets.append("%s=UTC_TIMESTAMP()" % q(touch))
         tail = " AS new ON DUPLICATE KEY UPDATE " + ", ".join(sets)
-        return self._write(table, columns, rows, tail, batch)
+        return self._write(table, columns, rows, tail, batch, raw)
 
     def insert_missing(self, table, columns, keys, rows, batch=BATCH):
         """없는 행만 넣습니다.

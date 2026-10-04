@@ -67,3 +67,42 @@ def test_futures_records(fake_sink):
     assert fake_sink.calls[0][:4] == ("upsert", "futures_season_stats",
                                       ["player_id", "season", "kind", "AVG"],
                                       ["player_id", "season", "kind"])
+
+
+
+def test_등번호_없는_줄도_KBO_명단_그대로_남깁니다():
+    # KBO 퓨처스 명단에 등번호 없이 오른 선수가 있습니다(2026-10-04 한화
+    # 노석진). 방출 여부는 KBO 명단이 바뀔 때 따르고, 여기서 빼지 않습니다.
+    rows = [{"team": "한화", "name": "가", "back_number": "117"},
+            {"team": "한화", "name": "나", "back_number": ""},
+            {"team": "LG", "name": "다", "back_number": " "},
+            {"team": "LG", "name": "라", "back_number": None},
+            {"team": "LG", "name": "마", "back_number": "-"},
+            {"team": "KT", "name": "바", "back_number": "0"}]
+    blank = roster_to_d1.mark_unnumbered(rows)
+    assert [r["name"] for r in rows] == ["가", "나", "다", "라", "마", "바"]
+    assert [r["name"] for r in blank] == ["나", "다", "라", "마"]
+    assert [r["back_number"] for r in rows] == ["117", "", "", "", "", "0"]
+
+
+def test_명단_적재는_등번호_빈_글자를_그대로_넘깁니다(fake_sink):
+    rows = [{"team": "한화", "name": "나", "back_number": ""}]
+    roster_to_d1.mysql_write_roster(fake_sink, rows, [])
+    assert fake_sink.raw["kbo_roster"] == ("back_number",)
+    _, sql, params = fake_sink.calls[-1]
+    assert params == ["한화", "나", ""]
+
+
+def test_명단_등번호가_비면_players_등번호를_지우지_않습니다(fake_sink):
+    fake_sink.answers = {
+        "FROM teams": [{"team_id": "HH"}, {"team_id": "LG"}],
+        "FROM kbo_roster r": [
+            # 같은 팀, 명단 등번호 없음: 바꿀 것 없음
+            {"pid": 1, "nm": "가", "rt": "HH", "rb": "", "pt": "HH", "pb": 117},
+            # 팀이 바뀜, 명단 등번호 없음: 팀만 바꾸고 등번호는 그대로
+            {"pid": 2, "nm": "나", "rt": "LG", "rb": "", "pt": "HH", "pb": 33},
+        ],
+    }
+    assert sync.mysql_write_sync(fake_sink) == 1
+    updates = [c for c in fake_sink.calls if c[0] == "execute"]
+    assert len(updates) == 1 and updates[0][2] == ["LG", 33, 2]

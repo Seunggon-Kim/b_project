@@ -61,6 +61,22 @@ def test_upsert_uses_row_alias_and_parameters():
     assert params[1] == 20261003 and params[2] == 2026 and params[7] is None
 
 
+def test_raw_열은_빈_글자를_NULL_로_바꾸지_않습니다():
+    # 기본 키 열(kbo_roster.back_number)은 NULL 을 못 받습니다. 부르는 쪽이
+    # raw 로 고른 열만 빈 글자를 그대로 넘깁니다.
+    con = Con()
+    row = {"team": "한화", "name": "나", "back_number": "", "role": "내야수",
+           "player_id": "", "as_of": "2026-10-04", "league": "퓨처스"}
+    cols = list(row)
+    ms.Sink(con).upsert("kbo_roster", cols, ["team", "name", "back_number"], [row],
+                        raw=["back_number"])
+    _, params = con.log[0]
+    assert params[2] == "" and params[4] is None
+    con2 = Con()
+    ms.Sink(con2).upsert("kbo_roster", cols, ["team", "name", "back_number"], [row])
+    assert con2.log[0][1][2] is None
+
+
 def test_upsert_touch_and_keep():
     con = Con()
     ms.Sink(con).upsert("futures_games", ["game_id", "season", "status", "updated_at"],

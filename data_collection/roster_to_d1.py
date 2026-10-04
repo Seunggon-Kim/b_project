@@ -111,13 +111,33 @@ def resolve(by_team, nums, by_name, name, team, back_number):
     return next(iter(only)) if len(only) == 1 else None
 
 
+def mark_unnumbered(rows):
+    """등번호가 없는 줄('', 공백, '-', None)의 등번호를 '' 로 맞추고 그 줄들을
+    돌려줍니다. 줄은 빼지 않습니다.
+
+    KBO 명단에 등번호 없이 오른 선수가 있습니다(2026-10-04 퓨처스 한화
+    노석진). 방출 여부를 등번호로 짐작하지 않고, KBO 명단에서 빠질 때
+    따릅니다.
+    """
+    blank = []
+    for r in rows:
+        b = r.get("back_number")
+        if b is None or str(b).strip() in ("", "-"):
+            r["back_number"] = ""
+            blank.append(r)
+    return blank
+
+
 def mysql_write_roster(sink, rows, moves):
     """명단·등말소를 덮어쓰고, 명단에서 빠진 선수를 지웁니다.
 
     1군을 떠난 선수를 남겨 두면 "지금 1군" 이 아니라 "한 번이라도 1군이었던
     사람" 이 됩니다.
     """
-    n = sink.upsert("kbo_roster", ROSTER_COLS, ["team", "name", "back_number"], rows)
+    # 등번호는 기본 키라 NULL 을 못 받습니다. 등번호 없는 줄(mark_unnumbered)은
+    # 빈 글자 그대로 넣습니다.
+    n = sink.upsert("kbo_roster", ROSTER_COLS, ["team", "name", "back_number"], rows,
+                    raw=["back_number"])
     if moves:
         sink.upsert("kbo_roster_moves", MOVE_COLS, ["move_date", "kind", "team", "name"], moves)
     if rows:
@@ -196,6 +216,11 @@ def main():
     if not rows:
         print("명단이 비었습니다. 페이지 구조가 바뀌었을 수 있습니다.")
         return 1
+
+    blank = mark_unnumbered(rows)
+    if blank:
+        print("등번호 없는 선수 %d명(KBO 명단 그대로 둡니다): %s"
+              % (len(blank), ", ".join("%s %s" % (x["team"], x["name"]) for x in blank)))
 
     if args.dry_run:
         print("\n[미리보기] 넣지 않았습니다.")
