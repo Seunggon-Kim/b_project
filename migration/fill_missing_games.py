@@ -126,7 +126,7 @@ def main():
         print("[미리보기] 쓰지 않았습니다.")
         return 0
 
-    mirror("fill_missing_games", lambda s: mysql_write(s, by_game, game_rows), required=True)
+    mirror("fill_missing_games", lambda s: mysql_write(s, by_game, game_rows))
     return 0
 
 

@@ -198,16 +198,6 @@
       "note": "작업 실행 기록(meta_job_runs)만 남깁니다.",
       "desc": "각 작업이 끝날 때 실행 결과(성공·실패, 시각, 메모)를 MySQL meta_job_runs 에 남깁니다. 화면의 작업 상태가 이 기록을 읽습니다."
     },
-    "migration/mysql/reconcile.py": {
-      "sources": [],
-      "writes": [],
-      "reads": [],
-      "status_keys": {
-        "daily": "reconcile"
-      },
-      "note": "D1 과 MySQL 의 행 수·값을 견줍니다. D1 을 켰을 때(D1_WRITE=on)만 돕니다. 표는 쓰지 않습니다.",
-      "desc": "D1 과 MySQL 의 최근 경기를 견주던 도구입니다. D1 을 끈 뒤로는 돌지 않고, D1 을 지우면서 빠집니다."
-    },
     "migration/mysql/ci_proxy.sh": {
       "sources": [],
       "writes": [],

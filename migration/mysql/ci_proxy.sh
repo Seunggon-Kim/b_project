@@ -7,7 +7,6 @@
 #   CLOUDSQL_INSTANCE       프로젝트:지역:인스턴스
 #   MYSQL_LOADER_PASSWORD   bstats_loader 비밀번호
 #   MYSQL_SERVER_PUBKEY     서버 RSA 공개키(PEM). 프록시 경유 첫 로그인(caching_sha2)에 필요합니다
-#   MIRROR_MODE             이중 적재 모드(shadow·off). 기본 shadow
 set -euo pipefail
 
 VERSION=2.26.0
@@ -52,6 +51,5 @@ export BSTATS_MYSQL_SETTINGS="$DIR/mysql_ci.json"
 python -m migration.mysql.conn --ping
 {
   echo "BSTATS_MYSQL_SETTINGS=$DIR/mysql_ci.json"
-  echo "BSTATS_MYSQL_MIRROR=${MIRROR_MODE:-shadow}"
   echo "BSTATS_MYSQL_FAIL_LOG=$DIR/failures.jsonl"
 } >> "$GITHUB_ENV"

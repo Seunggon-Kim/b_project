@@ -124,7 +124,7 @@ def main():
     ROLLBACK_SQL.write_text(update_sql(rows, "old_home", "old_away"),
                             encoding="utf-8", newline="\n")
     print("되돌리기 SQL: %s" % ROLLBACK_SQL)
-    mirror("fix_games_final_score", lambda sink: mysql_write(sink, rows), required=True)
+    mirror("fix_games_final_score", lambda sink: mysql_write(sink, rows))
     return 0
 
 

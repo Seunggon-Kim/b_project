@@ -342,24 +342,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      # D1 을 켰을 때(D1_WRITE=on)만 돕니다. 꺼져 있으면 견줄 D1 이 없습니다.
-      # 대조는 D1 을 하루 8만 행쯤 읽습니다.
-      - name: D1·MySQL 대조
-        id: reconcile
-        if: ${{ always() && vars.D1_WRITE == 'on' && steps.mysql.outcome == 'success' }}
-        continue-on-error: true
-        run: python -m migration.mysql.reconcile --days 3
-
-      # 꺼져 있어도 기록은 남깁니다(skip). /jobs/status 의 reconcile 칸이
-      # "기록 없음" 대신 건너뛴 까닭을 보여 줍니다.
-      - name: 대조 결과 기록
-        if: always()
-        continue-on-error: true
-        run: |
-          python data_collection/record_job_run.py --job reconcile \
-            --status ${{ steps.reconcile.outcome == 'success' && 'ok' || (steps.reconcile.outcome == 'skipped' && 'skip' || 'fail') }} \
-            --note "${{ vars.D1_WRITE == 'on' && 'D1 켜짐' || 'D1 꺼짐(D1_WRITE 가 on 이 아님)' }}"
-
       # D1 이 꺼져 있으면 수집 단계가 MySQL 실패에서 바로 멈추지만, 이 확인도
       # 그대로 둡니다. 실패 기록 파일이 어느 작업이 못 썼는지 모아 보여 줍니다.
       - name: MySQL 이중 적재 실패 확인
@@ -393,7 +375,6 @@ jobs:
             echo "| 캐시 비우기 | ${{ steps.purge.outcome }} |"
             echo "| MySQL 연결 | ${{ steps.mysql.outcome }} |"
             echo "| MySQL 이중 적재 | ${{ steps.mirror_check.outcome }} |"
-            echo "| D1·MySQL 대조 | ${{ steps.reconcile.outcome }} |"
             echo "| D1 (D1_WRITE) | ${{ env.BSTATS_D1 }} |"
           } >> $GITHUB_STEP_SUMMARY
 
@@ -414,11 +395,6 @@ jobs:
           for s in "${{ steps.mysql.outcome }}" "${{ steps.mirror_check.outcome }}"; do
             if [ "$s" != "success" ]; then fail=1; fi
           done
-          # 대조는 D1 을 켰을 때만 돌므로 그때만 봅니다. 꺼져 있으면 skipped 입니다.
-          if [ "${{ vars.D1_WRITE == 'on' }}" = "true" ] && \
-             [ "${{ steps.reconcile.outcome }}" != "success" ]; then
-            fail=1
-          fi
           if [ "$fail" = "1" ]; then
             echo "위 표에서 success 가 아닌 단계를 보십시오."
             exit 1

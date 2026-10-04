@@ -115,47 +115,52 @@ def test_refresh_count_writes_meta():
     assert con.log[1][1][:2] == ["play_by_play", 3983367]
 
 
-def test_mirror_off_does_nothing(monkeypatch):
-    monkeypatch.delenv(ms.MODE_ENV, raising=False)
-    called = []
-    assert ms.mirror("j", lambda s: called.append(1), connect=Con) is None
-    assert not called
-
-
-def test_mirror_shadow_commits_and_closes(monkeypatch):
-    monkeypatch.setenv(ms.MODE_ENV, "shadow")
+def test_mirror_always_writes_without_any_switch(monkeypatch):
+    """MySQL 이 유일한 저장소라 켜고 끄는 환경 변수 없이 늘 씁니다."""
+    monkeypatch.delenv("BSTATS_MYSQL_MIRROR", raising=False)
+    monkeypatch.delenv("BSTATS_D1", raising=False)
     con = Con()
     assert ms.mirror("j", lambda s: 7, connect=lambda: con) == 7
     assert con.commits == 1 and con.closed == 1
     assert "innodb_lock_wait_timeout" in con.log[0][0]
 
 
-def test_mirror_shadow_records_failure_and_continues(monkeypatch, tmp_path, capsys):
-    monkeypatch.setenv(ms.MODE_ENV, "shadow")
+def test_mirror_old_mode_variable_does_not_skip_or_swallow(monkeypatch, tmp_path):
+    """예전 BSTATS_MYSQL_MIRROR=off·shadow 가 남아 있어도 건너뛰거나 실패를 삼키지 않습니다."""
+    monkeypatch.setenv(ms.FAIL_LOG_ENV, str(tmp_path / "f.jsonl"))
+    for old in ("off", "shadow"):
+        monkeypatch.setenv("BSTATS_MYSQL_MIRROR", old)
+        assert ms.mirror("j", lambda s: 1, connect=Con) == 1
+        with pytest.raises(RuntimeError):
+            ms.mirror("j", lambda s: s.execute("INSERT 1"), connect=lambda: Con(fail_on="INSERT"))
+
+
+def test_mirror_failure_records_rolls_back_and_raises(monkeypatch, tmp_path, capsys):
     log = tmp_path / "fail.jsonl"
     monkeypatch.setenv(ms.FAIL_LOG_ENV, str(log))
     con = Con(fail_on="INSERT")
-    assert ms.mirror("games", lambda s: s.execute("INSERT INTO x VALUES (1)"),
-                     connect=lambda: con) is None
+    with pytest.raises(RuntimeError, match="boom"):
+        ms.mirror("games", lambda s: s.execute("INSERT INTO x VALUES (1)"), connect=lambda: con)
     assert con.rollbacks == 1 and con.commits == 0 and con.closed == 1
+    # 워크플로의 "MySQL 적재 실패 확인" 단계가 이 파일을 봅니다.
     rec = json.loads(log.read_text(encoding="utf-8").splitlines()[0])
     assert rec["job"] == "games" and "boom" in rec["error"]
-    assert "::warning" in capsys.readouterr().out
+    assert "::warning" not in capsys.readouterr().out
 
 
-def test_mirror_strict_raises(monkeypatch, tmp_path):
-    monkeypatch.setenv(ms.MODE_ENV, "strict")
-    monkeypatch.setenv(ms.FAIL_LOG_ENV, str(tmp_path / "f.jsonl"))
-    with pytest.raises(RuntimeError):
-        ms.mirror("j", lambda s: s.execute("INSERT 1"), connect=lambda: Con(fail_on="INSERT"))
+def test_mirror_connect_failure_is_recorded_and_raised(monkeypatch, tmp_path):
+    log = tmp_path / "fail.jsonl"
+    monkeypatch.setenv(ms.FAIL_LOG_ENV, str(log))
+
+    def no_db():
+        raise ConnectionError("MySQL 이 죽었습니다")
+
+    with pytest.raises(ConnectionError):
+        ms.mirror("pbp", lambda s: 1, connect=no_db)
+    assert json.loads(log.read_text(encoding="utf-8"))["job"] == "pbp"
 
 
-def test_mirror_required_runs_even_when_off(monkeypatch):
-    monkeypatch.delenv(ms.MODE_ENV, raising=False)
-    assert ms.mirror("j", lambda s: 1, required=True, connect=Con) == 1
-
-
-def test_bad_mode_is_an_error(monkeypatch):
-    monkeypatch.setenv(ms.MODE_ENV, "maybe")
-    with pytest.raises(ValueError):
-        ms.mode()
+def test_mirror_has_no_mode_or_required_switch():
+    import inspect
+    assert not hasattr(ms, "mode") and not hasattr(ms, "MODE_ENV")
+    assert list(inspect.signature(ms.mirror).parameters) == ["job", "fn", "connect"]

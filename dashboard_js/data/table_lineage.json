@@ -538,16 +538,6 @@
      "name": "등록 현황 결과 기록",
      "script": "data_collection/record_job_run.py",
      "status_key": null
-    },
-    {
-     "name": "D1·MySQL 대조",
-     "script": "migration/mysql/reconcile.py",
-     "status_key": "reconcile"
-    },
-    {
-     "name": "대조 결과 기록",
-     "script": "data_collection/record_job_run.py",
-     "status_key": null
     }
    ],
    "workflow": "daily.yml"
@@ -1681,20 +1671,6 @@
    "reads": [],
    "sources": [],
    "status_keys": {},
-   "writes": []
-  },
-  {
-   "desc": "D1 과 MySQL 의 최근 경기를 견주던 도구입니다. D1 을 끈 뒤로는 돌지 않고, D1 을 지우면서 빠집니다.",
-   "jobs": [
-    "daily"
-   ],
-   "note": "D1 과 MySQL 의 행 수·값을 견줍니다. D1 을 켰을 때(D1_WRITE=on)만 돕니다. 표는 쓰지 않습니다.",
-   "path": "migration/mysql/reconcile.py",
-   "reads": [],
-   "sources": [],
-   "status_keys": {
-    "daily": "reconcile"
-   },
    "writes": []
   },
   {

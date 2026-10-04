@@ -120,16 +120,6 @@ def test_리스트에_shell_True_를_같이_쓰지_않습니다(rel):
     )
 
 
-def test_고친_두_파일이_플랫폼을_봅니다():
-    """되돌아가지 않게 못을 박습니다."""
-    for rel in ("data_collection/d1_load.py",):
-        src = (ROOT / rel).read_text(encoding="utf-8")
-        assert 'USE_SHELL = os.name == "nt"' in src, \
-            "%s 에 USE_SHELL 정의가 없습니다" % rel
-        assert "shell=USE_SHELL" in src, \
-            "%s 가 USE_SHELL 을 쓰지 않습니다" % rel
-
-
 def test_판정기가_실제로_잡습니다():
     """테스트가 헛돌지 않는지 스스로 확인합니다."""
     tree = ast.parse(

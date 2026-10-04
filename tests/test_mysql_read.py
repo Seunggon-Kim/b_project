@@ -1,21 +1,17 @@
 # -*- coding: utf-8 -*-
-"""D1 끄기(BSTATS_D1=off)입니다.
+"""수집 스크립트의 MySQL 읽기와, D1 을 걷어낸 뒤의 쓰기 경로입니다.
 
-D1 무료 읽기 한도가 바닥나 사이트가 멈춘 일이 이어져(2026-10-03), 수집이
-MySQL 만 쓰게 했습니다. 스위치는 하나(`d1_load.d1_enabled`)이고, 꺼져
-있으면 다음이 지켜져야 합니다.
+D1 은 2026-10-04 에 수집 쪽에서 걷어냈습니다(그 전 하루는 BSTATS_D1=off
+스위치로 꺼 두었습니다). 지금 지켜져야 하는 것은 다음과 같습니다.
 
-- D1 에 쓰는 함수(run_d1·run_d1_file·refresh_count)는 wrangler 를 부르지
-  않고 "D1 꺼짐" 한 줄만 남깁니다.
-- 읽기(query·d1_columns)는 같은 SELECT 를 MySQL 에서 돌리고, D1 이 주던
-  파이썬 타입으로 맞춰 돌려줍니다.
-- mirror() 는 MySQL 이 유일한 저장소라 실패하면 작업을 실패시킵니다.
-- D1 이 있어야만 뜻이 있는 도구(대조 등)는 아예 멈춥니다.
+- 읽기(d1_load.query·d1_columns)는 같은 SELECT 를 MySQL 에서 돌리고, 수집
+  코드가 기대하는 파이썬 타입으로 맞춰 돌려줍니다. 쓰는 문은 붙기 전에 거절합니다.
+- 쓰기는 mysql_sink.mirror() 만 합니다(test_mysql_sink.py).
+- 수집 스크립트는 subprocess(wrangler)를 부르지 않습니다.
 """
 import ast
 import datetime
 import decimal
-import json
 import re
 import sqlite3
 import subprocess
@@ -25,17 +21,14 @@ from pathlib import Path
 import pytest
 
 from data_collection import d1_load as dl
-from data_collection import mysql_sink as ms
 
 ROOT = Path(__file__).resolve().parent.parent
 
 
 @pytest.fixture
-def d1_off(monkeypatch):
-    monkeypatch.setenv(dl.D1_ENV, "off")
-
+def no_subprocess(monkeypatch):
     def boom(*a, **k):
-        pytest.fail("D1 이 꺼져 있는데 wrangler(subprocess)를 불렀습니다: %r" % (a,))
+        pytest.fail("수집 스크립트가 subprocess(wrangler 등)를 불렀습니다: %r" % (a,))
 
     monkeypatch.setattr(subprocess, "run", boom)
 
@@ -77,62 +70,6 @@ class FakeCon:
 
     def close(self):
         self.closed += 1
-
-
-# --- 스위치 ------------------------------------------------------------------
-
-def test_스위치는_없으면_on_입니다(monkeypatch):
-    monkeypatch.delenv(dl.D1_ENV, raising=False)
-    assert dl.d1_enabled() is True
-    monkeypatch.setenv(dl.D1_ENV, " OFF ")
-    assert dl.d1_enabled() is False
-    monkeypatch.setenv(dl.D1_ENV, "on")
-    assert dl.d1_enabled() is True
-
-
-def test_스위치에_모르는_값이면_멈춥니다(monkeypatch):
-    monkeypatch.setenv(dl.D1_ENV, "maybe")
-    with pytest.raises(ValueError, match="BSTATS_D1"):
-        dl.d1_enabled()
-
-
-# --- 쓰기는 건너뜁니다 ---------------------------------------------------------
-
-def test_꺼져_있으면_D1_쓰기는_한_줄만_남기고_건너뜁니다(d1_off, tmp_path, capsys):
-    f = tmp_path / "x.sql"
-    f.write_text("DELETE FROM games;", encoding="utf-8")
-    assert dl.run_d1("INSERT INTO meta_job_runs VALUES (1);") == ""
-    assert dl.run_d1_file(f, db_name="kbo-pbp-a") == ""
-    assert dl.refresh_count("games") is None
-    lines = capsys.readouterr().out.strip().splitlines()
-    assert len(lines) == 3
-    assert all(line.startswith("D1 꺼짐: ") for line in lines)
-    assert "x.sql" in lines[1] and "kbo-pbp-a" in lines[1]
-    assert "meta_table_counts(games)" in lines[2]
-
-
-def test_켜져_있으면_예전처럼_wrangler_를_부릅니다(monkeypatch):
-    monkeypatch.delenv(dl.D1_ENV, raising=False)
-    seen = []
-
-    class R:
-        returncode, stdout, stderr = 0, "ok", ""
-
-    def fake_run(cmd, **k):
-        seen.append(cmd)
-        return R()
-
-    monkeypatch.setattr(subprocess, "run", fake_run)
-    assert dl.run_d1("SELECT 1;") == "ok"
-    assert seen and seen[0][:5] == ["npx", "--yes", "wrangler@4", "d1", "execute"]
-
-
-def test_require_d1_은_꺼져_있으면_멈춥니다(monkeypatch):
-    monkeypatch.setenv(dl.D1_ENV, "off")
-    with pytest.raises(SystemExit, match="D1 이 꺼져"):
-        dl.require_d1("대조")
-    monkeypatch.setenv(dl.D1_ENV, "on")
-    dl.require_d1("대조")
 
 
 # --- 읽기는 MySQL 에서 합니다 ---------------------------------------------------
@@ -242,12 +179,11 @@ def test_mysql_query_는_실패해도_연결을_닫습니다():
     assert con.closed == 1
 
 
-def test_꺼져_있으면_query_와_d1_columns_가_MySQL_을_읽습니다(d1_off, monkeypatch):
+def test_query_와_d1_columns_가_MySQL_을_읽습니다(no_subprocess, monkeypatch):
     con = FakeCon(names=["cid", "name", "type", "notnull", "pk"],
                   rows=[(0, "pbp_id", "int", 1, 1), (1, "gameID", "varchar(32)", 0, 0)])
     monkeypatch.setattr(dl, "_mysql_connect", lambda: con)
-    # 샤드 이름(db_name)은 보지 않습니다. MySQL 은 DB 가 하나입니다.
-    assert dl.d1_columns("play_by_play", db_name="kbo-pbp-2024-2026") == ["pbp_id", "gameID"]
+    assert dl.d1_columns("play_by_play") == ["pbp_id", "gameID"]
     assert "information_schema.columns" in con.log[1][0]
     assert con.log[1][1] == ["play_by_play"]
 
@@ -256,59 +192,15 @@ def test_꺼져_있으면_query_와_d1_columns_가_MySQL_을_읽습니다(d1_off
     assert dl.query("SELECT team_id FROM teams;") == [{"team_id": "LG"}, {"team_id": "KT"}]
 
 
-def test_꺼져_있으면_query_에_쓰기_SQL_을_넣어도_MySQL_에_닿지_않습니다(d1_off, monkeypatch):
+def test_query_에_쓰기_SQL_을_넣어도_MySQL_에_닿지_않습니다(monkeypatch):
     monkeypatch.setattr(dl, "_mysql_connect", lambda: pytest.fail("붙으면 안 됩니다"))
     with pytest.raises(ValueError):
         dl.query("DELETE FROM kbo_roster;")
 
 
-# --- mirror 는 꺼져 있으면 꼭 써야 합니다 --------------------------------------
-
-def test_꺼져_있으면_mirror_모드가_off_여도_씁니다(d1_off, monkeypatch):
-    monkeypatch.delenv(ms.MODE_ENV, raising=False)
-    con = FakeCon()
-    assert ms.mirror("j", lambda s: 5, connect=lambda: con) == 5
-    assert con.commits == 1
-
-
-def test_꺼져_있으면_mirror_실패가_shadow_여도_작업을_실패시킵니다(d1_off, monkeypatch, tmp_path):
-    monkeypatch.setenv(ms.MODE_ENV, "shadow")
-    log = tmp_path / "fail.jsonl"
-    monkeypatch.setenv(ms.FAIL_LOG_ENV, str(log))
-    con = FakeCon()
-
-    def bad(sink):
-        raise RuntimeError("MySQL 이 죽었습니다")
-
-    with pytest.raises(RuntimeError, match="MySQL 이 죽었습니다"):
-        ms.mirror("games", bad, connect=lambda: con)
-    assert con.rollbacks == 1 and con.commits == 0
-    # 실패 기록도 남깁니다. 워크플로의 실패 확인 단계가 이 파일을 봅니다.
-    assert json.loads(log.read_text(encoding="utf-8").splitlines()[0])["job"] == "games"
-
-
-def test_켜져_있으면_mirror_shadow_는_예전처럼_넘어갑니다(monkeypatch, tmp_path):
-    monkeypatch.delenv(dl.D1_ENV, raising=False)
-    monkeypatch.setenv(ms.MODE_ENV, "shadow")
-    monkeypatch.setenv(ms.FAIL_LOG_ENV, str(tmp_path / "f.jsonl"))
-
-    def bad(sink):
-        raise RuntimeError("x")
-
-    assert ms.mirror("games", bad, connect=FakeCon) is None
-
-
 # --- 스크립트 단위 --------------------------------------------------------------
 
-def test_대조는_꺼져_있으면_MySQL_에_붙기_전에_멈춥니다(d1_off, monkeypatch):
-    from migration.mysql import reconcile
-    monkeypatch.setattr(reconcile.myconn, "connect", lambda *a, **k: pytest.fail("붙으면 안 됩니다"))
-    monkeypatch.setattr(sys, "argv", ["reconcile", "--days", "3"])
-    with pytest.raises(SystemExit, match="D1 이 꺼져"):
-        reconcile.main()
-
-
-def test_결과_표_올리기는_꺼져_있으면_MySQL_에만_씁니다(d1_off, monkeypatch, tmp_path, capsys):
+def test_결과_표_올리기는_MySQL_에만_씁니다(no_subprocess, monkeypatch, tmp_path, capsys):
     from migration import sqlite_to_d1 as m
     db = tmp_path / "k.db"
     con = sqlite3.connect(str(db))
@@ -318,7 +210,7 @@ def test_결과_표_올리기는_꺼져_있으면_MySQL_에만_씁니다(d1_off,
     con.close()
     seen = {}
 
-    def fake_mirror(job, fn, required=False):
+    def fake_mirror(job, fn):
         seen["job"] = job
         return 1
 
@@ -332,19 +224,19 @@ def test_결과_표_올리기는_꺼져_있으면_MySQL_에만_씁니다(d1_off,
     assert "MySQL 반영: self_park_factor" in out
 
 
-def test_실행_기록은_꺼져_있으면_MySQL_에만_남깁니다(d1_off, monkeypatch, capsys):
+def test_실행_기록은_MySQL_에만_남깁니다(no_subprocess, monkeypatch, capsys):
     sys.path.insert(0, str(ROOT / "data_collection"))
     import record_job_run as m
     seen = {}
     monkeypatch.setattr(m, "mirror", lambda job, fn: seen.setdefault("job", job))
-    monkeypatch.setattr(sys, "argv", ["record_job_run", "--job", "reconcile", "--status", "skip"])
+    monkeypatch.setattr(sys, "argv", ["record_job_run", "--job", "pbp", "--status", "skip"])
     assert m.main() == 0
     assert seen["job"] == "job_runs"
     assert "D1" not in capsys.readouterr().out
 
 
 def test_사진_보정_질의는_파생_표에_별칭이_있습니다():
-    """MySQL 은 별칭 없는 파생 표를 거절합니다(D1 이 꺼지면 이 질의를 MySQL 이 받음)."""
+    """MySQL 은 별칭 없는 파생 표를 거절합니다."""
     sys.path.insert(0, str(ROOT / "data_collection"))
     import heal_player_photos as m
     seen = []
@@ -357,7 +249,7 @@ def test_사진_보정_질의는_파생_표에_별칭이_있습니다():
         m.query = orig
     for sql in seen:
         assert ") AS t" in sql, sql
-    # SQLite(D1)에서도 그대로 돕니다.
+    # SQLite 에서도 뜻이 같습니다(로컬 사본으로 확인할 때).
     con = sqlite3.connect(":memory:")
     con.executescript(
         "CREATE TABLE kbo_official_batter_stats (player_id INTEGER, season INTEGER);"
@@ -374,12 +266,12 @@ def test_사진_보정_질의는_파생_표에_별칭이_있습니다():
 #
 # 워크플로가 부르는 파이썬 파일에서 `query(...)` 에 넘기는 SQL 글자를 모아,
 # 하나하나 MySQL 로 바뀌는지 봅니다. 새 질의가 SQLite 에만 있는 말투(||,
-# 별칭 없는 sqlite_master 질의 등)를 쓰면 D1 이 꺼진 날 러너에서야 죽으므로
-# 여기서 먼저 잡습니다. `%` 서식 자리는 1 이나 x 로 채웁니다.
+# 별칭 없는 sqlite_master 질의 등)를 쓰면 러너에서야 죽으므로 여기서 먼저
+# 잡습니다. `%` 서식 자리는 1 이나 x 로 채웁니다.
 
 _FMT = re.compile(r"%(?:\([^)]*\))?[-#0 +]*\d*(?:\.\d+)?[sdifr%]")
-# 글자를 모을 수 없는 곳입니다. 대조는 D1 이 꺼져 있으면 멈춥니다(require_d1).
-_DYNAMIC_OK = {"migration/mysql/reconcile.py"}
+# 글자를 모을 수 없는 곳입니다(지금은 없음).
+_DYNAMIC_OK = set()
 
 
 def _fill(fmt):

@@ -1,30 +1,24 @@
 # -*- coding: utf-8 -*-
-"""수집 결과를 Cloud SQL(MySQL)에도 씁니다. 2단계 이중 적재입니다.
+"""수집 결과를 Cloud SQL(MySQL)에 씁니다. MySQL 이 유일한 저장소입니다.
 
-D1 에 쓰는 코드는 그대로 두고, 각 스크립트가 D1 적재를 마친 뒤
-`mirror()` 로 같은 내용을 MySQL 에 씁니다. 사이트는 3단계까지 D1 을
-읽으므로 MySQL 이 실패해도 D1 적재를 막지 않습니다. 대신 실패를 파일에
-남기고, 워크플로 마지막 판정이 그 파일을 보고 빨간색으로 끝냅니다.
+각 스크립트가 `mirror(작업, 함수)` 를 한 번 부르면 그 함수가 한 트랜잭션
+안에서 씁니다. 실패하면 되돌리고, 실패를 파일에 남긴 뒤 예외를 올려 작업을
+실패시킵니다. 워크플로의 "MySQL 적재 실패 확인" 단계가 그 파일을 모아
+보여 주고, 마지막 판정이 빨간색으로 끝냅니다.
 
-## 켜고 끄기
+(이름 mirror 는 D1 과 MySQL 에 같이 쓰던 이중 적재 시절 이름입니다. D1 은
+2026-10-04 에 수집 쪽에서 걷어냈습니다.)
 
-    BSTATS_MYSQL_MIRROR    off(기본)  MySQL 에 손대지 않습니다
-                           shadow     쓰고, 실패하면 기록만 하고 넘어갑니다
-                           strict     쓰고, 실패하면 예외를 그대로 올립니다
     BSTATS_MYSQL_SETTINGS  접속 파일(migration/mysql/conn.py)
     BSTATS_MYSQL_FAIL_LOG  실패 기록 파일(기본 logs/mysql_mirror_failures.jsonl)
 
-D1 이 꺼져 있으면(`BSTATS_D1=off`, d1_load.d1_enabled) MySQL 이 유일한
-저장소입니다. 그때 `mirror()` 는 위 모드와 상관없이 쓰고, 실패하면 예외를
-올려 작업을 실패시킵니다(strict 와 같음).
+## 값 맞추기
 
-## D1 과 같은 값 쓰기
-
-D1 쪽은 `d1_load.sql_literal` 이 ''·'-' 를 NULL 로 바꿉니다. 여기서도
-같게 한 뒤, 열 종류(schema_types.json)에 맞춰 1단계 적재와 같은 규칙
-(`typemap.normalize`)으로 바꿉니다. 값은 SQL 글자에 붙이지 않고
-파라미터로 넘깁니다. MySQL 엄격 모드는 '12345.0' 같은 글자를 정수 열에
-넣으면 실패하기 때문입니다.
+''·'-' 를 값 없음(NULL)으로 봅니다(크롤러가 없는 값을 '-' 로 씁니다). 그런
+뒤 열 종류(schema_types.json)에 맞춰 1단계 적재와 같은 규칙
+(`typemap.normalize`)으로 바꿉니다. 값은 SQL 글자에 붙이지 않고 파라미터로
+넘깁니다. MySQL 엄격 모드는 '12345.0' 같은 글자를 정수 열에 넣으면 실패하기
+때문입니다.
 """
 import datetime
 import json
@@ -37,14 +31,11 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from data_collection.d1_load import d1_enabled  # noqa: E402
 from migration.mysql import typemap as tm  # noqa: E402
 
 TYPES_PATH = ROOT / "migration" / "mysql" / "schema_types.json"
-MODE_ENV = "BSTATS_MYSQL_MIRROR"
 FAIL_LOG_ENV = "BSTATS_MYSQL_FAIL_LOG"
 DEFAULT_FAIL_LOG = ROOT / "logs" / "mysql_mirror_failures.jsonl"
-MODES = ("off", "shadow", "strict")
 BATCH = 500
 # 행 잠금 대기 한도(초)입니다. 수집 단계마다 시간 제한이 있어 오래 기다리지 않습니다.
 LOCK_WAIT_SEC = 30
@@ -52,19 +43,12 @@ LOCK_WAIT_SEC = 30
 _types = None
 
 
-def mode():
-    m = (os.environ.get(MODE_ENV) or "off").strip().lower()
-    if m not in MODES:
-        raise ValueError("%s 는 off·shadow·strict 중 하나여야 합니다: %r" % (MODE_ENV, m))
-    return m
-
-
 def q(name):
     return "`%s`" % str(name).replace("`", "``")
 
 
 def blank(v):
-    """d1_load.sql_literal 과 같이 ''·'-' 를 값 없음으로 봅니다."""
+    """''·'-' 를 값 없음으로 봅니다. 크롤러가 없는 값을 '-' 로 씁니다."""
     if v is None:
         return None
     s = str(v)
@@ -131,10 +115,11 @@ class Sink:
         return self._write(table, columns, rows, "", batch)
 
     def upsert(self, table, columns, keys, rows, touch=None, keep=(), batch=BATCH):
-        """d1_load.build_upserts 와 같은 뜻입니다.
+        """있으면 고치고 없으면 넣습니다.
 
         열쇠·keep·touch 를 뺀 열을 새 값으로 덮고, touch 열은 지금 UTC 시각으로
-        둡니다(D1 의 datetime('now') 와 같음).
+        둡니다. keep 열(보통 created_at)은 넣을 때만 쓰고 고칠 때는 두어,
+        "언제부터 있던 선수인지"를 잃지 않습니다.
         """
         keyset = set(keys) | set(keep) | ({touch} if touch else set())
         updatable = [c for c in columns if c not in keyset]
@@ -149,8 +134,8 @@ class Sink:
     def insert_missing(self, table, columns, keys, rows, batch=BATCH):
         """없는 행만 넣습니다.
 
-        D1 의 INSERT OR IGNORE 자리입니다. MySQL 의 INSERT IGNORE 는 값 잘림·
-        외래키 오류까지 경고로 삼키므로 쓰지 않습니다.
+        MySQL 의 INSERT IGNORE 는 값 잘림·외래키 오류까지 경고로 삼키므로
+        쓰지 않습니다.
         """
         k = q(keys[0])
         return self._write(table, columns, rows,
@@ -159,7 +144,7 @@ class Sink:
     def refresh_count(self, table):
         """meta_table_counts 를 MySQL 표 전체 행 수로 맞춥니다.
 
-        D1 은 play_by_play 를 샤드마다 따로 셌지만 MySQL 은 한 표라 전체입니다.
+        빠뜨리면 데이터 탐색기가 어제 행 수를 계속 보여 줍니다(src/lib/counts.js).
         """
         n = self.query("SELECT COUNT(*) AS n FROM %s" % q(table))[0]["n"]
         now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
@@ -188,22 +173,12 @@ def record_failure(job, e):
     traceback.print_exc()
 
 
-def mirror(job, fn, required=False, connect=None):
+def mirror(job, fn, connect=None):
     """fn(Sink) 를 한 트랜잭션으로 MySQL 에 씁니다. fn 의 값을 돌려줍니다.
 
-    꺼져 있으면(off) 아무것도 하지 않고 None 입니다. required=True 는 MySQL
-    에만 쓰는 손 작업(따라잡기)용입니다. 꺼져 있어도 쓰고, 실패하면 예외를
-    올립니다.
-
-    D1 이 꺼져 있으면(BSTATS_D1=off) 늘 required=True 로 봅니다. 그때는
-    MySQL 이 유일한 저장소라, 모드와 상관없이 쓰고 실패하면 작업이 실패해야
-    합니다. 조용히 넘기면 그날 수집이 어디에도 남지 않습니다.
+    늘 씁니다. 실패하면 되돌리고 실패 기록을 남긴 뒤 예외를 올립니다.
+    조용히 넘기면 그날 수집이 어디에도 남지 않습니다.
     """
-    if not d1_enabled():
-        required = True
-    m = mode()
-    if m == "off" and not required:
-        return None
     con = None
     try:
         con = (connect or _connect)()
@@ -220,10 +195,7 @@ def mirror(job, fn, required=False, connect=None):
             except Exception:  # noqa: BLE001
                 pass
         record_failure(job, e)
-        if m == "strict" or required:
-            raise
-        print("::warning title=MySQL 이중 적재 실패::%s: %s" % (job, one_line(e)), flush=True)
-        return None
+        raise
     finally:
         if con is not None:
             try:

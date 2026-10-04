@@ -6,7 +6,7 @@
 - 2026-10: D1 → Cloud SQL(MySQL). 사이트가 MySQL 을 읽고, 수집도 MySQL 에만 씁니다.
 - 2026-10-04: 수집 쪽에서 D1 을 걷어냈습니다. D1 에 쓰거나 D1 을 읽던 도구
   (`d1_to_sqlite.py`, `load_to_d1.py`, `export_to_d1.py`, `shard_*.py`,
-  `verify_d1.py` 등)는 지웠습니다. 필요하면 git 기록에서 찾으십시오.
+  `verify_d1.py`, `mysql/reconcile.py` 등)는 지웠습니다. 필요하면 git 기록에서 찾으십시오.
 
 ## 지금 쓰는 것
 

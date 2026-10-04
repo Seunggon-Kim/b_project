@@ -19,7 +19,7 @@ schema_post.sql(인덱스·외래키)을 적용합니다. --tables 는 --fresh �
 시작할 때와 다시 연결한 뒤, **같은 계정·같은 DB 의 다른 연결을 모두** 끊습니다.
 적재 중에 같은 계정으로 verify 나 다른 적재를 돌리지 마십시오(그 연결도 끊깁니다).
 수집 계정(bstats_loader)의 연결은 계정이 달라 건드리지 않습니다.
-수집 계정(bstats_loader)으로는 시작하지 않습니다. 같은 계정으로 돌리는 reconcile·daily_pbp --mysql-only·mysql_to_sqlite 도 적재 중에는 돌리지 마십시오.
+수집 계정(bstats_loader)으로는 시작하지 않습니다. 같은 계정으로 돌리는 mysql_to_sqlite 도 적재 중에는 돌리지 마십시오.
 
     py -m migration.mysql.load --post-only     # 없는 인덱스·외래키만 만들기
 

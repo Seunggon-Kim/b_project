@@ -113,7 +113,6 @@ jobs:
           CLOUDSQL_INSTANCE: ${{ secrets.CLOUDSQL_INSTANCE }}
           MYSQL_LOADER_PASSWORD: ${{ secrets.MYSQL_LOADER_PASSWORD }}
           MYSQL_SERVER_PUBKEY: ${{ secrets.MYSQL_SERVER_PUBKEY }}
-          MIRROR_MODE: shadow
         run: bash migration/mysql/ci_proxy.sh
 
       - name: MySQL 내려받기

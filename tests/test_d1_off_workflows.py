@@ -69,17 +69,6 @@ def test_예전_MYSQL_MIRROR_변수를_조건에_쓰지_않습니다(name):
         assert "vars.MYSQL_MIRROR" not in (s.get("run") or ""), "%s / %s" % (name, s.get("name"))
 
 
-def test_daily_대조는_D1_을_켰을_때만_돌고_기록은_늘_남깁니다():
-    _, ss = steps("daily")
-    rec = next(s for s in ss if "migration.mysql.reconcile" in (s.get("run") or ""))
-    assert rec.get("id") == "reconcile"
-    assert GATE in rec["if"]
-    log = next(s for s in ss if "--job reconcile" in (s.get("run") or ""))
-    assert log["if"] == "always()"
-    # 건너뛰면 skip 으로 남깁니다. /jobs/status 칸이 비지 않게 합니다.
-    assert "steps.reconcile.outcome == 'skipped' && 'skip'" in log["run"]
-
-
 def test_daily_실패_판정은_MySQL_을_늘_보고_대조는_켰을_때만_봅니다():
     _, ss = steps("daily")
     judge = next(s for s in ss if s.get("name") == "실패 판정")
@@ -88,9 +77,6 @@ def test_daily_실패_판정은_MySQL_을_늘_보고_대조는_켰을_때만_봅
     m = re.search(r'for s in "\$\{\{ steps\.mysql\.outcome \}\}" '
                   r'"\$\{\{ steps\.mirror_check\.outcome \}\}"; do', run)
     assert m, run
-    # 대조 결과는 D1_WRITE 조건 안에서만 봅니다.
-    i = run.index("steps.reconcile.outcome")
-    assert GATE in run[max(0, i - 200):i]
 
 
 @pytest.mark.parametrize("name", ["roster", "weekly", "monthly"])

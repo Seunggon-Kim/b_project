@@ -69,7 +69,7 @@ def main():
         print("[미리보기] 쓰지 않았습니다." if not args.write else "넣을 것이 없습니다.")
         return 0
 
-    mirror("fill_games_from_pbp_day", lambda s: mysql_write(s, new), required=True)
+    mirror("fill_games_from_pbp_day", lambda s: mysql_write(s, new))
     return 0
 
 

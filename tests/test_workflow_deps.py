@@ -40,7 +40,6 @@ TRANSITIVE = {"numpy", "dateutil", "pytz", "six"}
 # 포함합니다. 새 스크립트를 워크플로에 넣으면 여기에도 적으십시오.
 ENTRYPOINTS = {
     "daily.yml": [
-        "migration/mysql/reconcile.py",
         "data_collection/daily_pbp_to_d1.py",
         "data_collection/daily_games_to_d1.py",
         "data_collection/futures_to_d1.py",

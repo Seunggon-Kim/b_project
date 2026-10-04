@@ -106,7 +106,7 @@ def main():
         print("[미리보기] 쓰지 않았습니다.")
         return 0
 
-    mirror("fix_games_from_naver", lambda s: mysql_write(s, rows), required=True)
+    mirror("fix_games_from_naver", lambda s: mysql_write(s, rows))
     return 0
 
 
