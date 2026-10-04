@@ -11,6 +11,14 @@ name = "kbo-api"
 main = "src/index.js"
 compatibility_date = "2026-08-17"
 
+# 함수 이름 보존(esbuild keepNames)을 끕니다. 켜 두면 번들이 화살표 함수를
+# 만들 때마다 __name(fn, "…") 으로 이름을 다시 붙입니다(Object.defineProperty).
+# mysql2 의 정적 행 해석기(disableEval)는 칸마다 화살표 함수를 만들어서,
+# 행이 많은 응답에서 이것이 Worker CPU 의 절반 가까이를 썼습니다(로컬 프로파일:
+# play_by_play CSV 2만 행 약 2.2초 -> 1.0초). 무료 플랜은 요청당 CPU 10ms 입니다.
+# 압축(minify)을 하지 않아 함수 이름은 그대로 남고, 응답 본문은 바뀌지 않습니다.
+keep_names = false
+
 [[d1_databases]]
 binding = "DB"
 database_name = "kbo-stats"
