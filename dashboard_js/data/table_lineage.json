@@ -426,6 +426,10 @@
   },
   {
    "from": "table:wrc_plus_comparison",
+   "to": "page:pages/player-analytics.html"
+  },
+  {
+   "from": "table:wrc_plus_comparison",
    "to": "page:pages/player-stats.html"
   },
   {
@@ -757,7 +761,8 @@
     "/players/:id/arsenal",
     "/players/:id/usage",
     "/players/search",
-    "/stats/movement_avg"
+    "/stats/movement_avg",
+    "/stats/pitchers"
    ],
    "title": "선수 분석 - Bstats"
   },
@@ -1200,6 +1205,7 @@
    "file": "src/routes/stats.js",
    "live": false,
    "pages": [
+    "pages/player-analytics.html",
     "pages/player-stats.html",
     "pages/team-stats.html"
    ],
@@ -2428,6 +2434,7 @@
    "pages": [
     "index.html",
     "pages/article.html",
+    "pages/player-analytics.html",
     "pages/player-stats.html",
     "pages/team-stats.html"
    ],

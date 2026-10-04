@@ -73,7 +73,14 @@
       if (sorted[i] < value) lt++; else if (sorted[i] > value) gt++; else eq++;
     }
     const n = sorted.length;
-    return ((better === 'low' ? gt : lt) + eq / 2) / n * 100;
+    // 부동소수 오차(89.99999…)로 경계가 어긋나지 않게 소수 6자리로 맞춥니다.
+    return Math.round(((better === 'low' ? gt : lt) + eq / 2) / n * 100 * 1e6) / 1e6;
+  }
+
+  /** 칸 제목 글자입니다. 올림이라 '상위 5%' 는 진한 단계(≥95)와만 맞습니다. */
+  function label(pct) {
+    return pct >= 50 ? '상위 ' + Math.max(1, Math.ceil(100 - pct)) + '%'
+      : '하위 ' + Math.max(1, Math.ceil(pct)) + '%';
   }
 
   function tier(pct) {
@@ -85,7 +92,7 @@
     return '';
   }
 
-  const api = { METRICS, MIN_OUTS, rowValues, pool, percentile, tier };
+  const api = { METRICS, MIN_OUTS, rowValues, pool, percentile, tier, label };
   PA.percentile = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

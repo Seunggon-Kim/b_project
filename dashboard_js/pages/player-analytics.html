@@ -837,7 +837,7 @@
                         const t = P.tier(pct);
                         if (!t || !tds[i]) return;
                         tds[i].classList.add('pa-pct', 'pa-pct--' + t);
-                        tds[i].title = '그해 ' + (pct >= 50 ? '상위 ' + Math.max(1, Math.round(100 - pct)) : '하위 ' + Math.max(1, Math.round(pct))) + '%';
+                        tds[i].title = '그해 ' + P.label(pct);
                     });
                 });
             });
