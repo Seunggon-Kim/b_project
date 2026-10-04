@@ -285,6 +285,7 @@
     if (S.sel && !S.graph.nodes[S.sel]) S.sel = null;
     try {
       S.status = statusMap(S.lin, S.details, Date.now());
+      S.opsErrors = S.opsErrors.filter(x => x.indexOf('상태 계산:') !== 0);
     } catch (e) {
       console.error(e);
       S.status = null;
@@ -368,6 +369,7 @@
     scope.addEventListener('focusin', function (e) {
       const el = e.target.closest && e.target.closest('.lin-box[data-tooltip], .lin-sum-btn[data-tooltip]');
       if (!el || !scope.contains(el)) return;
+      try { if (!el.matches(':focus-visible')) return; } catch (err) { /* :focus-visible 미지원이면 그대로 보임 */ }
       const mark = el.querySelector('.lin-dot[data-tooltip], .lin-tag[data-tooltip]');
       show(el, joinTips(el.getAttribute('data-tooltip'), mark && mark.getAttribute('data-tooltip')));
     });
