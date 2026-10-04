@@ -133,8 +133,6 @@
 .pa-mv-lg { stroke-width: 2.5; opacity: 1; }
 .pa-mv-hatch-bg { fill: var(--bg-card); opacity: 0.85; }
 .pa-mv-hatch-line { stroke: var(--text-secondary); stroke-width: 1.2; }
-.pa-mv-avg-row td { padding-top: 0; color: var(--text-muted); font-size: 0.7rem; }
-.pa-mv-avg-row td:first-child { padding-left: 1.1rem; }
 
 .pa-usage-grid--dense .pa-usage-row { padding: 0.2rem 0; }
 .pa-usage-grid--dense .pa-usage-bar { height: 0.75rem; }

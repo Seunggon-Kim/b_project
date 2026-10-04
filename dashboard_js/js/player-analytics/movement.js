@@ -176,22 +176,20 @@
     return s + '</g></svg>';
   }
 
-  function avgRow(g, view, ctx) {
-    const a = ctx && ctx.map && Object.prototype.hasOwnProperty.call(ctx.map, g.type) ? ctx.map[g.type] : null;
-    if (!a) return '';
-    return '<tr class="pa-mv-avg-row"><td>' + esc(ctx.label) + ' 평균</td><td></td><td>' + (a.speed === null ? '-' : f1(a.speed))
-      + '</td><td>' + fd(a.z) + '</td><td>' + fx(a.x, view) + '</td></tr>';
+  function avgCell(g, ctx) {
+    const a = ctx.map && Object.prototype.hasOwnProperty.call(ctx.map, g.type) ? ctx.map[g.type] : null;
+    return '<td>' + (!a || a.speed === null ? '-' : f1(a.speed)) + '</td>';
   }
 
-  /** 구종 표입니다. 빈 배열이면 빈 글자입니다. */
+  /** 구종 표입니다(구종·비율·구속, ctx 가 있으면 리그 평균 구속 열 추가). 빈 배열이면 빈 글자입니다. */
   function legendHtml(summary, view, ctx) {
     if (!summary || !summary.length) return '';
-    return '<table class="pa-mv-legend"><thead><tr><th>구종</th><th>비율</th><th>구속(km/h)</th><th>수직(cm)</th><th>수평(cm)</th></tr></thead><tbody>'
+    return '<table class="pa-mv-legend"><thead><tr><th>구종</th><th>비율</th><th>구속(km/h)</th>'
+      + (ctx ? '<th>' + esc(ctx.label) + ' 평균</th>' : '') + '</tr></thead><tbody>'
       + summary.map(function (g) {
         return '<tr><td><span class="pa-mv-dot" style="background:' + g.color + '"></span>' + esc(g.type) + '</td>'
           + '<td>' + f1(g.pct) + '%</td><td>' + (g.speed === null ? '-' : f1(g.speed)) + '</td>'
-          + '<td>' + fd(g.z) + '</td><td>' + fx(g.x, view) + '</td></tr>'
-          + avgRow(g, view, ctx);
+          + (ctx ? avgCell(g, ctx) : '') + '</tr>';
       }).join('')
       + '</tbody></table>';
   }
