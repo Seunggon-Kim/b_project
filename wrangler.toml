@@ -1,4 +1,4 @@
-# Cloudflare Workers / D1 설정
+# Cloudflare Workers 설정
 #
 # 배포 주소: https://kbo-api.bstats-baseball.workers.dev
 #   name(kbo-api) + 계정 서브도메인(bstats-baseball) 으로 만들어집니다.
@@ -6,6 +6,9 @@
 #   바꾸면 이전 주소가 즉시 죽으므로, 프론트엔드를 붙인 뒤에는 손대지 않습니다.
 #
 # 참고: docs/superpowers/specs/2026-08-17-cloudflare-migration-design.md
+#
+# D1 바인딩은 2026-10-04 에 지웠습니다. Worker 는 MySQL(Cloud SQL)만 읽습니다.
+# test/no_d1.test.js 가 D1 바인딩이 다시 들어오지 않게 막습니다.
 
 name = "kbo-api"
 main = "src/index.js"
@@ -19,63 +22,14 @@ compatibility_date = "2026-08-17"
 # 압축(minify)을 하지 않아 함수 이름은 그대로 남고, 응답 본문은 바뀌지 않습니다.
 keep_names = false
 
-[[d1_databases]]
-binding = "DB"
-database_name = "kbo-stats"
-database_id = "505c67f5-45ff-42ee-bce9-2f5f00cf90e7"
-
 # Workers Cache (2026-07-06 출시). 전 플랜 무료이고 workers.dev 에서도
-# 동작합니다. 캐시에 맞으면 Worker 가 실행되지 않아 D1 읽기가 0 입니다.
+# 동작합니다. 캐시에 맞으면 Worker 가 실행되지 않아 DB 읽기가 0 입니다.
 # 응답의 Cache-Control 로 수명을 정합니다 - src/lib/cachepolicy.js
 [cache]
 enabled = true
 
-# play_by_play 를 시즌별로 나눈 D1 입니다.
-#
-# 한 표가 D1 한 DB 한도(500MB)를 넘습니다. 12시즌이면 약 1.5GB 입니다.
-# 표를 쪼갤 수는 없으니 DB 를 나눕니다. 배정 정본은
-# migration/shard_plan.json 이고 src/lib/shard.js 가 사본입니다.
-
-# 2008~2011 은 8개 구단 시절이라 시즌당 504~532경기입니다. 지금(720)보다
-# 적어서 네 시즌을 묶어도 세 시즌 샤드보다 작습니다.
-[[d1_databases]]
-binding = "DB_2008_2011"
-database_name = "kbo-pbp-2008-2011"
-database_id = "3d9dfeb0-63ff-4ced-b4f5-e852feb19961"
-
-[[d1_databases]]
-binding = "DB_2012_2014"
-database_name = "kbo-pbp-2012-2014"
-database_id = "1d6444f3-5840-4d05-857e-85ecdc31876b"
-
-[[d1_databases]]
-binding = "DB_2015_2017"
-database_name = "kbo-pbp-2015-2017"
-database_id = "92d5b1c7-7d35-4279-876e-c88caa3bccad"
-
-[[d1_databases]]
-binding = "DB_2018_2020"
-database_name = "kbo-pbp-2018-2020"
-database_id = "f9420d0e-dce5-4bab-a210-298aba89d63d"
-
-[[d1_databases]]
-binding = "DB_2021_2023"
-database_name = "kbo-pbp-2021-2023"
-database_id = "b6bf7d3e-dfef-480e-ae6f-a2c18278b77e"
-
-[[d1_databases]]
-binding = "DB_2024_2026"
-database_name = "kbo-pbp-2024-2026"
-database_id = "0ee0dec0-eeac-47da-b31d-ee38426fbb92"
-
-# MySQL(Cloud SQL)을 Hyperdrive 로 읽습니다(3단계).
-# vars.DB_BACKEND 가 'mysql' 일 때만 씁니다. 접속 정보는 Cloudflare 에만 있습니다.
+# MySQL(Cloud SQL)을 Hyperdrive 로 읽습니다. 접속 정보는 Cloudflare 에만 있습니다.
+# 라우트는 요청마다 env.MYSQL 어댑터로 읽습니다(src/lib/backend.js).
 [[hyperdrive]]
 binding = "HYPERDRIVE"
 id = "f63b3e022f1f4eff99728eb28b08ccaa"
-
-# 읽을 DB 를 정합니다(3단계). 'mysql' 이면 Hyperdrive 로 Cloud SQL MySQL 을 읽고,
-# 'd1' 이면 D1 을 읽습니다. 운영은 2026-10-04 KST 에 MySQL 로 전환했습니다.
-# 되돌리기: 이 값을 "d1" 로 바꿔 다시 배포하거나 `wrangler rollback` 을 씁니다.
-[vars]
-DB_BACKEND = "mysql"
