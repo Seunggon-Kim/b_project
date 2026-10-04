@@ -156,12 +156,14 @@
       + '<text class="pa-mv-dir" x="194" y="374" text-anchor="end">더 떨어짐</text>'
       + '<text class="pa-mv-dir" x="26" y="214">' + sideL + '</text>'
       + '<text class="pa-mv-dir" x="374" y="214" text-anchor="end">' + sideR + '</text>';
-    // 모서리 범례(고정 자리, 투수 시점에도 안 바뀝니다)
-    s += '<circle class="pa-mv-key-own" cx="318" cy="18" r="7"/>'
-      + '<text class="pa-mv-key" x="394" y="23" text-anchor="end">선수 평균</text>';
+    // 범례: 오른쪽 아래(5시) 한 줄. 선수 평균, 그 오른쪽에 리그 평균(evan 의견).
+    // 고정 자리라 투수 시점에도 안 바뀝니다. 리그 평균이 없으면 선수 평균만 오른쪽 끝.
+    const ownX = ctx ? 228 : 330;
+    s += '<circle class="pa-mv-key-own" cx="' + ownX + '" cy="391" r="7"/>'
+      + '<text class="pa-mv-key" x="' + (ownX + 12) + '" y="396">선수 평균</text>';
     if (ctx) {
-      s += '<circle class="pa-mv-key-lg" cx="318" cy="382" r="8" fill="url(#pa-mv-hatch)"/>'
-        + '<text class="pa-mv-key" x="394" y="387" text-anchor="end">' + esc(ctx.label) + ' 평균</text>';
+      s += '<circle class="pa-mv-key-lg" cx="330" cy="391" r="8" fill="url(#pa-mv-hatch)"/>'
+        + '<text class="pa-mv-key" x="342" y="396">' + esc(ctx.label) + ' 평균</text>';
     }
     s += '<g clip-path="url(#pa-mv-clip)">';
     vs.forEach(function (p) {
