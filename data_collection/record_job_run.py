@@ -18,6 +18,7 @@ MySQL(meta_job_runs)에만 남깁니다. 그때 MySQL 쓰기가 실패하면 이
     py data_collection/record_job_run.py --job official_stats --status fail
 """
 import argparse
+import json
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -31,17 +32,16 @@ from mysql_sink import mirror  # noqa: E402
 # 어긋납니다.
 KST = timezone(timedelta(hours=9))
 
-# 화면의 data-job 값과 같아야 합니다
-# (dashboard_js/pages/database-explorer.html).
-KNOWN_JOBS = {
-    "official_stats", "pbp", "games", "player_detector", "cleanup",
-    "park_factors", "registry_sync", "futures", "player_info",
-    # 2008~2014 PBP 되채우기입니다. 2026-08-29 에 끝나 daily 에서 뺐습니다.
-    # 화면(database-explorer.html)에서 항목을 지울 때 여기서도 지웁니다.
-    "pbp_backfill",
-    # 1군 등록 현황·등말소. 놓친 날은 소급이 안 됩니다.
-    "roster",
-}
+def known_jobs(path=None):
+    """계보 손 파일(database/lineage_writes.json)의 status_keys 에 적힌 작업
+    이름들입니다. 화면의 수집 일정 표가 이 이름으로 실행 기록을 찾습니다."""
+    path = path or Path(__file__).resolve().parent.parent / "database" / "lineage_writes.json"
+    hand = json.loads(Path(path).read_text(encoding="utf-8"))
+    return {job for s in hand["scripts"].values()
+            for job in s.get("status_keys", {}).values()}
+
+
+KNOWN_JOBS = known_jobs()
 
 JOB_COLS = ["job", "last_run_at", "status", "note", "duration_sec"]
 
@@ -67,7 +67,7 @@ def main():
     if args.job not in KNOWN_JOBS:
         # 오타로 새 이름이 생기면 화면에는 영영 "기록 없음"이 뜹니다.
         # 그래도 기록은 남기되 눈에 띄게 알립니다.
-        print("경고: 화면에 없는 작업 이름입니다: %s" % args.job)
+        print("경고: 계보 파일(status_keys)에 없는 작업 이름입니다: %s" % args.job)
         print("  아는 이름: %s" % ", ".join(sorted(KNOWN_JOBS)))
 
     now = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
