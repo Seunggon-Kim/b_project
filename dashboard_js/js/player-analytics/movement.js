@@ -149,6 +149,13 @@
     RINGS.forEach(function (cm) {
       s += '<text class="pa-mv-tick" x="204" y="' + (C - cm * PX_PER_CM + 12) + '">' + cm + '</text>';
     });
+    // 방향 글자(Savant 의 MORE RISE 등). 원 안쪽 가장자리에 둡니다. 투수 시점은 좌우가 바뀝니다.
+    const sideL = view === 'pitcher' ? '1루 쪽' : '3루 쪽';
+    const sideR = view === 'pitcher' ? '3루 쪽' : '1루 쪽';
+    s += '<text class="pa-mv-dir" x="194" y="34" text-anchor="end">더 솟음</text>'
+      + '<text class="pa-mv-dir" x="194" y="374" text-anchor="end">더 떨어짐</text>'
+      + '<text class="pa-mv-dir" x="26" y="214">' + sideL + '</text>'
+      + '<text class="pa-mv-dir" x="374" y="214" text-anchor="end">' + sideR + '</text>';
     s += '<g clip-path="url(#pa-mv-clip)">';
     vs.forEach(function (p) {
       s += '<circle class="pa-mv-pt" cx="' + px(num(p.pfx_x) * IN2CM, view) + '" cy="' + py(num(p.pfx_z) * IN2CM)
@@ -206,17 +213,8 @@
   /**
    * 구종 구사율(Savant Pitch Usage 참고)입니다.
    * 좌타 상대 % · 왼쪽 막대 · 구종(전체 %) · 오른쪽 막대 · 우타 상대 %. 전체 비율 큰 순.
-   * data 는 /players/{id}/usage 응답입니다.
+   * data 는 /players/{id}/usage 응답입니다. 투구 수 합계 줄은 두지 않습니다(evan 의견).
    */
-  function usageTotal(data) {
-    const t = data && data.total_pitches;
-    if (typeof t !== 'number' || !(t > 0)) return '';
-    let x = '투구 수 ' + comma(t);
-    if (typeof data.total_l === 'number') x += ' · 좌타 상대 ' + comma(data.total_l);
-    if (typeof data.total_r === 'number') x += ' · 우타 상대 ' + comma(data.total_r);
-    return '<p class="pa-usage-total">' + x + '</p>';
-  }
-
   function usageHtml(data, season) {
     const title = '<div class="pa-usage-title">' + esc(season) + ' 구종 구사율</div>';
     const rows = ((data && data.usage) || []).slice().sort(function (a, b) { return pct1(b.usage_all) - pct1(a.usage_all); });
@@ -233,8 +231,7 @@
           + '<span class="pa-usage-pct">' + f1(r) + '%</span>'
           + '</div>';
       }).join('')
-      + '</div>'
-      + usageTotal(data);
+      + '</div>';
   }
 
   const api = { COLORS, colorOf, summarize, seasonsFor, totalsFor, svgHtml, legendHtml, bodyHtml, avgFor, handLabel, HELP, helpFor, usageHtml };

@@ -80,12 +80,13 @@
 /* ---------- 무브먼트(Savant Movement Profile 참고) ---------- */
 .pa-card--move .pa-card-tabs { align-items: center; justify-content: space-between; padding-right: 0.5rem; position: relative; }
 .pa-move-season { font: inherit; font-size: 0.85rem; padding: 0.2rem 1.8rem 0.2rem 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; background-color: var(--bg-card); color: var(--text-primary); }
-.pa-mv-svg { display: block; width: 100%; max-width: 250px; height: auto; margin: 0 auto; }
+.pa-mv-svg { display: block; width: 100%; max-width: 300px; height: auto; margin: 0 auto; }
 .pa-mv-bg { fill: var(--bg-secondary); }
 .pa-mv-ring { fill: none; stroke: var(--text-muted); stroke-width: 0.8; opacity: 0.55; }
 .pa-mv-ring--minor { stroke-dasharray: 3 3; }
 .pa-mv-axis { stroke: var(--text-muted); stroke-width: 0.8; opacity: 0.55; }
 .pa-mv-tick { fill: var(--text-muted); font-size: 11px; }
+.pa-mv-dir { fill: var(--text-secondary); font-size: 15px; font-weight: 700; }
 .pa-mv-pt { opacity: 0.35; }
 .pa-mv-avg { stroke: var(--bg-card); stroke-width: 2.5; }
 .pa-mv-note { margin: 0.1rem 0 0.2rem; line-height: 1.3; font-size: 0.75rem; color: var(--text-secondary); text-align: center; }
@@ -121,7 +122,6 @@
     linear-gradient(to right, transparent calc(50% - 0.5px), var(--border-color) calc(50% - 0.5px), var(--border-color) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
     linear-gradient(to right, transparent calc(75% - 0.5px), var(--border-color) calc(75% - 0.5px), var(--border-color) calc(75% + 0.5px), transparent calc(75% + 0.5px)); }
 .pa-usage-bar--l { justify-content: flex-end; }
-.pa-usage-total { margin: 0.6rem 0 0; font-size: 0.75rem; color: var(--text-secondary); text-align: center; }
 .pa-usage-bar i { display: block; height: 100%; border-radius: 999px; }
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .pa-mv-view { display: flex; justify-content: flex-end; padding: 0.5rem 0.75rem 0; }
