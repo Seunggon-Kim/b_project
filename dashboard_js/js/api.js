@@ -153,6 +153,18 @@ class API {
         }
     }
 
+    /** 투수 구종 가치(득점 가치). 운영에 아직 없으면 빈 결과입니다. */
+    static async getPitchValues(playerId, season) {
+        try {
+            const response = await fetch(`${API_BASE_URL}/players/${playerId}/pitch_values?season=${encodeURIComponent(season)}`);
+            if (!response.ok) return { rows: [] };
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching pitch values:', error);
+            return { rows: [] };
+        }
+    }
+
     /**
      * Get available seasons (시즌 통계가 존재하는 시즌 목록)
      */

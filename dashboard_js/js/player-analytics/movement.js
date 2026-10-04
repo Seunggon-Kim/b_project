@@ -222,10 +222,12 @@
    * 좌타 상대 % · 왼쪽 막대 · 구종(전체 %) · 오른쪽 막대 · 우타 상대 %. 전체 비율 큰 순.
    * data 는 /players/{id}/usage 응답입니다. 투구 수 합계 줄은 두지 않습니다(evan 의견).
    */
-  function usageHtml(data, season) {
+  function usageHtml(data, season, pv) {
     const title = '<div class="pa-usage-title">' + esc(season) + ' 구종 구사율</div>';
     const rows = ((data && data.usage) || []).slice().sort(function (a, b) { return pct1(b.usage_all) - pct1(a.usage_all); });
     if (!rows.length) return title + '<p class="pa-mv-empty">이 시즌은 구종 구사율 데이터가 없습니다.</p>';
+    const pvRows = (pv && pv.rows) || [];
+    if (pvRows.length) return title + rvGridHtml(rows, pvRows);
     return title + '<div class="pa-usage-grid' + (rows.length >= 7 ? ' pa-usage-grid--dense' : '') + '">'
       + '<div class="pa-usage-head"><span>좌타 상대</span><span></span><span>구종 (전체)</span><span></span><span>우타 상대</span></div>'
       + rows.map(function (u) {
@@ -234,6 +236,43 @@
           + '<span class="pa-usage-pct">' + f1(l) + '%</span>'
           + '<span class="pa-usage-bar pa-usage-bar--l"><i style="width:' + f1(l) + '%;background:' + c + '"></i></span>'
           + '<span class="pa-usage-name">' + esc(u.pitch_type) + ' <b>' + f1(pct1(u.usage_all)) + '%</b></span>'
+          + '<span class="pa-usage-bar"><i style="width:' + f1(r) + '%;background:' + c + '"></i></span>'
+          + '<span class="pa-usage-pct">' + f1(r) + '%</span>'
+          + '</div>';
+      }).join('')
+      + '</div>';
+  }
+
+  const RV_HELP = '구종 가치: 그 타자 손을 상대로 던진 공의 득점 가치 합입니다. 볼카운트·주자·아웃별 기대 득점으로 셉니다. 실점을 막으면 +입니다.';
+
+  /** 한 손 상대 가치 칸입니다. 공이 0개이거나 값이 없으면 '-'. */
+  function rvCell(p, side) {
+    const n = p ? num(p['n_' + side]) : null, v = p ? num(p['rv_' + side]) : null;
+    if (!n || v === null) return '<span class="pa-rv">-</span>';
+    let k = Math.round(v);
+    if (k === 0) k = 0;  // -0 은 0
+    const txt = k > 0 ? '+' + k : String(k);
+    const cls = 'pa-rv' + (k > 0 ? ' pa-rv--pos' : k < 0 ? ' pa-rv--neg' : '');
+    const exact = v.toFixed(1), sign = Number(exact) > 0 ? '+' : '';
+    const title = (side === 'l' ? '좌타' : '우타') + ' 상대 ' + n.toLocaleString('en-US') + '구, 가치 ' + sign + (Number(exact) === 0 ? '0.0' : exact);
+    return '<span class="' + cls + '" title="' + title + '">' + txt + '</span>';
+  }
+
+  /** 구종 구사율 + 구종 가치(7칸)입니다. */
+  function rvGridHtml(rows, pvRows) {
+    const byType = {};
+    pvRows.forEach(function (p) { byType[p.pitch_type] = p; });
+    const h = function () { return '<span class="pa-rv-h" title="' + RV_HELP + '">가치</span>'; };
+    return '<div class="pa-usage-grid pa-usage-grid--rv' + (rows.length >= 7 ? ' pa-usage-grid--dense' : '') + '">'
+      + '<div class="pa-usage-head"><span>좌타 상대</span><span></span>' + h() + '<span>구종 (전체)</span>' + h() + '<span></span><span>우타 상대</span></div>'
+      + rows.map(function (u) {
+        const c = colorOf(u.pitch_type), l = pct1(u.usage_l), r = pct1(u.usage_r), p = byType[u.pitch_type];
+        return '<div class="pa-usage-row">'
+          + '<span class="pa-usage-pct">' + f1(l) + '%</span>'
+          + '<span class="pa-usage-bar pa-usage-bar--l"><i style="width:' + f1(l) + '%;background:' + c + '"></i></span>'
+          + rvCell(p, 'l')
+          + '<span class="pa-usage-name">' + esc(u.pitch_type) + ' <b>' + f1(pct1(u.usage_all)) + '%</b></span>'
+          + rvCell(p, 'r')
           + '<span class="pa-usage-bar"><i style="width:' + f1(r) + '%;background:' + c + '"></i></span>'
           + '<span class="pa-usage-pct">' + f1(r) + '%</span>'
           + '</div>';

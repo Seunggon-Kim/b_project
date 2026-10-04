@@ -132,6 +132,18 @@
 .pa-mv-hatch-bg { fill: var(--bg-card); opacity: 0.85; }
 .pa-mv-hatch-line { stroke: var(--text-secondary); stroke-width: 1.2; }
 
+/* 구종 가치(7칸) */
+.pa-usage-grid--rv .pa-usage-head, .pa-usage-grid--rv .pa-usage-row { grid-template-columns: 2.7rem minmax(0, 1fr) 2rem 6rem 2rem minmax(0, 1fr) 2.7rem; }
+.pa-usage-grid--rv .pa-usage-head span:nth-child(3), .pa-usage-grid--rv .pa-usage-head span:nth-child(4), .pa-usage-grid--rv .pa-usage-head span:nth-child(5) { text-align: center; }
+.pa-usage-grid--rv .pa-usage-head span:nth-child(1) { grid-column: 1 / 3; text-align: left; white-space: nowrap; }
+.pa-usage-grid--rv .pa-usage-head span:nth-child(2), .pa-usage-grid--rv .pa-usage-head span:nth-child(6) { display: none; }
+.pa-usage-grid--rv .pa-usage-head span:nth-child(7) { grid-column: 6 / 8; text-align: right; white-space: nowrap; }
+.pa-rv { text-align: center; font-size: 0.75rem; font-weight: 700; font-variant-numeric: tabular-nums; border-radius: 4px; color: var(--text-muted); }
+.pa-rv--pos { color: #b91c1c; background: rgba(220, 38, 38, 0.10); }
+.pa-rv--neg { color: #1d4ed8; background: rgba(37, 99, 235, 0.10); }
+[data-theme="dark"] .pa-rv--pos { color: #fca5a5; background: rgba(248, 113, 113, 0.16); }
+[data-theme="dark"] .pa-rv--neg { color: #93c5fd; background: rgba(96, 165, 250, 0.16); }
+.pa-rv-h { cursor: help; text-decoration: underline dotted; }
 .pa-usage-grid--dense .pa-usage-row { padding: 0.2rem 0; }
 .pa-usage-grid--dense .pa-usage-bar { height: 0.75rem; }
 

@@ -595,10 +595,12 @@
         // 저장하지 않아 다음에 다시 시도합니다.
         const mvCache = {};
         const usageCache = {};
+        const pvCache = {};
         // 위·아래 카드가 같은 선수·시즌 데이터를 한 번만 부르게 합니다. 진행 중 요청(Promise)도 저장합니다.
         // 빈 결과(오류 포함)는 저장을 지워 다음에 다시 시도합니다.
         const arsenalReq = {};
         const usageReq = {};
+        const pvReq = {};
         function sharedFetch(store, key, fetcher, isEmpty) {
             if (store[key]) return store[key];
             const p = Promise.resolve().then(fetcher).then(
@@ -614,6 +616,10 @@
         function getUsageShared(playerId, season) {
             return sharedFetch(usageReq, playerId + ':' + season,
                 () => API.getPitchUsage(playerId, season), r => !r || !(r.usage || []).length);
+        }
+        function getPitchValuesShared(playerId, season) {
+            return sharedFetch(pvReq, playerId + ':' + season,
+                () => API.getPitchValues(playerId, season), r => !r || !(r.rows || []).length);
         }
         const avgCache = {};  // 시즌별 리그 평균(선수와 무관)
         let mvHand = null;    // 현재 선수의 투구 손('L'/'R')
@@ -673,18 +679,21 @@
             const key = playerId + ':' + season;
             let pitches = mvCache[key];
             let usage = usageCache[key];
+            let pv = pvCache[key];
             let avg = avgCache[season];
-            if (!pitches || !usage || !avg) {
+            if (!pitches || !usage || !pv || !avg) {
                 // 데이터가 없는 칸에만 로딩을 보입니다(평균만 없으면 어느 칸도 가리지 않습니다).
                 if (!pitches) body.innerHTML = createLoadingSpinner();
                 if (!usage && usageBox) usageBox.innerHTML = createLoadingSpinner();
-                const [a, u, av] = await Promise.all([
+                const [a, u, pvr, av] = await Promise.all([
                     pitches ? null : getArsenalShared(playerId, season),
                     usage ? null : getUsageShared(playerId, season),
+                    pv ? null : getPitchValuesShared(playerId, season),
                     avg ? null : API.getMovementAvg(season),
                 ]);
                 if (!pitches) { pitches = (a && a.arsenal) || []; if (pitches.length) mvCache[key] = pitches; }
                 if (!usage) { usage = u || { usage: [] }; if ((usage.usage || []).length) usageCache[key] = usage; }
+                if (!pv) { pv = pvr || { rows: [] }; if ((pv.rows || []).length) pvCache[key] = pv; }
                 if (!avg) { avg = av || { rows: [] }; avgCache[season] = avg; }  // 리그 평균은 비어 있어도 저장합니다(없으면 이 페이지에선 평균 없음)
             }
             if (token !== mvToken) return;  // 그사이 다른 선수·시즌을 골랐습니다.
@@ -692,7 +701,7 @@
             const ctx = label ? { map: M.avgFor(avg, mvHand), label } : null;
             mvLast = { pitches, total, ctx };
             body.innerHTML = M.bodyHtml(pitches, total, mvView, ctx);
-            if (usageBox) usageBox.innerHTML = M.usageHtml(usage, season);
+            if (usageBox) usageBox.innerHTML = M.usageHtml(usage, season, pv);
         }
 
         /**

@@ -759,6 +759,7 @@
     "/futures/search",
     "/players/:id",
     "/players/:id/arsenal",
+    "/players/:id/pitch_values",
     "/players/:id/usage",
     "/players/search",
     "/stats/movement_avg",
@@ -1072,7 +1073,9 @@
   {
    "file": "src/routes/pitchValues.js",
    "live": false,
-   "pages": [],
+   "pages": [
+    "pages/player-analytics.html"
+   ],
    "path": "/players/:id/pitch_values",
    "reads_all_tables": false,
    "tables": []
