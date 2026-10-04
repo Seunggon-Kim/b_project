@@ -26,11 +26,19 @@
   },
   {
    "from": "job:daily",
+   "to": "table:pitch_run_value"
+  },
+  {
+   "from": "job:daily",
    "to": "table:play_by_play"
   },
   {
    "from": "job:daily",
    "to": "table:players"
+  },
+  {
+   "from": "job:daily",
+   "to": "table:run_expectancy"
   },
   {
    "from": "job:daily",
@@ -273,6 +281,10 @@
    "to": "page:pages/team-record.html"
   },
   {
+   "from": "table:pitch_run_value",
+   "to": "page:pages/player-analytics.html"
+  },
+  {
    "from": "table:play_by_play",
    "to": "page:index.html"
   },
@@ -298,7 +310,15 @@
   },
   {
    "from": "table:play_by_play",
+   "to": "table:pitch_run_value"
+  },
+  {
+   "from": "table:play_by_play",
    "to": "table:re24_matrix_by_season"
+  },
+  {
+   "from": "table:play_by_play",
+   "to": "table:run_expectancy"
   },
   {
    "from": "table:play_by_play",
@@ -486,6 +506,16 @@
     },
     {
      "name": "팀 순위 결과 기록",
+     "script": "data_collection/record_job_run.py",
+     "status_key": null
+    },
+    {
+     "name": "구종 가치 계산",
+     "script": "data_collection/pitch_run_value.py",
+     "status_key": "pitch_values"
+    },
+    {
+     "name": "구종 가치 결과 기록",
      "script": "data_collection/record_job_run.py",
      "status_key": null
     },
@@ -835,9 +865,11 @@
     "kbo_run_values_by_season",
     "kbo_woba_weights_by_season",
     "korean_series_champion",
+    "pitch_run_value",
     "play_by_play",
     "players",
     "re24_matrix_by_season",
+    "run_expectancy",
     "self_park_factor",
     "stadium_dim",
     "statiz_park_factor",
@@ -872,9 +904,11 @@
     "kbo_run_values_by_season",
     "kbo_woba_weights_by_season",
     "korean_series_champion",
+    "pitch_run_value",
     "play_by_play",
     "players",
     "re24_matrix_by_season",
+    "run_expectancy",
     "self_park_factor",
     "stadium_dim",
     "statiz_park_factor",
@@ -909,9 +943,11 @@
     "kbo_run_values_by_season",
     "kbo_woba_weights_by_season",
     "korean_series_champion",
+    "pitch_run_value",
     "play_by_play",
     "players",
     "re24_matrix_by_season",
+    "run_expectancy",
     "self_park_factor",
     "stadium_dim",
     "statiz_park_factor",
@@ -1068,7 +1104,9 @@
    ],
    "path": "/players/:id/pitch_values",
    "reads_all_tables": false,
-   "tables": []
+   "tables": [
+    "pitch_run_value"
+   ]
   },
   {
    "file": "src/routes/players.js",
@@ -1542,6 +1580,25 @@
    ],
    "status_keys": {},
    "writes": []
+  },
+  {
+   "desc": "올 시즌 정규시즌 PBP 로 기대 득점 표(주자·아웃·볼카운트 288가지)를 만들고, 공 하나마다 기대 득점이 얼마나 바뀌었는지로 투수·구종·타자 손별 구종 가치를 계산해 MySQL 에 넣습니다. 2016~2025는 2026-10-04에 한 번 채운 값입니다.",
+   "jobs": [
+    "daily"
+   ],
+   "note": "MySQL 에만 있는 계산 표입니다. 시즌 단위로 지우고 다시 넣습니다.",
+   "path": "data_collection/pitch_run_value.py",
+   "reads": [
+    "play_by_play"
+   ],
+   "sources": [],
+   "status_keys": {
+    "daily": "pitch_values"
+   },
+   "writes": [
+    "pitch_run_value",
+    "run_expectancy"
+   ]
   },
   {
    "desc": "선수 상세 프로필(소속·연봉·경력·사진)을 다시 받아 MySQL players 를 고칩니다. 예전에는 players 에 이미 있는 선수를 건너뛰어 한 번 넣은 값이 영영 낡았습니다(2026-08 실행은 1,749명 중 4명만 처리). 이제 --refresh 로 올 시즌 기록이 있는 선수를 전부 다시 봅니다.",
@@ -2120,6 +2177,25 @@
    "written_by": []
   },
   {
+   "category": "세이버메트릭스 분석",
+   "derived_from": [
+    "play_by_play"
+   ],
+   "desc": "투수·구종·타자 손별로 공 하나하나가 실점을 얼마나 막았는지(던진 뒤 기대 득점 변화 + 그 공의 득점)를 더한 구종 가치 표로, 2016년부터 정규시즌만 셉니다.",
+   "kind": "derived",
+   "manual_note": null,
+   "name": "pitch_run_value",
+   "pages": [
+    "pages/player-analytics.html"
+   ],
+   "routes": [
+    "/players/:id/pitch_values"
+   ],
+   "written_by": [
+    "data_collection/pitch_run_value.py"
+   ]
+  },
+  {
    "category": "수집 데이터",
    "derived_from": [],
    "desc": "KBO 투구 단위 플레이바이플레이 원천 기록(투구 트래킹·카운트·주자·수비배치·타석 결과)",
@@ -2204,6 +2280,21 @@
    "routes": [],
    "written_by": [
     "park_factors/build_re24_run_values.py"
+   ]
+  },
+  {
+   "category": "세이버메트릭스 분석",
+   "derived_from": [
+    "play_by_play"
+   ],
+   "desc": "시즌마다 주자·아웃·볼카운트 상황(288가지)에서 그 반이닝이 끝날 때까지 평균 몇 점이 나는지(기대 득점)를 적은 표로, 2016년부터 있습니다.",
+   "kind": "derived",
+   "manual_note": null,
+   "name": "run_expectancy",
+   "pages": [],
+   "routes": [],
+   "written_by": [
+    "data_collection/pitch_run_value.py"
    ]
   },
   {

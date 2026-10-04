@@ -149,6 +149,23 @@ jobs:
           python data_collection/record_job_run.py --job team_ranks \
             --status ${{ steps.team_ranks.outcome == 'success' && 'ok' || (steps.team_ranks.outcome == 'skipped' && 'skip' || 'fail') }}
 
+      # --- 2-3. 구종 가치 ---------------------------------------------
+      # 올 시즌 정규시즌 PBP 로 기대 득점 표(주자×아웃×볼카운트)와 투수 ×
+      # 구종 × 타자 손별 구종 가치를 다시 만듭니다(MySQL run_expectancy·
+      # pitch_run_value, 시즌 단위로 지우고 넣음). 선수 분석 화면이 읽습니다.
+      # 설계: docs/superpowers/specs/2026-10-04-pitch-run-value-design.md
+      - name: 구종 가치 계산
+        id: pitch_values
+        continue-on-error: true
+        run: python data_collection/pitch_run_value.py --current
+
+      - name: 구종 가치 결과 기록
+        if: always()
+        continue-on-error: true
+        run: |
+          python data_collection/record_job_run.py --job pitch_values \
+            --status ${{ steps.pitch_values.outcome == 'success' && 'ok' || (steps.pitch_values.outcome == 'skipped' && 'skip' || 'fail') }}
+
       # --- 3. KBO 공식 통계 (원래 02:00 KST) --------------------------
       # Selenium 으로 KBO 사이트를 읽습니다. 러너 IP 가 막히면 여기서
       # 실패합니다(설계 7장 위험 1).
@@ -330,6 +347,7 @@ jobs:
             echo "| PBP 수집·적재 | ${{ steps.pbp.outcome }} |"
             echo "| games 적재 | ${{ steps.games.outcome }} |"
             echo "| 올 시즌 팀 순위 | ${{ steps.team_ranks.outcome }} |"
+            echo "| 구종 가치 계산 | ${{ steps.pitch_values.outcome }} |"
             echo "| 타자 수집 | ${{ steps.scrape_batter.outcome }} |"
             echo "| 타자 적재 | ${{ steps.load_batter.outcome }} |"
             echo "| 투수 수집 | ${{ steps.scrape_pitcher.outcome }} |"
@@ -348,7 +366,7 @@ jobs:
           fail=0
           for s in "${{ steps.pbp.outcome }}" "${{ steps.load_batter.outcome }}" \
                    "${{ steps.load_pitcher.outcome }}" "${{ steps.purge.outcome }}" \
-                   "${{ steps.team_ranks.outcome }}"; do
+                   "${{ steps.team_ranks.outcome }}" "${{ steps.pitch_values.outcome }}"; do
             if [ "$s" != "success" ]; then fail=1; fi
           done
           # games 는 경기가 없는 날 건너뛰므로 skipped 를 실패로 보지 않습니다.

@@ -45,6 +45,7 @@ ENTRYPOINTS = {
         "data_collection/futures_to_d1.py",
         # 올 시즌 팀 순위(팀 기록실).
         "data_collection/team_ranks.py",
+        "data_collection/pitch_run_value.py",
         # 공식 기록은 브라우저 없이 HTTP 로 읽습니다.
         "data_collection/official_stats_http.py",
         "data_collection/csv_to_d1.py",

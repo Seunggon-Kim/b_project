@@ -31,7 +31,9 @@
         "pitcher_fip",
         "kbo_woba_weights_by_season",
         "kbo_run_values_by_season",
-        "re24_matrix_by_season"
+        "re24_matrix_by_season",
+        "run_expectancy",
+        "pitch_run_value"
       ]
     },
     {
@@ -681,6 +683,33 @@
         "wRC_home": "홈구장 단독 PF 적용 조정득점생산(wRC+), 100=리그평균",
         "wRC_half": "홈-원정 절반 PF 적용 조정득점생산(wRC+), 100=리그평균",
         "wRC_weighted": "PA가중 PF 적용 조정득점생산(wRC+), 100=리그평균"
+      }
+    },
+    "run_expectancy": {
+      "category": "세이버메트릭스 분석",
+      "table_desc": "시즌마다 주자·아웃·볼카운트 상황(288가지)에서 그 반이닝이 끝날 때까지 평균 몇 점이 나는지(기대 득점)를 적은 표로, 2016년부터 있습니다.",
+      "update_freq": "매일 03:33 (daily, 올 시즌)",
+      "columns": {
+        "season": "시즌 연도",
+        "bases": "주자 상황(1루=1, 2루=2, 3루=4 를 더한 값, 0~7)",
+        "outs": "아웃 수(0~2)",
+        "balls": "볼 수(0~3)",
+        "strikes": "스트라이크 수(0~2)",
+        "re": "이 상황에서 반이닝 끝까지 평균 득점(기대 득점)",
+        "n": "이 상황에서 던진 공 수"
+      }
+    },
+    "pitch_run_value": {
+      "category": "세이버메트릭스 분석",
+      "table_desc": "투수·구종·타자 손별로 공 하나하나가 실점을 얼마나 막았는지(던진 뒤 기대 득점 변화 + 그 공의 득점)를 더한 구종 가치 표로, 2016년부터 정규시즌만 셉니다.",
+      "update_freq": "매일 03:33 (daily, 올 시즌)",
+      "columns": {
+        "season": "시즌 연도",
+        "pitcher_ID": "투수 고유 ID",
+        "pitch_type": "구종(직구·슬라이더 등)",
+        "stands": "타자 타석(L 좌타, R 우타, 스위치 타자는 투수 반대쪽)",
+        "n": "공 수",
+        "rv": "구종 가치 합(점, +면 실점을 막음)"
       }
     }
   }

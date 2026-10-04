@@ -538,3 +538,22 @@ CREATE TABLE `wrc_plus_comparison` (
   `wRC_half` DOUBLE,
   `wRC_weighted` DOUBLE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CREATE TABLE `run_expectancy` (
+  `season` SMALLINT NOT NULL,
+  `bases` TINYINT NOT NULL,
+  `outs` TINYINT NOT NULL,
+  `balls` TINYINT NOT NULL,
+  `strikes` TINYINT NOT NULL,
+  `re` DOUBLE NOT NULL,
+  `n` INT NOT NULL,
+  PRIMARY KEY (`season`, `bases`, `outs`, `balls`, `strikes`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CREATE TABLE `pitch_run_value` (
+  `season` SMALLINT NOT NULL,
+  `pitcher_ID` INT NOT NULL,
+  `pitch_type` VARCHAR(20) NOT NULL,
+  `stands` CHAR(1) NOT NULL,
+  `n` INT NOT NULL,
+  `rv` DOUBLE NOT NULL,
+  PRIMARY KEY (`season`, `pitcher_ID`, `pitch_type`, `stands`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

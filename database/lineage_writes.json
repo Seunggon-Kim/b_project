@@ -301,6 +301,21 @@
         "weekly": "park_factors"
       },
       "desc": "누적 PBP 로 시즌별 RE24 표와 이벤트별 득점 가치(re24_matrix_by_season·kbo_run_values_by_season)를 다시 계산합니다. 주 1회 돌고, 결과 표는 MySQL 에 올립니다."
+    },
+    "data_collection/pitch_run_value.py": {
+      "sources": [],
+      "writes": [
+        "pitch_run_value",
+        "run_expectancy"
+      ],
+      "reads": [
+        "play_by_play"
+      ],
+      "status_keys": {
+        "daily": "pitch_values"
+      },
+      "note": "MySQL 에만 있는 계산 표입니다. 시즌 단위로 지우고 다시 넣습니다.",
+      "desc": "올 시즌 정규시즌 PBP 로 기대 득점 표(주자·아웃·볼카운트 288가지)를 만들고, 공 하나마다 기대 득점이 얼마나 바뀌었는지로 투수·구종·타자 손별 구종 가치를 계산해 MySQL 에 넣습니다. 2016~2025는 2026-10-04에 한 번 채운 값입니다."
     }
   },
   "manual_tables": {
@@ -324,7 +339,6 @@
     "/wrc/batter/:id": "옛 FastAPI(api/main.py)에서 옮겨 온 주소입니다. 지금 어느 화면도 부르지 않습니다."
   },
   "routes_without_tables": {
-    "/players/:id/pitch_values": "MySQL 전용 표 pitch_run_value 를 읽습니다. 표를 schema.sql·계보에 넣는 일은 daily 단계와 함께 합니다(DB 세션 5-B 뒤). 그때 이 줄을 지웁니다.",
     "/jobs/status": "작업 실행 기록(meta_job_runs)만 읽습니다. meta_ 표는 계보에서 뺍니다."
   },
   "live_route_files": [
