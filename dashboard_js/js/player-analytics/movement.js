@@ -147,7 +147,7 @@
       + '<p class="pa-mv-note">포수 시점 · 수평 +는 1루 쪽 · 수직 +는 위</p>'
       + '<p class="pa-mv-note">공 ' + comma(vs.length) + '개 추적'
       + (total > 0 ? ' (정규시즌 ' + comma(total) + '구 대비 ' + Math.min(100, Math.round(vs.length * 100 / total)) + '%)' : '') + '</p>'
-      + (total > 0 ? '<p class="pa-mv-note pa-mv-note--sub">추적 공에는 시범경기·포스트시즌이 섞일 수 있습니다.</p>' : '')
+      + (total > 0 ? '<p class="pa-mv-note pa-mv-note--sub">추적 수는 문자중계 기준이라 공식 투구 수와 조금 다를 수 있습니다.</p>' : '')
       + legendHtml(summary);
   }
 
