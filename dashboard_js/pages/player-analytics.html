@@ -1121,6 +1121,14 @@
             const zone = A.zone(lastArsenalData);
             const d3ok = window.d3 && window.d3.contourDensity;
             const mode = (currentPitchViewMode === 'point' || !d3ok) ? 'point' : 'contour';
+            const cBtn = document.getElementById('mode-contour');
+            if (cBtn && !d3ok) {
+                cBtn.disabled = true;
+                cBtn.title = '등고선을 불러오지 못해 점으로 보여 줍니다.';
+                cBtn.classList.remove('active');
+                const pBtn = document.getElementById('mode-point');
+                if (pBtn) pBtn.classList.add('active');
+            }
             grid.innerHTML = groups.map(g => {
                 const cs = mode === 'contour' ? A.contours(g, currentPitchPerspective, window.d3) : null;
                 return '<div class="pitch-chart-item pa-ars-card">' + A.titleHtml(g) +

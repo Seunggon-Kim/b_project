@@ -180,9 +180,11 @@
 .pa-ars-title { font-size: 1rem; font-weight: 700; color: var(--text-primary); text-align: left; margin-bottom: 0.4rem; }
 .pa-ars-title span { display: block; font-size: 0.78rem; font-weight: 500; color: var(--text-secondary); }
 .pa-ars-svg { display: block; width: 100%; max-width: 300px; height: auto; margin: 0 auto; }
-.pa-ars-zone { fill: var(--text-muted); fill-opacity: 0.14; stroke: var(--text-muted); stroke-opacity: 0.45; stroke-width: 1; }
+.pa-ars-zone { fill: var(--text-muted); fill-opacity: 0.22; stroke: var(--text-muted); stroke-opacity: 0.5; stroke-width: 1; }
 .pa-ars-plate { fill: var(--text-muted); fill-opacity: 0.14; stroke: var(--text-muted); stroke-opacity: 0.45; stroke-width: 1; }
 .pa-ars-pt { fill-opacity: 0.5; }
+.pa-ars-pt--edge { stroke: var(--text-secondary); stroke-width: 1; }
+.mode-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .pa-ars-empty { padding: 1rem 0.5rem; margin: 0; }
 @media (max-width: 640px) {
   #pitch-arsenal-section .pitch-arsenal-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }

@@ -8,8 +8,9 @@
   const PA = root.PlayerAnalytics = root.PlayerAnalytics || {};
 
   const SIZE = 300;                 // viewBox 한 변
-  const X_MAX = 2.5;                // 좌우 ±2.5ft
-  const K = SIZE / (X_MAX * 2);     // ft → 좌표(60)
+  const X_MAX = 3;                  // 좌우 ±3ft
+  const Z_TOP = 5.5;                // 높이 -0.5~5.5ft (존이 가운데)
+  const K = SIZE / (X_MAX * 2);     // ft → 좌표(50)
   const HALF_ZONE = 17 / 12 / 2;    // 0.708ft
   const MIN_CONTOUR_N = 15;
   const LEVELS = 5;
@@ -59,8 +60,13 @@
   /** 피트(px, pz) → viewBox 좌표입니다. view 'pitcher' 면 좌우를 뒤집습니다. */
   function toXY(px, pz, view) {
     const x = (view === 'pitcher' ? -px : px) * K + SIZE / 2;
-    const y = SIZE - pz * K;
+    const y = (Z_TOP - pz) * K;
     return [x, y];
+  }
+  /** 보이는 범위 밖 공은 가장자리(3px 안쪽)에 붙여 둡니다. 빼지 않습니다. */
+  function clampXY(xy) {
+    const m = 3;
+    return [Math.min(SIZE - m, Math.max(m, xy[0])), Math.min(SIZE - m, Math.max(m, xy[1]))];
   }
   function scale() { return { size: SIZE, k: K }; }
 
@@ -81,7 +87,7 @@
 
   /** 홈플레이트(납작한 오각형)입니다. 좌표는 viewBox. */
   function plateD() {
-    const cx = SIZE / 2, w = HALF_ZONE * K, y0 = SIZE - 34, y1 = y0 + 10, y2 = y0 + 22;
+    const cx = SIZE / 2, w = HALF_ZONE * K, y0 = SIZE - 44, y1 = y0 + 9, y2 = y0 + 20;
     return 'M' + r1(cx - w) + ' ' + y0 + 'L' + r1(cx + w) + ' ' + y0 + 'L' + r1(cx + w) + ' ' + y1 +
       'L' + cx + ' ' + y2 + 'L' + r1(cx - w) + ' ' + y1 + 'Z';
   }
@@ -107,8 +113,9 @@
       (g.pitches || []).forEach(function (p) {
         const px = num(p.px), pz = num(p.pz);
         if (px === null || pz === null) return;
-        const xy = toXY(px, pz, view);
-        s += '<circle class="pa-ars-pt" cx="' + r1(xy[0]) + '" cy="' + r1(xy[1]) + '" r="3" fill="' + g.color + '"/>';
+        const raw = toXY(px, pz, view), xy = clampXY(raw);
+        const edge = xy[0] !== raw[0] || xy[1] !== raw[1];
+        s += '<circle class="pa-ars-pt" cx="' + r1(xy[0]) + '" cy="' + r1(xy[1]) + '" r="3" fill="' + g.color + '"' + (edge ? ' class="pa-ars-pt pa-ars-pt--edge" stroke="currentColor"' : '') + '/>';
       });
     }
     return s + '</svg>';
@@ -117,9 +124,9 @@
   /** d3.contourDensity 로 등고선을 계산합니다(d3 없거나 공이 적으면 null → 점). */
   function contours(g, view, d3) {
     if (!d3 || !d3.contourDensity || g.n < MIN_CONTOUR_N) return null;
-    const data = g.pitches.map(function (p) { return toXY(num(p.px), num(p.pz), view); });
+    const data = g.pitches.map(function (p) { return clampXY(toXY(num(p.px), num(p.pz), view)); });
     const out = d3.contourDensity().x(function (d) { return d[0]; }).y(function (d) { return d[1]; })
-      .size([SIZE, SIZE]).bandwidth(11).thresholds(LEVELS + 1)(data);
+      .size([SIZE, SIZE]).bandwidth(9).thresholds(LEVELS + 1)(data);
     return out.length > LEVELS ? out.slice(out.length - LEVELS) : out;
   }
 
