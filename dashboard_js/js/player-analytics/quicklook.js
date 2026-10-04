@@ -15,11 +15,12 @@
   const TS = function () { return root.TeamStats; };
 
   // [라벨, 합계 키, 표시 형식]. 'pct' 는 소수 1자리 뒤에 % 를 붙입니다.
+  // 투수는 무브먼트 카드 높이에 맞춰 줄을 더 둡니다(evan 의견).
   const ROWS = {
     pit: [
       ['W', 'w', 'int'], ['L', 'l', 'int'], ['SV', 'sv', 'int'], ['HLD', 'hld', 'int'],
       ['G', 'g', 'int'], ['GS', 'gs', 'int'], ['IP', 'outs', 'ip'],
-      ['K%', 'kpct', 'pct'], ['BB%', 'bbpct', 'pct'], ['ERA', 'era', 'f2'], ['WHIP', 'whip', 'f2'],
+      ['K%', 'kpct', 'pct'], ['BB%', 'bbpct', 'pct'], ['K-BB%', 'kbbpct', 'pct'], ['K/9', 'k9', 'f2'], ['BB/9', 'bb9', 'f2'], ['HR/9', 'hr9', 'f2'], ['BABIP', 'babip', 'avg3'], ['ERA', 'era', 'f2'], ['WHIP', 'whip', 'f2'],
     ],
     bat: [
       ['G', 'g', 'int'], ['PA', 'pa', 'int'], ['HR', 'hr', 'int'], ['R', 'r', 'int'], ['RBI', 'rbi', 'int'],
