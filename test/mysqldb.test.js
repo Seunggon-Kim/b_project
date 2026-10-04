@@ -208,6 +208,11 @@ test('연결 옵션은 행을 배열로 받습니다', () => {
   assert.equal(MYSQL_OPTIONS.rowsAsArray, true);
 });
 
+test('연결 옵션은 질의마다 호출 위치 스택을 뜨지 않습니다(trace 끔)', () => {
+  // mysql2 promise 는 trace 가 켜져 있으면 질의마다 Error.captureStackTrace 를 부릅니다.
+  assert.equal(MYSQL_OPTIONS.trace, false);
+});
+
 /** 객체 행을 mysql2 의 rowsAsArray 모양(열 순서 배열)으로 바꿉니다. */
 function asArrays(rows, fields) {
   return rows.map((r) => fields.map((f) => r[f.name]));

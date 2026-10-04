@@ -22,6 +22,11 @@ export const MYSQL_OPTIONS = {
   // 행을 다시 펼쳐 복사하던 일을 한 번의 반복으로 합칩니다. 값은 mysql2 가
   // 객체 모드에서 주던 것과 같습니다(같은 열 해석기를 씁니다).
   rowsAsArray: true,
+  // 질의마다 호출 위치 스택을 떠 두지 않습니다(mysql2 의 trace, 기본 true).
+  // 오류의 stack 에 우리 코드 쪽 호출 줄이 붙게 해 주는 기능인데, 질의
+  // 하나마다 Error.captureStackTrace 를 불러 Worker CPU 를 씁니다. 오류
+  // 메시지·코드는 그대로이고 err.stack 의 줄만 mysql2 내부 줄이 됩니다.
+  trace: false,
 };
 
 // mysql2 가 객체 키로 쓰기를 거절하는 열 이름입니다(helpers.fieldEscape).
