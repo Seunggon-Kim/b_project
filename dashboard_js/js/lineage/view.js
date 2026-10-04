@@ -454,10 +454,27 @@
     bindTips(tab);
   }
 
+  /** '계보에서 보기'로 연 표가 그림에 없을 때 알릴 문구입니다. 그림에 있으면 ''. */
+  function missingTableNote(lin, id) {
+    const name = String(id).replace(/^table:/, '');
+    const t = ((lin && lin.tables) || []).find(x => x.name === name);
+    if (!t) return `${name} 표는 아직 계보에 없습니다.`;
+    if (t.kind === 'meta') return `${name} 표는 운영 기록 표라 계보 그림에 넣지 않습니다.`;
+    return '';
+  }
+
   /** 다른 탭에서 넘어올 때 표 하나를 고른 채 엽니다. 손 작업 표면 묶음을 펼칩니다. */
   function select(id) {
-    const t = (S.lin.tables || []).find(x => 'table:' + x.name === id);
-    if (!t || t.kind === 'meta') return;
+    const note = missingTableNote(S.lin, id);
+    if (note) {
+      S.sel = null;
+      S.filter = null;
+      render();
+      // render 가 lin-alerts 를 다시 쓰므로 그 뒤에 붙입니다. 다음 render 때 사라집니다.
+      $('lin-alerts').insertAdjacentHTML('beforeend', `<div class="lin-alert">${esc(note)}</div>`);
+      return;
+    }
+    const t = S.lin.tables.find(x => 'table:' + x.name === id);
     if (t.kind === 'manual') S.manualOpen = true;
     S.filter = null;
     S.sel = id;
@@ -492,7 +509,7 @@
     });
   }
 
-  const api = { esc, pageHref, statusMap, summaryHtml, graphHtml, listHtml, detailHtml, boxTip, joinTips, loadLineage, open, STATE_LABEL, SUM_TIP };
+  const api = { missingTableNote, esc, pageHref, statusMap, summaryHtml, graphHtml, listHtml, detailHtml, boxTip, joinTips, loadLineage, open, STATE_LABEL, SUM_TIP };
   L.view = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

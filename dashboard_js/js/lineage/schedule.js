@@ -83,8 +83,10 @@
   function scheduleHtml(rows, details) {
     return rows.map(function (r) {
       const sched = r.runs.map(x => esc(x.schedule)).join('<br>');
-      const upd = r.runs.map(function (x) {
-        const t = runText(x, details);
+      const shown = r.runs.filter((x, i) => !x.key || r.runs.findIndex(y => y.key === x.key) === i);
+      const upd = shown.map(function (x) {
+        const label = x.key ? r.runs.filter(y => y.key === x.key).map(y => y.schedule).join(' · ') : x.schedule;
+        const t = runText({ job: x.job, schedule: label, key: x.key }, details);
         const fail = details && x.key && details[x.key] && details[x.key].status === 'fail';
         const note = details && x.key && details[x.key] && details[x.key].note;
         return `<span class="dbx-run${fail ? ' fail' : ''}"${note ? ` title="${esc(note)}"` : ''}>${esc(t)}</span>`;
@@ -98,7 +100,7 @@
     }).join('');
   }
 
-  /** 카드 제목 옆 요약입니다. 예: '총 20개 스크립트 · 작업 4개' */
+  /** 카드 제목 옆 요약입니다. 예: '총 21개 스크립트 · 작업 4개' */
   function scheduleSummary(rows, lin) {
     return `총 ${rows.length}개 스크립트 · 작업 ${((lin && lin.jobs) || []).length}개`;
   }
@@ -123,7 +125,7 @@
       const det = js && js.ok && js.data && js.data.details && typeof js.data.details === 'object' ? js.data.details : null;
       const rows = scheduleRows(lin.data);
       tbody.innerHTML = scheduleHtml(rows, det);
-      if (opts.summary) opts.summary.textContent = scheduleSummary(rows, lin.data);
+      if (opts.summary) opts.summary.textContent = scheduleSummary(rows, lin.data) + (det ? '' : ' · 실행 기록을 불러오지 못했습니다');
     } catch (e) {
       console.error(e);
       tbody.innerHTML = `<tr><td colspan="4" class="dbx-cron-error">수집 일정을 불러오지 못했습니다 (${esc(String((e && e.message) || e))}).</td></tr>`;
