@@ -1,0 +1,53 @@
+# 데이터 탐색 수집 일정 표를 계보로 만들기 · 두 탭 잇기 설계
+
+- 작성: 2026-10-04, bstats 화면 세션
+- 대상: `dashboard_js/pages/database-explorer.html` 의 "데이터 탐색" 탭 '자동 수집 스케줄' 표, "테이블 계보" 탭(#lineage)
+- 결정: evan (수집 표 = 계보 데이터로 자동 생성, 두 탭을 오가는 링크 더하기)
+- 상태: 설계 승인됨(evan).
+
+## 1. 왜
+
+'자동 수집 스케줄' 표는 손으로 적은 HTML 이라 수집 작업이 바뀔 때마다 어긋납니다. 계보 탭이 생긴 뒤 맞대어 보니 이미 세 곳이 틀렸습니다.
+
+- futures_records.py 줄이 자기 기록(futures_records)이 아니라 roster 작업 시각을 보입니다.
+- "매일 03:33·16:07" 줄들이 16:07 실행 기록(roster_pm)을 보이지 않습니다.
+- build_woba_weights.py 가 빠져 있습니다.
+
+계보 파일(`dashboard_js/data/table_lineage.json`, DB 세션 생성물)에는 작업·단계·스크립트·기록 키가 이미 있어, 표를 이것으로 만들면 늘 맞습니다.
+
+## 2. 수집 일정 표
+
+- 데이터: 계보 파일 `jobs[].steps[]`·`scripts[]` + `/jobs/status` 의 `details[키]`.
+- 줄: 스크립트 하나에 한 줄. 거들기 단계(`record_job_run.py`, `ci_proxy.sh`)는 뺍니다. 같은 스크립트가 두 작업에서 돌면 한 줄에 실행을 둘 적습니다(예: roster_to_d1.py = 매일 03:33 + 매일 16:07).
+- 순서: 작업 daily → roster → weekly → monthly, 그 안은 단계 순서(처음 나온 곳).
+- 칸
+  - 모듈: 스크립트 이름 + 경로(작은 글자)
+  - 설명: `scripts[].desc` 가 있으면 그것, 없으면 단계 이름들(겹치면 한 번)과 `note`. 지금 손 표의 설명 14개는 DB 세션이 계보 손 파일(`database/lineage_writes.json` → `scripts[].desc`)로 옮깁니다(부탁함). 옮기기 전에도 표는 단계 이름으로 나옵니다.
+  - 실행 시각: 실행마다 `jobs[].schedule_kst`(줄바꿈)
+  - 마지막 업데이트: 실행마다 "매일 03:33: 2026-10-04 10:21", 실패면 "(실패)"·건너뜀이면 "(건너뜀)"·모르는 값이면 그 값. 기록을 따로 남기지 않는 단계와 실행 기록을 못 받았을 때는 "-", 기록 키는 있는데 아직 기록이 없으면 "아직 기록 없음". 실패 줄은 빨간 글자, 메모(`note`)는 마우스를 올리면(title).
+- 제목 옆: "총 N개 스크립트 · 작업 4개".
+- 표 아래 안내문(손으로 돌리는 작업)은 그대로 두고, "'-'는 그 단계가 실행 기록을 따로 남기지 않는다는 뜻입니다" 한 문장을 더합니다.
+- 계보 파일을 못 받으면 표 자리에 "수집 일정을 불러오지 못했습니다(이유)".
+- 계보 파일은 두 탭이 한 번만 받아 같이 씁니다(`Lineage.view.loadLineage()`). 실행 기록은 지금처럼 `API.getJobsStatus()`.
+
+## 3. 두 탭 잇기
+
+- 데이터 탐색 → 계보: 표를 열면(테이블 상세) 제목 줄에 '계보에서 보기' 버튼. 누르면 계보 탭으로 가서 그 표를 고른 상태(경로 진하게·상세 카드)로 엽니다. 손 작업 표면 묶음을 펼칩니다.
+- 계보 → 데이터 탐색: 표 상세 카드 제목 줄에 '데이터 보기' 버튼(닫기 앞). 누르면 데이터 탐색 탭으로 가서 그 표를 엽니다(`selectTable`). 계보 화면은 `lineage:show-table` 이벤트를 보내고 페이지가 받아 처리합니다(모듈이 페이지 함수를 직접 부르지 않음).
+
+## 4. 파일
+
+| 파일 | 하는 일 |
+|---|---|
+| `dashboard_js/js/lineage/schedule.js` (새) | 수집 일정 표: `scheduleRows`·`runText`·`scheduleHtml`·`scheduleSummary`(순수), `mount`(브라우저) |
+| `dashboard_js/js/lineage/view.js` | `loadLineage()`(계보 파일 한 번 받기, load 도 이것을 씀), `open(selectId)`, 표 상세 카드 '데이터 보기' 버튼과 이벤트 |
+| `dashboard_js/css/lineage.css` | 실패 줄·오류 줄 글자 색 |
+| `dashboard_js/pages/database-explorer.html` | 손 표 tbody → 빈 자리, 제목 옆 요약 id, `schedule.js` 싣기, `loadCronStatus` 를 `Lineage.schedule.mount` 로, '계보에서 보기' 버튼, `lineage:show-table` 받기, `switchTab(tab, opts)` |
+
+## 5. 검증
+
+- Node(저장소 밖): schedule 시험(줄 수·합치기·기록 키·설명 대체·문구·이스케이프), view 시험(데이터 보기 버튼), html 시험(스크립트·버튼·이벤트·switchTab).
+- 캡처: 데이터 탐색 탭 표, '계보에서 보기'로 넘어간 계보(손 작업 표 하나 포함), 계보 '데이터 보기'로 넘어간 데이터 탐색, 휴대폰.
+- 끝에 `py scripts/build_lineage.py` → `py -m pytest tests`(페이지 API 호출이 바뀌므로).
+
+push·Pages 배포는 evan 허락 뒤.
