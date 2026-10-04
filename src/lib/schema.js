@@ -56,6 +56,23 @@ export async function tableColumns(env, table, db = env.DB) {
   return results;
 }
 
+/**
+ * 표마다 열 수입니다(이름 -> 수). MySQL 만 한 번의 질의로 셉니다.
+ *
+ * `/db/tables` 가 표마다 tableColumns 를 부르면 질의가 표 수만큼 나가
+ * Worker CPU 가 쌓입니다. 수는 tableColumns(env, 표).length 와 같습니다
+ * (같은 information_schema.columns 의 행 수). D1 이면 null 이고, 부르는
+ * 쪽이 예전처럼 표마다 셉니다.
+ */
+export async function columnCounts(env) {
+  if (!isMysql(env)) return null;
+  const { results } = await env.DB.prepare(
+    'SELECT table_name AS name, COUNT(*) AS n FROM information_schema.columns '
+    + 'WHERE table_schema = DATABASE() GROUP BY table_name',
+  ).all();
+  return new Map(results.map((r) => [r.name, Number(r.n)]));
+}
+
 export async function tableExists(env, name) {
   try {
     const row = isMysql(env)

@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { tableNames, tableColumns, tableExists, sqliteTypeOf } from '../src/lib/schema.js';
+import {
+  tableNames, tableColumns, tableExists, sqliteTypeOf, columnCounts,
+} from '../src/lib/schema.js';
 
 function fakeDb(answers) {
   const seen = [];
@@ -86,4 +88,18 @@ test('D1 표 존재 확인은 sqlite_master 에 이름을 묶어 묻습니다', 
   assert.match(yes.seen[0][0], /sqlite_master/);
   assert.deepEqual(yes.seen[0][1], ['games']);
   assert.equal(await tableExists({ DB: fakeDb([]) }, 'nope'), false);
+});
+
+test('MySQL 열 수는 한 번의 질의로 표마다 셉니다', async () => {
+  const db = fakeDb([['information_schema.columns', [{ name: 'games', n: 9 }, { name: 'players', n: 12 }]]]);
+  const m = await columnCounts({ DB: db, DB_BACKEND: 'mysql' });
+  assert.deepEqual([...m], [['games', 9], ['players', 12]]);
+  assert.equal(db.seen.length, 1);
+  assert.match(db.seen[0][0], /GROUP BY table_name/);
+});
+
+test('D1 이면 열 수를 미리 세지 않습니다(null)', async () => {
+  const db = fakeDb([]);
+  assert.equal(await columnCounts({ DB: db }), null);
+  assert.equal(db.seen.length, 0);
 });

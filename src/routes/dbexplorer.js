@@ -4,7 +4,7 @@ import {
   csvExportPlan, csvRow, csvRowsFromArrays, isRealType,
 } from '../lib/csv.js';
 import { countOf, countsOf } from '../lib/counts.js';
-import { tableNames, tableColumns } from '../lib/schema.js';
+import { tableNames, tableColumns, columnCounts } from '../lib/schema.js';
 import {
   isSharded, SHARDED_TABLES, shardCounts, sliceRows, shardTableInfo,
 } from '../lib/pbpvirtual.js';
@@ -42,6 +42,10 @@ export async function dbTables(request, env) {
   // 24만 행을 읽었고 그 95% 가 play_by_play 였습니다. 미리 적어 둔 값을
   // 한 번에 읽습니다. 자세한 사정은 lib/counts.js 주석에 있습니다.
   const known = await countsOf(db, names);
+  // 열 수도 한 번에 읽습니다(MySQL). 표마다 열 정보를 따로 물으면 질의가
+  // 표 수만큼 나가고, 질의마다 드는 Worker CPU 가 쌓입니다(무료 플랜은
+  // 요청당 10ms). D1 이면 null 이라 예전처럼 표마다 셉니다.
+  const ncols = await columnCounts(env);
 
   const result = [];
   for (const name of names) {
@@ -50,20 +54,22 @@ export async function dbTables(request, env) {
     // 나뉜 표는 샤드 합계를 내고 스키마도 샤드에서 읽습니다.
     // 공용 DB 에는 그 표가 없습니다.
     let n;
-    let info;
+    let columns;
     if (isSharded(name, env)) {
       const parts = await shardCounts(env, name);
       n = parts.reduce((acc, x) => acc + x.n, 0);
-      info = await shardTableInfo(env, name);
+      columns = (await shardTableInfo(env, name)).results.length;
     } else {
       n = known.has(name) ? known.get(name) : await countOf(db, name);
-      info = { results: await tableColumns(env, name) };
+      columns = ncols && ncols.has(name)
+        ? ncols.get(name)
+        : (await tableColumns(env, name)).length;
     }
     const m = tmeta[name] || {};
     result.push({
       name,
       rows: n,
-      columns: info.results.length,
+      columns,
       category: m.category || '',
       table_desc: m.table_desc || '',
       update_freq: m.update_freq || '',
