@@ -103,7 +103,7 @@ class TestToRows:
     NAMES = {('OB', 1982): 'OB', ('SS', 1982): 'SS'}
 
     def test_리그가_하나면_단일로_둡니다(self):
-        # 빈 문자열은 안 됩니다. sql_literal 이 빈 값을 NULL 로 바꾸는데
+        # 빈 문자열은 안 됩니다. 적재(mysql_sink.blank)가 빈 값을 NULL 로 바꾸는데
         # league 는 PK 라 NOT NULL 입니다. 실제로 적재가 여기서 실패했습니다.
         tables = parse_ranks(ONE_LEAGUE)
         rows = to_rows(tables, 1982, {'OB': 'OB', '삼성': 'SS'})

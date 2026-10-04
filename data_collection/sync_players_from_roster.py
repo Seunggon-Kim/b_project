@@ -37,10 +37,9 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 
-from d1_load import d1_enabled, query, run_d1_file  # noqa: E402
+from d1_load import query  # noqa: E402
 from mysql_sink import mirror  # noqa: E402
 
 
@@ -103,15 +102,14 @@ def split_known(rows, known):
     return keep, skip
 
 
-def sql_str(v):
-    return "'" + str(v).replace("'", "''") + "'"
-
-
 def mysql_write_sync(sink):
-    """MySQL 의 명단·선수 표로 같은 판단을 다시 해 반영합니다.
+    """MySQL 의 명단·선수 표로 판단해 반영합니다.
 
-    D1 의 결과를 옮기지 않고 MySQL 안에서 다시 계산합니다. 두 DB 가 같으면
-    결과도 같고, 다르면 매일 대조(reconcile)가 잡아냅니다.
+    미리보기(show_diffs)가 센 것을 옮기지 않고 쓰기 트랜잭션 안에서 다시
+    계산합니다. 그 사이에 명단이 바뀌어도 쓰는 시점의 값으로 맞춥니다.
+
+    UPDATE 를 행마다 씁니다. players 는 UPSERT 하면 안 됩니다.
+    생년월일·신장·경력 같은 다른 컬럼을 덮어쓸 위험이 있습니다.
     """
     known = {r["team_id"] for r in sink.query("SELECT team_id FROM teams")}
     rows, _ = split_known(pick_diffs(sink.query(DIFF_SQL)), known)
@@ -123,7 +121,8 @@ def mysql_write_sync(sink):
     return len(rows)
 
 
-def sync_d1(args):
+def show_diffs(args):
+    """바뀔 선수를 보여 줍니다. 쓰지는 않습니다(쓰기는 main 의 mirror)."""
     rows = diffs()
     if not rows:
         print("바꿀 것이 없습니다. players 가 최신입니다.")
@@ -150,27 +149,6 @@ def sync_d1(args):
 
     if args.dry_run:
         print("\n[미리보기] 반영하지 않았습니다.")
-        return 0
-
-    # UPDATE 를 행마다 씁니다. players 는 UPSERT 하면 안 됩니다.
-    # 생년월일·신장·경력 같은 다른 컬럼을 덮어쓸 위험이 있습니다.
-    lines = []
-    for r in rows:
-        lines.append(
-            "UPDATE players SET team_id=%s, back_number=%s, "
-            "updated_at=datetime('now') WHERE player_id=%d;"
-            % (sql_str(r["rt"]), sql_str(r["rb"]), int(r["pid"])))
-    out = ROOT / "migration" / "players_sync.sql"
-    out.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
-    run_d1_file(out)
-    if not d1_enabled():
-        # D1 이 꺼져 있으면 반영은 main() 의 mirror 가 MySQL 에 합니다. 여기서
-        # 다시 세면 쓰기 전 MySQL 을 읽어 그대로 남은 것처럼 보입니다.
-        return 0
-    print("반영 완료 (%d문)" % len(lines))
-
-    left = [r for r in diffs() if r["rt"] in known]
-    print("남은 불일치 %d명" % len(left))
     return 0
 
 
@@ -178,11 +156,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
-    rc = sync_d1(args)
+    rc = show_diffs(args)
     if not args.dry_run:
         n = mirror("players_sync", mysql_write_sync)
-        if not d1_enabled():
-            print("MySQL 반영 %s명" % n)
+        print("MySQL 반영 %s명" % n)
     return rc
 
 

@@ -83,9 +83,8 @@ def derive_games(con, skip_existing=True):
         if gid in existing:
             continue
         # 올스타전은 팀이 '나눔'·'드림' 이라 teams 에 없습니다. 넣으면
-        # FK 위반으로 그 적재가 통째로 막히고, wrangler 는 진짜 원인을
-        # `D1_RESET_DO` 로 가립니다. 실제로 games 가 30분간 절반이
-        # 된 적이 있습니다.
+        # FK 위반으로 그 적재가 통째로 막힙니다. D1 시절에는 오류가 진짜
+        # 원인을 가려 games 가 30분간 절반이 된 적이 있습니다.
         #
         # 2025 까지는 크롤러의 수집 창(`crawler/download.py` 의
         # `playoff_start`)이 10월 초에서 끊겨 7월 올스타전이 들어올

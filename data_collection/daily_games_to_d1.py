@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""하루치 경기 메타(games)를 D1 에 넣습니다.
+"""하루치 경기 메타(games)를 Cloud SQL(MySQL)에 넣습니다.
 
 `daily_pbp_to_d1.py` 가 play_by_play 를 채우면 이 스크립트가 같은 날짜의
 `games` 행을 만듭니다. **둘 다 해야 합니다.** `games` 는 순위·경기목록에
@@ -9,7 +9,7 @@
 판정 규칙(팀 별칭 해석, 포스트시즌 컷오프)은 `games_from_pbp.py` 의
 `derive_games` 를 그대로 씁니다. 같은 규칙을 두 번 쓰면 언젠가 갈라집니다.
 러너에는 로컬 DB 가 없으므로, 그날 CSV 로 메모리 SQLite 를 만들어
-그 함수를 먹입니다.
+그 함수를 먹입니다. 파일 이름의 `_to_d1` 은 예전 이름이 남은 것입니다.
 
     py data_collection/daily_games_to_d1.py --date 20260816 --dry-run
 """
@@ -22,9 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from d1_load import (  # noqa: E402
-    build_upserts, d1_enabled, query, refresh_count, run_d1_file,
-)
+from d1_load import query  # noqa: E402
 from games_from_pbp import derive_games  # noqa: E402
 from mysql_sink import mirror  # noqa: E402
 
@@ -50,7 +48,7 @@ def read_csv_rows(path):
 
 
 def memory_db(rows, teams):
-    """그날 CSV 와 D1 의 teams 로 작은 SQLite 를 만듭니다."""
+    """그날 CSV 와 MySQL 의 teams 로 작은 SQLite 를 만듭니다."""
     con = sqlite3.connect(":memory:")
     con.execute("CREATE TABLE teams (team_id TEXT)")
     con.executemany("INSERT INTO teams VALUES (?)", [(t,) for t in teams])
@@ -64,7 +62,7 @@ def memory_db(rows, teams):
 
 
 def mysql_write_games(sink, dicts):
-    """D1 과 같은 UPSERT 입니다. 관중·날씨처럼 여기서 못 만드는 열은 덮지 않습니다."""
+    """UPSERT 입니다. 관중·날씨처럼 여기서 못 만드는 열은 덮지 않습니다."""
     n = sink.upsert("games", GAME_COLS, ["game_id"], dicts)
     sink.refresh_count("games")
     return n
@@ -74,7 +72,6 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", default=None, help="YYYYMMDD, 기본값은 어제")
     ap.add_argument("--save-dir", default="crawler/save_daily")
-    ap.add_argument("--out", default="migration/daily_games.sql")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -105,7 +102,7 @@ def main():
 
     con = memory_db(rows, teams)
     # skip_existing=False 로 둡니다. 메모리 DB 의 games 가 비어 있어
-    # 어차피 전부 새로 나옵니다. 기존 행 보존은 D1 쪽 UPSERT 가 합니다.
+    # 어차피 전부 새로 나옵니다. 기존 행 보존은 MySQL 쪽 UPSERT 가 합니다.
     derived, unresolved = derive_games(con, skip_existing=False)
     con.close()
 
@@ -123,23 +120,12 @@ def main():
             d["game_id"], d["away_team_id"], d["away_score"],
             d["home_score"], d["home_team_id"], d["game_type"]))
 
-    # 이미 있는 경기는 점수만 갱신합니다. 2025 행에는 관중·날씨 같은
-    # 값이 더 들어 있는데 여기서 만들 수 없으므로 덮지 않습니다.
-    stmts = build_upserts("games", GAME_COLS, ["game_id"], dicts)
-    out = ROOT / args.out
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text("\n".join(stmts) + "\n", encoding="utf-8", newline="\n")
-    print("SQL %d문 -> %s" % (len(stmts), out))
-
     if args.dry_run:
         print("[dry-run] 적재하지 않았습니다.")
         return 0
 
-    # D1 이 꺼져 있으면 두 줄 다 "D1 꺼짐" 만 남기고, 아래 mirror 가 유일한 쓰기입니다.
-    run_d1_file(out)
-    refresh_count("games")
-    if d1_enabled():
-        print("D1 적재 완료 (%d경기)" % len(dicts))
+    # 이미 있는 경기는 점수만 갱신합니다. 2025 행에는 관중·날씨 같은
+    # 값이 더 들어 있는데 여기서 만들 수 없으므로 덮지 않습니다.
     mirror("games", lambda s: mysql_write_games(s, dicts))
     return 0
 

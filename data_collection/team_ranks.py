@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""KBO 팀 순위를 1982년부터 받아 D1 에 넣습니다.
+"""KBO 팀 순위를 1982년부터 받아 Cloud SQL(MySQL)에 넣습니다.
 
 ## 왜 필요한가
 
@@ -52,14 +52,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "data_collection"))
 
-from d1_load import d1_enabled, query, run_d1_file, sql_literal  # noqa: E402
+from d1_load import query  # noqa: E402
 from kbo_http import Session  # noqa: E402
 from mysql_sink import mirror  # noqa: E402
 
 URL = "https://www.koreabaseball.com/Record/TeamRank/TeamRank.aspx"
 TABLE_CLASS = "tData"
-
-SQL_TMP = ROOT / "migration" / "_team_ranks.sql"
 
 KST = datetime.timezone(datetime.timedelta(hours=9))
 KEYS = ["season", "team_name", "league"]
@@ -133,8 +131,8 @@ def to_rows(tables, season, franchise_by_name):
     """적재용 행입니다.
 
     `league` 는 양대리그면 그 이름(매직리그·드림리그), 아니면 '단일'
-    입니다. **빈 문자열은 안 됩니다.** `sql_literal` 이 빈 값을 NULL 로
-    바꾸는데 league 는 PK 라 NOT NULL 입니다. 실제로 적재가 거기서
+    입니다. **빈 문자열은 안 됩니다.** 적재(`mysql_sink.blank`)가 빈 값을
+    NULL 로 바꾸는데 league 는 PK 라 NOT NULL 입니다. 실제로 적재가 거기서
     멈췄습니다.
     """
     many = len(tables) > 1
@@ -162,30 +160,8 @@ COLUMNS = ["franchise_id", "season", "team_name", "league", "rank",
            "games", "wins", "losses", "draws", "pct", "gb"]
 
 
-def create_table():
-    return (
-        'CREATE TABLE IF NOT EXISTS team_season_rank ('
-        ' franchise_id TEXT, season INTEGER NOT NULL, team_name TEXT NOT NULL,'
-        " league TEXT NOT NULL DEFAULT '',"
-        ' rank INTEGER, games INTEGER, wins INTEGER, losses INTEGER,'
-        ' draws INTEGER, pct TEXT, gb TEXT,'
-        ' PRIMARY KEY (season, team_name, league));')
-
-
-def insert_sql(rows):
-    head = ('INSERT INTO team_season_rank (%s) VALUES '
-            % ",".join('"%s"' % c for c in COLUMNS))
-    tail = (' ON CONFLICT(season, team_name, league) DO UPDATE SET %s;'
-            % ",".join('"%s"=excluded."%s"' % (c, c) for c in COLUMNS
-                       if c not in ("season", "team_name", "league")))
-    values = ",".join(
-        "(%s)" % ",".join(sql_literal(r.get(c)) for c in COLUMNS)
-        for r in rows)
-    return head + values + tail
-
-
 def mysql_write_ranks(sink, rows):
-    """D1 의 ON CONFLICT(season, team_name, league) DO UPDATE 와 같습니다."""
+    """(season, team_name, league) 가 같으면 나머지 열을 덮어씁니다."""
     n = sink.upsert("team_season_rank", COLUMNS, KEYS, rows)
     sink.refresh_count("team_season_rank")
     return n
@@ -278,13 +254,6 @@ def main():
         print("[미리보기] 넣지 않았습니다.")
         return 0
 
-    SQL_TMP.parent.mkdir(parents=True, exist_ok=True)
-    SQL_TMP.write_text(create_table() + "\n" + insert_sql(rows) + "\n",
-                       encoding="utf-8", newline="\n")
-    run_d1_file(SQL_TMP)
-    # D1 이 꺼져 있으면 위 올리기는 "D1 꺼짐" 한 줄로 건너뛰고, 아래 mirror 가 유일한 쓰기입니다.
-    if d1_enabled():
-        print("D1 적재 완료 %s행" % format(len(rows), ","))
     mirror("team_ranks", lambda sink: mysql_write_ranks(sink, rows))
     return 0
 

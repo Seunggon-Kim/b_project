@@ -20,7 +20,7 @@
 이 파일은 원래 EC2 의 로컬 SQLite 를 보고 사진 파일을 내려받아
 `dashboard_js/assets/player_photos/` 에 미러하는 스크립트였습니다.
 Cloudflare 로 옮긴 뒤로는 한 번도 돌지 않았습니다. 경로가
-`/home/ubuntu/...` 로 박혀 있고 D1 을 모릅니다. 미러 폴더도 비어
+`/home/ubuntu/...` 로 박혀 있었습니다. 미러 폴더도 비어
 있습니다.
 
 이제 **주소만 맞춥니다.** 사진 파일은 KBO CDN 이 직접 보내 줍니다.
@@ -45,7 +45,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "data_collection"))
 
-from d1_load import query, run_d1_file  # noqa: E402
+from d1_load import query  # noqa: E402
 from photo_url import photo_url, probe_years, year_of  # noqa: E402
 from mysql_sink import mirror  # noqa: E402
 
@@ -53,17 +53,6 @@ UA = {"User-Agent": "Mozilla/5.0"}
 
 # KBO 서버에 대고 두드리는 간격입니다. 예의 차원입니다.
 SLEEP_SEC = 0.05
-
-# 한 번에 보내는 UPDATE 개수입니다.
-#
-# **명령행이 아니라 파일로 보냅니다.** `run_d1` 은 SQL 을 `--command`
-# 인자에 실어 보내는데, UPDATE 189개(약 28,000자)를 넣자 윈도우가
-# "명령줄이 너무 깁니다" 로 거절했습니다. 파일이면 그 한도가 없습니다.
-BATCH = 300
-
-# 임시 SQL 파일입니다. 러너에서도 쓰므로 저장소 안에 둡니다.
-SQL_TMP = ROOT / "migration" / "_photo_urls.sql"
-
 
 def head_ok(url):
     """그 주소에 사진이 있으면 True 입니다."""
@@ -78,10 +67,8 @@ def head_ok(url):
 def current_season():
     """공식 기록이 있는 가장 최근 시즌입니다.
 
-    괄호 안 질의(파생 표)에 `AS t` 별칭을 붙입니다. D1 이 꺼져 있으면 이
-    질의를 MySQL 이 받는데, MySQL 은 별칭 없는 파생 표를 거절합니다
-    ("Every derived table must have its own alias"). SQLite 는 별칭이
-    있어도 뜻이 같습니다.
+    괄호 안 질의(파생 표)에 `AS t` 별칭을 붙입니다. MySQL 은 별칭 없는
+    파생 표를 거절합니다("Every derived table must have its own alias").
     """
     rows = query(
         "SELECT MAX(s) AS s FROM ("
@@ -107,21 +94,8 @@ def load_players():
         ") AS last_season FROM players p;")
 
 
-def flush(updates, dry_run):
-    """모아 둔 UPDATE 를 파일 한 장으로 보냅니다."""
-    if not updates or dry_run:
-        return
-    sql = "\n".join(
-        "UPDATE players SET image_url='%s', updated_at=datetime('now') "
-        "WHERE player_id='%s';" % (url, pid)
-        for pid, url in updates)
-    SQL_TMP.parent.mkdir(parents=True, exist_ok=True)
-    SQL_TMP.write_text(sql + "\n", encoding="utf-8", newline="\n")
-    run_d1_file(SQL_TMP)
-
-
 def mysql_write_photos(sink, updates):
-    """D1 에 보낸 주소를 MySQL 에도 씁니다."""
+    """고친 주소를 MySQL 에 씁니다."""
     for pid, url in updates:
         sink.execute("UPDATE `players` SET `image_url`=%s, `updated_at`=UTC_TIMESTAMP() "
                      "WHERE `player_id`=%s", [url, int(pid)])
@@ -131,7 +105,7 @@ def mysql_write_photos(sink, updates):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true",
-                    help="찔러 보기만 하고 D1 을 고치지 않습니다")
+                    help="찔러 보기만 하고 players 를 고치지 않습니다")
     ap.add_argument("--limit", type=int, default=0,
                     help="이 수만큼만 처리합니다 (0 이면 전부)")
     args = ap.parse_args()
@@ -147,7 +121,6 @@ def main():
 
     skipped = fixed = missing = 0
     probes = 0
-    updates = []
     all_updates = []
 
     for i, r in enumerate(rows, 1):
@@ -177,19 +150,13 @@ def main():
             continue
 
         if found != url:
-            updates.append((pid, found))
             all_updates.append((pid, found))
             fixed += 1
-            if len(updates) >= BATCH:
-                flush(updates, args.dry_run)
-                updates = []
 
         if i % 200 == 0:
             print("  [%s/%s] 그대로 %d  고침 %d  못찾음 %d  요청 %d"
                   % (format(i, ","), format(len(rows), ","),
                      skipped, fixed, missing, probes), flush=True)
-
-    flush(updates, args.dry_run)
 
     if all_updates and not args.dry_run:
         mirror("photos", lambda s: mysql_write_photos(s, all_updates))

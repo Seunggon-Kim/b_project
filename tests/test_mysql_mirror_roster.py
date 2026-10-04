@@ -48,18 +48,6 @@ def _found():
     ]
 
 
-def test_d1_update_sql_matches_old_text():
-    """함수로 옮겨도 D1 에 보내는 글자는 예전과 같아야 합니다."""
-    got = [add_new_players.d1_update_sql(*t) for t in add_new_players.id_fill_targets(_found())]
-    assert got == [
-        "UPDATE kbo_roster SET player_id=51234 WHERE player_id IS NULL AND name='가' AND team='LG' AND role='투수';",
-        "UPDATE kbo_roster_moves SET player_id=51234 WHERE player_id IS NULL AND name='가' AND team='LG' AND position='투수';",
-        "UPDATE kbo_roster SET player_id=51235 WHERE player_id IS NULL AND name='나' AND team='KT' AND role='포수' AND back_number='12';",
-        "UPDATE kbo_roster SET player_id=51236 WHERE player_id IS NULL AND name='다' AND team='OB';",
-        "UPDATE kbo_roster_moves SET player_id=51236 WHERE player_id IS NULL AND name='다' AND team='OB';",
-    ]
-
-
 def test_mysql_new_players(fake_sink):
     targets = add_new_players.id_fill_targets(_found())
     rows = [{"player_id": 51234, "player_name": "가"}]

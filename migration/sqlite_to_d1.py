@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
-"""로컬 SQLite 의 표 몇 개를 D1 으로 되돌립니다.
+"""로컬 SQLite 의 표 몇 개를 Cloud SQL(MySQL)로 올립니다.
 
-파크팩터 파이프라인이 만든 결과 표만 올릴 때 씁니다. 원천(`play_by_play`)은
-이미 D1 에 있으므로 다시 올리지 않습니다.
+파크팩터 파이프라인이 만든 결과 표(weekly)와 월간 선수 프로필(monthly,
+`--tables players`)을 올릴 때 씁니다. 파일 이름의 `_to_d1` 은 예전 이름이
+남은 것입니다(D1 은 2026-10-04 에 걷어냈습니다).
 
-**표를 통째로 바꿉니다**(DELETE 후 INSERT). 파생 표는 매번 전부 다시
-계산되므로 부분 갱신이 의미가 없고, 옛 행이 남으면 계산에서 빠진 선수가
-화면에 계속 보입니다.
+**표를 통째로 바꿉니다**(DELETE 후 INSERT, 한 트랜잭션). 파생 표는 매번
+전부 다시 계산되므로 부분 갱신이 의미가 없고, 옛 행이 남으면 계산에서
+빠진 선수가 화면에 계속 보입니다.
 
     py migration/sqlite_to_d1.py --db /tmp/kbo.db \
         --tables self_park_factor,wrc_plus_comparison
@@ -14,17 +15,11 @@
 import argparse
 import sqlite3
 import sys
-import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from data_collection.d1_load import (  # noqa: E402
-    build_inserts, d1_enabled, query, refresh_count, run_d1, run_d1_file,
-)
 from data_collection.mysql_sink import mirror  # noqa: E402
-
-ROOT = Path(__file__).resolve().parent.parent
 
 # 파크팩터 파이프라인이 쓰는 표입니다.
 DERIVED_TABLES = [
@@ -36,18 +31,12 @@ DERIVED_TABLES = [
     "kbo_run_values_by_season",
 ]
 
-# 파이프라인이 남기는 롤링 백업입니다. D1 에 올릴 이유가 없습니다.
+# 파이프라인이 남기는 롤링 백업입니다. 올릴 이유가 없습니다.
 SKIP_SUFFIXES = ("_bak",)
 
 
-def d1_has(table):
-    rows = query("SELECT name FROM sqlite_master WHERE type='table' "
-                 "AND name='%s';" % table)
-    return bool(rows)
-
-
 def mysql_replace_tables(sink, tables):
-    """D1 에 올린 표를 MySQL 에서도 통째로 바꿉니다.
+    """표를 MySQL 에서 통째로 바꿉니다.
 
     한 트랜잭션이라 중간에 실패하면 모두 되돌아가 옛 값이 그대로 남습니다.
     MySQL 에서 players 를 가리키는 외래키는 없어 지우고 넣어도 됩니다.
@@ -64,7 +53,6 @@ def main():
     ap.add_argument("--db", required=True)
     ap.add_argument("--tables", default=None,
                     help="쉼표로 구분. 기본값은 파생 표 전부")
-    ap.add_argument("--out-dir", default="migration/push")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -73,8 +61,6 @@ def main():
 
     conn = sqlite3.connect(args.db)
     conn.row_factory = sqlite3.Row
-    out_dir = ROOT / args.out_dir
-    out_dir.mkdir(parents=True, exist_ok=True)
 
     pushed, skipped, mirrored = [], [], []
     for table in tables:
@@ -93,31 +79,9 @@ def main():
         cols = [r[1] for r in conn.execute('PRAGMA table_info("%s")' % table)]
         rows = [dict(r) for r in conn.execute('SELECT * FROM "%s"' % table)]
 
-        lines = []
-        # D1 이 꺼져 있으면 D1 표가 있는지 볼 이유가 없습니다(아래 올리기가
-        # "D1 꺼짐" 으로 건너뜁니다). MySQL 쪽은 mirror() 가 씁니다.
-        if d1_enabled() and not d1_has(table):
-            # D1 에 없으면 만들어야 합니다. 로컬 정의를 그대로 씁니다.
-            print("%s: D1 에 없어 새로 만듭니다." % table)
-            lines.append(row[0].replace("CREATE TABLE",
-                                        "CREATE TABLE IF NOT EXISTS", 1) + ";")
-        lines.append('DELETE FROM "%s";' % table)
-        lines += build_inserts(table, cols, rows)
-
-        path = out_dir / ("%s.sql" % table)
-        path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
-        print("%-32s %8s행  문 %d개" % (table, format(len(rows), ","),
-                                       len(lines)))
+        print("%-32s %8s행" % (table, format(len(rows), ",")))
         if args.dry_run:
             continue
-
-        t0 = time.time()
-        run_d1_file(path)
-        refresh_count(table)
-        if d1_enabled():
-            print("  올림 %.0f초" % (time.time() - t0))
-        else:
-            print("  D1 꺼짐(건너뜀)")
         pushed.append((table, len(rows)))
         mirrored.append((table, cols, rows))
 
@@ -131,11 +95,7 @@ def main():
         print("[dry-run] 올리지 않았습니다.")
         return 0
     for t, n in pushed:
-        if d1_enabled():
-            print("올림: %-32s %s행" % (t, format(n, ",")))
-        else:
-            # D1 에는 올리지 않았습니다. 위 mirror 가 MySQL 에 썼습니다.
-            print("MySQL 반영: %-28s %s행 (D1 꺼짐(건너뜀))" % (t, format(n, ",")))
+        print("MySQL 반영: %-28s %s행" % (t, format(n, ",")))
     for t, why in skipped:
         print("건너뜀: %-30s %s" % (t, why))
     # 하나도 못 올렸으면 실패입니다. 조용히 성공으로 끝내면 화면이

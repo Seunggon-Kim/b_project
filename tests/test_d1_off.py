@@ -316,25 +316,6 @@ def test_D1_내려받기는_꺼져_있으면_멈춥니다(d1_off, monkeypatch, t
         d1_to_sqlite.main()
 
 
-def test_pbp_따라잡기는_꺼져_있으면_멈춥니다(d1_off, monkeypatch):
-    sys.path.insert(0, str(ROOT / "data_collection"))
-    import daily_pbp_to_d1 as m
-    monkeypatch.setattr(m, "query", lambda *a, **k: pytest.fail("읽으면 안 됩니다"))
-    monkeypatch.setattr(m, "mirror", lambda *a, **k: pytest.fail("쓰면 안 됩니다"))
-    monkeypatch.setattr(sys, "argv", ["daily_pbp_to_d1", "--date", "20261003", "--mysql-only"])
-    assert m.main() == 1
-
-
-def test_pbp_는_꺼져_있으면_샤드가_없는_시즌도_막지_않습니다(d1_off, monkeypatch, tmp_path):
-    sys.path.insert(0, str(ROOT / "data_collection"))
-    import daily_pbp_to_d1 as m
-    monkeypatch.setattr(m.shard_plan, "db_of", lambda y: None)
-    monkeypatch.setattr(sys, "argv", ["daily_pbp_to_d1", "--date", "20990401", "--skip-crawl",
-                                      "--save-dir", str(tmp_path)])
-    # 경기 CSV 가 없으니 "경기가 없습니다" 로 0 입니다. 샤드 때문에 1 이 되면 안 됩니다.
-    assert m.main() == 0
-
-
 def test_결과_표_올리기는_꺼져_있으면_MySQL_에만_씁니다(d1_off, monkeypatch, tmp_path, capsys):
     from migration import sqlite_to_d1 as m
     db = tmp_path / "k.db"
@@ -343,7 +324,6 @@ def test_결과_표_올리기는_꺼져_있으면_MySQL_에만_씁니다(d1_off,
     con.execute("INSERT INTO self_park_factor VALUES (2026, '잠실', 98.5)")
     con.commit()
     con.close()
-    monkeypatch.setattr(m, "query", lambda *a, **k: pytest.fail("D1 표 있는지 볼 이유가 없습니다"))
     seen = {}
 
     def fake_mirror(job, fn, required=False):
@@ -352,14 +332,11 @@ def test_결과_표_올리기는_꺼져_있으면_MySQL_에만_씁니다(d1_off,
 
     monkeypatch.setattr(m, "mirror", fake_mirror)
     monkeypatch.setattr(sys, "argv", ["sqlite_to_d1", "--db", str(db), "--tables",
-                                      "self_park_factor", "--out-dir", str(tmp_path / "push")])
+                                      "self_park_factor"])
     assert m.main() == 0
     assert seen["job"] == "sqlite_push"
     out = capsys.readouterr().out
-    assert "D1 꺼짐:" in out and "D1 에 없어 새로 만듭니다" not in out
-    # D1 에 올리지 않았는데 "올림" 이라고 찍지 않습니다.
-    assert "올림" not in out
-    assert "D1 꺼짐(건너뜀)" in out
+    assert "D1" not in out and "올림" not in out
     assert "MySQL 반영: self_park_factor" in out
 
 
@@ -371,7 +348,7 @@ def test_실행_기록은_꺼져_있으면_MySQL_에만_남깁니다(d1_off, mon
     monkeypatch.setattr(sys, "argv", ["record_job_run", "--job", "reconcile", "--status", "skip"])
     assert m.main() == 0
     assert seen["job"] == "job_runs"
-    assert "D1 꺼짐:" in capsys.readouterr().out
+    assert "D1" not in capsys.readouterr().out
 
 
 def test_사진_보정_질의는_파생_표에_별칭이_있습니다():
@@ -474,8 +451,7 @@ def test_워크플로_수집_스크립트의_질의가_모두_MySQL_로_바뀝�
     for rel in ("data_collection/team_ranks.py", "data_collection/roster_to_d1.py",
                 "data_collection/sync_players_from_roster.py",
                 "data_collection/add_new_players.py", "data_collection/heal_player_photos.py",
-                "data_collection/daily_games_to_d1.py", "data_collection/daily_pbp_to_d1.py",
-                "migration/sqlite_to_d1.py"):
+                "data_collection/daily_games_to_d1.py"):
         assert rel in files, rel
     assert len(found) >= 12, found
     assert {rel for rel, _ in unknown} <= _DYNAMIC_OK, unknown

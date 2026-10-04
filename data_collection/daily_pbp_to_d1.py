@@ -1,23 +1,23 @@
 # -*- coding: utf-8 -*-
-"""하루치 play-by-play 를 수집해 D1 에 직접 넣습니다.
+"""하루치 play-by-play 를 수집해 Cloud SQL(MySQL)에 넣습니다.
 
 EC2 의 `daily_kbo_pbp.sh` 를 대신합니다. 그 스크립트는 CSV 를 로컬
 SQLite 에 넣는데, GitHub Actions 러너에는 그 파일이 없습니다. DB 가
 226MB(12시즌이면 약 1.3GB)라 git 에 둘 수 없기 때문입니다.
 
 하루치는 경기 5개, 약 1,500행이라 로컬 DB 없이도 다룰 수 있습니다.
-CSV 를 읽어 SQL 을 만들고 wrangler 로 올립니다.
+CSV 를 읽어 `mysql_sink.mirror()` 로 MySQL 에 씁니다. 파일 이름의 `_to_d1`
+은 예전 이름이 남은 것입니다(D1 은 2026-10-04 에 걷어냈습니다).
 
     py data_collection/daily_pbp_to_d1.py               # 어제
     py data_collection/daily_pbp_to_d1.py --date 20260816
     py data_collection/daily_pbp_to_d1.py --date 20260816 --dry-run
 
-CLOUDFLARE_API_TOKEN 과 CLOUDFLARE_ACCOUNT_ID 가 필요합니다.
+MySQL 접속 파일은 `BSTATS_MYSQL_SETTINGS`(migration/mysql/conn.py)입니다.
 """
 import argparse
 import csv
 import datetime
-import os
 import re
 import subprocess
 import sys
@@ -28,11 +28,7 @@ ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(ROOT))
 
-from d1_load import (  # noqa: E402
-    DB_NAME, build_inserts, d1_columns, d1_enabled, query, refresh_count,
-    run_d1_file,
-)
-from migration import shard_plan  # noqa: E402
+from d1_load import d1_columns  # noqa: E402
 from mysql_sink import mirror  # noqa: E402
 
 
@@ -66,9 +62,9 @@ def wrong_dates(rows, day):
 
 
 def mysql_write_pbp(sink, day, rows):
-    """MySQL 에 하루치를 씁니다. 표 하나라 샤드를 고르지 않습니다.
+    """MySQL 에 하루치를 씁니다.
 
-    D1 과 같이 그날 행을 지우고 다시 넣어, 다시 돌려도 결과가 같습니다.
+    그날 행을 지우고 다시 넣어, 다시 돌려도 결과가 같습니다.
     idx_pbp_game_date 가 있어야 이 DELETE 가 400만 행을 훑지 않습니다.
     pbp_id 는 넣지 않습니다. AUTO_INCREMENT 가 이어 붙이고, 받은 순서대로
     넣으므로 경기 안 순서(RE24 의 ORDER BY pbp_id)가 지켜집니다.
@@ -80,47 +76,13 @@ def mysql_write_pbp(sink, day, rows):
     return n
 
 
-# 포스트시즌·순위결정전 시리즈 코드입니다(gameID 앞 4자리가 연도 대신 들어갑니다).
-SERIES_CODES = ("3333", "4444", "5555", "6666", "7777")
-
-
-def d1_day_rows(day, pbp_db):
-    """D1 에 이미 들어간 그날 행입니다. 따라잡기(--mysql-only)용입니다.
-
-    games 표를 거치지 않습니다. D1 일일 한도가 바닥난 날(2026-09-29, 10-01)
-    에는 play_by_play 는 들어갔는데 games 단계가 건너뛰어져 games 에 그날
-    행이 없습니다. games 로 경기를 찾으면 따라잡기가 바로 그런 날을 놓칩니다.
-
-    대신 샤드의 play_by_play 를 gameID 접두어 범위로 직접 읽습니다. 정규시즌
-    gameID 는 날짜(YYYYMMDD)로, 포스트시즌은 시리즈 코드+MMDD 로 시작합니다.
-    접두어마다 gameID 인덱스 범위 읽기라 샤드 전체를 훑지 않고, 읽는 양은
-    그날 행 수와 같습니다. 다른 해의 같은 MMDD 포스트시즌 행은 파이썬에서
-    걸러 냅니다.
-    """
-    prefixes = [day] + [code + day[4:8] for code in SERIES_CODES]
-    where = " OR ".join("(gameID >= '%s' AND gameID < '%s~')" % (p, p) for p in prefixes)
-    rows = query("SELECT * FROM play_by_play WHERE %s ORDER BY pbp_id;" % where,
-                 db_name=pbp_db)
-    out = []
-    for r in rows:
-        gid = str(r.get("gameID") or "")
-        if (gid.startswith(day)
-                or (len(gid) > 13 and gid[-4:] == day[:4])
-                or (len(gid) == 13 and int(day[:4]) <= 2015)):
-            out.append(r)
-    return out
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", default=None, help="YYYYMMDD, 기본값은 어제")
     ap.add_argument("--save-dir", default="crawler/save_daily")
-    ap.add_argument("--out", default="migration/daily_pbp.sql")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--skip-crawl", action="store_true",
-                    help="이미 받아 둔 CSV 로만 SQL 을 만듭니다")
-    ap.add_argument("--mysql-only", action="store_true",
-                    help="크롤링·D1 쓰기 없이, D1 에 이미 있는 그날 행을 MySQL 에 넣습니다(따라잡기)")
+                    help="이미 받아 둔 CSV 로만 넣습니다")
     args = ap.parse_args()
 
     # 러너는 UTC 라 그냥 어제를 잡으면 한국 날짜가 하루 어긋납니다.
@@ -129,46 +91,7 @@ def main():
                         - datetime.timedelta(days=1)).strftime("%Y%m%d")
     year = day[:4]
     print("대상 날짜: %s (KST 기준)" % day)
-
-    if args.mysql_only and not d1_enabled():
-        # 따라잡기는 D1 에 있는 행을 MySQL 로 옮기는 일입니다. D1 이 꺼져 있으면
-        # MySQL 을 읽어 MySQL 에 다시 쓰게 되어(pbp_id 만 바뀜) 뜻이 없습니다.
-        print("D1 이 꺼져 있어(BSTATS_D1=off) --mysql-only 따라잡기를 할 수 없습니다.")
-        return 1
-
-    # `play_by_play` 는 시즌별 D1 네 개에 나뉘어 있습니다. 공용
-    # DB(kbo-stats)에는 이 표가 없습니다. 예전처럼 공용 DB 에 넣으면
-    # 워커가 읽지 않아 **오류 없이 화면만 어제에 멈춥니다.** 그게 제일
-    # 찾기 어려운 고장이라 배정에 없으면 여기서 멈춥니다.
-    pbp_db = shard_plan.db_of(year)
-    if not pbp_db and not d1_enabled():
-        # D1 이 꺼져 있으면 샤드가 필요 없습니다. MySQL 은 play_by_play 가 표
-        # 하나입니다. 새 시즌에 샤드를 안 만들었다고 수집을 멈추지 않습니다.
-        pbp_db = DB_NAME
-    elif not pbp_db:
-        print("%s 시즌을 담당하는 D1 이 배정표에 없습니다." % year)
-        print("migration/shard_plan.json 에 시즌을 넣고 D1 을 만든 뒤")
-        print("src/lib/shard.js 사본까지 맞춘 다음 다시 돌리십시오.")
-        return 1
-    print("대상 D1: %s" % pbp_db if d1_enabled()
-          else "대상: MySQL play_by_play (D1 꺼짐)")
-
-    if args.mysql_only:
-        rows = d1_day_rows(day, pbp_db)
-        print("D1 에서 읽은 행 %s개" % format(len(rows), ","))
-        if not rows:
-            print("%s 에 D1 행이 없습니다. 넣을 것이 없습니다." % day)
-            return 0
-        bad = wrong_dates(rows, day)
-        if bad:
-            print("game_date 가 %s 이 아닌 행이 있습니다: %s" % (day, ", ".join(bad[:5])))
-            return 1
-        if args.dry_run:
-            print("[dry-run] MySQL 에 넣지 않았습니다.")
-            return 0
-        n = mirror("pbp", lambda s: mysql_write_pbp(s, day, rows), required=True)
-        print("MySQL 적재 완료 (%s행)" % format(n, ","))
-        return 0
+    print("대상: MySQL play_by_play")
 
     save_dir = ROOT / args.save_dir
     if not args.skip_crawl:
@@ -205,49 +128,23 @@ def main():
         print("crawler/gameid.py 의 game_date_of 와 CSV 를 확인하십시오.")
         return 1
 
-    columns = d1_columns("play_by_play", db_name=pbp_db)
-    # pbp_id 는 넣지 않습니다. 샤드가 이미 70만 행 안팎을 갖고 있어 CSV 의
-    # 번호와 부딪힙니다. INTEGER PRIMARY KEY 라 빼면 자동으로 붙습니다.
+    # MySQL 표의 열 순서입니다. CSV 에 없는 열을 알리는 데만 씁니다.
+    # 쓰기는 mysql_write_pbp 가 schema_types.json 의 열로 합니다.
+    columns = d1_columns("play_by_play")
+    # pbp_id 는 넣지 않습니다. AUTO_INCREMENT 가 이어 붙입니다.
     insert_cols = [c for c in columns if c != "pbp_id"]
     missing = [c for c in insert_cols if c not in (rows[0] or {})]
     if missing:
         print("CSV 에 없는 컬럼 %d개는 NULL 로 들어갑니다: %s"
               % (len(missing), ", ".join(missing[:6])))
 
-    lines = [
-        "-- %s 하루치 play_by_play" % day,
-        # 같은 날짜를 두 번 넣어도 결과가 같아야 합니다. 재실행이
-        # 흔하기 때문입니다. 넣기 전에 그 날짜를 지웁니다.
-        "DELETE FROM play_by_play WHERE game_date = %s;" % int(day),
-    ]
-    lines += build_inserts("play_by_play", insert_cols, rows)
-
-    out = ROOT / args.out
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
-    print("SQL %d문 -> %s" % (len(lines) - 1, out))
-
     if args.dry_run:
         print("[dry-run] 적재하지 않았습니다.")
         return 0
 
-    # Actions 에서는 토큰이 반드시 있어야 합니다. 로컬에서는 wrangler 가
-    # 로그인 세션을 쓰므로 없어도 됩니다. 그래서 막지 않고 알리기만 합니다.
-    # 인증이 정말 없으면 아래 wrangler 호출이 실패하며 이유를 보여 줍니다.
-    if d1_enabled() and not os.environ.get("CLOUDFLARE_API_TOKEN"):
-        print("CLOUDFLARE_API_TOKEN 이 없습니다. wrangler 로그인 세션으로 시도합니다.")
-
-    # D1 이 꺼져 있으면 아래 두 줄은 "D1 꺼짐" 한 줄씩만 남기고 넘어갑니다.
-    run_d1_file(out, db_name=pbp_db)
-    if d1_enabled():
-        print("D1 적재 완료 (%s)" % pbp_db)
-
-    # 행 수 메타를 갱신합니다. 이것을 빠뜨리면 화면이 어제 숫자를
-    # 계속 보여 줍니다(src/lib/counts.js). 나뉜 표라서 **샤드마다**
-    # 따로 적어 두고, 화면은 네 값을 더해 보여 줍니다.
-    refresh_count("play_by_play", db_name=pbp_db)
-    if d1_enabled():
-        print("행 수 메타 갱신 완료")
+    # 같은 날짜를 두 번 넣어도 결과가 같습니다. 그날 행을 지우고 다시 넣습니다.
+    # 행 수 메타(meta_table_counts)도 같은 트랜잭션에서 맞춥니다. 빠뜨리면
+    # 화면이 어제 숫자를 계속 보여 줍니다(src/lib/counts.js).
     mirror("pbp", lambda s: mysql_write_pbp(s, day, rows))
     return 0
 

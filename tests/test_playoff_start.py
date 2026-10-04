@@ -129,7 +129,7 @@ def test_날짜_컷오프_표가_되살아나지_않았습니다():
     없으며, 실제로 아홉 경기를 정규시즌으로 잘못 넣었습니다.
     """
     for name in ["games_from_pbp.py", "load_year_pbp.py",
-                 "daily_games_to_d1.py", "old_games_to_d1.py"]:
+                 "daily_games_to_d1.py"]:
         path = ROOT / "data_collection" / name
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):

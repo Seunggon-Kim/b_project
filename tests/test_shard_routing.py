@@ -35,43 +35,6 @@ def test_공용_DB_는_샤드가_아닙니다():
     assert shard_plan.shared_db() not in names
 
 
-# ------------------------------------------------- 매일 적재가 샤드를 봅니다
-
-DAILY_PBP = ROOT / "data_collection" / "daily_pbp_to_d1.py"
-
-
-def _daily_source():
-    return DAILY_PBP.read_text(encoding="utf-8")
-
-
-def test_매일_pbp_적재가_담당_D1_을_고릅니다():
-    src = _daily_source()
-    assert "shard_plan.db_of(" in src, (
-        "daily_pbp_to_d1.py 가 시즌별 D1 을 고르지 않습니다. "
-        "공용 DB 에 넣으면 워커가 읽지 않습니다."
-    )
-
-
-@pytest.mark.parametrize("fn", ["d1_columns", "run_d1_file", "refresh_count"])
-def test_매일_pbp_적재가_D1_이름을_넘깁니다(fn):
-    """기본값이 kbo-stats 라서, 안 넘기면 공용 DB 로 갑니다."""
-    src = _daily_source()
-    calls = re.findall(r"(?<!sink\.)" + re.escape(fn) + r"\((.*?)\)", src, re.DOTALL)
-    # import 줄에서 걸린 것은 인자가 없습니다. `sink.refresh_count(` 같은 MySQL 쪽
-    # 메서드 호출은 D1 함수가 아니므로 제외합니다.
-    calls = [c for c in calls if c.strip()]
-    assert calls, "%s 호출을 찾지 못했습니다" % fn
-    for c in calls:
-        assert "db_name=" in c, (
-            "%s 가 db_name 없이 불립니다. 기본값이 공용 DB 입니다: %s"
-            % (fn, c.strip())
-        )
-
-
-def test_매일_pbp_적재가_문법적으로_성립합니다():
-    ast.parse(_daily_source())
-
-
 # --------------------------------------- 주간 내려받기가 샤드 전부를 훑습니다
 
 def test_나뉜_표는_샤드마다_한_번씩_받습니다():

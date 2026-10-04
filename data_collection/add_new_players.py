@@ -34,8 +34,8 @@
 
 ## 무엇을 쓰나
 
-**없는 선수만 넣습니다.** `INSERT OR IGNORE` 라 이미 있는 선수의
-생년월일·경력 같은 값을 덮지 않습니다. 투타(`throw`·`bat`)는 검색 표에
+**없는 선수만 넣습니다**(`mysql_sink.Sink.insert_missing`). 이미 있는
+선수의 생년월일·경력 같은 값을 덮지 않습니다. 투타(`throw`·`bat`)는 검색 표에
 없어 비워 둡니다. 기록이 생기면 monthly 가 `--refresh` 로 채웁니다.
 
 그다음 `kbo_roster`·`kbo_roster_moves` 의 빈 `player_id` 를 채웁니다.
@@ -54,10 +54,9 @@ from pathlib import Path
 import requests
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 
-from d1_load import d1_enabled, query, run_d1_file  # noqa: E402
+from d1_load import query  # noqa: E402
 from mysql_sink import mirror  # noqa: E402
 
 SEARCH_URL = "https://www.koreabaseball.com/Player/Search.aspx"
@@ -182,14 +181,6 @@ def to_int(s):
     return int(s) if s and s.isdigit() else None
 
 
-def sql_val(v):
-    if v is None:
-        return "NULL"
-    if isinstance(v, int):
-        return str(v)
-    return "'" + str(v).replace("'", "''") + "'"
-
-
 def player_row(r):
     """`players` 한 행입니다. 모르는 칸은 NULL 로 둡니다."""
     birthday = r["birthday"].replace("-", "")
@@ -237,11 +228,6 @@ def id_fill_targets(found):
                 done.add(key)
                 out.append(t)
     return out
-
-
-def d1_update_sql(table, pid, conds):
-    where = " AND ".join("%s=%s" % (c, sql_val(v)) for c, v in conds)
-    return "UPDATE %s SET player_id=%d WHERE player_id IS NULL AND %s;" % (table, pid, where)
 
 
 def mysql_write_new_players(sink, new_rows, targets):
@@ -303,21 +289,7 @@ def main():
             print("\n[미리보기] 반영하지 않았습니다.")
         return 0
 
-    lines = []
-    for p in new_rows:
-        lines.append(
-            "INSERT OR IGNORE INTO players (%s, created_at, updated_at) "
-            "VALUES (%s, datetime('now'), datetime('now'));"
-            % (", ".join(NEW_PLAYER_COLS), ", ".join(sql_val(p[c]) for c in NEW_PLAYER_COLS)))
     targets = id_fill_targets(found)
-    lines += [d1_update_sql(*t) for t in targets]
-
-    out = ROOT / "migration" / "players_add_new.sql"
-    out.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
-    run_d1_file(out)
-    # D1 이 꺼져 있으면 위 올리기는 "D1 꺼짐" 한 줄로 건너뛰고, 아래 mirror 가 유일한 쓰기입니다.
-    if d1_enabled():
-        print("D1 반영 완료 (새 선수 %d명, 문 %d개)" % (len(new_rows), len(lines)))
     mirror("players_new", lambda s: mysql_write_new_players(s, new_rows, targets))
     return 0
 

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""퓨처스(2군) 시즌 기록을 KBO 기록실에서 받아 D1 에 넣습니다.
+"""퓨처스(2군) 시즌 기록을 KBO 기록실에서 받아 Cloud SQL(MySQL)에 넣습니다.
 
 ## 왜 필요한가
 
@@ -38,7 +38,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "data_collection"))
 
-from d1_load import d1_enabled, run_d1_file, sql_literal  # noqa: E402
 from kbo_http import Session  # noqa: E402
 from mysql_sink import mirror  # noqa: E402
 
@@ -53,13 +52,6 @@ COLUMN_ALIAS = {"2B": "double_hit", "3B": "triple_hit"}
 
 # 표에 있지만 담지 않는 칸입니다. 순위는 필터에 따라 달라집니다.
 SKIP_COLUMNS = ("순위",)
-
-SQL_TMP = ROOT / "migration" / "_futures_records.sql"
-
-# 한 파일에 담는 INSERT 행 수입니다. D1 문 상한(100,000바이트)에
-# 걸리지 않게 잡습니다.
-BATCH = 400
-
 
 def column_name(header):
     """표 머리를 컬럼 이름으로 바꿉니다."""
@@ -126,42 +118,13 @@ def collect(kind, season, team, delay):
     return out
 
 
-def create_table(columns):
-    """표가 없으면 만듭니다. 컬럼은 사이트가 주는 그대로입니다."""
-    cols = ", ".join('"%s" TEXT' % c for c in columns
-                     if c not in ("player_id", "season", "kind"))
-    return (
-        'CREATE TABLE IF NOT EXISTS futures_season_stats ('
-        ' player_id TEXT NOT NULL, season INTEGER NOT NULL,'
-        ' kind TEXT NOT NULL, %s,'
-        ' PRIMARY KEY (player_id, season, kind));' % cols)
-
-
-def insert_sql(records, columns):
-    """INSERT 문들입니다. 같은 열쇠는 덮어씁니다."""
-    head = ('INSERT INTO futures_season_stats (%s) VALUES '
-            % ",".join('"%s"' % c for c in columns))
-    tail = (' ON CONFLICT(player_id, season, kind) DO UPDATE SET %s;'
-            % ",".join('"%s"=excluded."%s"' % (c, c) for c in columns
-                       if c not in ("player_id", "season", "kind")))
-    out = []
-    for i in range(0, len(records), BATCH):
-        chunk = records[i:i + BATCH]
-        values = ",".join(
-            "(%s)" % ",".join(sql_literal(r.get(c)) for c in columns)
-            for r in chunk)
-        out.append(head + values + tail)
-    return out
-
-
 KEY = ["player_id", "season", "kind"]
 
 
 def mysql_write_futures_stats(sink, rows, columns):
-    """D1 과 같이 같은 열쇠는 덮어씁니다. 표는 1단계에서 만들어 두었습니다.
+    """같은 열쇠는 덮어씁니다. 표는 MySQL 이관 1단계에서 만들어 두었습니다.
 
-    사이트가 새 열을 내기 시작하면 D1 쪽 INSERT 가 먼저 실패하고, 여기서도
-    없는 열이라 실패합니다. 둘 다 빨간색으로 드러납니다.
+    사이트가 새 열을 내기 시작하면 없는 열이라 실패합니다(빨간색으로 드러남).
     """
     return sink.upsert("futures_season_stats", columns, KEY, rows)
 
@@ -231,15 +194,7 @@ def main():
         print("[미리보기] 넣지 않았습니다.")
         return 0
 
-    # 없는 컬럼은 NULL 로 채워 문 하나에 넣습니다.
-    statements = [create_table(columns)] + insert_sql(rows, columns)
-    SQL_TMP.parent.mkdir(parents=True, exist_ok=True)
-    SQL_TMP.write_text("\n".join(statements) + "\n",
-                       encoding="utf-8", newline="\n")
-    run_d1_file(SQL_TMP)
-    # D1 이 꺼져 있으면 위 올리기는 "D1 꺼짐" 한 줄로 건너뛰고, 아래 mirror 가 유일한 쓰기입니다.
-    if d1_enabled():
-        print("D1 적재 완료 %s행" % format(len(rows), ","))
+    # 없는 컬럼은 NULL 로 채웁니다(행마다 columns 를 다 씀).
     mirror("futures_records", lambda s: mysql_write_futures_stats(s, rows, columns))
     return 0
 

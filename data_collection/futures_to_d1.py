@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-"""퓨처스(2군) 일정을 수집해 D1 에 직접 넣습니다.
+"""퓨처스(2군) 일정을 수집해 Cloud SQL(MySQL)에 넣습니다.
 
 `futures_schedule.py` 는 로컬 SQLite 에 씁니다. 러너에는 그 파일이
-없으므로, 수집·파싱은 그대로 쓰고 쓰는 곳만 D1 으로 바꿉니다.
+없으므로, 수집·파싱은 그대로 쓰고 쓰는 곳만 MySQL 로 바꿉니다.
 파싱 규칙을 복사하지 않는 이유는 같은 규칙이 두 벌이 되면 언젠가
-갈라지기 때문입니다.
+갈라지기 때문입니다. 파일 이름의 `_to_d1` 은 예전 이름이 남은 것입니다.
 
     py data_collection/futures_to_d1.py                # 이번 달
     py data_collection/futures_to_d1.py 2026-07 2026-08
@@ -18,11 +18,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from d1_load import build_upserts, d1_enabled, refresh_count, run_d1_file  # noqa: E402
 from futures_schedule import fetch_month, parse_schedule  # noqa: E402
 from mysql_sink import mirror  # noqa: E402
-
-ROOT = Path(__file__).resolve().parent.parent
 
 COLS = ["game_id", "game_date", "game_time", "season", "series_id",
         "away_code", "home_code", "away_name", "home_name",
@@ -35,7 +32,7 @@ KEEP = ["season", "away_code", "home_code", "away_name", "home_name"]
 
 
 def mysql_write_futures(sink, rows):
-    """D1 과 같이 팀·시즌 열(KEEP)은 덮지 않습니다."""
+    """팀·시즌 열(KEEP)은 덮지 않습니다."""
     n = sink.upsert("futures_games", COLS, ["game_id"], rows, touch=None, keep=KEEP)
     sink.refresh_count("futures_games")
     return n
@@ -44,7 +41,6 @@ def mysql_write_futures(sink, rows):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("months", nargs="*", help="YYYY-MM, 기본값은 이번 달")
-    ap.add_argument("--out", default="migration/futures.sql")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -82,22 +78,12 @@ def main():
         month_now = int(months[-1][5:7])
         return 1 if 3 <= month_now <= 9 else 0
 
-    stmts = build_upserts("futures_games", COLS, ["game_id"], rows,
-                          touch=None, keep=KEEP)
-    out = ROOT / args.out
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text("\n".join(stmts) + "\n", encoding="utf-8", newline="\n")
-    print("경기 %d개, SQL %d문 -> %s" % (len(rows), len(stmts), out))
+    print("경기 %d개" % len(rows))
 
     if args.dry_run:
         print("[dry-run] 적재하지 않았습니다.")
         return 0
 
-    # D1 이 꺼져 있으면 두 줄 다 "D1 꺼짐" 만 남기고, 아래 mirror 가 유일한 쓰기입니다.
-    run_d1_file(out)
-    refresh_count("futures_games")
-    if d1_enabled():
-        print("D1 적재 완료")
     mirror("futures", lambda s: mysql_write_futures(s, rows))
     return 0
 
