@@ -84,11 +84,11 @@
                 <!-- Filled dynamically -->
             </div>
 
-            <!-- 팬그래프 선수 페이지의 카드 줄입니다. 왼쪽 Quick Look(2칸),
+            <!-- 팬그래프 선수 페이지의 카드 줄입니다. 왼쪽 한눈에 보기(2칸),
                  오른쪽 프로필(1칸). 뉴스 카드는 수집을 안 해서 없습니다. -->
             <div class="player-details-grid fade-in">
                 <div class="pa-card pa-card--ql">
-                    <div class="pa-card-tabs"><span class="pa-card-tab">Quick Look</span></div>
+                    <div class="pa-card-tabs"><span class="pa-card-tab">한눈에 보기</span></div>
                     <div class="pa-card-body" id="player-stats"></div>
                 </div>
 
@@ -601,12 +601,46 @@
                 `<div class="pa-prof-row"><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join('') + '</dl>';
         }
 
+        /** 프로필 표 맨 앞 줄(헤더와 같은 값)입니다. 1군·퓨처스 공통. */
+        function profileBasics(player) {
+            const Q = window.PlayerAnalytics.quicklook;
+            const age = Q.ageParts(player.birthday, new Date());
+            const dob = Q.dobText(player.birthday);
+            return [
+                ['나이', age ? '만 ' + age.years + '세' : '-'],
+                ['투타', formatThrowBat(player.throw, player.bat)],
+                ['신체', (player.height || player.weight)
+                    ? (player.height ? player.height + 'cm' : '-') + ' / ' + (player.weight ? player.weight + 'kg' : '-') : '-'],
+                ['생년월일', dob || '-'],
+            ];
+        }
+
         // --- 무브먼트 카드(Savant 참고) ---------------------------------
         // 1군 투수만 보입니다. 연도를 바꾸면 그 시즌 투구를 불러옵니다.
         // 같은 선수·시즌은 다시 부르지 않습니다. 빈 결과(오류 포함)는
         // 저장하지 않아 다음에 다시 시도합니다.
         const mvCache = {};
         const usageCache = {};
+        // 위·아래 카드가 같은 선수·시즌 데이터를 한 번만 부르게 합니다. 진행 중 요청(Promise)도 저장합니다.
+        // 빈 결과(오류 포함)는 저장을 지워 다음에 다시 시도합니다.
+        const arsenalReq = {};
+        const usageReq = {};
+        function sharedFetch(store, key, fetcher, isEmpty) {
+            if (store[key]) return store[key];
+            const p = Promise.resolve().then(fetcher).then(
+                res => { if (isEmpty(res)) delete store[key]; return res; },
+                err => { delete store[key]; throw err; });
+            store[key] = p;
+            return p;
+        }
+        function getArsenalShared(playerId, season) {
+            return sharedFetch(arsenalReq, playerId + ':' + season,
+                () => API.getPitchArsenal(playerId, season), r => !r || !(r.arsenal || []).length);
+        }
+        function getUsageShared(playerId, season) {
+            return sharedFetch(usageReq, playerId + ':' + season,
+                () => API.getPitchUsage(playerId, season), r => !r || !(r.usage || []).length);
+        }
         const avgCache = {};  // 시즌별 리그 평균(선수와 무관)
         let mvHand = null;    // 현재 선수의 투구 손('L'/'R')
         let mvToken = 0;
@@ -671,8 +705,8 @@
                 if (!pitches) body.innerHTML = createLoadingSpinner();
                 if (!usage && usageBox) usageBox.innerHTML = createLoadingSpinner();
                 const [a, u, av] = await Promise.all([
-                    pitches ? null : API.getPitchArsenal(playerId, season),
-                    usage ? null : API.getPitchUsage(playerId, season),
+                    pitches ? null : getArsenalShared(playerId, season),
+                    usage ? null : getUsageShared(playerId, season),
                     avg ? null : API.getMovementAvg(season),
                 ]);
                 if (!pitches) { pitches = (a && a.arsenal) || []; if (pitches.length) mvCache[key] = pitches; }
@@ -721,6 +755,7 @@
             headerBar.innerHTML = renderHeaderBar(player);
 
             cardDiv.innerHTML = profileHtml([
+                ...profileBasics(player),
                 ['연봉', formatMoney(player.salary, 'KRW')],
                 ['지명순위', f.draft || '-'],
                 ['출신교', f.career || '-'],
@@ -818,13 +853,14 @@
                     + (player.draft_year && player.draft_order ? ' / ' : '')
                     + (player.draft_order || '');
                 cardDiv.innerHTML = profileHtml([
+                ...profileBasics(player),
                     ['연봉', money(player.salary)],
                     ['입단 계약금', money(player.signing_bonus)],
                     ['입단년도 / 지명순위', draft || '-'],
                     ['경력', player.career || '-'],
                 ]);
 
-                // Quick Look: 최근 3시즌 + 통산. 계산은 quicklook.js 입니다.
+                // 한눈에 보기: 최근 3시즌 + 통산. 계산은 quicklook.js 입니다.
                 const isPitcher = player.position === '투수';
                 const Q = window.PlayerAnalytics.quicklook;
                 statsDiv.innerHTML = Q.tableHtml(Q.build(player, new Date().getFullYear()));
@@ -963,20 +999,26 @@
                     const arsenalSection = document.getElementById('pitch-arsenal-section');
                     const arsenalGrid = document.getElementById('pitch-arsenal-grid');
 
-                    try {
-                        const arsenalRes = await API.getPitchArsenal(playerId);
+                    // 위 무브먼트 카드와 같은 시즌(처음 연도)을 씁니다. 목록이 비면(2016 이전만) 부르지 않고 감춥니다.
+                    const lowerSeason = window.PlayerAnalytics.movement.seasonsFor(player)[0];
+                    if (!lowerSeason) {
+                        arsenalSection.classList.add('hidden');
+                        const ur = document.getElementById('usage-movement-row');
+                        if (ur) ur.classList.add('hidden');
+                    } else try {
+                        const arsenalRes = await getArsenalShared(playerId, lowerSeason) || {};
                         const arsenalData = arsenalRes.arsenal || [];
                         lastArsenalData = arsenalData; // Store for mode switching
                         console.log("Arsenal total count:", arsenalData.length);
 
                         if (arsenalData.length > 0) {
                             renderPitchArsenalGrid();
-                            renderPitchUsage(playerId);
+                            renderPitchUsage(playerId, lowerSeason);
                             renderMovementProfile(lastArsenalData);
                         } else {
                             console.log("No pitch arsenal data found for player.");
                             arsenalSection.classList.add('hidden');
-                            renderPitchUsage(playerId);
+                            renderPitchUsage(playerId, lowerSeason);
                         }
 
                     } catch (err) {
@@ -1055,13 +1097,13 @@
             });
         }
 
-        async function renderPitchUsage(playerId) {
+        async function renderPitchUsage(playerId, season) {
             const usageRow = document.getElementById('usage-movement-row');
             const usageList = document.getElementById('usage-list');
             if (!usageRow || !usageList) return;
 
             try {
-                const data = await API.getPitchUsage(playerId);
+                const data = await getUsageShared(playerId, season) || {};
                 if (!data.usage || data.usage.length === 0) {
                     usageRow.classList.add('hidden');
                     return;

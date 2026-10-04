@@ -189,14 +189,12 @@
       + '</tbody></table>';
   }
 
-  /** 카드 본문입니다. 그림 + 추적 비율 줄 + 표. 데이터가 없으면 안내 문구입니다. 설명은 카드 제목 옆 툴팁(HELP)에 있습니다. */
+  /** 카드 본문입니다. 그림 + 표(추적 비율 줄은 없음, total 인자는 받기만 함). 데이터가 없으면 안내 문구입니다. 설명은 카드 제목 옆 툴팁(HELP)에 있습니다. */
   function bodyHtml(pitches, total, view, ctx) {
     const vs = valid(pitches);
     if (!vs.length) return '<p class="pa-mv-empty">이 시즌은 투구 추적 데이터가 없습니다.</p>';
     const summary = summarize(vs);
     return svgHtml(vs, summary, view, ctx)
-      + '<p class="pa-mv-note">공 ' + comma(vs.length) + '개 추적'
-      + (total > 0 ? ' (정규시즌 ' + comma(total) + '구 대비 ' + Math.min(100, Math.round(vs.length * 100 / total)) + '%)' : '') + '</p>'
       + legendHtml(summary, view, ctx);
   }
 
@@ -223,7 +221,7 @@
     const title = '<div class="pa-usage-title">' + esc(season) + ' 구종 구사율</div>';
     const rows = ((data && data.usage) || []).slice().sort(function (a, b) { return pct1(b.usage_all) - pct1(a.usage_all); });
     if (!rows.length) return title + '<p class="pa-mv-empty">이 시즌은 구종 구사율 데이터가 없습니다.</p>';
-    return title + '<div class="pa-usage-grid">'
+    return title + '<div class="pa-usage-grid' + (rows.length >= 7 ? ' pa-usage-grid--dense' : '') + '">'
       + '<div class="pa-usage-head"><span>좌타 상대</span><span></span><span>구종 (전체)</span><span></span><span>우타 상대</span></div>'
       + rows.map(function (u) {
         const c = colorOf(u.pitch_type), l = pct1(u.usage_l), r = pct1(u.usage_r);
