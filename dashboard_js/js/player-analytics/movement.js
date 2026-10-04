@@ -138,7 +138,7 @@
     const R = RINGS[RINGS.length - 1] * PX_PER_CM;
     let s = '<svg class="pa-mv-svg" viewBox="0 0 400 400" role="img" aria-label="구종별 무브먼트">'
       + '<defs><clipPath id="pa-mv-clip"><circle cx="200" cy="200" r="' + R + '"/></clipPath>'
-      + (ctx ? '<pattern id="pa-mv-hatch" patternUnits="userSpaceOnUse" width="6" height="6"><path class="pa-mv-hatch-line" d="M-1,1 l2,-2 M0,6 l6,-6 M5,7 l2,-2"/></pattern>' : '')
+      + (ctx ? '<pattern id="pa-mv-hatch" patternUnits="userSpaceOnUse" width="6" height="6"><rect class="pa-mv-hatch-bg" width="6" height="6"/><path class="pa-mv-hatch-line" d="M-1,1 l2,-2 M0,6 l6,-6 M5,7 l2,-2"/></pattern>' : '')
       + '</defs>'
       + '<circle class="pa-mv-bg" cx="200" cy="200" r="' + R + '"/>';
     RINGS.forEach(function (cm) {
@@ -158,7 +158,7 @@
       (summary || []).forEach(function (g) {
         const a = ctx.map && Object.prototype.hasOwnProperty.call(ctx.map, g.type) ? ctx.map[g.type] : null;
         if (!a) return;
-        s += '<circle class="pa-mv-lg" cx="' + px(a.x, view) + '" cy="' + py(a.z) + '" r="11" fill="url(#pa-mv-hatch)" stroke="' + g.color + '">'
+        s += '<circle class="pa-mv-lg" cx="' + px(a.x, view) + '" cy="' + py(a.z) + '" r="13" fill="url(#pa-mv-hatch)" stroke="' + g.color + '">'
           + '<title>' + esc(ctx.label) + ' 평균 ' + esc(g.type) + ' · 수직 ' + fd(a.z) + 'cm · 수평 ' + fx(a.x, view) + 'cm</title></circle>';
       });
     }
@@ -210,6 +210,15 @@
    * 좌타 상대 % · 왼쪽 막대 · 구종(전체 %) · 오른쪽 막대 · 우타 상대 %. 전체 비율 큰 순.
    * data 는 /players/{id}/usage 응답입니다.
    */
+  function usageTotal(data) {
+    const t = data && data.total_pitches;
+    if (typeof t !== 'number' || !(t > 0)) return '';
+    let x = '투구 수 ' + comma(t);
+    if (typeof data.total_l === 'number') x += ' · 좌타 상대 ' + comma(data.total_l);
+    if (typeof data.total_r === 'number') x += ' · 우타 상대 ' + comma(data.total_r);
+    return '<p class="pa-usage-total">' + x + '</p>';
+  }
+
   function usageHtml(data, season) {
     const title = '<div class="pa-usage-title">' + esc(season) + ' 구종 구사율</div>';
     const rows = ((data && data.usage) || []).slice().sort(function (a, b) { return pct1(b.usage_all) - pct1(a.usage_all); });
@@ -226,7 +235,8 @@
           + '<span class="pa-usage-pct">' + f1(r) + '%</span>'
           + '</div>';
       }).join('')
-      + '</div>';
+      + '</div>'
+      + usageTotal(data);
   }
 
   const api = { COLORS, colorOf, summarize, seasonsFor, totalsFor, svgHtml, legendHtml, bodyHtml, avgFor, handLabel, HELP, helpFor, usageHtml };
