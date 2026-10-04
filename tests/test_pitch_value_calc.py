@@ -91,3 +91,9 @@ def test_구종_없는_공은_가치_표에_넣지_않습니다():
     re = {(0, 0, 0, 0): 0.5}
     vals = pv.pitch_values([[row(1, ptype=None)], [row(2, ptype="-")]], re)
     assert vals == {}
+
+
+def test_투수_ID_가_빈_공은_가치_표에_넣지_않습니다():
+    re = {(0, 0, 0, 0): 0.5}
+    vals = pv.pitch_values([[row(1, pitcher=None)]], re)
+    assert vals == {}

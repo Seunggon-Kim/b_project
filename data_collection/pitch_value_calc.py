@@ -78,7 +78,9 @@ def pitch_values(halves, re):
     out = {}
     for h in halves:
         for i, r in enumerate(h):
-            if not is_pitch(r) or not has_type(r):
+            # 투수 ID 가 빈 공(2019 등 원천 누락)은 누구 몫인지 몰라 뺍니다.
+            # 기대 득점 표에는 그대로 씁니다.
+            if not is_pitch(r) or not has_type(r) or r.get("pitcher_ID") is None:
                 continue
             nxt = h[i + 1] if i + 1 < len(h) else None
             after = re.get(state_of(nxt), 0.0) if nxt is not None else 0.0
