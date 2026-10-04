@@ -50,7 +50,9 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 
-from d1_load import build_upserts, d1_columns, query, run_d1_file  # noqa: E402
+from d1_load import (  # noqa: E402
+    build_upserts, d1_columns, query, require_d1, run_d1_file,
+)
 from game_type import classify, classify_game, is_skippable  # noqa: E402
 
 API = "https://api-gw.sports.naver.com/schedule"
@@ -217,6 +219,8 @@ def main():
                     help="포스트시즌만 받습니다. 있는 정규시즌 행을 "
                          "건드리지 않고 빠진 것만 채울 때 씁니다.")
     args = ap.parse_args()
+    # D1 이 꺼져 있으면(BSTATS_D1=off) D1 을 건드리지 않고 멈춥니다.
+    require_d1("옛 시즌 games D1 적재")
 
     years = [args.year] if args.year else list(range(args.start, args.end + 1))
     bad = [y for y in years if y < FIRST_SEASON]

@@ -47,6 +47,16 @@ def d1_query(sql, db_name=None):
     return query(sql, db_name=db_name or DB_NAME)
 
 
+def require_d1():
+    """D1 이 꺼져 있으면 멈춥니다.
+
+    꺼져 있으면 d1_query 가 MySQL 을 읽어 MySQL 과 MySQL 을 견주게 되고,
+    늘 같다고 나옵니다. 틀렸는데 맞아 보이는 결과라 아예 돌지 않습니다.
+    """
+    from data_collection.d1_load import require_d1 as need
+    need("D1·MySQL 대조")
+
+
 def my_query(con, sql, params=None):
     with con.cursor() as cur:
         cur.execute(sql, params)
@@ -199,6 +209,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=3, help="경기별로 견줄 최근 일수")
     args = ap.parse_args()
+    require_d1()
     types = json.loads((OUT_DIR / "schema_types.json").read_text(encoding="utf-8"))
     my = myconn.connect()
     try:

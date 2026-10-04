@@ -56,7 +56,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "data_collection"))
 
-from d1_load import query, run_d1, run_d1_file  # noqa: E402
+from d1_load import query, require_d1, run_d1, run_d1_file  # noqa: E402
 
 PLAN = json.loads((ROOT / "migration" / "shard_plan.json")
                   .read_text(encoding="utf-8"))
@@ -263,6 +263,8 @@ def main():
     ap.add_argument("--job", default=None,
                     help="커서 이름. 기본은 pbp_<first>_<last> 입니다")
     args = ap.parse_args()
+    # D1 이 꺼져 있으면(BSTATS_D1=off) D1 을 건드리지 않고 멈춥니다.
+    require_d1("D1 샤드 되채우기")
 
     save_root = ROOT / args.save_dir
     first, last = args.first, args.last

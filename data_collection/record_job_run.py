@@ -10,6 +10,10 @@ EC2 의 `cron_status.json` 을 대신합니다. 그 파일은 서버가 15분마
 성공만 남기지 말고 실패도 남기십시오. 조용히 멈춘 것과 실패한 것을
 구분할 수 있어야 합니다.
 
+D1 이 꺼져 있으면(BSTATS_D1=off) D1 쓰기는 "D1 꺼짐" 한 줄로 건너뛰고
+MySQL(meta_job_runs)에만 남깁니다. 그때 MySQL 쓰기가 실패하면 이 명령도
+실패합니다.
+
     py data_collection/record_job_run.py --job pbp --status ok --note "3경기 859행"
     py data_collection/record_job_run.py --job official_stats --status fail
 """

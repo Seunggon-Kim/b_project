@@ -39,7 +39,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 
-from d1_load import build_upserts, query, run_d1_file  # noqa: E402
+from d1_load import build_upserts, d1_enabled, query, run_d1_file  # noqa: E402
 import futures_register
 from kbo_register import collect  # noqa: E402
 from mysql_sink import mirror  # noqa: E402
@@ -215,7 +215,9 @@ def main():
     out = ROOT / "migration" / "roster_upsert.sql"
     out.write_text("\n".join(stmts) + "\n", encoding="utf-8", newline="\n")
     run_d1_file(out)
-    print("적재 완료 (%d문)" % len(stmts))
+    # D1 이 꺼져 있으면 위 올리기는 "D1 꺼짐" 한 줄로 건너뛰고, 아래 mirror 가 유일한 쓰기입니다.
+    if d1_enabled():
+        print("D1 적재 완료 (%d문)" % len(stmts))
 
     # 1군을 떠난 선수는 명단에서 지웁니다. 남겨 두면 "지금 1군" 이
     # 아니라 "한 번이라도 1군이었던 사람" 이 됩니다.
@@ -229,9 +231,11 @@ def main():
         "DELETE FROM kbo_roster WHERE (team, name, back_number) NOT IN (%s);\n"
         % keys, encoding="utf-8", newline="\n")
     run_d1_file(gone)
+    mirror("roster", lambda s: mysql_write_roster(s, rows, moves))
+    # MySQL 쓰기 뒤에 셉니다. D1 이 꺼져 있으면 이 질의는 MySQL 을 읽으므로,
+    # 먼저 세면 쓰기 전 수가 찍힙니다.
     left = query("SELECT COUNT(*) AS n FROM kbo_roster;")[0]["n"]
     print("현재 명단 %s명" % left)
-    mirror("roster", lambda s: mysql_write_roster(s, rows, moves))
     return 0
 
 

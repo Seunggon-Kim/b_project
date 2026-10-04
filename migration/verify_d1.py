@@ -95,6 +95,9 @@ def main():
     ap.add_argument("--db", default="kbo-stats")
     ap.add_argument("--local-db", default="database/kbo_stats.db")
     args = ap.parse_args()
+    from data_collection.d1_load import require_d1
+    # D1 이 꺼져 있으면(BSTATS_D1=off) D1 을 건드리지 않고 멈춥니다.
+    require_d1("D1 검증")
 
     conn = sqlite3.connect(args.local_db)
     local = local_counts(conn, TABLE_ORDER)

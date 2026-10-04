@@ -29,7 +29,8 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(ROOT))
 
 from d1_load import (  # noqa: E402
-    build_inserts, d1_columns, query, refresh_count, run_d1_file,
+    DB_NAME, build_inserts, d1_columns, d1_enabled, query, refresh_count,
+    run_d1_file,
 )
 from migration import shard_plan  # noqa: E402
 from mysql_sink import mirror  # noqa: E402
@@ -129,17 +130,28 @@ def main():
     year = day[:4]
     print("대상 날짜: %s (KST 기준)" % day)
 
+    if args.mysql_only and not d1_enabled():
+        # 따라잡기는 D1 에 있는 행을 MySQL 로 옮기는 일입니다. D1 이 꺼져 있으면
+        # MySQL 을 읽어 MySQL 에 다시 쓰게 되어(pbp_id 만 바뀜) 뜻이 없습니다.
+        print("D1 이 꺼져 있어(BSTATS_D1=off) --mysql-only 따라잡기를 할 수 없습니다.")
+        return 1
+
     # `play_by_play` 는 시즌별 D1 네 개에 나뉘어 있습니다. 공용
     # DB(kbo-stats)에는 이 표가 없습니다. 예전처럼 공용 DB 에 넣으면
     # 워커가 읽지 않아 **오류 없이 화면만 어제에 멈춥니다.** 그게 제일
     # 찾기 어려운 고장이라 배정에 없으면 여기서 멈춥니다.
     pbp_db = shard_plan.db_of(year)
-    if not pbp_db:
+    if not pbp_db and not d1_enabled():
+        # D1 이 꺼져 있으면 샤드가 필요 없습니다. MySQL 은 play_by_play 가 표
+        # 하나입니다. 새 시즌에 샤드를 안 만들었다고 수집을 멈추지 않습니다.
+        pbp_db = DB_NAME
+    elif not pbp_db:
         print("%s 시즌을 담당하는 D1 이 배정표에 없습니다." % year)
         print("migration/shard_plan.json 에 시즌을 넣고 D1 을 만든 뒤")
         print("src/lib/shard.js 사본까지 맞춘 다음 다시 돌리십시오.")
         return 1
-    print("대상 D1: %s" % pbp_db)
+    print("대상 D1: %s" % pbp_db if d1_enabled()
+          else "대상: MySQL play_by_play (D1 꺼짐)")
 
     if args.mysql_only:
         rows = d1_day_rows(day, pbp_db)
@@ -222,17 +234,20 @@ def main():
     # Actions 에서는 토큰이 반드시 있어야 합니다. 로컬에서는 wrangler 가
     # 로그인 세션을 쓰므로 없어도 됩니다. 그래서 막지 않고 알리기만 합니다.
     # 인증이 정말 없으면 아래 wrangler 호출이 실패하며 이유를 보여 줍니다.
-    if not os.environ.get("CLOUDFLARE_API_TOKEN"):
+    if d1_enabled() and not os.environ.get("CLOUDFLARE_API_TOKEN"):
         print("CLOUDFLARE_API_TOKEN 이 없습니다. wrangler 로그인 세션으로 시도합니다.")
 
+    # D1 이 꺼져 있으면 아래 두 줄은 "D1 꺼짐" 한 줄씩만 남기고 넘어갑니다.
     run_d1_file(out, db_name=pbp_db)
-    print("D1 적재 완료 (%s)" % pbp_db)
+    if d1_enabled():
+        print("D1 적재 완료 (%s)" % pbp_db)
 
     # 행 수 메타를 갱신합니다. 이것을 빠뜨리면 화면이 어제 숫자를
     # 계속 보여 줍니다(src/lib/counts.js). 나뉜 표라서 **샤드마다**
     # 따로 적어 두고, 화면은 네 값을 더해 보여 줍니다.
     refresh_count("play_by_play", db_name=pbp_db)
-    print("행 수 메타 갱신 완료")
+    if d1_enabled():
+        print("행 수 메타 갱신 완료")
     mirror("pbp", lambda s: mysql_write_pbp(s, day, rows))
     return 0
 

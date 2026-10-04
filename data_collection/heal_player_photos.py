@@ -76,16 +76,25 @@ def head_ok(url):
 
 
 def current_season():
-    """공식 기록이 있는 가장 최근 시즌입니다."""
+    """공식 기록이 있는 가장 최근 시즌입니다.
+
+    괄호 안 질의(파생 표)에 `AS t` 별칭을 붙입니다. D1 이 꺼져 있으면 이
+    질의를 MySQL 이 받는데, MySQL 은 별칭 없는 파생 표를 거절합니다
+    ("Every derived table must have its own alias"). SQLite 는 별칭이
+    있어도 뜻이 같습니다.
+    """
     rows = query(
         "SELECT MAX(s) AS s FROM ("
         "SELECT MAX(season) AS s FROM kbo_official_batter_stats"
-        " UNION ALL SELECT MAX(season) FROM kbo_official_pitcher_stats);")
+        " UNION ALL SELECT MAX(season) FROM kbo_official_pitcher_stats) AS t;")
     return int(rows[0]["s"]) if rows and rows[0]["s"] else None
 
 
 def load_players():
-    """선수마다 (id, 현재 주소, 마지막 기록 시즌) 입니다."""
+    """선수마다 (id, 현재 주소, 마지막 기록 시즌) 입니다.
+
+    파생 표 별칭(`AS t`)은 current_season 과 같은 이유입니다.
+    """
     return query(
         "SELECT p.player_id AS id, p.image_url AS url, ("
         "  SELECT MAX(season) FROM ("
@@ -94,7 +103,7 @@ def load_players():
         "    UNION ALL"
         "    SELECT season FROM kbo_official_pitcher_stats"
         "     WHERE player_id = p.player_id"
-        "  )"
+        "  ) AS t"
         ") AS last_season FROM players p;")
 
 

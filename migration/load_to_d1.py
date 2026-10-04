@@ -171,6 +171,10 @@ def main():
     ap.add_argument("--dry-run", action="store_true",
                     help="무엇을 넣을지만 보여 주고 넣지 않습니다")
     args = ap.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from data_collection.d1_load import require_d1
+    # D1 이 꺼져 있으면(BSTATS_D1=off) D1 을 건드리지 않고 멈춥니다.
+    require_d1("D1 적재")
 
     out_dir = Path(args.dir)
     progress = out_dir / ".progress"

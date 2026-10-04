@@ -38,7 +38,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "data_collection"))
 
-from d1_load import run_d1_file, sql_literal  # noqa: E402
+from d1_load import d1_enabled, run_d1_file, sql_literal  # noqa: E402
 from kbo_http import Session  # noqa: E402
 from mysql_sink import mirror  # noqa: E402
 
@@ -237,7 +237,9 @@ def main():
     SQL_TMP.write_text("\n".join(statements) + "\n",
                        encoding="utf-8", newline="\n")
     run_d1_file(SQL_TMP)
-    print("적재 완료 %s행" % format(len(rows), ","))
+    # D1 이 꺼져 있으면 위 올리기는 "D1 꺼짐" 한 줄로 건너뛰고, 아래 mirror 가 유일한 쓰기입니다.
+    if d1_enabled():
+        print("D1 적재 완료 %s행" % format(len(rows), ","))
     mirror("futures_records", lambda s: mysql_write_futures_stats(s, rows, columns))
     return 0
 

@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from d1_load import build_upserts, refresh_count, run_d1_file  # noqa: E402
+from d1_load import build_upserts, d1_enabled, refresh_count, run_d1_file  # noqa: E402
 from futures_schedule import fetch_month, parse_schedule  # noqa: E402
 from mysql_sink import mirror  # noqa: E402
 
@@ -93,9 +93,11 @@ def main():
         print("[dry-run] 적재하지 않았습니다.")
         return 0
 
+    # D1 이 꺼져 있으면 두 줄 다 "D1 꺼짐" 만 남기고, 아래 mirror 가 유일한 쓰기입니다.
     run_d1_file(out)
     refresh_count("futures_games")
-    print("D1 적재 완료")
+    if d1_enabled():
+        print("D1 적재 완료")
     mirror("futures", lambda s: mysql_write_futures(s, rows))
     return 0
 

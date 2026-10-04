@@ -57,7 +57,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 
-from d1_load import query, run_d1_file  # noqa: E402
+from d1_load import d1_enabled, query, run_d1_file  # noqa: E402
 from mysql_sink import mirror  # noqa: E402
 
 SEARCH_URL = "https://www.koreabaseball.com/Player/Search.aspx"
@@ -315,7 +315,9 @@ def main():
     out = ROOT / "migration" / "players_add_new.sql"
     out.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     run_d1_file(out)
-    print("반영 완료 (새 선수 %d명, 문 %d개)" % (len(new_rows), len(lines)))
+    # D1 이 꺼져 있으면 위 올리기는 "D1 꺼짐" 한 줄로 건너뛰고, 아래 mirror 가 유일한 쓰기입니다.
+    if d1_enabled():
+        print("D1 반영 완료 (새 선수 %d명, 문 %d개)" % (len(new_rows), len(lines)))
     mirror("players_new", lambda s: mysql_write_new_players(s, new_rows, targets))
     return 0
 

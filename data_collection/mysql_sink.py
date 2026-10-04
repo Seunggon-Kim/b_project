@@ -14,6 +14,10 @@ D1 에 쓰는 코드는 그대로 두고, 각 스크립트가 D1 적재를 마�
     BSTATS_MYSQL_SETTINGS  접속 파일(migration/mysql/conn.py)
     BSTATS_MYSQL_FAIL_LOG  실패 기록 파일(기본 logs/mysql_mirror_failures.jsonl)
 
+D1 이 꺼져 있으면(`BSTATS_D1=off`, d1_load.d1_enabled) MySQL 이 유일한
+저장소입니다. 그때 `mirror()` 는 위 모드와 상관없이 쓰고, 실패하면 예외를
+올려 작업을 실패시킵니다(strict 와 같음).
+
 ## D1 과 같은 값 쓰기
 
 D1 쪽은 `d1_load.sql_literal` 이 ''·'-' 를 NULL 로 바꿉니다. 여기서도
@@ -33,6 +37,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from data_collection.d1_load import d1_enabled  # noqa: E402
 from migration.mysql import typemap as tm  # noqa: E402
 
 TYPES_PATH = ROOT / "migration" / "mysql" / "schema_types.json"
@@ -189,7 +194,13 @@ def mirror(job, fn, required=False, connect=None):
     꺼져 있으면(off) 아무것도 하지 않고 None 입니다. required=True 는 MySQL
     에만 쓰는 손 작업(따라잡기)용입니다. 꺼져 있어도 쓰고, 실패하면 예외를
     올립니다.
+
+    D1 이 꺼져 있으면(BSTATS_D1=off) 늘 required=True 로 봅니다. 그때는
+    MySQL 이 유일한 저장소라, 모드와 상관없이 쓰고 실패하면 작업이 실패해야
+    합니다. 조용히 넘기면 그날 수집이 어디에도 남지 않습니다.
     """
+    if not d1_enabled():
+        required = True
     m = mode()
     if m == "off" and not required:
         return None

@@ -20,7 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from data_collection.d1_load import (  # noqa: E402
-    build_inserts, query, refresh_count, run_d1, run_d1_file,
+    build_inserts, d1_enabled, query, refresh_count, run_d1, run_d1_file,
 )
 from data_collection.mysql_sink import mirror  # noqa: E402
 
@@ -94,7 +94,9 @@ def main():
         rows = [dict(r) for r in conn.execute('SELECT * FROM "%s"' % table)]
 
         lines = []
-        if not d1_has(table):
+        # D1 이 꺼져 있으면 D1 표가 있는지 볼 이유가 없습니다(아래 올리기가
+        # "D1 꺼짐" 으로 건너뜁니다). MySQL 쪽은 mirror() 가 씁니다.
+        if d1_enabled() and not d1_has(table):
             # D1 에 없으면 만들어야 합니다. 로컬 정의를 그대로 씁니다.
             print("%s: D1 에 없어 새로 만듭니다." % table)
             lines.append(row[0].replace("CREATE TABLE",

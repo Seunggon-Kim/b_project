@@ -321,6 +321,9 @@ def main():
     ap.add_argument("--indexes-only", action="store_true",
                     help="내려받지 않고, 이미 있는 --out 스냅샷에 D1 인덱스만 만듭니다")
     args = ap.parse_args()
+    from data_collection.d1_load import require_d1
+    # D1 이 꺼져 있으면(BSTATS_D1=off) D1 을 건드리지 않고 멈춥니다.
+    require_d1("D1 내려받기")
 
     if args.indexes_only:
         out = Path(args.out)

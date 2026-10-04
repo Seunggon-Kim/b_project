@@ -40,7 +40,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 
-from d1_load import query, run_d1_file  # noqa: E402
+from d1_load import d1_enabled, query, run_d1_file  # noqa: E402
 from mysql_sink import mirror  # noqa: E402
 
 
@@ -163,6 +163,10 @@ def sync_d1(args):
     out = ROOT / "migration" / "players_sync.sql"
     out.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     run_d1_file(out)
+    if not d1_enabled():
+        # D1 이 꺼져 있으면 반영은 main() 의 mirror 가 MySQL 에 합니다. 여기서
+        # 다시 세면 쓰기 전 MySQL 을 읽어 그대로 남은 것처럼 보입니다.
+        return 0
     print("반영 완료 (%d문)" % len(lines))
 
     left = [r for r in diffs() if r["rt"] in known]
@@ -176,7 +180,9 @@ def main():
     args = ap.parse_args()
     rc = sync_d1(args)
     if not args.dry_run:
-        mirror("players_sync", mysql_write_sync)
+        n = mirror("players_sync", mysql_write_sync)
+        if not d1_enabled():
+            print("MySQL 반영 %s명" % n)
     return rc
 
 
