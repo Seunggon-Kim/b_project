@@ -125,10 +125,12 @@ class API {
 
     /**
      * Get Pitch Usage (By Stands)
+     * season 을 주면 그 시즌, 안 주면 서버 기본(올해)입니다.
      */
-    static async getPitchUsage(playerId) {
+    static async getPitchUsage(playerId, season) {
         try {
-            const response = await fetch(`${API_BASE_URL}/players/${playerId}/usage`);
+            const q = season ? `?season=${encodeURIComponent(season)}` : '';
+            const response = await fetch(`${API_BASE_URL}/players/${playerId}/usage${q}`);
             if (!response.ok) throw new Error('Failed to fetch pitch usage');
             return await response.json();
         } catch (error) {

@@ -78,7 +78,7 @@
 .pa-prof dd { margin: 0; color: var(--text-primary); overflow-wrap: anywhere; }
 
 /* ---------- 무브먼트(Savant Movement Profile 참고) ---------- */
-.pa-card--move .pa-card-tabs { align-items: center; justify-content: space-between; padding-right: 0.5rem; }
+.pa-card--move .pa-card-tabs { align-items: center; justify-content: space-between; padding-right: 0.5rem; position: relative; }
 .pa-move-season { font: inherit; font-size: 0.85rem; padding: 0.2rem 1.8rem 0.2rem 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; background-color: var(--bg-card); color: var(--text-primary); }
 .pa-mv-svg { display: block; width: 100%; max-width: 250px; height: auto; margin: 0 auto; }
 .pa-mv-bg { fill: var(--bg-secondary); }
@@ -100,3 +100,22 @@
 /* 1025~1280px: 무브먼트 카드는 아래 줄 전폭입니다. 그림은 그대로, 표는 너무 늘지 않게 합니다. */
 @media (min-width: 1025px) and (max-width: 1280px) { .player-details-grid.pa-3col > .pa-card--move { grid-column: 1 / -1; } .pa-card--move .pa-mv-legend { max-width: 560px; margin: 0 auto; } }
 @media (max-width: 480px) { .pa-mv-legend { font-size: 0.74rem; } .pa-mv-legend th, .pa-mv-legend td { padding: 0.25rem 0.2rem; } .pa-mv-dot { margin-right: 0.2rem; } }
+
+/* ---------- 2차: 툴팁·구종 구사율 ---------- */
+.pa-card-tabs-left { display: inline-flex; align-items: center; }
+.pa-help { position: static; margin-left: 0.35rem; width: 1.15rem; height: 1.15rem; padding: 0; border: 1px solid var(--border-color); border-radius: 50%; background: var(--bg-card); color: var(--text-secondary); font: inherit; font-size: 0.72rem; font-weight: 700; line-height: 1; cursor: help; }
+.pa-help::after { content: attr(data-tip); position: absolute; top: calc(100% + 6px); left: 0.5rem; right: 0.5rem; z-index: 20; padding: 0.5rem 0.6rem; border-radius: 6px; background: var(--text-primary); color: var(--bg-card); font-size: 0.75rem; font-weight: 400; line-height: 1.45; text-align: left; white-space: pre-line; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.12s; }
+.pa-help:hover::after, .pa-help:focus-visible::after { opacity: 1; visibility: visible; }
+.pa-usage { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color); }
+.pa-usage-title { margin-bottom: 0.5rem; font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); }
+.pa-usage-head, .pa-usage-row { display: grid; grid-template-columns: 3rem minmax(0, 1fr) 6.5rem minmax(0, 1fr) 3rem; align-items: center; gap: 0.35rem; }
+.pa-usage-head { margin-bottom: 0.25rem; font-size: 0.7rem; font-weight: 600; color: var(--text-muted); }
+.pa-usage-head span:first-child { text-align: right; }
+.pa-usage-head span:nth-child(3) { text-align: center; }
+.pa-usage-row { padding: 0.2rem 0; font-size: 0.8rem; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.pa-usage-pct:first-child { text-align: right; }
+.pa-usage-name { text-align: center; white-space: nowrap; }
+.pa-usage-name b { font-weight: 700; color: var(--text-secondary); font-size: 0.72rem; }
+.pa-usage-bar { display: flex; height: 0.7rem; background: var(--bg-secondary); border-radius: 999px; overflow: hidden; }
+.pa-usage-bar--l { justify-content: flex-end; }
+.pa-usage-bar i { display: block; height: 100%; border-radius: 999px; }
