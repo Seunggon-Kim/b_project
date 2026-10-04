@@ -96,3 +96,4 @@
 .pa-mv-legend tbody tr:last-child td { border-bottom: 0; }
 .pa-mv-dot { display: inline-block; width: 0.6rem; height: 0.6rem; margin-right: 0.35rem; border-radius: 50%; vertical-align: middle; }
 .pa-mv-empty { padding: 1rem 0; font-size: 0.85rem; color: var(--text-secondary); text-align: center; }
+@media (max-width: 480px) { .pa-mv-legend { font-size: 0.74rem; } .pa-mv-legend th, .pa-mv-legend td { padding: 0.25rem 0.2rem; } .pa-mv-dot { margin-right: 0.2rem; } }
