@@ -22,7 +22,7 @@ const BBPCT = 'CASE WHEN ps.total_batters_faced > 0 '
 // MySQL 의 시즌 기록 표 열입니다. `b.*`·`ps.*` 가 내는 순서 그대로입니다
 // (migration/mysql/schema.sql 의 CREATE TABLE 순서). MySQL 길은 행을 JSON
 // 배열로 받으려고 열을 하나씩 적어야 해서 여기 둡니다. 표에 열이 늘면 이
-// 목록도 늘려야 응답이 D1 길(`*`)과 같습니다. test/stats_columns.test.js 가
+// 목록도 늘려야 응답이 D1 길(`*`)과 같습니다. test/mysql_paths_sqlite.test.js 가
 // schema.sql 과 대조합니다.
 export const BATTER_STAT_COLUMNS = [
   'player_id', 'season', 'player_name', 'player_team', 'batting_average', 'games',
