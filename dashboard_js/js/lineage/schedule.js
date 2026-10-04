@@ -75,7 +75,7 @@
     const rec = details[run.key];
     if (!rec) return `${run.schedule}: 아직 기록 없음`;
     const st = rec.status === null || rec.status === undefined ? '' : String(rec.status);
-    const mark = Object.prototype.hasOwnProperty.call(RESULT, st) ? RESULT[st] : ` (${st})`;
+    const mark = st === '' ? '' : (Object.prototype.hasOwnProperty.call(RESULT, st) ? RESULT[st] : ` (${st})`);
     return `${run.schedule}: ${rec.last_run_at || '-'}${mark}`;
   }
 
@@ -112,7 +112,8 @@
   async function mount(opts) {
     const tbody = opts.tbody;
     try {
-      const res = await Promise.all([opts.lineage, opts.jobs]);
+      const jobsP = Promise.resolve(opts.jobs).catch(function (e) { console.error(e); return { ok: false, error: String((e && e.message) || e) }; });
+      const res = await Promise.all([opts.lineage, jobsP]);
       const lin = res[0];
       if (!lin || !lin.ok) {
         tbody.innerHTML = `<tr><td colspan="4" class="dbx-cron-error">수집 일정을 불러오지 못했습니다 (${esc((lin && lin.error) || '빈 응답')}).</td></tr>`;
@@ -122,7 +123,7 @@
       const det = js && js.ok && js.data && js.data.details && typeof js.data.details === 'object' ? js.data.details : null;
       const rows = scheduleRows(lin.data);
       tbody.innerHTML = scheduleHtml(rows, det);
-      if (opts.summary) opts.summary.textContent = scheduleSummary(rows, lin.data);
+      if (opts.summary && js && js.ok) opts.summary.textContent = scheduleSummary(rows, lin.data);
     } catch (e) {
       console.error(e);
       tbody.innerHTML = `<tr><td colspan="4" class="dbx-cron-error">수집 일정을 불러오지 못했습니다 (${esc(String((e && e.message) || e))}).</td></tr>`;
