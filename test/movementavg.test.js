@@ -111,7 +111,8 @@ test('season 이 없거나 네 자리 숫자가 아니면 400 이고 DB 를 안 
 
 test('2016 전·수집 안 한 시즌은 404 이고 DB 를 안 읽습니다', async () => {
   const db = fakeDb([]);
-  for (const s of [2008, 2015, 2027]) {
+  // 2099 는 아직 오지 않은 해입니다(2027 을 쓰면 2027-01-01 에 시험이 깨집니다).
+  for (const s of [2008, 2015, 2099]) {
     const res = await movementAvg(req(`?season=${s}`), envOf(db));
     assert.equal(res.status, 404, String(s));
   }

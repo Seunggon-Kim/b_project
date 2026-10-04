@@ -1,21 +1,25 @@
 // play_by_play 가 있는 시즌과, 시즌을 game_date 범위로 고르는 도우미입니다.
 //
-// 네이버 문자중계는 2008 년부터 있습니다. 마지막 시즌은 지금 모으는
-// 시즌입니다. 다음 시즌을 모으기 시작하면 PBP_LAST_SEASON 을 올려야
-// 그 시즌의 구종·구사율·무브먼트·구종 가치·기간 기록이 나옵니다. 올리기
-// 전에는 그 시즌을 "없는 시즌"으로 봅니다(빈 결과·404).
+// 네이버 문자중계는 2008 년부터 있습니다. 마지막 시즌은 한국 날짜의
+// 올해입니다(2026 아래로는 내려가지 않습니다). 해가 바뀌면 손대지 않아도
+// 그해 구종·구사율·무브먼트·구종 가치·기간 기록을 읽습니다. 아직 공이
+// 없으면 빈 결과가 나옵니다.
 //
-// 예전에는 D1 샤드 배정표(시즌 -> D1)가 이 범위를 정했습니다. 그 배정표의
-// 시즌 목록(2008~2026, 빠짐 없음)을 그대로 옮겼습니다.
+// 예전에는 D1 샤드 배정표(시즌 -> D1)가 이 범위를 정했고, 새 시즌을 넣으려면
+// 배정표를 꼭 고쳐야 했습니다. D1 을 걷어내며 그 장치가 없어져, 2026 으로
+// 박아 두면 2027 이 조용히 빠집니다(2026-10-05 검토). 그래서 날짜로 정합니다.
+
+import { kstToday } from './kst.js';
 
 export const PBP_FIRST_SEASON = 2008;
-export const PBP_LAST_SEASON = 2026;
+// 예전 샤드 배정표의 마지막 시즌입니다. 이보다 앞당기지 않습니다.
+const PBP_MIN_LAST_SEASON = 2026;
 
-/** play_by_play 가 있는 시즌 전부입니다(오름차순). */
-export const PBP_SEASONS = Object.freeze(Array.from(
-  { length: PBP_LAST_SEASON - PBP_FIRST_SEASON + 1 },
-  (_, i) => PBP_FIRST_SEASON + i,
-));
+/** play_by_play 를 볼 마지막 시즌입니다. 한국 날짜의 올해이고 2026 이상입니다. */
+export function pbpLastSeason(today = kstToday()) {
+  const y = Number(String(today).slice(0, 4));
+  return Number.isInteger(y) ? Math.max(PBP_MIN_LAST_SEASON, y) : PBP_MIN_LAST_SEASON;
+}
 
 /**
  * play_by_play 가 있는 시즌인지 봅니다. 문자열 시즌도 받습니다.
@@ -24,8 +28,9 @@ export const PBP_SEASONS = Object.freeze(Array.from(
  * 나오는데, 그것을 "경기가 없었다"로 보이면 사용자는 데이터가 사라진
  * 줄 모릅니다. 부르는 쪽에서 404 나 빈 응답으로 드러내십시오.
  */
-export function hasPbpSeason(season) {
-  return PBP_SEASONS.includes(Number(season));
+export function hasPbpSeason(season, today = kstToday()) {
+  const n = Number(season);
+  return Number.isInteger(n) && n >= PBP_FIRST_SEASON && n <= pbpLastSeason(today);
 }
 
 /**
@@ -58,13 +63,14 @@ export function seasonDateRange(season) {
  * 나올 뿐 오류가 아닙니다. 기간 조회는 목록이 비면 play_by_play 를 읽지
  * 않습니다(routes/teamrange.js).
  */
-export function seasonsBetween(fromDate, toDate) {
+export function seasonsBetween(fromDate, toDate, today = kstToday()) {
   const a = Number(fromDate);
   const b = Number(toDate);
   if (!Number.isFinite(a) || !Number.isFinite(b) || a > b) return [];
+  const last = pbpLastSeason(today);
   const out = [];
   for (let y = Math.floor(a / 10000); y <= Math.floor(b / 10000); y += 1) {
-    if (hasPbpSeason(y)) out.push(y);
+    if (y >= PBP_FIRST_SEASON && y <= last) out.push(y);
   }
   return out;
 }

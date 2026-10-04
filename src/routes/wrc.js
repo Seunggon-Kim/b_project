@@ -2,7 +2,7 @@ import { json } from '../lib/respond.js';
 import { intIdOrSame } from '../lib/ids.js';
 import { queryInt, queryStr, sqlLimit } from '../lib/router.js';
 import { pyRound } from './leaders.js';
-import { PBP_FIRST_SEASON, PBP_LAST_SEASON, seasonDateRange } from '../lib/pbpseasons.js';
+import { PBP_FIRST_SEASON, pbpLastSeason, seasonDateRange } from '../lib/pbpseasons.js';
 
 // wRC+ 계열 여섯 개입니다. 모두 wrc_plus_comparison 과 규정타석 계산을
 // 공유해 한 파일에 둡니다.
@@ -296,7 +296,7 @@ export async function wrcBatter(request, env, ctx, params) {
   // 원본이 문자열 season 을 돌려주므로 형태를 맞춥니다.
   // (SQL 글자는 바꾸지 않습니다. Hyperdrive 가 질의 글자로 캐시합니다.)
   const from = seasonDateRange(PBP_FIRST_SEASON).from;
-  const to = seasonDateRange(PBP_LAST_SEASON).to;
+  const to = seasonDateRange(pbpLastSeason()).to;
   const { results: stadiumDist } = await db.prepare(`
       SELECT CAST(CAST(game_date / 10000 AS SIGNED) AS CHAR) AS season, stadium, COUNT(*) AS pa
       FROM play_by_play

@@ -2,31 +2,37 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  PBP_FIRST_SEASON, PBP_LAST_SEASON, PBP_SEASONS, hasPbpSeason,
+  PBP_FIRST_SEASON, hasPbpSeason, pbpLastSeason,
   seasonDateRange, seasonsBetween,
 } from '../src/lib/pbpseasons.js';
 
-// play_by_play 가 있는 시즌입니다. 예전 D1 샤드 배정표의 시즌 목록
-// (2008~2026)과 같아야 응답이 바뀌지 않습니다.
-test('시즌 목록은 2008~2026 이고 빠지거나 겹치는 해가 없습니다', () => {
+// 마지막 시즌은 한국 날짜의 올해이고 2026 아래로는 내려가지 않습니다.
+// 2026 에는 예전 D1 샤드 배정표(2008~2026)와 같아 응답이 바뀌지 않습니다.
+test('마지막 시즌은 한국 날짜의 올해이고 2026 이상입니다', () => {
   assert.equal(PBP_FIRST_SEASON, 2008);
-  assert.equal(PBP_LAST_SEASON, 2026);
-  assert.equal(PBP_SEASONS.length, 19);
-  for (let i = 1; i < PBP_SEASONS.length; i += 1) {
-    assert.equal(PBP_SEASONS[i], PBP_SEASONS[i - 1] + 1);
-  }
-  assert.ok(Object.isFrozen(PBP_SEASONS));
+  assert.equal(pbpLastSeason('2026-10-05'), 2026);
+  assert.equal(pbpLastSeason('2025-12-31'), 2026);
+  assert.equal(pbpLastSeason('2027-01-01'), 2027);
+  assert.equal(pbpLastSeason('2031-03-20'), 2031);
+  // 날짜를 못 읽으면 2026 으로 둡니다(모든 시즌이 사라지지 않게).
+  assert.equal(pbpLastSeason('x'), 2026);
 });
 
 test('있는 시즌인지 봅니다(문자열 시즌도 받습니다)', () => {
-  assert.equal(hasPbpSeason(2008), true);
-  assert.equal(hasPbpSeason(2019), true);
-  assert.equal(hasPbpSeason('2026'), true);
+  const today = '2026-10-05';
+  assert.equal(hasPbpSeason(2008, today), true);
+  assert.equal(hasPbpSeason(2019, today), true);
+  assert.equal(hasPbpSeason('2026', today), true);
+  assert.equal(hasPbpSeason(' 2026 ', today), true);
   // 2007 이하는 네이버에 PBP 가 없고, 2027 은 아직 안 왔습니다.
-  assert.equal(hasPbpSeason(2007), false);
-  assert.equal(hasPbpSeason(2027), false);
-  assert.equal(hasPbpSeason('abc'), false);
-  assert.equal(hasPbpSeason(null), false);
+  assert.equal(hasPbpSeason(2007, today), false);
+  assert.equal(hasPbpSeason(2027, today), false);
+  assert.equal(hasPbpSeason('abc', today), false);
+  assert.equal(hasPbpSeason(null, today), false);
+  assert.equal(hasPbpSeason('', today), false);
+  assert.equal(hasPbpSeason(2026.5, today), false);
+  // 해가 바뀌면 손대지 않아도 새 시즌을 봅니다.
+  assert.equal(hasPbpSeason(2027, '2027-03-08'), true);
 });
 
 // --- game_date 로 시즌을 고릅니다 ------------------------------------
@@ -59,7 +65,8 @@ test('play_by_play 가 없는 연도는 기간에서 빠집니다', () => {
   // 부터만 줍니다.
   assert.deepEqual(seasonsBetween(20050101, 20070101), []);
   assert.deepEqual(seasonsBetween(20070101, 20080501), [2008]);
-  assert.deepEqual(seasonsBetween(20261001, 20270501), [2026]);
+  assert.deepEqual(seasonsBetween(20261001, 20270501, '2026-10-05'), [2026]);
+  assert.deepEqual(seasonsBetween(20261001, 20270501, '2027-04-01'), [2026, 2027]);
 });
 
 test('뒤집힌 기간은 빈 목록입니다', () => {
