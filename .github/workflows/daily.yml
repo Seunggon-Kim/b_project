@@ -14,26 +14,14 @@ name: daily
 # 매일 실행 자체가 활동으로 잡히는지 확실치 않으므로, 실패하면 워크플로가
 # 빨간색으로 끝나게 두어 알림을 받으십시오(마지막 단계).
 #
-# ## D1 끄기(BSTATS_D1)
+# ## 저장소
 #
-# 수집은 Cloud SQL(MySQL)에만 씁니다. D1 무료 읽기 한도가 바닥나 사이트가
-# 멈춘 일이 이어져(2026-10-03) 사이트가 MySQL 을 읽게 된 뒤 D1 을 껐습니다.
-# 되돌리려면 저장소 변수 D1_WRITE 를 on 으로 두십시오. 그러면 예전처럼
-# D1 에 쓰고 MySQL 에도 씁니다(이중 적재). MySQL 은 어느 쪽이든 반드시
-# 붙어야 합니다. 사이트가 MySQL 을 읽기 때문입니다.
-#
-# 되돌린 뒤(D1_WRITE=on) 알아 둘 것:
-# - D1 에는 꺼져 있던 동안의 값이 없습니다. MySQL 에서 D1 으로 채우는 도구가
-#   아직 없어, 채우기 전까지 daily 의 D1·MySQL 대조가 빨갛습니다.
-# - roster_to_d1 은 낡은 D1 players 로 선수 ID 를 찾습니다. 같은 실행의
-#   add_new_players 가 대부분 고칩니다.
+# 수집은 Cloud SQL(MySQL)에만 씁니다. D1 은 2026-10-04 에 걷어냈습니다.
 #
 # ## 필요한 시크릿
 #
-#   GCP_WIF_PROVIDER / GCP_LOADER_SA / CLOUDSQL_INSTANCE / MYSQL_LOADER_PASSWORD / MYSQL_SERVER_PUBKEY   MySQL 적재(늘)
+#   GCP_WIF_PROVIDER / GCP_LOADER_SA / CLOUDSQL_INSTANCE / MYSQL_LOADER_PASSWORD / MYSQL_SERVER_PUBKEY   MySQL 적재
 #   ADMIN_TOKEN            적재 뒤 캐시 비우기 (Worker 시크릿과 같은 값)
-#   CLOUDFLARE_API_TOKEN   D1 적재(변수 D1_WRITE=on 일 때만)
-#   CLOUDFLARE_ACCOUNT_ID  D1 적재(변수 D1_WRITE=on 일 때만)
 
 on:
   # 18:33 UTC = 03:33 KST. 전날 경기가 모두 끝난 뒤입니다.
@@ -42,7 +30,7 @@ on:
   workflow_dispatch:
 
 # 앞 실행이 아직 돌고 있으면 겹치지 않게 합니다. 같은 날짜를 두 번
-# 넣어도 멱등이지만, D1 쓰기를 두 배로 쓸 이유가 없습니다.
+# 넣어도 멱등이지만, 같은 쓰기를 두 번 할 이유가 없습니다.
 concurrency:
   group: daily-collect
   cancel-in-progress: false
@@ -59,13 +47,6 @@ jobs:
   collect:
     runs-on: ubuntu-latest
     timeout-minutes: 120
-
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      # D1 스위치입니다(data_collection/d1_load.py 의 d1_enabled). 저장소 변수
-      # D1_WRITE 가 on 일 때만 on 이고, 없거나 다른 값이면 off 입니다.
-      BSTATS_D1: ${{ vars.D1_WRITE == 'on' && 'on' || 'off' }}
 
     steps:
       - uses: actions/checkout@v7
@@ -87,29 +68,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install beautifulsoup4 lxml requests pandas tqdm pymysql cryptography
 
-      # 토큰이 없으면 수집만 하고 아무것도 안 남습니다. 시간만 쓰고
-      # 끝나므로 먼저 막습니다. D1 을 켰을 때(D1_WRITE=on)만 봅니다.
-      # `d1 info` 도 D1 을 부르는 일이라 꺼져 있으면 돌리지 않습니다.
-      - name: 인증 확인
-        if: ${{ vars.D1_WRITE == 'on' }}
-        run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "CLOUDFLARE_API_TOKEN 이 없습니다."
-            echo "Settings > Secrets and variables > Actions 에 등록하십시오."
-            exit 1
-          fi
-          npx --yes wrangler@4 d1 info kbo-stats > /dev/null
-          echo "D1 접근 확인"
-
       # --- MySQL 연결 ---------------------------------------------------
-      # 늘 붙습니다. 사이트가 MySQL 을 읽고, D1 이 꺼져 있으면 MySQL 이 유일한
-      # 저장소입니다. D1 이 꺼져 있으면 여기서 실패할 때 바로 멈춥니다(뒤 수집이
-      # 쓸 곳이 없음). continue-on-error 는 D1 을 켠 되돌리기 때만 켭니다. 그때는
-      # MySQL 이 죽어도 D1 적재는 계속하고, 마지막 판정이 빨갛습니다.
-      # 예전 저장소 변수 MYSQL_MIRROR 는 더 보지 않습니다.
+      # MySQL 이 유일한 저장소라 붙지 못하면 여기서 바로 멈춥니다(뒤 수집이
+      # 쓸 곳이 없음). 아래 always() 단계(결과 기록·요약·실패 판정)는 돌고,
+      # 실패 판정이 빨갛게 끝냅니다.
       - name: GCP 인증(키 없음)
         id: gcp
-        continue-on-error: ${{ vars.D1_WRITE == 'on' }}
         uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
@@ -117,8 +81,6 @@ jobs:
 
       - name: MySQL 연결
         id: mysql
-        if: ${{ steps.gcp.outcome == 'success' }}
-        continue-on-error: ${{ vars.D1_WRITE == 'on' }}
         env:
           CLOUDSQL_INSTANCE: ${{ secrets.CLOUDSQL_INSTANCE }}
           MYSQL_LOADER_PASSWORD: ${{ secrets.MYSQL_LOADER_PASSWORD }}
@@ -200,7 +162,7 @@ jobs:
         continue-on-error: true
         run: python data_collection/official_stats_http.py --kind batter
 
-      - name: 타자 기록 D1 적재
+      - name: 타자 기록 적재
         id: load_batter
         if: steps.scrape_batter.outcome == 'success'
         continue-on-error: true
@@ -215,7 +177,7 @@ jobs:
         continue-on-error: true
         run: python data_collection/official_stats_http.py --kind pitcher
 
-      - name: 투수 기록 D1 적재
+      - name: 투수 기록 적재
         id: load_pitcher
         if: steps.scrape_pitcher.outcome == 'success'
         continue-on-error: true
@@ -290,9 +252,9 @@ jobs:
             --note "players 갱신 ${{ steps.sync_players.outcome }} / 새 선수 ${{ steps.new_players.outcome }}"
 
       # --- 4. 옛 시즌 PBP 되채우기 (2008~2014): 끝남---------------------
-      # 2026-08-29 에 두 커서 모두 마지막 경기까지 넣었습니다. 매일 "모두
-      # 끝났습니다" 만 찍으며 D1 을 읽어서 단계를 뺐습니다. 다시 돌릴 일이
-      # 생기면 migration/shard_backfill.py 를 손으로 부르십시오.
+      # 2026-08-29 에 두 커서 모두 마지막 경기까지 넣어 단계를 뺐습니다.
+      # 그때 쓴 되채우기 도구(migration/shard_backfill.py)는 D1 전용이라
+      # 2026-10-04 에 지웠습니다.
 
       # --- 5. 캐시 비우기 ---------------------------------------------
       # 이걸 빠뜨리면 적재해도 최대 한 시간 동안 화면이 어제 숫자를
@@ -342,9 +304,10 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      # D1 이 꺼져 있으면 수집 단계가 MySQL 실패에서 바로 멈추지만, 이 확인도
-      # 그대로 둡니다. 실패 기록 파일이 어느 작업이 못 썼는지 모아 보여 줍니다.
-      - name: MySQL 이중 적재 실패 확인
+      # 수집 단계는 MySQL 쓰기가 실패하면 그 자리에서 실패합니다. 그래도 이
+      # 확인을 둡니다. 실패 기록 파일이 어느 작업이 못 썼는지 모아 보여 주고,
+      # 아래 실패 판정에 넣지 않은 단계(퓨처스·명단 등)의 MySQL 실패도 잡습니다.
+      - name: MySQL 적재 실패 확인
         id: mirror_check
         if: ${{ always() && steps.mysql.outcome == 'success' }}
         continue-on-error: true
@@ -354,7 +317,7 @@ jobs:
             cat "$BSTATS_MYSQL_FAIL_LOG"
             exit 1
           fi
-          echo "MySQL 이중 적재 실패 없음"
+          echo "MySQL 적재 실패 없음"
 
       - name: 요약
         if: always()
@@ -374,8 +337,7 @@ jobs:
             echo "| 1군 등록 현황 | ${{ steps.roster.outcome }} |"
             echo "| 캐시 비우기 | ${{ steps.purge.outcome }} |"
             echo "| MySQL 연결 | ${{ steps.mysql.outcome }} |"
-            echo "| MySQL 이중 적재 | ${{ steps.mirror_check.outcome }} |"
-            echo "| D1 (D1_WRITE) | ${{ env.BSTATS_D1 }} |"
+            echo "| MySQL 적재 | ${{ steps.mirror_check.outcome }} |"
           } >> $GITHUB_STEP_SUMMARY
 
       # 실패를 초록색으로 덮지 않습니다. 조용히 멈춘 수집을 몇 주 뒤에

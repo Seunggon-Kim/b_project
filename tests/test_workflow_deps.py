@@ -81,7 +81,7 @@ ENTRYPOINTS = {
         "data_collection/record_job_run.py",
     ],
     "monthly.yml": [
-        # D1_WRITE 와 상관없이 늘 MySQL 에서 받습니다.
+        # MySQL 에서 받습니다.
         "migration/mysql/mysql_to_sqlite.py",
         "data_collection/player_info_scraper.py",
         "migration/sqlite_to_d1.py",

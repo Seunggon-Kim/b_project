@@ -495,7 +495,7 @@
      "status_key": null
     },
     {
-     "name": "타자 기록 D1 적재",
+     "name": "타자 기록 적재",
      "script": "data_collection/csv_to_d1.py",
      "status_key": "official_stats"
     },
@@ -505,7 +505,7 @@
      "status_key": null
     },
     {
-     "name": "투수 기록 D1 적재",
+     "name": "투수 기록 적재",
      "script": "data_collection/csv_to_d1.py",
      "status_key": "official_stats"
     },
@@ -1679,7 +1679,7 @@
     "monthly",
     "weekly"
    ],
-   "note": "계산 결과 표를 MySQL 에 올립니다(D1 은 켜져 있을 때만). 올리는 표는 계산한 스크립트에 적었습니다.",
+   "note": "계산 결과 표(월간은 players)를 MySQL 에 통째로 바꿔 넣습니다. 올리는 표는 계산한 스크립트에 적었습니다.",
    "path": "migration/sqlite_to_d1.py",
    "reads": [],
    "sources": [],
@@ -1731,7 +1731,7 @@
    "jobs": [
     "weekly"
    ],
-   "note": "team_stadium_by_season 의 올 시즌 행을 로컬에서 채우지만 sqlite_to_d1.py 가 올리지 않아 D1·MySQL 에는 반영되지 않습니다.",
+   "note": "team_stadium_by_season 의 올 시즌 행을 로컬에서 채우지만 sqlite_to_d1.py 가 올리지 않아 MySQL 에는 반영되지 않습니다.",
    "path": "park_factors/build_wrc_plus.py",
    "reads": [
     "games",
@@ -2324,7 +2324,7 @@
    "derived_from": [],
    "desc": "시즌별 팀-홈구장 매핑 기준표(파크팩터(PF) 산출용 팀·시즌·구장 대응표)",
    "kind": "manual",
-   "manual_note": "시즌별 홈구장입니다. 2026-06-05 백업 덤프에서 한 번 복원했습니다. park_factors/build_wrc_plus.py 가 올 시즌 행을 로컬에서 채우지만 D1·MySQL 에는 올리지 않습니다.",
+   "manual_note": "시즌별 홈구장입니다. 2026-06-05 백업 덤프에서 한 번 복원했습니다. park_factors/build_wrc_plus.py 가 올 시즌 행을 로컬에서 채우지만 MySQL 에는 올리지 않습니다.",
    "name": "team_stadium_by_season",
    "pages": [
     "pages/player-stats.html",

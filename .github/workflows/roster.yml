@@ -25,20 +25,12 @@ name: roster
 #
 # ## 필요한 시크릿
 #
-#   GCP_WIF_PROVIDER / GCP_LOADER_SA / CLOUDSQL_INSTANCE / MYSQL_LOADER_PASSWORD / MYSQL_SERVER_PUBKEY   MySQL 적재(늘)
+#   GCP_WIF_PROVIDER / GCP_LOADER_SA / CLOUDSQL_INSTANCE / MYSQL_LOADER_PASSWORD / MYSQL_SERVER_PUBKEY   MySQL 적재
 #   ADMIN_TOKEN            적재 뒤 캐시 비우기
-#   CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID   D1 적재(변수 D1_WRITE=on 일 때만)
 #
-# ## D1 끄기(BSTATS_D1)
+# ## 저장소
 #
-# 수집은 MySQL 에만 씁니다. 되돌리려면 저장소 변수 D1_WRITE 를 on 으로
-# 두십시오. 그러면 D1 에도 씁니다(이중 적재). 자세한 사정은 daily.yml 에 적었습니다.
-#
-# 되돌린 뒤(D1_WRITE=on) 알아 둘 것:
-# - D1 에는 꺼져 있던 동안의 값이 없습니다. MySQL 에서 D1 으로 채우는 도구가
-#   아직 없어, 채우기 전까지 daily 의 D1·MySQL 대조가 빨갛습니다.
-# - roster_to_d1 은 낡은 D1 players 로 선수 ID 를 찾습니다. 같은 실행의
-#   add_new_players 가 대부분 고칩니다.
+# 수집은 Cloud SQL(MySQL)에만 씁니다. D1 은 2026-10-04 에 걷어냈습니다.
 
 on:
   schedule:
@@ -56,17 +48,11 @@ permissions:
 
 env:
   API_BASE: https://kbo-api.bstats-baseball.workers.dev
-  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
 jobs:
   roster:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      # D1 스위치입니다(data_collection/d1_load.py 의 d1_enabled). 저장소 변수
-      # D1_WRITE 가 on 일 때만 on 이고, 없거나 다른 값이면 off 입니다.
-      BSTATS_D1: ${{ vars.D1_WRITE == 'on' && 'on' || 'off' }}
     steps:
       - uses: actions/checkout@v5
 
@@ -74,33 +60,15 @@ jobs:
         with:
           python-version: '3.12'
 
-      # node 는 wrangler(D1) 에만 씁니다. D1 이 꺼져 있으면 깔지 않습니다.
-      - uses: actions/setup-node@v5
-        if: ${{ vars.D1_WRITE == 'on' }}
-        with:
-          node-version: '24'
-
       - name: 의존성 설치
         run: pip install requests pymysql cryptography
 
-      # D1 을 켰을 때(D1_WRITE=on)만 봅니다.
-      - name: 인증 확인
-        if: ${{ vars.D1_WRITE == 'on' }}
-        run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "CLOUDFLARE_API_TOKEN 이 없습니다."
-            exit 1
-          fi
-
       # --- MySQL 연결 ---------------------------------------------------
-      # 늘 붙습니다. 사이트가 MySQL 을 읽고, D1 이 꺼져 있으면 MySQL 이 유일한
-      # 저장소입니다. D1 이 꺼져 있으면 여기서 실패할 때 바로 멈춥니다(뒤 수집이
-      # 쓸 곳이 없음). continue-on-error 는 D1 을 켠 되돌리기 때만 켭니다. 그때는
-      # MySQL 이 죽어도 D1 적재는 계속하고, 마지막 판정이 빨갛습니다.
-      # 예전 저장소 변수 MYSQL_MIRROR 는 더 보지 않습니다.
+      # MySQL 이 유일한 저장소라 붙지 못하면 여기서 바로 멈춥니다(뒤 수집이
+      # 쓸 곳이 없음). always() 단계(결과 기록·요약·MySQL 판정)는 돌고, MySQL
+      # 판정이 빨갛게 끝냅니다.
       - name: GCP 인증(키 없음)
         id: gcp
-        continue-on-error: ${{ vars.D1_WRITE == 'on' }}
         uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
@@ -108,8 +76,6 @@ jobs:
 
       - name: MySQL 연결
         id: mysql
-        if: ${{ steps.gcp.outcome == 'success' }}
-        continue-on-error: ${{ vars.D1_WRITE == 'on' }}
         env:
           CLOUDSQL_INSTANCE: ${{ secrets.CLOUDSQL_INSTANCE }}
           MYSQL_LOADER_PASSWORD: ${{ secrets.MYSQL_LOADER_PASSWORD }}
@@ -184,7 +150,7 @@ jobs:
           cat /tmp/purge.txt; echo
           test "$code" = "200"
 
-      - name: MySQL 이중 적재 실패 확인
+      - name: MySQL 적재 실패 확인
         id: mirror_check
         if: ${{ always() && steps.mysql.outcome == 'success' }}
         continue-on-error: true
@@ -194,7 +160,7 @@ jobs:
             cat "$BSTATS_MYSQL_FAIL_LOG"
             exit 1
           fi
-          echo "MySQL 이중 적재 실패 없음"
+          echo "MySQL 적재 실패 없음"
 
       - name: 요약
         if: always()
@@ -207,8 +173,7 @@ jobs:
             echo "| 새 선수 추가 | ${{ steps.newp.outcome }} |"
             echo "| 퓨처스 올 시즌 기록 | ${{ steps.futures.outcome }} |"
             echo "| MySQL 연결 | ${{ steps.mysql.outcome }} |"
-            echo "| MySQL 이중 적재 | ${{ steps.mirror_check.outcome }} |"
-            echo "| D1 (D1_WRITE) | ${{ env.BSTATS_D1 }} |"
+            echo "| MySQL 적재 | ${{ steps.mirror_check.outcome }} |"
           } >> $GITHUB_STEP_SUMMARY
 
       # 실패를 초록색으로 덮지 않습니다. 조용히 멈춘 수집을 몇 주 뒤에
@@ -220,8 +185,8 @@ jobs:
           exit 1
 
       # MySQL 연결·적재는 늘 성공해야 합니다(사이트가 MySQL 을 읽습니다).
-      - name: MySQL 이중 적재 판정
+      - name: MySQL 적재 판정
         if: ${{ always() && (steps.mysql.outcome != 'success' || steps.mirror_check.outcome != 'success') }}
         run: |
-          echo "MySQL 연결 또는 이중 적재가 실패했습니다. 요약 표를 보십시오."
+          echo "MySQL 연결 또는 적재가 실패했습니다. 요약 표를 보십시오."
           exit 1

@@ -8,24 +8,14 @@ name: monthly
 #
 # 러너에는 로컬 DB 가 없으므로 MySQL 에서 `players`·공식 기록을 받아 임시
 # SQLite 를 만들고, 스크립트에 `KBO_DB` 로 그 경로를 넘긴 뒤, 끝나면
-# 되돌립니다. D1_WRITE 와 상관없이 늘 MySQL 에서 받습니다. MySQL 이 원본입니다.
+# 되돌립니다. MySQL 이 원본입니다.
+#
+# 수집은 Cloud SQL(MySQL)에만 씁니다. D1 은 2026-10-04 에 걷어냈습니다.
 #
 # ## 필요한 시크릿
 #
-#   GCP_WIF_PROVIDER / GCP_LOADER_SA / CLOUDSQL_INSTANCE / MYSQL_LOADER_PASSWORD / MYSQL_SERVER_PUBKEY   MySQL 적재(늘)
+#   GCP_WIF_PROVIDER / GCP_LOADER_SA / CLOUDSQL_INSTANCE / MYSQL_LOADER_PASSWORD / MYSQL_SERVER_PUBKEY   MySQL 적재
 #   ADMIN_TOKEN            적재 뒤 캐시 비우기
-#   CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID   D1 적재(변수 D1_WRITE=on 일 때만)
-#
-# ## D1 끄기(BSTATS_D1)
-#
-# 수집은 MySQL 에만 씁니다. 되돌리려면 저장소 변수 D1_WRITE 를 on 으로
-# 두십시오. 그러면 D1 에도 씁니다(이중 적재). 자세한 사정은 daily.yml 에 적었습니다.
-#
-# 되돌린 뒤(D1_WRITE=on) 알아 둘 것:
-# - D1 에는 꺼져 있던 동안의 값이 없습니다. MySQL 에서 D1 으로 채우는 도구가
-#   아직 없어, 채우기 전까지 daily 의 D1·MySQL 대조가 빨갛습니다.
-# - roster_to_d1 은 낡은 D1 players 로 선수 ID 를 찾습니다. 같은 실행의
-#   add_new_players 가 대부분 고칩니다.
 
 on:
   # 매월 1일 04:13 UTC = 13:13 KST. 원래 시각과 같습니다.
@@ -51,13 +41,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 300
 
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      # D1 스위치입니다(data_collection/d1_load.py 의 d1_enabled). 저장소 변수
-      # D1_WRITE 가 on 일 때만 on 이고, 없거나 다른 값이면 off 입니다.
-      BSTATS_D1: ${{ vars.D1_WRITE == 'on' && 'on' || 'off' }}
-
     steps:
       - uses: actions/checkout@v7
 
@@ -73,25 +56,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install selenium webdriver-manager beautifulsoup4 lxml requests pandas pymysql cryptography
 
-      # D1 을 켰을 때(D1_WRITE=on)만 봅니다. `d1 info` 도 D1 을 부르는 일입니다.
-      - name: 인증 확인
-        if: ${{ vars.D1_WRITE == 'on' }}
-        run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "CLOUDFLARE_API_TOKEN 이 없습니다."
-            exit 1
-          fi
-          npx --yes wrangler@4 d1 info kbo-stats > /dev/null
-
       # --- MySQL 연결 ---------------------------------------------------
-      # 늘 붙습니다. 사이트가 MySQL 을 읽고, D1 이 꺼져 있으면 MySQL 이 유일한
-      # 저장소입니다. D1 이 꺼져 있으면 여기서 실패할 때 바로 멈춥니다(뒤 수집이
-      # 쓸 곳이 없음). continue-on-error 는 D1 을 켠 되돌리기 때만 켭니다. 그때는
-      # MySQL 이 죽어도 D1 적재는 계속하고, 마지막 판정이 빨갛습니다.
-      # 예전 저장소 변수 MYSQL_MIRROR 는 더 보지 않습니다.
+      # MySQL 이 유일한 저장소라 붙지 못하면 여기서 바로 멈춥니다(뒤 단계가
+      # 받을 곳도 쓸 곳도 없음). always() 단계(결과 기록·요약·MySQL 판정)는
+      # 돌고, MySQL 판정이 빨갛게 끝냅니다.
       - name: GCP 인증(키 없음)
         id: gcp
-        continue-on-error: ${{ vars.D1_WRITE == 'on' }}
         uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
@@ -99,8 +69,6 @@ jobs:
 
       - name: MySQL 연결
         id: mysql
-        if: ${{ steps.gcp.outcome == 'success' }}
-        continue-on-error: ${{ vars.D1_WRITE == 'on' }}
         env:
           CLOUDSQL_INSTANCE: ${{ secrets.CLOUDSQL_INSTANCE }}
           MYSQL_LOADER_PASSWORD: ${{ secrets.MYSQL_LOADER_PASSWORD }}
@@ -108,7 +76,7 @@ jobs:
         run: bash migration/mysql/ci_proxy.sh
 
       # players 와 공식 기록 두 표만 받습니다. play_by_play 는 이 작업에
-      # 필요 없고, 받으면 읽기 한도만 크게 씁니다.
+      # 필요 없고, 받으면 시간만 오래 걸립니다.
       #
       # **공식 기록 두 표가 있어야 합니다.** player_info_scraper 가 수집
       # 대상 선수 명단을 거기서 뽑습니다(get_existing_player_ids).
@@ -116,9 +84,7 @@ jobs:
       # 죽었습니다. meta_job_runs 에 player_info 기록이 한 번도 없는
       # 이유입니다. 두 표는 합쳐 7천 행 남짓이라 비용은 무시할 수준입니다.
       #
-      # D1_WRITE 와 상관없이 늘 MySQL 에서 받습니다(weekly 와 같은 도구).
-      # 되돌리기(D1_WRITE=on) 때 낡은 D1 players 를 받으면, 아래 적재가 그것으로
-      # MySQL players(사이트가 읽는 값)를 통째로 덮습니다(DELETE 후 INSERT).
+      # weekly 와 같은 도구로 MySQL 에서 받습니다.
       - name: players·공식기록 내려받기
         id: pull
         run: |
@@ -136,8 +102,8 @@ jobs:
         id: scrape
         run: python data_collection/player_info_scraper.py --refresh
 
-      # MySQL 에 씁니다(sqlite_to_d1 의 mirror). D1 은 켜져 있을 때만 씁니다.
-      # 켜져 있으면 D1 players 도 MySQL 에서 받은 값으로 맞춰집니다.
+      # MySQL 에 씁니다(sqlite_to_d1 의 mirror). players 를 통째로 바꿉니다
+      # (DELETE 후 INSERT, 한 트랜잭션).
       - name: players 적재
         id: push
         if: steps.scrape.outcome == 'success'
@@ -190,7 +156,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      - name: MySQL 이중 적재 실패 확인
+      - name: MySQL 적재 실패 확인
         id: mirror_check
         if: ${{ always() && steps.mysql.outcome == 'success' }}
         continue-on-error: true
@@ -200,7 +166,7 @@ jobs:
             cat "$BSTATS_MYSQL_FAIL_LOG"
             exit 1
           fi
-          echo "MySQL 이중 적재 실패 없음"
+          echo "MySQL 적재 실패 없음"
 
       - name: 요약
         if: always()
@@ -216,13 +182,12 @@ jobs:
             echo "| 선수 사진 주소 보정 | ${{ steps.photos.outcome }} |"
             echo "| 캐시 비우기 | ${{ steps.purge.outcome }} |"
             echo "| MySQL 연결 | ${{ steps.mysql.outcome }} |"
-            echo "| MySQL 이중 적재 | ${{ steps.mirror_check.outcome }} |"
-            echo "| D1 (D1_WRITE) | ${{ env.BSTATS_D1 }} |"
+            echo "| MySQL 적재 | ${{ steps.mirror_check.outcome }} |"
           } >> $GITHUB_STEP_SUMMARY
 
       # MySQL 연결·적재는 늘 성공해야 합니다(사이트가 MySQL 을 읽습니다).
-      - name: MySQL 이중 적재 판정
+      - name: MySQL 적재 판정
         if: ${{ always() && (steps.mysql.outcome != 'success' || steps.mirror_check.outcome != 'success') }}
         run: |
-          echo "MySQL 연결 또는 이중 적재가 실패했습니다. 요약 표를 보십시오."
+          echo "MySQL 연결 또는 적재가 실패했습니다. 요약 표를 보십시오."
           exit 1

@@ -216,7 +216,7 @@
       "sources": [],
       "writes": [],
       "reads": [],
-      "note": "계산 결과 표를 MySQL 에 올립니다(D1 은 켜져 있을 때만). 올리는 표는 계산한 스크립트에 적었습니다.",
+      "note": "계산 결과 표(월간은 players)를 MySQL 에 통째로 바꿔 넣습니다. 올리는 표는 계산한 스크립트에 적었습니다.",
       "desc": "러너에서 계산한 결과 표를 MySQL 에 올립니다. 계산한 표만 올리고 원천 표는 건드리지 않습니다."
     },
     "migration/export_csv.py": {
@@ -284,7 +284,7 @@
       "status_keys": {
         "weekly": "park_factors"
       },
-      "note": "team_stadium_by_season 의 올 시즌 행을 로컬에서 채우지만 sqlite_to_d1.py 가 올리지 않아 D1·MySQL 에는 반영되지 않습니다.",
+      "note": "team_stadium_by_season 의 올 시즌 행을 로컬에서 채우지만 sqlite_to_d1.py 가 올리지 않아 MySQL 에는 반영되지 않습니다.",
       "desc": "wOBA 가중치와 자체 파크팩터로 타자별 wRC+ 와 구장 보정값(wrc_plus_comparison·weighted_pf_by_batter_season)을 다시 계산합니다. 주 1회 돌고, 결과 표는 MySQL 에 올립니다."
     },
     "park_factors/build_re24_run_values.py": {
@@ -309,7 +309,7 @@
     "teams": "현재 10팀 목록입니다. database/schema.sql 의 INSERT OR IGNORE 시드로 채웠고, 정기 작업은 없습니다.",
     "futures_teams": "퓨처스 팀 목록입니다. data_collection/futures_schedule.py 의 시드값(INSERT OR REPLACE)으로 한 번 채웠고, 정기 작업은 없습니다.",
     "stadium_dim": "구장 정보입니다. migration/restore_derived.py 가 한 번 복원해 채웠고, 정기 작업은 없습니다.",
-    "team_stadium_by_season": "시즌별 홈구장입니다. 2026-06-05 백업 덤프에서 한 번 복원했습니다. park_factors/build_wrc_plus.py 가 올 시즌 행을 로컬에서 채우지만 D1·MySQL 에는 올리지 않습니다.",
+    "team_stadium_by_season": "시즌별 홈구장입니다. 2026-06-05 백업 덤프에서 한 번 복원했습니다. park_factors/build_wrc_plus.py 가 올 시즌 행을 로컬에서 채우지만 MySQL 에는 올리지 않습니다.",
     "team_logos": "팀 로고 이미지입니다. data_collection/team_logos.py 로 로컬 PNG 와 생성 배지를 한 번 넣었고, 정기 작업은 없습니다.",
     "statiz_park_factor": "STATIZ 파크팩터 참고값입니다. migration/restore_derived.py 가 다른 DB 에서 한 번 복원했고, 정기 작업은 없습니다.",
     "statiz_yearly_constants": "STATIZ 연도별 상수 참고값입니다. migration/restore_derived.py 가 다른 DB 에서 한 번 복원했고, 정기 작업은 없습니다.",
