@@ -1,4 +1,5 @@
 import { json, dbError } from '../lib/respond.js';
+import { regularSeasonSql } from '../lib/gametype.js';
 import { queryInt } from '../lib/router.js';
 import { shardOf, seasonDateRange } from '../lib/shard.js';
 
@@ -270,6 +271,8 @@ export async function playerArsenal(request, env, ctx, params) {
       return json({ player_id: playerId, arsenal: [], count: 0 });
     }
 
+    // 정규시즌 공만 셉니다(포스트시즌·올스타전 제외, lib/gametype.js). 선수
+    // 분석 화면의 구종 카드가 정규시즌 기록과 같은 기준이 되게 합니다(2026-10-04).
     const { results } = await pdb.prepare(`
       SELECT pbp.pitch_type, pbp.px, pbp.pz, pbp.speed, pbp.pitch_result,
              pbp.pfx_x, pbp.pfx_z, pbp.game_date, pbp.x0, pbp.z0,
@@ -277,6 +280,7 @@ export async function playerArsenal(request, env, ctx, params) {
       FROM play_by_play pbp
       WHERE pbp.pitcher_ID = ?
       AND pbp.game_date >= ? AND pbp.game_date < ?
+      AND ${regularSeasonSql('pbp')}
       AND pbp.px IS NOT NULL
       AND pbp.pz IS NOT NULL
       AND pbp.pitch_type IS NOT NULL
