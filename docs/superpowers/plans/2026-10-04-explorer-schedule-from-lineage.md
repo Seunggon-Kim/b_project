@@ -528,3 +528,127 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" -- dashboard_js/js/line
 ```
 
 (Step 7 에서 계보 JSON 이 바뀌었으면 위 두 명령에 `dashboard_js/data/table_lineage.json` 을 더합니다.)
+
+
+### Task 3: 계보 그림 위 층 띠(원천 · 데이터 웨어하우스 · 데이터 마트)
+
+evan 추가 결정(2026-10-04). 설계: 설계 문서 §3-1. 칸 이름은 그대로 두고 그 위에 층 띠를 그립니다.
+
+**Files:**
+- Modify: `dashboard_js/js/lineage/model.js`, `dashboard_js/js/lineage/view.js`, `dashboard_js/css/lineage.css`
+- Test (저장소 밖): `tests/lineage.graph.test.js`(더함), `tests/lineage.view.test.js`(더함)
+
+**Interfaces:**
+- Consumes: `model.js` 의 `COLS`(`['source','job','table','derived','page']`)·`COL_LABEL`, `layout()` 이 주는 `colW`·`boxW`, `view.js` 의 `esc`·`graphHtml`·`listHtml`, `bindTips(tab)`(탭 전체의 `[data-tooltip]` 에 설명 창).
+- Produces: `Lineage.model.LAYERS` = `[{ id, col, label, tip }]` 3개.
+
+- [ ] **Step 1: 시험 먼저 더하기**
+
+(1) `tests/lineage.graph.test.js` 끝에:
+
+```js
+test('LAYERS: 층 셋이 원천·표·계산 표 칸에 붙음', () => {
+  assert.deepEqual(M.LAYERS.map(l => [l.id, l.col, l.label]), [['source', 'source', '원천'], ['dw', 'table', '데이터 웨어하우스'], ['mart', 'derived', '데이터 마트']]);
+  M.LAYERS.forEach(l => { assert.ok(M.COLS.includes(l.col), l.col); assert.ok(l.tip.length > 20, l.id); });
+});
+```
+
+(2) `tests/lineage.view.test.js` 끝에:
+
+```js
+test('graphHtml: 칸 제목 위 층 띠 셋, 칸 위치와 같고 설명이 붙음', () => {
+  const g = M.buildGraph(lin, {});
+  const lay = M.layout(g, 1300);
+  const h = V.graphHtml(g, lay, lin, null);
+  assert.equal(count(h, /class="lin-layer lin-layer-/g), 3);
+  assert.match(h, /<div class="lin-layer lin-layer-source" style="left:0px;width:224px" data-tooltip="[^"]+">원천<\/div>/);
+  assert.match(h, /<div class="lin-layer lin-layer-dw" style="left:520px;width:224px" data-tooltip="[^"]+">데이터 웨어하우스<\/div>/);
+  assert.match(h, /<div class="lin-layer lin-layer-mart" style="left:780px;width:224px" data-tooltip="[^"]*API 주소[^"]*">데이터 마트<\/div>/);
+  assert.ok(h.indexOf('class="lin-layers"') < h.indexOf('class="lin-heads"'));
+});
+
+test('listHtml: 층이 있는 칸 제목 옆에 층 이름(칸 이름과 같으면 생략)', () => {
+  const g = M.buildGraph(lin, {});
+  const h = V.listHtml(g, lin, null);
+  assert.match(h, /<h4>표 <span class="lin-layer-tag" data-tooltip="[^"]+">데이터 웨어하우스<\/span><\/h4>/);
+  assert.match(h, /<h4>계산 표 <span class="lin-layer-tag" data-tooltip="[^"]+">데이터 마트<\/span><\/h4>/);
+  assert.match(h, /<h4>원천<\/h4>/);
+  assert.match(h, /<h4>수집 작업<\/h4>/);
+  assert.equal(count(h, /class="lin-layer-tag"/g), 2);
+});
+```
+
+Run: `cd C:/tmp/bstats-team-stats-check/tests && node --test *.test.js` → 새 시험 3개 실패.
+
+- [ ] **Step 2: model.js**
+
+`const COL_LABEL = …;` 줄 바로 다음에:
+
+```js
+  // 칸 위 층 띠입니다(evan 결정 2026-10-04, 설계 §3-1). 칸 이름은 그대로 두고 층에 해당하는 칸 위에만 그립니다.
+  // 경계: 우리 공식으로 계산했으면 마트, 받은 것을 정리만 했으면 웨어하우스입니다(games·players 는 웨어하우스).
+  const LAYERS = [
+    { id: 'source', col: 'source', label: '원천', tip: '데이터를 받아 오는 바깥 사이트입니다(KBO 기록실, 네이버 중계 등). 우리 데이터베이스 밖에 있습니다.' },
+    { id: 'dw', col: 'table', label: '데이터 웨어하우스', tip: '원천에서 받아 온 그대로이거나 정리만 한 표와, 손으로 관리하는 기준표(팀·구장 등)입니다. 우리 공식으로 계산하지 않은 표는 여기에 둡니다.' },
+    { id: 'mart', col: 'derived', label: '데이터 마트', tip: '웨어하우스 표로 우리 공식(wOBA 가중치, wRC+, RE24, 파크팩터 등)을 계산해 저장한 표입니다. 화면 숫자 가운데 많은 수는 저장된 표 없이 API 주소가 웨어하우스 표를 바로 계산해 만들므로 이 칸에 다 나오지는 않습니다.' },
+  ];
+```
+
+맨 아래 `const api = {` 의 첫 줄 `COLS, COL_LABEL, GROUP_ID, …` 에서 `COL_LABEL,` 다음에 `LAYERS,` 를 넣습니다.
+
+- [ ] **Step 3: view.js**
+
+(1) `graphHtml` 의 첫 줄 `let h = \`<div class="lin-heads" style="width:${lay.width}px">\`;` 를 아래로 바꿉니다.
+
+```js
+    let h = `<div class="lin-layers" style="width:${lay.width}px">`;
+    m.LAYERS.forEach(function (ly) {
+      const i = m.COLS.indexOf(ly.col);
+      h += `<div class="lin-layer lin-layer-${ly.id}" style="left:${Math.round(i * lay.colW)}px;width:${lay.boxW}px" data-tooltip="${esc(ly.tip)}">${esc(ly.label)}</div>`;
+    });
+    h += `</div><div class="lin-heads" style="width:${lay.width}px">`;
+```
+
+(2) `listHtml` 의 칸 제목 줄 `h += \`<section class="lin-list-col"><h4>${esc(m.COL_LABEL[c])}</h4><ul class="lin-list">\`;` 를 아래로 바꿉니다.
+
+```js
+      const ly = m.LAYERS.find(x => x.col === c && x.label !== m.COL_LABEL[c]);
+      const tag = ly ? ` <span class="lin-layer-tag" data-tooltip="${esc(ly.tip)}">${esc(ly.label)}</span>` : '';
+      h += `<section class="lin-list-col"><h4>${esc(m.COL_LABEL[c])}${tag}</h4><ul class="lin-list">`;
+```
+
+- [ ] **Step 4: lineage.css** — `.lin-heads` 규칙 바로 앞에:
+
+```css
+/* 칸 위 층 띠(원천·데이터 웨어하우스·데이터 마트). 수집 작업·화면 칸 위는 비웁니다. */
+.lin-layers { position: relative; height: 1.5rem; margin-bottom: 0.25rem; }
+.lin-layer { position: absolute; top: 0; box-sizing: border-box; height: 1.4rem; line-height: 1.4rem; padding: 0 0.5rem; border-radius: 6px; background: var(--bg-tertiary); color: var(--text-secondary); font-size: 0.78rem; font-weight: 600; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: help; }
+.lin-layer-tag { margin-left: 0.4rem; padding: 0.05rem 0.45rem; border-radius: 6px; background: var(--bg-tertiary); color: var(--text-secondary); font-size: 0.75rem; font-weight: 600; }
+```
+
+- [ ] **Step 5: 시험** — `cd C:/tmp/bstats-team-stats-check/tests && node --test *.test.js` → 모두 통과(전보다 3개 많음), 고친 파일 BOM 0.
+
+- [ ] **Step 6: 캡처**(PNG 는 `C:/Users/김승곤/Desktop/bstats_미리보기/explorer_schedule/` 로 옮겨 Read 로 봄)
+
+```bash
+cd C:/tmp/bstats-team-stats-check
+MSYS_NO_PATHCONV=1 node lineage_shot.mjs layers "/pages/database-explorer.html#lineage"
+MSYS_NO_PATHCONV=1 node lineage_shot.mjs layers_dark "/__theme/dark?to=%2Fpages%2Fdatabase-explorer.html%23lineage"
+MSYS_NO_PATHCONV=1 node lineage_shot.mjs layers_mobile "/pages/database-explorer.html#lineage" --mobile
+```
+
+| 캡처 | 맞아야 하는 것 |
+|---|---|
+| layers | 칸 제목 위 띠 셋이 원천·표·계산 표 칸 바로 위, 수집 작업·화면 위는 빈칸, 상자 35 그대로 |
+| layers_dark | 띠 글자가 어두운 바탕에서 읽힘 |
+| layers_mobile | 목록 칸 제목 '표 데이터 웨어하우스'·'계산 표 데이터 마트', doc ≤ 390 |
+
+- [ ] **Step 7: 커밋**
+
+```bash
+cd C:/Users/김승곤/Desktop/b_project
+git status --short
+git commit -m "feat(lineage): 계보 그림 위에 원천·데이터 웨어하우스·데이터 마트 층 띠
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" -- dashboard_js/js/lineage/model.js dashboard_js/js/lineage/view.js dashboard_js/css/lineage.css
+```
