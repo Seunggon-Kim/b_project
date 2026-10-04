@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-// D1 은 자바스크립트 숫자를 SQLite REAL 로 바인딩합니다.
+// D1 시절에 배운 것입니다. D1 은 자바스크립트 숫자를 SQLite REAL 로 바인딩합니다.
 //
 //   .bind(2026)  ->  typeof(?) = 'real',  CAST(? AS TEXT) = '2026.0'
 //
@@ -13,7 +13,7 @@ import { join } from 'node:path';
 // 계속 비어 있었습니다.
 //
 // 숫자로 시즌을 가릴 때는 `game_date >= 20260000 AND game_date < 20270000`
-// 처럼 정수끼리 비교합니다(lib/shard.js 의 seasonDateRange).
+// 처럼 정수끼리 비교합니다(lib/pbpseasons.js 의 seasonDateRange).
 // 문자열 비교가 꼭 필요하면 바인딩 전에 String() 으로 바꿉니다.
 
 function jsFiles(dir) {

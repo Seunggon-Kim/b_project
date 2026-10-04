@@ -1,6 +1,6 @@
 import { json } from '../lib/respond.js';
 import { pyRound } from './leaders.js';
-import { fanOut, seasonsBetween } from '../lib/shard.js';
+import { seasonsBetween } from '../lib/pbpseasons.js';
 
 // 기간별 팀 성적입니다. 원본 api/main.py:448-596.
 //
@@ -228,13 +228,9 @@ export async function statsTeamRange(request, env) {
     if (dmax === null || gd > dmax) dmax = gd;
   }
 
-  // play_by_play 가 시즌별 D1 에 나뉘어 있습니다. D1 은 DB 를 가로지르는
-  // 조인을 못 하므로, 각 샤드에 games 사본을 함께 두고 그 안에서
-  // 조인합니다. 기간이 걸치는 시즌의 DB 에만 묻습니다.
-  //
-  // 두 질의 모두 팀별로 누적할 뿐 순서를 보지 않아서, 이어붙이는 순서가
-  // 결과를 바꾸지 않습니다.
-  const seasons = seasonsBetween(s, e);
+  // 기간이 play_by_play 가 있는 시즌(lib/pbpseasons.js)에 하나도 걸치지
+  // 않으면 play_by_play 를 읽지 않습니다(타석·아웃·실점이 0).
+  const hasPbp = seasonsBetween(s, e).length > 0;
 
   // 타석 단위 집계
   //
@@ -247,37 +243,29 @@ export async function statsTeamRange(request, env) {
   // (utf8mb4_0900_ai_ci)은 대소문자·악센트·전각을 같게 보아 서로 다른
   // 글자를 한 묶음으로 합칠 수 있는데, JS 는 글자가 정확히 같아야 같은
   // 분류로 셉니다. 바이트가 같은 묶음 안의 값은 모두 같으므로 MIN 이 곧
-  // 그 값입니다. SQLite(D1)에도 HEX·MIN 이 있어 같은 SQL 을 씁니다.
-  const paRows = await fanOut(env, seasons, async (pdb) => {
-    const r = await pdb.prepare(
-      'SELECT MIN(p.inning_topbot) AS inning_topbot, MIN(p.pa_result) AS pa_result, '
-      + 'MIN(gm.home_team_id) AS home_team_id, MIN(gm.away_team_id) AS away_team_id, '
-      + 'COUNT(*) AS n '
-      + 'FROM play_by_play p JOIN games gm ON gm.game_id = p.gameID '
-      + "WHERE gm.game_date>=? AND gm.game_date<=? AND gm.game_type='정규시즌' "
-      + "AND p.pa_result IS NOT NULL AND p.pa_result<>'' "
-      + 'GROUP BY HEX(p.inning_topbot), HEX(p.pa_result), '
-      + 'HEX(gm.home_team_id), HEX(gm.away_team_id)',
-    ).bind(s, e).all();
-    return r.results;
-  });
+  // 그 값입니다. SQLite 에도 HEX·MIN 이 있어 시험(test/aggregate_sql.test.js)이
+  // 같은 SQL 을 돌립니다.
+  const paRows = !hasPbp ? [] : (await db.prepare(
+    'SELECT MIN(p.inning_topbot) AS inning_topbot, MIN(p.pa_result) AS pa_result, '
+    + 'MIN(gm.home_team_id) AS home_team_id, MIN(gm.away_team_id) AS away_team_id, '
+    + 'COUNT(*) AS n '
+    + 'FROM play_by_play p JOIN games gm ON gm.game_id = p.gameID '
+    + "WHERE gm.game_date>=? AND gm.game_date<=? AND gm.game_type='정규시즌' "
+    + "AND p.pa_result IS NOT NULL AND p.pa_result<>'' "
+    + 'GROUP BY HEX(p.inning_topbot), HEX(p.pa_result), '
+    + 'HEX(gm.home_team_id), HEX(gm.away_team_id)',
+  ).bind(s, e).all()).results;
   accumulatePa(teams, paRows);
 
   // 아웃과 실점. 삼진 아웃은 outs_on_play 에 잡히지 않아 따로 셉니다.
-  //
-  // GROUP BY 결과를 여러 DB 에서 이어붙이면 같은 조합이 여러 번 나올 수
-  // 있습니다. 아래 루프가 += 로 누적하므로 합계는 맞습니다.
-  const sumRows = await fanOut(env, seasons, async (pdb) => {
-    const r = await pdb.prepare(
-      'SELECT p.inning_topbot, gm.home_team_id, gm.away_team_id, '
-      + 'SUM(p.outs_on_play) AS oop, SUM(p.runs_scored) AS runs, '
-      + "SUM(CASE WHEN p.pa_result='삼진' THEN 1 ELSE 0 END) AS ko "
-      + 'FROM play_by_play p JOIN games gm ON gm.game_id = p.gameID '
-      + "WHERE gm.game_date>=? AND gm.game_date<=? AND gm.game_type='정규시즌' "
-      + 'GROUP BY p.inning_topbot, gm.home_team_id, gm.away_team_id',
-    ).bind(s, e).all();
-    return r.results;
-  });
+  const sumRows = !hasPbp ? [] : (await db.prepare(
+    'SELECT p.inning_topbot, gm.home_team_id, gm.away_team_id, '
+    + 'SUM(p.outs_on_play) AS oop, SUM(p.runs_scored) AS runs, '
+    + "SUM(CASE WHEN p.pa_result='삼진' THEN 1 ELSE 0 END) AS ko "
+    + 'FROM play_by_play p JOIN games gm ON gm.game_id = p.gameID '
+    + "WHERE gm.game_date>=? AND gm.game_date<=? AND gm.game_type='정규시즌' "
+    + 'GROUP BY p.inning_topbot, gm.home_team_id, gm.away_team_id',
+  ).bind(s, e).all()).results;
 
   for (const row of sumRows) {
     const bat = row.inning_topbot === TOP ? row.away_team_id : row.home_team_id;

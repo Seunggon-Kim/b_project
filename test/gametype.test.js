@@ -20,14 +20,16 @@ test('구종 구사율 질의는 정규시즌 공만 셉니다', async () => {
       return {
         bind() { return this; },
         async first() {
-          return sql.includes('FROM players') ? { player_id: '65933', player_name: '구창모' } : null;
+          seen.push(sql);
+          if (sql.includes('FROM players')) return { player_id: '65933', player_name: '구창모' };
+          // 구종 질의(GROUP_CONCAT 한 칸)는 공이 없으면 n=0, j=NULL 입니다.
+          return sql.includes('GROUP_CONCAT') ? { n: 0, j: null } : null;
         },
         async all() { seen.push(sql); return { results: [] }; },
       };
     },
   };
   const env = { DB: db };
-  for (const k of ['DB_2008_2011', 'DB_2012_2014', 'DB_2015_2017', 'DB_2018_2020', 'DB_2021_2023', 'DB_2024_2026']) env[k] = db;
   const req = new Request('https://x/players/65933/arsenal?season=2026');
   const res = await playerArsenal(req, env, {}, { id: '65933' });
   assert.equal(res.status, 200);

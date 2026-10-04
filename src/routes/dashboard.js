@@ -1,6 +1,5 @@
 import { json, dbError } from '../lib/respond.js';
-import { shardedCountOf } from '../lib/counts.js';
-import { SHARDS } from '../lib/shard.js';
+import { countOf } from '../lib/counts.js';
 
 /**
  * 원본 api/main.py:82-107 입니다.
@@ -37,9 +36,7 @@ export async function dashboardStats(request, env) {
     // '20[0-2][0-9]' 는 2000~2029 를 뜻합니다.
     const games = await one(db,
       'SELECT COUNT(*) FROM games WHERE season BETWEEN 2000 AND 2029');
-    // play_by_play 는 D1 네 개에 나뉘어 있습니다. 한 DB 만 세면 1/4 만
-    // 나와, 화면이 "270만"이라고 해야 할 자리에 "70만"이 뜹니다.
-    const plays = await shardedCountOf(env, SHARDS, 'play_by_play');
+    const plays = await countOf(db, 'play_by_play');
     const batters = await one(db,
       'SELECT COUNT(DISTINCT player_id) FROM kbo_official_batter_stats');
     const pitchers = await one(db,

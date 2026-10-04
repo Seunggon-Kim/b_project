@@ -128,7 +128,7 @@ test('usage 질의는 DB 에서 묶고 정규시즌 공만 셉니다', async () 
       };
     },
   };
-  const env = { DB: db, DB_BACKEND: 'mysql' };
+  const env = { DB: db };
   const res = await playerUsage(new Request('https://x/players/65933/usage?season=2026'), env, {}, { id: '65933' });
   const body = await res.json();
   assert.equal(body.total_pitches, 7);

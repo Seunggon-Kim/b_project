@@ -50,7 +50,7 @@ test('질의는 표에서 투수·시즌으로 읽기만 합니다', () => {
 test('응답 모양과 캐시', async () => {
   const db = fakeDb((sql) => (sql.includes('FROM players') ? [PLAYER]
     : [{ pitch_type: '직구', stands: 'R', n: 3, rv: 0.25 }]));
-  const res = await pitchValues(req('/players/65933/pitch_values?season=2025'), { DB: db, DB_BACKEND: 'mysql' }, {}, { id: '65933' });
+  const res = await pitchValues(req('/players/65933/pitch_values?season=2025'), { DB: db }, {}, { id: '65933' });
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), {
     player_id: '65933', season: 2025,
@@ -61,23 +61,23 @@ test('응답 모양과 캐시', async () => {
 
 test('season 형식 오류 400, 2016 전 404, 선수 없음 404', async () => {
   const db = fakeDb((sql) => (sql.includes('FROM players') ? [PLAYER] : []));
-  const env = { DB: db, DB_BACKEND: 'mysql' };
+  const env = { DB: db };
   assert.equal((await pitchValues(req('/players/65933/pitch_values?season=x'), env, {}, { id: '65933' })).status, 400);
   assert.equal((await pitchValues(req('/players/65933/pitch_values'), env, {}, { id: '65933' })).status, 400);
   assert.equal((await pitchValues(req('/players/65933/pitch_values?season=2015'), env, {}, { id: '65933' })).status, 404);
   const none = fakeDb(() => []);
-  assert.equal((await pitchValues(req('/players/1/pitch_values?season=2025'), { DB: none, DB_BACKEND: 'mysql' }, {}, { id: '1' })).status, 404);
+  assert.equal((await pitchValues(req('/players/1/pitch_values?season=2025'), { DB: none }, {}, { id: '1' })).status, 404);
 });
 
 test('그 시즌 공이 없으면 빈 rows', async () => {
   const db = fakeDb((sql) => (sql.includes('FROM players') ? [PLAYER] : []));
-  const res = await pitchValues(req('/players/65933/pitch_values?season=2025'), { DB: db, DB_BACKEND: 'mysql' }, {}, { id: '65933' });
+  const res = await pitchValues(req('/players/65933/pitch_values?season=2025'), { DB: db }, {}, { id: '65933' });
   assert.deepEqual((await res.json()).rows, []);
 });
 
 test('DB 오류는 503·no-store', async () => {
   const db = fakeDb((sql) => { if (sql.includes('pitch_run_value')) throw new Error('boom'); return [PLAYER]; });
-  const res = await pitchValues(req('/players/65933/pitch_values?season=2025'), { DB: db, DB_BACKEND: 'mysql' }, {}, { id: '65933' });
+  const res = await pitchValues(req('/players/65933/pitch_values?season=2025'), { DB: db }, {}, { id: '65933' });
   assert.equal(res.status, 503);
   assert.equal(res.headers.get('cache-control'), 'no-store');
 });

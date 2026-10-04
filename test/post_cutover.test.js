@@ -120,31 +120,26 @@ test('/wrc/leaderboard, top-changes: batter_ID 가 숫자로 돌아옵니다', a
 });
 
 // dbexplorer.js 는 JSON 을 import 해 node --test 에서 직접 못 읽습니다.
-// 행 변환은 idFixer 로 떼어 검증하고, 두 경로(JSON·CSV)가 쓰는지는 원문으로 봅니다.
-test('idFixer(MySQL): ID 가 INTEGER 였던 표는 숫자로 바꿉니다', () => {
+// 행 변환은 idFixer·idFixFlags 로 떼어 검증하고(csv_raw.test.js), 두 경로(JSON·CSV)가
+// 쓰는지는 원문으로 봅니다.
+test('idFixer: ID 가 INTEGER 였던 표는 숫자로 바꿉니다', () => {
   assert.equal(TEXT_ID_TABLES.has('kbo_roster'), false);
-  const fix = idFixer({ DB_BACKEND: 'mysql' }, 'kbo_roster');
+  const fix = idFixer('kbo_roster');
   assert.deepEqual(fix({ player_id: '53609', name: 'a' }), { player_id: 53609, name: 'a' });
 });
 
-test('idFixer(MySQL): TEXT 였던 표는 글자 그대로입니다', () => {
+test('idFixer: TEXT 였던 표는 같은 행 객체를 그대로 돌려줍니다', () => {
   const row = { player_id: '53609', name: 'a' };
   for (const t of TEXT_ID_TABLES) {
-    assert.equal(idFixer({ DB_BACKEND: 'mysql' }, t)(row), row);
+    assert.equal(idFixer(t)(row), row);
   }
 });
 
-test('idFixer(D1): 같은 행 객체를 그대로 돌려줍니다', () => {
-  const row = { player_id: '53609', name: 'a' };
-  assert.equal(idFixer({}, 'kbo_roster')(row), row);
-  assert.equal(idFixer({ DB_BACKEND: 'd1' }, 'kbo_roster')(row), row);
-});
-
-test('dbexplorer: JSON 과 CSV 가 모두 idFixer 를 씁니다', () => {
+test('dbexplorer: JSON 은 idFixer, CSV 는 같은 규칙의 idFixFlags 를 씁니다', () => {
   const src = readFileSync(new URL('../src/routes/dbexplorer.js', import.meta.url), 'utf8');
-  assert.ok(src.includes('rows = rows.map(idFixer(env, tableName))'));
-  assert.ok(src.includes('const fixIds = idFixer(env, tableName)'));
-  assert.ok(src.includes('const row = fixIds(r)'));
+  assert.ok(src.includes('r.results.map(idFixer(tableName))'));
+  assert.ok(src.includes('const fixFlags = idFixFlags(tableName, columns)'));
+  assert.ok(src.includes('csvRowsFromArrays(names, rows, columns, realFlags, fixFlags, intIdOrSame)'));
 });
 
 test('TEXT_ID_COLUMNS 에 player_id 가 있습니다', () => {

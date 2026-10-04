@@ -1,8 +1,8 @@
-// MySQL(Hyperdrive)을 D1 과 같은 모양으로 감쌉니다.
+// MySQL(Hyperdrive)을 D1 시절 바인딩과 같은 모양으로 감쌉니다.
 //
-// 라우트는 지금처럼 env.DB.prepare(sql).bind(...).all()/.first() 를
-// 부릅니다. 백엔드가 mysql 이면 env.DB 자리에 이것이 들어갑니다
-// (lib/backend.js). 질의는 mysql2 의 query() 로 보냅니다. execute() 는
+// 라우트는 env.DB.prepare(sql).bind(...).all()/.first()/.raw() 를 부릅니다.
+// 요청마다 이것이 env.DB 자리에 들어갑니다(lib/backend.js).
+// 질의는 mysql2 의 query() 로 보냅니다. execute() 는
 // `LIMIT ?` 에 숫자를 묶으면 MySQL 8 이 거절합니다.
 import { createConnection } from 'mysql2/promise';
 

@@ -39,15 +39,14 @@ function dbOf(table) {
 }
 
 for (const table of Object.keys(TABLES)) {
-  test(`MySQL CSV(raw 길)는 예전 객체 길과 바이트가 같습니다: ${table}`, async () => {
-    const env = { DB_BACKEND: 'mysql' };
+  test(`CSV(raw 길)는 예전 객체 길과 바이트가 같습니다: ${table}`, async () => {
     const columns = TABLES[table].cols.map(([n]) => n);
     const realFlags = TABLES[table].cols.map(([, ty]) => isRealType(ty));
     const sql = `SELECT * FROM \`${table}\` LIMIT ? OFFSET ?`;
 
     // 예전 길
     const { results } = await dbOf(table).prepare(sql).bind(100, 0).all();
-    const fix = idFixer(env, table);
+    const fix = idFixer(table);
     let want = '';
     for (const r of results) {
       const row = fix(r);
@@ -57,7 +56,7 @@ for (const table of Object.keys(TABLES)) {
     // raw 길
     const [names, ...rows] = await dbOf(table).prepare(sql).bind(100, 0).raw({ columnNames: true });
     const got = csvRowsFromArrays(names, rows, columns, realFlags,
-      idFixFlags(env, table, columns), intIdOrSame);
+      idFixFlags(table, columns), intIdOrSame);
     assert.equal(got, want);
   });
 }
@@ -66,7 +65,7 @@ test('kbo_roster 의 player_id 는 숫자로, 실수 열의 정수는 .0 으로 
   const columns = TABLES.kbo_roster.cols.map(([n]) => n);
   const [names, ...rows] = await dbOf('kbo_roster').prepare('SELECT 1').raw({ columnNames: true });
   const text = csvRowsFromArrays(names, rows, columns, [false, false, false, true],
-    idFixFlags({ DB_BACKEND: 'mysql' }, 'kbo_roster', columns), intIdOrSame);
+    idFixFlags('kbo_roster', columns), intIdOrSame);
   assert.equal(text, '1,52630,김,80.0\r\n2,7,"이,박",81.5\r\n3,,,\r\n');
 });
 
@@ -77,7 +76,6 @@ test('csvRowsFromArrays: 없는 열은 빈 칸, 겹친 이름은 뒤 열을 씁�
 
 test('idFixFlags 는 idFixer 와 같은 열·같은 경우에만 참입니다', () => {
   const cols = ['player_id', 'name', 'batter_ID'];
-  assert.deepEqual(idFixFlags({ DB_BACKEND: 'mysql' }, 'kbo_roster', cols), [true, false, true]);
-  assert.deepEqual(idFixFlags({ DB_BACKEND: 'mysql' }, 'play_by_play', cols), [false, false, false]);
-  assert.deepEqual(idFixFlags({ DB_BACKEND: 'd1' }, 'kbo_roster', cols), [false, false, false]);
+  assert.deepEqual(idFixFlags('kbo_roster', cols), [true, false, true]);
+  assert.deepEqual(idFixFlags('play_by_play', cols), [false, false, false]);
 });

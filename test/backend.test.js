@@ -2,26 +2,21 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  isMysql, withBackend, closeAfterBody, finalizeResponse,
+  withBackend, closeAfterBody, finalizeResponse,
 } from '../src/lib/backend.js';
-import { SHARDS } from '../src/lib/shard.js';
 
-test('기본은 D1 이고 env 를 그대로 씁니다', () => {
-  const env = { DB: 'd1', DB_BACKEND: undefined };
-  const b = withBackend(env, () => { throw new Error('부르면 안 됩니다'); });
-  assert.equal(isMysql(env), false);
-  assert.equal(b.env, env);
-  assert.equal(b.done, null);
-});
-
-test('mysql 이면 DB 와 샤드 바인딩을 같은 어댑터로 바꿉니다', async () => {
+test('요청마다 MySQL 어댑터를 만들어 env 사본의 DB 에 끼웁니다', async () => {
   let closed = false;
   const fake = { close: async () => { closed = true; } };
-  const env = { DB: 'd1', DB_BACKEND: 'mysql', HYPERDRIVE: {} };
-  const b = withBackend(env, () => fake);
+  const env = { HYPERDRIVE: {}, ADMIN_TOKEN: 'x' };
+  let made = 0;
+  const b = withBackend(env, (e) => { made += 1; assert.equal(e, env); return fake; });
+  assert.equal(made, 1);
   assert.equal(b.env.DB, fake);
-  for (const s of SHARDS) assert.equal(b.env[s.binding], fake);
-  assert.equal(env.DB, 'd1');
+  assert.equal(b.env.ADMIN_TOKEN, 'x');
+  assert.equal(b.db, fake);
+  // 원래 env 는 바꾸지 않습니다.
+  assert.equal(env.DB, undefined);
   await b.done();
   assert.equal(closed, true);
 });
@@ -40,20 +35,6 @@ test('CSV 는 본문을 다 보낸 뒤에 연결을 닫습니다', async () => {
   await Promise.all(waits);
   assert.equal(closed, true);
   assert.equal(res.headers.get('x-a'), '1');
-});
-
-test('D1 이면 db 가 null 이고, mysql 이면 어댑터를 그대로 내놓습니다', () => {
-  const d1 = withBackend({ DB: 'd1' }, () => { throw new Error('부르면 안 됩니다'); });
-  assert.equal(d1.db, null);
-  const fake = { close: async () => {} };
-  const my = withBackend({ DB: 'd1', DB_BACKEND: 'mysql' }, () => fake);
-  assert.equal(my.db, fake);
-});
-
-test('finalizeResponse: D1 이면 응답을 그대로(같은 객체) 돌려줍니다', () => {
-  const res = new Response('{}', { status: 200 });
-  const b = withBackend({ DB: 'd1' });
-  assert.equal(finalizeResponse(res, b), res);
 });
 
 test('finalizeResponse: MySQL 이 멀쩡하면 응답을 그대로 돌려줍니다', () => {

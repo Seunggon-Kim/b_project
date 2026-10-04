@@ -26,13 +26,8 @@ function fakeDb(rows, { fail = false } = {}) {
   };
 }
 
-const SHARD_BINDINGS = ['DB_2008_2011', 'DB_2012_2014', 'DB_2015_2017',
-  'DB_2018_2020', 'DB_2021_2023', 'DB_2024_2026'];
-
-function d1Env(db) {
-  const env = { DB: db };
-  for (const k of SHARD_BINDINGS) env[k] = db;
-  return env;
+function envOf(db) {
+  return { DB: db };
 }
 
 const req = (qs) => new Request(`https://x.test/stats/movement_avg${qs}`);
@@ -88,25 +83,15 @@ test('정규시즌 공·무브먼트 있는 공만 보고 손·구종으로 묶�
 
 test('시즌 하나의 game_date 범위만 묶습니다', async () => {
   const db = fakeDb([]);
-  const res = await movementAvg(req('?season=2019'), d1Env(db));
+  const res = await movementAvg(req('?season=2019'), envOf(db));
   assert.equal(res.status, 200);
   assert.equal(db.calls.length, 1);
   assert.deepEqual(db.calls[0].params, [20190000, 20200000]);
 });
 
-test('D1 이면 그 시즌 샤드 하나만 두드립니다', async () => {
-  const hit = fakeDb([]);
-  const other = fakeDb([]);
-  const env = d1Env(other);
-  env.DB_2024_2026 = hit;
-  await movementAvg(req('?season=2026'), env);
-  assert.equal(hit.calls.length, 1);
-  assert.equal(other.calls.length, 0);
-});
-
-test('MySQL 이면 DB 하나에 묻습니다', async () => {
+test('묶은 행을 응답 모양으로 돌려줍니다', async () => {
   const db = fakeDb([{ throws: '우', pitch_type: '직구', n: 2, pfx_x: -5, pfx_z: 10, speed: 147 }]);
-  const res = await movementAvg(req('?season=2026'), { DB: db, DB_BACKEND: 'mysql' });
+  const res = await movementAvg(req('?season=2026'), envOf(db));
   assert.deepEqual(await res.json(), {
     season: 2026,
     rows: [{ throws: 'R', pitch_type: '직구', n: 2, pfx_x: -5, pfx_z: 10, speed: 147 }],
@@ -118,7 +103,7 @@ test('MySQL 이면 DB 하나에 묻습니다', async () => {
 test('season 이 없거나 네 자리 숫자가 아니면 400 이고 DB 를 안 읽습니다', async () => {
   const db = fakeDb([]);
   for (const qs of ['', '?season=', '?season=abc', '?season=26', '?season=2026x']) {
-    const res = await movementAvg(req(qs), d1Env(db));
+    const res = await movementAvg(req(qs), envOf(db));
     assert.equal(res.status, 400, qs);
   }
   assert.equal(db.calls.length, 0);
@@ -127,14 +112,14 @@ test('season 이 없거나 네 자리 숫자가 아니면 400 이고 DB 를 안 
 test('2016 전·수집 안 한 시즌은 404 이고 DB 를 안 읽습니다', async () => {
   const db = fakeDb([]);
   for (const s of [2008, 2015, 2027]) {
-    const res = await movementAvg(req(`?season=${s}`), d1Env(db));
+    const res = await movementAvg(req(`?season=${s}`), envOf(db));
     assert.equal(res.status, 404, String(s));
   }
   assert.equal(db.calls.length, 0);
 });
 
 test('DB 오류는 503 이고 캐시하지 않습니다', async () => {
-  const res = await movementAvg(req('?season=2026'), d1Env(fakeDb([], { fail: true })));
+  const res = await movementAvg(req('?season=2026'), envOf(fakeDb([], { fail: true })));
   assert.equal(res.status, 503);
   assert.equal(res.headers.get('cache-control'), 'no-store');
 });
@@ -151,7 +136,7 @@ test('지난 시즌은 엣지 30일, 올해는 하루입니다', () => {
 });
 
 test('라우트가 붙인 캐시 수명을 withCache 가 덮지 않습니다', async () => {
-  const res = await movementAvg(req('?season=2017'), d1Env(fakeDb([])));
+  const res = await movementAvg(req('?season=2017'), envOf(fakeDb([])));
   const out = withCache(res, '/stats/movement_avg');
   assert.match(out.headers.get('cache-control'), /s-maxage=2592000/);
 });

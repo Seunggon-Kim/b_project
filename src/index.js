@@ -111,17 +111,17 @@ export default {
     const backend = withBackend(env);
     try {
       // MySQL 연결이 끊긴 적이 있으면 라우트 응답 대신 503·no-store 입니다
-      // (lib/backend.js finalizeResponse). D1 이면 응답을 그대로 둡니다.
+      // (lib/backend.js finalizeResponse).
       const res = finalizeResponse(
         await router.handle(request, backend.env, ctx), backend);
       // Cache-Control 을 여기서 한 번에 붙입니다. 라우트마다 붙이면
       // 빠뜨리기 쉽고, 빠뜨린 곳은 캐시가 안 걸려 DB 를 그대로 읽습니다.
       // 정책은 lib/cachepolicy.js 에 있습니다.
       const cached = withCache(res, new URL(request.url).pathname);
-      // MySQL 이면 본문을 다 보낸 뒤 연결을 닫습니다(lib/backend.js).
-      return backend.done ? closeAfterBody(cached, backend.done, ctx) : cached;
+      // 본문을 다 보낸 뒤 MySQL 연결을 닫습니다(lib/backend.js).
+      return closeAfterBody(cached, backend.done, ctx);
     } catch (err) {
-      if (backend.done) ctx.waitUntil(backend.done());
+      ctx.waitUntil(backend.done());
       // 던진 원인이 MySQL 연결이면 500 대신 503·no-store 입니다.
       return finalizeResponse(serverError(err), backend);
     }

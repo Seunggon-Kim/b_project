@@ -7,10 +7,8 @@
 //
 //     GET /players/65933/pitch_values?season=2025
 //     → { player_id, season, rows: [ { pitch_type, n_l, rv_l, n_r, rv_r, n, rv } ] }
-//
-// 표는 MySQL 에만 있습니다. D1 으로 되돌리면 표가 없어 503 입니다.
 import { json, dbError } from '../lib/respond.js';
-import { hasSeason } from '../lib/shard.js';
+import { hasPbpSeason } from '../lib/pbpseasons.js';
 import { robustPlayerLookup } from './players.js';
 import { movementCacheControl } from './movementAvg.js';
 
@@ -51,7 +49,7 @@ export async function pitchValues(request, env, ctx, params) {
   const raw = new URL(request.url).searchParams.get('season');
   const season = /^\d{4}$/.test(raw || '') ? Number(raw) : null;
   if (season === null) return json({ detail: 'season=YYYY 가 필요합니다' }, 400);
-  if (season < PITCH_VALUE_FIRST_SEASON || !hasSeason(season)) {
+  if (season < PITCH_VALUE_FIRST_SEASON || !hasPbpSeason(season)) {
     return json({ detail: `구종 가치는 ${PITCH_VALUE_FIRST_SEASON}년부터 수집한 시즌까지만 있습니다` }, 404);
   }
   try {

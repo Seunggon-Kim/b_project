@@ -20,12 +20,9 @@
 // 시즌은 바뀌지 않으므로 엣지 30일, 올해는 하루입니다. 다만 적재 뒤
 // /admin/purge-cache 가 엣지를 통째로 비우므로, 실제로는 하루에 한 번씩
 // 다시 계산됩니다.
-//
-// D1 으로 되돌리면(DB_BACKEND=d1) 캐시 미스마다 시즌 한 해치 행 수가 그대로
-// 읽기 한도에서 빠집니다. 그때는 이 주소를 부르는 화면을 먼저 확인하십시오.
 import { json, dbError } from '../lib/respond.js';
 import { regularSeasonSql } from '../lib/gametype.js';
-import { shardOf, seasonDateRange } from '../lib/shard.js';
+import { hasPbpSeason, seasonDateRange } from '../lib/pbpseasons.js';
 import { kstToday } from '../lib/kst.js';
 
 /** 무브먼트(PITCHf/x 추적) 값이 처음 나오는 시즌입니다. 첫 공은 2016-06-14 입니다. */
@@ -120,16 +117,16 @@ export async function movementAvg(request, env) {
 
   // 2016 전에는 무브먼트 값이 없습니다. 빈 rows 를 주면 "평균이 없다"와
   // "데이터가 없는 해"를 화면이 가를 수 없어 404 로 드러냅니다.
-  const pdb = season >= MOVEMENT_FIRST_SEASON ? shardOf(env, season) : null;
-  const range = seasonDateRange(season);
-  if (!pdb || !range) {
+  const range = season >= MOVEMENT_FIRST_SEASON && hasPbpSeason(season)
+    ? seasonDateRange(season) : null;
+  if (!range) {
     return json({
       detail: `무브먼트 평균은 ${MOVEMENT_FIRST_SEASON}년부터 수집한 시즌까지만 있습니다`,
     }, 404);
   }
 
   try {
-    const { results } = await pdb.prepare(MOVEMENT_AVG_SQL)
+    const { results } = await env.DB.prepare(MOVEMENT_AVG_SQL)
       .bind(range.from, range.to).all();
     const res = json({ season, rows: shapeMovementRows(results) });
     res.headers.set('cache-control', movementCacheControl(season));

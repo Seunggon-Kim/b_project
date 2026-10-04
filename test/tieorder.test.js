@@ -13,8 +13,10 @@ const read = (f) => readFileSync(new URL(`../src/routes/${f}`, import.meta.url),
 // [파일, 조각] : 조각이 소스에 그대로 들어 있어야 합니다.
 const GUARDS = [
   ['games.js', 'ORDER BY g.game_date DESC, g.game_id LIMIT ?'],
-  ["leaders.js", "' DESC, b.player_id LIMIT 5'"],
-  ["leaders.js", "' DESC, w.batter_ID LIMIT 5'"],
+  // Top5 순위는 창 함수(ROW_NUMBER)의 ORDER BY 가 매깁니다(batterTopsOnce·wrcTopsOnce).
+  ['leaders.js', '`ROW_NUMBER() OVER (ORDER BY b.${c} DESC, b.player_id) AS r${i}`'],
+  ['leaders.js', "'ROW_NUMBER() OVER (ORDER BY w.wRC_half DESC, w.batter_ID) AS r0, '"],
+  ['leaders.js', "'ROW_NUMBER() OVER (ORDER BY w.wOBA DESC, w.batter_ID) AS r1 '"],
   ['leaders.js', "WHERE ps.season=? ORDER BY ps.player_id'"],
   ['players.js', 'ORDER BY season DESC, player_team LIMIT 1`'],
   ['players.js', "FROM kbo_official_batter_stats WHERE player_id = ? ORDER BY season DESC, player_team'"],
@@ -25,7 +27,7 @@ const GUARDS = [
   ['roster.js', "'ORDER BY kind DESC, team, name LIMIT ?'"],
   ['roster.js', "'ORDER BY move_date DESC, kind DESC, team, name LIMIT ?'"],
   ['roster.js', 'CAST(back_number AS SIGNED), name, player_id"'],
-  // 두 길(D1 의 ORDER BY, MySQL 의 ROW_NUMBER)이 같은 ORDER 를 씁니다.
+  // 행을 고르는 ORDER BY 와 한 칸으로 잇는 ROW_NUMBER(lib/jsonrows.js)가 같은 ORDER 를 씁니다.
   ['stats.js', "const ORDER = 'b.batting_average DESC, b.player_id';"],
   ['stats.js', "const ORDER = 'ps.earned_run_average ASC, ps.player_id';"],
   ['stats.js', 'ORDER BY ${ORDER} LIMIT ?'],

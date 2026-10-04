@@ -95,20 +95,20 @@ function fakeDb(answer) {
 
 const PLAYER = { player_id: '65543', player_name: '투수' };
 
-test('MySQL 이면 JSON 한 칸으로 읽고, 응답은 보통 질의와 같습니다', async () => {
+test('JSON 한 칸으로 읽고, 응답은 보통 질의와 같습니다', async () => {
   const db = fakeDb((sql) => {
     if (sql.includes('FROM players')) return [PLAYER];
     if (sql.includes('GROUP_CONCAT')) return [{ n: 2, j: JSON_TEXT }];
     throw new Error(`예상 밖 질의: ${sql}`);
   });
-  const env = { DB: db, DB_BACKEND: 'mysql' };
+  const env = { DB: db };
   const res = await playerArsenal(new Request('https://x/players/65543/arsenal?season=2019'), env, {}, { id: '65543' });
   const body = await res.text();
   assert.equal(body, JSON.stringify({ player_id: '65543', arsenal: viaMysql2(TEXT_ROWS), count: 2 }));
   assert.equal(db.seen.filter((s) => s.includes('GROUP_CONCAT')).length, 1);
 });
 
-test('MySQL 에서 묶은 글자를 못 풀면 pbp_id 순서의 보통 질의로 다시 읽습니다', async () => {
+test('묶은 글자를 못 풀면 pbp_id 순서의 보통 질의로 다시 읽습니다', async () => {
   const plain = viaMysql2(TEXT_ROWS);
   const db = fakeDb((sql) => {
     if (sql.includes('FROM players')) return [PLAYER];
@@ -120,7 +120,7 @@ test('MySQL 에서 묶은 글자를 못 풀면 pbp_id 순서의 보통 질의로
   const warned = [];
   console.warn = (...a) => warned.push(a);
   try {
-    const env = { DB: db, DB_BACKEND: 'mysql' };
+    const env = { DB: db };
     const res = await playerArsenal(new Request('https://x/players/65543/arsenal?season=2019'), env, {}, { id: '65543' });
     assert.deepEqual(await res.json(), { player_id: '65543', arsenal: plain, count: 2 });
   } finally {
@@ -129,18 +129,3 @@ test('MySQL 에서 묶은 글자를 못 풀면 pbp_id 순서의 보통 질의로
   assert.equal(warned.length, 1);
 });
 
-test('D1 이면 예전처럼 보통 질의 하나(ORDER BY 없음)입니다', async () => {
-  const plain = viaMysql2(TEXT_ROWS);
-  const db = fakeDb((sql) => {
-    if (sql.includes('FROM players')) return [PLAYER];
-    if (sql.includes('FROM play_by_play')) return plain;
-    throw new Error(`예상 밖 질의: ${sql}`);
-  });
-  const env = { DB: db, DB_2018_2020: db };
-  const res = await playerArsenal(new Request('https://x/players/65543/arsenal?season=2019'), env, {}, { id: '65543' });
-  assert.deepEqual(await res.json(), { player_id: '65543', arsenal: plain, count: 2 });
-  const pbp = db.seen.filter((s) => s.includes('FROM play_by_play'));
-  assert.equal(pbp.length, 1);
-  assert.doesNotMatch(pbp[0], /GROUP_CONCAT|ORDER BY/);
-  assert.match(pbp[0], /SELECT pbp\.pitch_type, pbp\.px, pbp\.pz, pbp\.speed, pbp\.pitch_result, pbp\.pfx_x, pbp\.pfx_z, pbp\.game_date, pbp\.x0, pbp\.z0, pbp\.sz_top, pbp\.sz_bot/);
-});

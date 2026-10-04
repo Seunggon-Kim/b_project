@@ -2,7 +2,6 @@ import { json } from '../lib/respond.js';
 import { queryInt, sqlLimit } from '../lib/router.js';
 import { pyRound } from './leaders.js';
 import { tableExists } from '../lib/schema.js';
-import { isMysql } from '../lib/backendflag.js';
 import { jsonRowsOnce } from '../lib/jsonrows.js';
 
 // K%·BB% 는 저장된 컬럼이 아니라 셀 때마다 계산합니다.
@@ -20,10 +19,10 @@ const BBPCT = 'CASE WHEN ps.total_batters_faced > 0 '
   + 'THEN ps.base_on_balls * 100.0e0 / ps.total_batters_faced END';
 
 // MySQL 의 시즌 기록 표 열입니다. `b.*`·`ps.*` 가 내는 순서 그대로입니다
-// (migration/mysql/schema.sql 의 CREATE TABLE 순서). MySQL 길은 행을 JSON
-// 배열로 받으려고 열을 하나씩 적어야 해서 여기 둡니다. 표에 열이 늘면 이
-// 목록도 늘려야 응답이 D1 길(`*`)과 같습니다. test/mysql_paths_sqlite.test.js 가
-// schema.sql 과 대조합니다.
+// (migration/mysql/schema.sql 의 CREATE TABLE 순서). 행을 JSON 배열로
+// 받으려고 열을 하나씩 적어야 해서 여기 둡니다. 표에 열이 늘면 이 목록도
+// 늘려야 응답에 그 열이 나옵니다(예전 `b.*`·`ps.*` 질의와 같은 응답).
+// test/mysql_paths_sqlite.test.js 가 schema.sql 과 대조합니다.
 export const BATTER_STAT_COLUMNS = [
   'player_id', 'season', 'player_name', 'player_team', 'batting_average', 'games',
   'plate_appearance', 'at_bat', 'run', 'single', 'double', 'triple', 'home_run',
@@ -135,12 +134,8 @@ export async function statsBatters(request, env) {
   const teamIds = url.searchParams.get('team_ids');
 
   // 원본은 wrc_plus_comparison 이 없는 DB 를 위해 NULL 폴백을 둡니다.
-  // D1 에는 있으므로 조인하지만, 없을 때의 동작도 그대로 남깁니다.
+  // 지금 DB 에는 있으므로 조인하지만, 없을 때의 동작도 그대로 남깁니다.
   const hasWrc = await tableExists(env, 'wrc_plus_comparison');
-  const wrcSelect = hasWrc
-    ? ', ROUND(w.wOBA, 3) AS woba, ROUND(w.wRAA_FG, 1) AS wraa, '
-      + 'ROUND(w.wRC_half, 1) AS wrc_plus'
-    : ', NULL AS woba, NULL AS wraa, NULL AS wrc_plus';
   const wrcJoin = hasWrc
     ? ' LEFT JOIN wrc_plus_comparison w '
       + 'ON CAST(w.batter_ID AS CHAR) = b.player_id AND w.season = b.season'
@@ -159,29 +154,26 @@ export async function statsBatters(request, env) {
     ORDER BY ${ORDER} LIMIT ?`;
   const binds = [season, minPa, ...team.binds, sqlLimit(limit)];
 
-  // MySQL 은 모든 행을 JSON 배열로 이은 한 칸으로 받습니다(lib/jsonrows.js
-  // jsonRowsOnce). 열과 이름은 아래 D1 질의의 `b.*, ...` 와 같은 순서입니다.
+  // 모든 행을 JSON 배열로 이은 한 칸으로 받습니다(lib/jsonrows.js
+  // jsonRowsOnce). 열과 이름은 예전 질의
+  // `SELECT b.*, COALESCE(p.player_name, b.player_name) AS player_name,
+  // TEAM AS team_id, p.position, b.on_base_plus_slugging as ops, woba, wraa,
+  // wrc_plus` 와 같은 순서입니다(이름이 겹치면 뒤 열 값, 자리는 앞 열).
   // (season, player_id) 가 기본 키라 ORDER 가 행 하나를 정합니다.
-  const results = isMysql(env)
-    ? await jsonRowsOnce(env.DB, [
-      ...statColumns('b', BATTER_STAT_COLUMNS),
-      { expr: 'COALESCE(p.player_name, b.player_name)', name: 'player_name' },
-      { expr: TEAM, name: 'team_id' },
-      { expr: 'p.position', name: 'position' },
-      { expr: 'b.on_base_plus_slugging', name: 'ops' },
-      ...(hasWrc
-        ? [
-          { expr: 'ROUND(w.wOBA, 3)', name: 'woba' },
-          { expr: 'ROUND(w.wRAA_FG, 1)', name: 'wraa' },
-          { expr: 'ROUND(w.wRC_half, 1)', name: 'wrc_plus' },
-        ]
-        : ['woba', 'wraa', 'wrc_plus'].map((name) => ({ expr: 'NULL', name }))),
-    ], from, binds, ORDER)
-    : (await env.DB.prepare(`
-    SELECT b.*, COALESCE(p.player_name, b.player_name) AS player_name,
-           ${TEAM} AS team_id, p.position,
-           b.on_base_plus_slugging as ops${wrcSelect}${from}`)
-      .bind(...binds).all()).results;
+  const results = await jsonRowsOnce(env.DB, [
+    ...statColumns('b', BATTER_STAT_COLUMNS),
+    { expr: 'COALESCE(p.player_name, b.player_name)', name: 'player_name' },
+    { expr: TEAM, name: 'team_id' },
+    { expr: 'p.position', name: 'position' },
+    { expr: 'b.on_base_plus_slugging', name: 'ops' },
+    ...(hasWrc
+      ? [
+        { expr: 'ROUND(w.wOBA, 3)', name: 'woba' },
+        { expr: 'ROUND(w.wRAA_FG, 1)', name: 'wraa' },
+        { expr: 'ROUND(w.wRC_half, 1)', name: 'wrc_plus' },
+      ]
+      : ['woba', 'wraa', 'wrc_plus'].map((name) => ({ expr: 'NULL', name }))),
+  ], from, binds, ORDER);
 
   // team_ids 는 받은 그대로 돌려줍니다. 없으면 null 입니다.
   return json({
@@ -211,24 +203,19 @@ export async function statsPitchers(request, env) {
     ORDER BY ${ORDER} LIMIT ?`;
   const binds = [season, minIp, ...team.binds, sqlLimit(limit)];
 
-  // MySQL 은 모든 행을 JSON 배열로 이은 한 칸으로 받습니다(statsBatters 와 같음).
-  const results = isMysql(env)
-    ? await jsonRowsOnce(env.DB, [
-      ...statColumns('ps', PITCHER_STAT_COLUMNS),
-      { expr: 'COALESCE(p.player_name, ps.player_name)', name: 'player_name' },
-      { expr: TEAM, name: 'team_id' },
-      { expr: 'ps.walks_plus_hits_per_inning_pitched', name: 'whip' },
-      // 나눗셈으로 만든 실수는 글자로 받아 mysql2 와 같게 읽습니다(jsonrows.js).
-      { expr: KPCT, name: 'strikeout_per_pa', float: true },
-      { expr: BBPCT, name: 'base_on_balls_per_pa', float: true },
-    ], from, binds, ORDER)
-    : (await env.DB.prepare(`
-    SELECT ps.*, COALESCE(p.player_name, ps.player_name) AS player_name,
-           ${TEAM} AS team_id,
-           ps.walks_plus_hits_per_inning_pitched as whip,
-           ${KPCT} AS strikeout_per_pa,
-           ${BBPCT} AS base_on_balls_per_pa${from}`)
-      .bind(...binds).all()).results;
+  // 모든 행을 JSON 배열로 이은 한 칸으로 받습니다(statsBatters 와 같음).
+  // 열과 이름은 예전 질의 `SELECT ps.*, ... AS player_name, TEAM AS team_id,
+  // ... as whip, KPCT AS strikeout_per_pa, BBPCT AS base_on_balls_per_pa` 와
+  // 같은 순서입니다.
+  const results = await jsonRowsOnce(env.DB, [
+    ...statColumns('ps', PITCHER_STAT_COLUMNS),
+    { expr: 'COALESCE(p.player_name, ps.player_name)', name: 'player_name' },
+    { expr: TEAM, name: 'team_id' },
+    { expr: 'ps.walks_plus_hits_per_inning_pitched', name: 'whip' },
+    // 나눗셈으로 만든 실수는 글자로 받아 mysql2 와 같게 읽습니다(jsonrows.js).
+    { expr: KPCT, name: 'strikeout_per_pa', float: true },
+    { expr: BBPCT, name: 'base_on_balls_per_pa', float: true },
+  ], from, binds, ORDER);
 
   return json({
     pitchers: results,

@@ -1,8 +1,7 @@
 import { json, dbError } from '../lib/respond.js';
 import { regularSeasonSql } from '../lib/gametype.js';
 import { queryInt } from '../lib/router.js';
-import { shardOf, seasonDateRange } from '../lib/shard.js';
-import { isMysql } from '../lib/backendflag.js';
+import { hasPbpSeason, seasonDateRange } from '../lib/pbpseasons.js';
 
 /**
  * 바깥 `p` 행의 가장 최근 시즌 소속을 뽑는 조각입니다.
@@ -337,12 +336,12 @@ export function arsenalFromJson(row) {
 }
 
 /** MySQL 에서 구종 행을 읽습니다. 묶은 글자를 못 풀면 보통 질의로 읽습니다. */
-async function arsenalRowsMysql(pdb, binds) {
-  const rows = arsenalFromJson(await pdb.prepare(arsenalJsonSql()).bind(...binds).first());
+async function arsenalRowsMysql(db, binds) {
+  const rows = arsenalFromJson(await db.prepare(arsenalJsonSql()).bind(...binds).first());
   if (rows) return rows;
   // 응답은 같고 CPU 만 더 듭니다. tail 에서 보이게 남깁니다.
   console.warn('arsenal: GROUP_CONCAT 결과를 못 풀어 보통 질의로 읽습니다', binds[0], binds[1]);
-  const { results } = await pdb
+  const { results } = await db
     .prepare(`SELECT ${ARSENAL_SELECT} ${ARSENAL_FROM} ORDER BY pbp.pbp_id`)
     .bind(...binds).all();
   return results;
@@ -365,22 +364,16 @@ export async function playerArsenal(request, env, ctx, params) {
     }
     const season = queryInt(new URL(request.url), 'season', 2026);
 
-    // play_by_play 는 시즌별 D1 에 나뉘어 있습니다. 이 질의는 시즌
-    // 하나만 보므로 담당 DB 한 개만 두드립니다.
-    const pdb = shardOf(env, season);
-    const range = seasonDateRange(season);
-    if (!pdb || !range) {
-      // 배정에 없는 시즌입니다. 빈 결과를 주면 "그 해엔 안 던졌다"로
-      // 보여 데이터가 없는 것을 알 수 없습니다.
+    // play_by_play 가 없는 시즌이면 빈 결과입니다(lib/pbpseasons.js).
+    const range = hasPbpSeason(season) ? seasonDateRange(season) : null;
+    if (!range) {
       return json({ player_id: playerId, arsenal: [], count: 0 });
     }
 
     // 정규시즌 공만 셉니다(포스트시즌·올스타전 제외, lib/gametype.js). 선수
     // 분석 화면의 구종 카드가 정규시즌 기록과 같은 기준이 되게 합니다(2026-10-04).
     const binds = [player.player_id, range.from, range.to];
-    const results = isMysql(env)
-      ? await arsenalRowsMysql(pdb, binds)
-      : (await pdb.prepare(`SELECT ${ARSENAL_SELECT} ${ARSENAL_FROM}`).bind(...binds).all()).results;
+    const results = await arsenalRowsMysql(db, binds);
 
     // 원본은 요청받은 player_id 를 그대로 돌려줍니다. DB 에서 찾은 것이
     // 아닙니다. 문자열과 정수가 섞여 있어 값이 다를 수 있습니다.
@@ -488,9 +481,8 @@ export async function playerUsage(request, env, ctx, params) {
 
     const season = queryInt(new URL(request.url), 'season', 2026);
 
-    const pdb = shardOf(env, season);
-    const range = seasonDateRange(season);
-    if (!pdb || !range) {
+    const range = hasPbpSeason(season) ? seasonDateRange(season) : null;
+    if (!range) {
       return json({ player_id: playerId, usage: [] });
     }
 
@@ -499,7 +491,7 @@ export async function playerUsage(request, env, ctx, params) {
     // mysql2 가 eval 없이 행을 해석해 CPU 를 26~50ms 썼습니다. 무료 한도
     // (10ms)에 걸려 503(exceededCpu)이 났습니다. 묶으면 수십 행입니다.
     // 정규시즌 공만 셉니다. 구종 카드(arsenal)와 같은 기준입니다.
-    const { results } = await pdb.prepare(`
+    const { results } = await db.prepare(`
       SELECT pbp.pitch_type AS pitch_type, pbp.stands AS stands,
              pbp.throws AS throws, COUNT(*) AS n
       FROM play_by_play pbp

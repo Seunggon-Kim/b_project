@@ -2,8 +2,7 @@ import { json } from '../lib/respond.js';
 import { intIdOrSame } from '../lib/ids.js';
 import { queryInt, queryStr, sqlLimit } from '../lib/router.js';
 import { pyRound } from './leaders.js';
-import { fanOut, allSeasons, seasonDateRange } from '../lib/shard.js';
-import { isMysql } from '../lib/backendflag.js';
+import { PBP_FIRST_SEASON, PBP_LAST_SEASON, seasonDateRange } from '../lib/pbpseasons.js';
 
 // wRC+ 계열 여섯 개입니다. 모두 wrc_plus_comparison 과 규정타석 계산을
 // 공유해 한 파일에 둡니다.
@@ -146,24 +145,15 @@ export async function wrcSeasons(request, env) {
   `).bind(minPa, minPa).all();
 
   // 원본은 행마다 쿼리를 한 번 더 날려 편차 목록을 받아 표준편차를 냅니다.
-  // 시즌 수만큼이라(최대 12) D1 의 호출당 50개 한도 안입니다.
   //
-  // MySQL 은 같은 질의들을 UNION ALL 로 이어 한 번에 보냅니다. Worker CPU 를
+  // 여기서는 같은 질의들을 UNION ALL 로 이어 한 번에 보냅니다. Worker CPU 를
   // 줄이려는 것입니다(질의마다 열 정보 해석·행 해석기 만들기가 되풀이됨).
   // 시즌마다 조각 하나이고 조각 안의 SQL·묶는 값은 예전 질의와 같아, 조각
   // 안 행 순서(표준편차를 더하는 순서)도 예전과 같습니다(min_pa 여섯 가지 x
   // 12시즌의 값 순서를 실제로 대조, 차이 0). 시즌 열로 나눕니다.
-  if (isMysql(env) && rows.length) {
+  if (rows.length) {
     const deltas = await deltasBySeason(db, rows);
     for (const r of rows) r.std_delta = stdDelta(deltas.get(Number(r.season)) || []);
-    return json(rows);
-  }
-  for (const r of rows) {
-    const { results } = await db.prepare(
-      'SELECT (wRC_weighted - wRC_half) AS d FROM wrc_plus_comparison '
-      + 'WHERE PA>=? AND season=?',
-    ).bind(r.min_pa, r.season).all();
-    r.std_delta = stdDelta(results.map((x) => x.d));
   }
   return json(rows);
 }
@@ -296,27 +286,24 @@ export async function wrcBatter(request, env, ctx, params) {
     ORDER BY wrc.season
   `).bind(batterId).all();
 
-  // play_by_play 가 시즌별 D1 에 나뉘어 있습니다. 이 질의만은 전 시즌을
-  // 봐야 하므로 네 DB 에 모두 묻고 이어붙입니다.
+  // 이 질의만은 play_by_play 가 있는 전 시즌을 봅니다(lib/pbpseasons.js).
   //
   // season 을 `substr(gameID,1,4)` 로 뽑던 것을 game_date 로 바꿨습니다.
   // 포스트시즌 gameID 는 앞 네 자리가 시리즈 코드(3333/4444/6666)라
   // 그대로 두면 그 경기들이 '3333' 시즌으로 묶여 화면에 나옵니다.
-  // 자세한 설명은 lib/shard.js 의 seasonDateRange 에 있습니다.
+  // 자세한 설명은 lib/pbpseasons.js 의 seasonDateRange 에 있습니다.
   //
   // 원본이 문자열 season 을 돌려주므로 형태를 맞춥니다.
-  const stadiumDist = await fanOut(env, allSeasons(), async (pdb, seasons) => {
-    const from = seasonDateRange(seasons[0]).from;
-    const to = seasonDateRange(seasons[seasons.length - 1]).to;
-    const { results } = await pdb.prepare(`
+  // (SQL 글자는 바꾸지 않습니다. Hyperdrive 가 질의 글자로 캐시합니다.)
+  const from = seasonDateRange(PBP_FIRST_SEASON).from;
+  const to = seasonDateRange(PBP_LAST_SEASON).to;
+  const { results: stadiumDist } = await db.prepare(`
       SELECT CAST(CAST(game_date / 10000 AS SIGNED) AS CHAR) AS season, stadium, COUNT(*) AS pa
       FROM play_by_play
       WHERE batter_ID = ? AND game_date >= ? AND game_date < ?
       GROUP BY season, stadium
       ORDER BY season, pa DESC, stadium
     `).bind(batterId, from, to).all();
-    return results;
-  });
 
   // 원본: history 가 비면 None 입니다. 빈 문자열이 아닙니다.
   const name = history.length ? history[0].player_name : null;

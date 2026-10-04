@@ -1,17 +1,17 @@
 // 타석·공을 DB 에서 세어(GROUP BY … COUNT) 받는 두 라우트(team_range, usage)가
 // 예전(행을 하나씩 받아 JS 로 세던) 결과와 같은지 SQLite 로 확인합니다.
 //
-// D1 은 SQLite 라 이 시험이 곧 D1 길의 확인입니다. MySQL 길은 스테이징과
-// 운영의 응답 대조(scripts/api_compare.mjs)로 확인합니다.
+// 두 라우트는 MySQL 과 SQLite 가 함께 받는 SQL(HEX·MIN·GROUP BY)을 써서, 같은 SQL
+// 을 SQLite 에 돌려 JS 집계를 봅니다. 실제 MySQL 응답은 스테이징과 운영의 응답
+// 대조(scripts/api_compare.mjs)로 확인합니다.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 
 import { statsTeamRange, accumulatePa, buildTeamRange } from '../src/routes/teamrange.js';
 import { playerUsage, summarizeUsage } from '../src/routes/players.js';
-import { SHARDS } from '../src/lib/shard.js';
 
-/** node:sqlite 를 D1 처럼(prepare/bind/all/first) 감쌉니다. */
+/** node:sqlite 를 어댑터(lib/mysqldb.js)처럼(prepare/bind/all/first) 감쌉니다. */
 function d1(sqlite) {
   return {
     prepare(sql) {
@@ -64,11 +64,10 @@ function fixture() {
     }
   }
   const env = { DB: d1(db) };
-  for (const s of SHARDS) env[s.binding] = env.DB;
   return { db, env };
 }
 
-test('team_range: DB 에서 센 타석 집계가 행별 집계와 같습니다(D1)', async () => {
+test('team_range: DB 에서 센 타석 집계가 행별 집계와 같습니다(SQLite)', async () => {
   const { db, env } = fixture();
   const res = await statsTeamRange(new Request('https://x/stats/team_range?start=2025-04-01&end=2025-04-30'), env);
   const body = await res.json();
@@ -97,7 +96,7 @@ test('team_range: DB 에서 센 타석 집계가 행별 집계와 같습니다(D
   assert.deepEqual(strip(body.pitching, PIT), strip(want.pitching, PIT));
 });
 
-test('usage: DB 에서 센 구사율이 공별 집계와 같습니다(D1)', async () => {
+test('usage: DB 에서 센 구사율이 공별 집계와 같습니다(SQLite)', async () => {
   const { db, env } = fixture();
   const res = await playerUsage(new Request('https://x/players/100/usage?season=2025'), env, {}, { id: '100' });
   const body = await res.json();
