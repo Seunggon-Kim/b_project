@@ -10,7 +10,7 @@
   'use strict';
   const PA = root.PlayerAnalytics = root.PlayerAnalytics || {};
 
-  // 기존 카드(player-analytics.html renderMovementProfile)의 색표와 같습니다.
+  // 기존 카드(옛 Movement Profile 카드(지웠음))의 색표와 같습니다.
   const COLORS = {
     '너클볼': '#3C44CD', '스위퍼': '#DDB33A', '슬러브': '#93AFD4',
     '싱커': '#FE9D00', '투심': '#FE9D00', '직구': '#D22D49',

@@ -1,5 +1,5 @@
 /*
- * 선수 분석 페이지의 Quick Look 표와 헤더 글자를 만드는 순수 함수입니다.
+ * 선수 분석 페이지의 한눈에 보기 표와 헤더 글자를 만드는 순수 함수입니다.
  * 화면(DOM)에는 손대지 않습니다.
  *
  * 합계·비율은 공용 TeamStats.metrics, 숫자 표시는 TeamStats.columns.fmt 를
@@ -29,7 +29,7 @@
     ],
   };
 
-  // 퓨처스 Quick Look 줄입니다. 퓨처스 응답의 칸 이름 그대로입니다.
+  // 퓨처스 한눈에 보기 줄입니다. 퓨처스 응답의 칸 이름 그대로입니다.
   // wOBA·wRC+ 는 2군에 타석 단위 자료가 없어 만들 수 없습니다.
   const FUT = {
     batter: ['G', 'PA', 'AB', 'R', 'H', 'HR', 'RBI', 'AVG', 'OBP', 'SLG'],
@@ -85,7 +85,7 @@
     return fmt(v, kind);
   }
 
-  /** 1군 Quick Look 입니다. 칸은 최근 3시즌 + 통산입니다. */
+  /** 1군 한눈에 보기 입니다. 칸은 최근 3시즌 + 통산입니다. */
   function build(player, thisYear) {
     const kind = kindOf(player);
     const all = seasonRows(player, kind);
@@ -106,7 +106,7 @@
     return x === null || x === undefined || x === '' ? '-' : String(x);
   }
 
-  /** 퓨처스 Quick Look 입니다. 응답은 최신 시즌이 앞이고, 통산 칸은 없습니다. */
+  /** 퓨처스 한눈에 보기 입니다. 응답은 최신 시즌이 앞이고, 통산 칸은 없습니다. */
   function buildFutures(seasons, kind) {
     const use = (seasons || []).slice(0, 3).reverse();
     if (!use.length) return null;

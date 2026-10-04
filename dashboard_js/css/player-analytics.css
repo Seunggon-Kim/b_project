@@ -1,5 +1,5 @@
 /*
- * 선수 분석 머리 부분(헤더·Quick Look·프로필)입니다. 팬그래프 선수 페이지 모양을 따릅니다.
+ * 선수 분석 머리 부분(헤더·한눈에 보기·프로필)입니다. 팬그래프 선수 페이지 모양을 따릅니다.
  * 설계: docs/superpowers/specs/2026-10-04-player-analytics-fangraphs-header-design.md
  *
  * style.css 의 옛 .header-bar-*·.player-card·.stats-card 규칙은 건드리지 않습니다.
@@ -40,7 +40,7 @@
 .pa-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
 .pa-card.hidden { display: none; }
 .pa-card--ql { grid-column: span 2; }
-/* 1군 투수는 무브먼트 카드까지 3칸입니다. Quick Look 을 1칸으로 줄입니다. */
+/* 1군 투수는 무브먼트 카드까지 3칸입니다. 한눈에 보기 을 1칸으로 줄입니다. */
 @media (min-width: 1281px) { .player-details-grid.pa-3col > .pa-card--ql { grid-column: span 1; } }
 /* 두 카드 높이는 같습니다(그리드 stretch). 프로필 줄은 촘촘히 두고, 남는 높이는
    아래 시즌 타일이 채웁니다(evan 결정). */
@@ -60,7 +60,7 @@
     .pa-card--ql, .pa-card--profile, .pa-card--move { grid-column: 1 / -1; }
 }
 
-/* ---------- Quick Look 표 ---------- */
+/* ---------- 한눈에 보기 표 ---------- */
 .pa-ql-wrap { overflow-x: auto; }
 .pa-ql { width: 100%; border-collapse: collapse; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 .pa-ql th, .pa-ql td { padding: 0.3rem 0.6rem; text-align: right; border-bottom: 1px solid var(--border-color); white-space: nowrap; color: var(--text-primary); }
@@ -89,8 +89,6 @@
 .pa-mv-dir { fill: var(--text-secondary); font-size: 15px; font-weight: 700; }
 .pa-mv-pt { opacity: 0.35; }
 .pa-mv-avg { stroke: var(--bg-card); stroke-width: 2.5; }
-.pa-mv-note { margin: 0.1rem 0 0.2rem; line-height: 1.3; font-size: 0.75rem; color: var(--text-secondary); text-align: center; }
-.pa-mv-note--sub { font-size: 0.7rem; color: var(--text-muted); }
 .pa-mv-legend { width: 100%; border-collapse: collapse; font-size: 0.75rem; font-variant-numeric: tabular-nums; }
 .pa-mv-legend th, .pa-mv-legend td { padding: 0.15rem 0.35rem; text-align: right; border-bottom: 1px solid var(--border-color); white-space: nowrap; color: var(--text-primary); }
 .pa-mv-legend th { font-weight: 600; color: var(--text-secondary); }
@@ -136,3 +134,9 @@
 
 .pa-usage-grid--dense .pa-usage-row { padding: 0.2rem 0; }
 .pa-usage-grid--dense .pa-usage-bar { height: 0.75rem; }
+
+/* 휴대폰: 무브먼트 제목을 줄여 한 줄에 두고, 툴팁은 시점 단추 줄 아래로 내립니다. */
+@media (max-width: 640px) {
+    .pa-hide-sm { display: none; }
+    .pa-card--move .pa-help::after { top: calc(100% + 2.9rem); }
+}

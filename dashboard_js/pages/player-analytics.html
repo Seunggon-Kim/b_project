@@ -101,7 +101,7 @@
                 <div class="pa-card pa-card--move hidden" id="pa-move-card">
                     <div class="pa-card-tabs">
                         <span class="pa-card-tabs-left">
-                            <span class="pa-card-tab">무브먼트 (Induced Break)</span>
+                            <span class="pa-card-tab">무브먼트<span class="pa-hide-sm"> (Induced Break)</span></span>
                             <button type="button" class="pa-help" id="pa-move-help" aria-label="무브먼트 설명" aria-describedby="pa-move-help-text">?</button>
                             <span id="pa-move-help-text" class="sr-only"></span>
                         </span>
@@ -159,32 +159,6 @@
                         <!-- Pitch charts will be loaded here -->
                     </div>
                 </div>
-
-                <!-- Usage & Movement Row -->
-                <div id="usage-movement-row" class="grid-usage-movement mt-3 hidden">
-                    <!-- Pitch Usage Section (For Pitchers) -->
-                    <div id="pitch-usage-section" class="detailed-stats-container fade-in">
-                        <h3 class="card-title mb-4">Pitch Usage</h3>
-                        <div class="usage-container">
-                            <div class="usage-header">
-                                <div class="usage-label-l">vs. LHH</div>
-                                <div class="usage-label-p">Pitch</div>
-                                <div class="usage-label-r">vs. RHH</div>
-                            </div>
-                            <div id="usage-list" class="usage-list">
-                                <!-- Filled dynamically -->
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Movement Profile Section -->
-                    <div id="movement-profile-section" class="detailed-stats-container fade-in">
-                        <h3 class="card-title mb-4">Movement Profile (Induced Break)</h3>
-                        <div class="movement-container">
-                            <canvas id="movement-canvas"></canvas>
-                        </div>
-                    </div>
-                </div>
             </div>
         </section>
     </main>
@@ -214,7 +188,6 @@
         // Re-render charts when theme changes
         new MutationObserver(() => {
             if (typeof lastArsenalData !== 'undefined' && lastArsenalData) {
-                renderMovementProfile(lastArsenalData);
                 // arsenal sub-charts
                 const types = [...new Set(lastArsenalData.map(p => p.pitch_type))];
                 types.forEach(t => {
@@ -589,7 +562,7 @@
          */
         function hidePbpSections() {
             ['detailed-stats-section', 'advanced-stats-section',
-             'pitch-arsenal-section', 'usage-movement-row'].forEach(id => {
+             'pitch-arsenal-section'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.add('hidden');
             });
@@ -1003,8 +976,6 @@
                     const lowerSeason = window.PlayerAnalytics.movement.seasonsFor(player)[0];
                     if (!lowerSeason) {
                         arsenalSection.classList.add('hidden');
-                        const ur = document.getElementById('usage-movement-row');
-                        if (ur) ur.classList.add('hidden');
                     } else try {
                         const arsenalRes = await getArsenalShared(playerId, lowerSeason) || {};
                         const arsenalData = arsenalRes.arsenal || [];
@@ -1013,12 +984,9 @@
 
                         if (arsenalData.length > 0) {
                             renderPitchArsenalGrid();
-                            renderPitchUsage(playerId, lowerSeason);
-                            renderMovementProfile(lastArsenalData);
                         } else {
                             console.log("No pitch arsenal data found for player.");
                             arsenalSection.classList.add('hidden');
-                            renderPitchUsage(playerId, lowerSeason);
                         }
 
                     } catch (err) {
@@ -1030,7 +998,6 @@
                     detailedSection.classList.add('hidden');
                     document.getElementById('advanced-stats-section').classList.add('hidden');
                     document.getElementById('pitch-arsenal-section').classList.add('hidden');
-                    document.getElementById('usage-movement-row').classList.add('hidden');
                 }
 
                 // Scroll to stats
@@ -1095,144 +1062,6 @@
                 arsenalGrid.appendChild(item);
                 renderArsenalChart(chartId, pitches);
             });
-        }
-
-        async function renderPitchUsage(playerId, season) {
-            const usageRow = document.getElementById('usage-movement-row');
-            const usageList = document.getElementById('usage-list');
-            if (!usageRow || !usageList) return;
-
-            try {
-                const data = await getUsageShared(playerId, season) || {};
-                if (!data.usage || data.usage.length === 0) {
-                    usageRow.classList.add('hidden');
-                    return;
-                }
-
-                usageRow.classList.remove('hidden');
-                usageList.innerHTML = '';
-
-                data.usage.forEach(item => {
-                    const row = document.createElement('div');
-                    row.className = 'usage-row fade-in';
-
-                    row.innerHTML = `
-                        <div class="usage-left">
-                            <span class="usage-pct">${item.usage_l}%</span>
-                            <div class="usage-bar-total">
-                                <div class="usage-bar-fill pitch-${item.abbreviation}" style="width: ${item.usage_l}%"></div>
-                            </div>
-                        </div>
-                        <div class="usage-center">
-                            <div class="pitch-abb-circle pitch-${item.abbreviation}">${item.abbreviation}</div>
-                            <span class="usage-total-pct">${item.usage_all}%</span>
-                        </div>
-                        <div class="usage-right">
-                            <div class="usage-bar-total">
-                                <div class="usage-bar-fill pitch-${item.abbreviation}" style="width: ${item.usage_r}%"></div>
-                            </div>
-                            <span class="usage-pct">${item.usage_r}%</span>
-                        </div>
-                    `;
-                    usageList.appendChild(row);
-                });
-
-            } catch (err) {
-                console.error("Error loading usage data:", err);
-                usageRow.classList.add('hidden');
-            }
-        }
-
-        function renderMovementProfile(pitches) {
-            const canvas = document.getElementById('movement-canvas');
-            if (!canvas || !pitches || pitches.length === 0) return;
-
-            const ctx = canvas.getContext('2d');
-            // Fixed size for consistency
-            canvas.width = 400;
-            canvas.height = 400;
-            const W = canvas.width;
-            const H = canvas.height;
-
-            const PITCH_COLORS = {
-                '너클볼': '#3C44CD', '스위퍼': '#DDB33A', '슬러브': '#93AFD4',
-                '싱커': '#FE9D00', '투심': '#FE9D00', '직구': '#D22D49',
-                '체인지업': '#1DBE3A', '커브': '#00D1ED', '커터': '#933F2C',
-                '포크': '#3BACAC', '스플리터': '#3BACAC', '슬라이더': '#EEE716'
-            };
-
-            // Range: -60cm to 60cm
-            const minMove = -60, maxMove = 60;
-            const inchToCm = 2.54;
-
-            const transformX = (cm) => ((cm - minMove) / (maxMove - minMove)) * W;
-            const transformY = (cm) => H - (((cm - minMove) / (maxMove - minMove)) * H);
-
-            // 1. Draw Grid & Axes
-            ctx.clearRect(0, 0, W, H);
-
-            // Grid lines
-            const _MC = getThemeColors(); ctx.strokeStyle = _MC.grid;
-            ctx.lineWidth = 1;
-            for (let i = minMove + 20; i < maxMove; i += 20) {
-                // Vertical
-                ctx.beginPath();
-                ctx.moveTo(transformX(i), 0);
-                ctx.lineTo(transformX(i), H);
-                ctx.stroke();
-                // Horizontal
-                ctx.beginPath();
-                ctx.moveTo(0, transformY(i));
-                ctx.lineTo(W, transformY(i));
-                ctx.stroke();
-            }
-
-            // Central Axes (0,0)
-            ctx.strokeStyle = _MC.axes;
-            ctx.lineWidth = 1.5;
-            // Y-axis (X=0)
-            ctx.beginPath();
-            ctx.moveTo(transformX(0), 0);
-            ctx.lineTo(transformX(0), H);
-            ctx.stroke();
-            // X-axis (Y=0)
-            ctx.beginPath();
-            ctx.moveTo(0, transformY(0));
-            ctx.lineTo(W, transformY(0));
-            ctx.stroke();
-
-            // Labels
-            ctx.fillStyle = _MC.label;
-            ctx.font = '10px Inter';
-            ctx.fillText('-60', 5, transformY(0) - 5);
-            ctx.fillText('60', W - 20, transformY(0) - 5);
-            ctx.fillText('60', transformX(0) + 5, 15);
-            ctx.fillText('-60', transformX(0) + 5, H - 5);
-
-            // 2. Plot Pitches
-            pitches.forEach(p => {
-                if (p.pfx_x === null || p.pfx_z === null) return;
-
-                // pfx_x in DB is inches. Horizontal movement.
-                // pfx_z in DB is inches. Vertical movement.
-                const cmX = parseFloat(p.pfx_x) * inchToCm;
-                const cmZ = parseFloat(p.pfx_z) * inchToCm;
-
-                ctx.beginPath();
-                ctx.arc(transformX(cmX), transformY(cmZ), 3.5, 0, Math.PI * 2);
-
-                const ptype = p.pitch_type;
-                const colorKey = ptype === '싱커' ? '투심' : ptype;
-                ctx.fillStyle = PITCH_COLORS[colorKey] || '#3b82f6';
-                ctx.globalAlpha = 0.6;
-                ctx.fill();
-
-                ctx.strokeStyle = _MC.pointStroke;
-                ctx.lineWidth = 0.5;
-                ctx.globalAlpha = 0.8;
-                ctx.stroke();
-            });
-            ctx.globalAlpha = 1.0;
         }
 
         function renderArsenalChart(canvasId, pitches) {
@@ -1424,6 +1253,8 @@
                 if (opened) help.classList.remove('dismissed');
                 else help.classList.add('dismissed');  // 포커스가 남아 있어도 닫힌 채로 둡니다.
             });
+            // 마우스를 떼면 닫힘 표시를 풉니다. 맥 Safari·Firefox 는 클릭해도 포커스가 안 와 blur 가 안 옵니다.
+            help.addEventListener('mouseleave', () => { help.classList.remove('dismissed'); });
             help.addEventListener('blur', () => { help.classList.remove('open'); help.classList.remove('dismissed'); });
             help.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape') { help.classList.remove('open'); help.classList.add('dismissed'); }
