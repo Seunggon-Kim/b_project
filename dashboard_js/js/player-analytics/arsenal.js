@@ -13,7 +13,11 @@
   const K = SIZE / (X_MAX * 2);     // ft → 좌표(37.5)
   const HALF_ZONE = 17 / 12 / 2;    // 0.708ft
   const MIN_CONTOUR_N = 15;
-  const LEVELS = 5;
+  // 등고선 단계: 바깥 줄부터 이 비율의 공을 감쌉니다(evan). 선수·구종마다 바깥 줄 의미가 같아집니다.
+  const SHARES = [0.9, 0.7, 0.5, 0.3, 0.1];
+  const CELL = 4;                   // 밀도 격자 한 칸(viewBox 단위)
+  const SIGMA = 0.18 * K;           // 밀도 번짐 정도(약 0.18ft, 공 900구 이상일 때)
+  const SIGMA_N = 900;              // 공이 이보다 적으면 (900/n)^(1/6) 배로 넓힘(실버만 규칙). 적은 공이 조각나지 않게
 
   function num(v) {
     if (v === null || v === undefined || v === '') return null;
@@ -129,14 +133,50 @@
     return g.pitches.map(function (p) { return toXY(num(p.px), num(p.pz), view); }).filter(inRange);
   }
 
-  /** d3.contourDensity 로 등고선을 계산합니다(d3 없거나 범위 안 공이 적으면 null → 점). */
+  /** 공 위치를 격자에 세고 가우스로 번지게 한 밀도 격자입니다(가로·세로 따로 번짐). */
+  function densityGrid(data) {
+    const n = SIZE / CELL, raw = new Float64Array(n * n), tmp = new Float64Array(n * n), out = new Float64Array(n * n);
+    const cl = function (v) { return Math.min(n - 1, Math.max(0, Math.floor(v / CELL))); };
+    data.forEach(function (d) { raw[cl(d[1]) * n + cl(d[0])] += 1; });
+    const sg = SIGMA * Math.max(1, Math.pow(SIGMA_N / Math.max(1, data.length), 1 / 6)) / CELL, r = Math.ceil(sg * 3), kern = [];
+    for (let d = -r; d <= r; d++) kern.push(Math.exp(-d * d / (2 * sg * sg)));
+    const blur = function (src, dst, horiz) {
+      for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+        let v = 0;
+        for (let d = -r; d <= r; d++) {
+          const ii = horiz ? i + d : i, jj = horiz ? j : j + d;
+          if (ii >= 0 && ii < n && jj >= 0 && jj < n) v += kern[d + r] * src[jj * n + ii];
+        }
+        dst[j * n + i] = v;
+      }
+    };
+    blur(raw, tmp, true);
+    blur(tmp, out, false);
+    return { n: n, values: out };
+  }
+  /** 격자 밀도를 점 위치에서 읽습니다(칸 가운데 사이를 직선으로 이음, 등고선과 같은 방식). */
+  function densityAt(grid, x, y) {
+    const n = grid.n, v = grid.values;
+    const fx = Math.min(n - 1, Math.max(0, x / CELL - 0.5)), fy = Math.min(n - 1, Math.max(0, y / CELL - 0.5));
+    const i = Math.min(n - 2, Math.floor(fx)), j = Math.min(n - 2, Math.floor(fy)), tx = fx - i, ty = fy - j;
+    const a = v[j * n + i], b = v[j * n + i + 1], c = v[(j + 1) * n + i], d = v[(j + 1) * n + i + 1];
+    return (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty;
+  }
+
+  /** 등고선을 계산합니다. 단계마다 SHARES 비율의 공을 감싸게 높이를 고릅니다(d3 없거나 범위 안 공이 적으면 null → 점). */
   function contours(g, view, d3) {
-    if (!d3 || !d3.contourDensity) return null;
+    if (!d3 || !d3.contours) return null;
     const data = densityData(g, view);
     if (data.length < MIN_CONTOUR_N) return null;
-    const out = d3.contourDensity().x(function (d) { return d[0]; }).y(function (d) { return d[1]; })
-      .size([SIZE, SIZE]).bandwidth(0.18 * K).thresholds(LEVELS + 1)(data);
-    return out.length > LEVELS ? out.slice(out.length - LEVELS) : out;
+    const grid = densityGrid(data);
+    const dens = data.map(function (d) { return densityAt(grid, d[0], d[1]); }).sort(function (a, b) { return a - b; });
+    const ts = SHARES.map(function (p) { return dens[Math.min(dens.length - 1, Math.floor((1 - p) * dens.length))]; });
+    const out = d3.contours().size([grid.n, grid.n]).thresholds(ts)(Array.from(grid.values));
+    return out.map(function (c) {
+      return { value: c.value, coordinates: c.coordinates.map(function (poly) {
+        return poly.map(function (ring) { return ring.map(function (pt) { return [pt[0] * CELL, pt[1] * CELL]; }); });
+      }) };
+    });
   }
 
   const api = { groups, zone, toXY, scale, cardSvg, titleHtml, contours, densityData, MIN_CONTOUR_N };
