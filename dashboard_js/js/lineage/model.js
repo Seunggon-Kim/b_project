@@ -131,7 +131,7 @@
           let allow = null;
           if (nodeType(b) === 'job' && dir === 'up' && nodeType(a) === 'table') allow = sourcesFor(lin, a, b);
           if (nodeType(b) === 'job' && dir === 'down' && nodeType(a) === 'source') allow = tablesFor(lin, a, b);
-          // 스크립트가 원천을 적지 않았으면(예: csv_to_d1.py) 좁히지 않습니다. 빠뜨리는 것보다 넓게 보이는 편이 낫습니다.
+          // 스크립트가 원천을 적지 않았으면(예: sync_players_from_roster.py) 좁히지 않습니다. 빠뜨리는 것보다 넓게 보이는 편이 낫습니다.
           if (allow && !allow.size) allow = null;
           used.add(i);
           nodes.add(b);
@@ -241,6 +241,13 @@
 
   const STATE_WORD = { ok: '성공', skip: '건너뜀', fail: '실패' };
 
+  /** 기준 시간 글자입니다. 48시간 미만은 '36시간', 이상은 '8일'(나누어떨어지지 않으면 '7.5일'). */
+  function hoursText(h) {
+    h = Number(h);
+    if (!(h >= 48)) return `${h}시간`;
+    return `${Math.round(h / 24 * 10) / 10}일`;
+  }
+
   /** 키 상태 하나를 사람이 읽는 문구로 바꿉니다. it 는 tableStatus/jobStatus 의 items 항목. */
   function itemText(lin, it) {
     if (it.state === 'none') return `${it.job} · ${it.key}: 실행 기록이 아직 없습니다`;
@@ -248,7 +255,7 @@
     if (it.state === 'stale') {
       if (it.unknown) return `${it.job} · ${it.key}: 알 수 없는 상태(${it.status}) ${shortTime(it.at)}`;
       const j = jobById(lin, it.job);
-      return `${it.job} · ${it.key}: ${it.staleHours}시간 넘게 갱신이 없습니다(기준: ${j ? j.schedule_kst : ''} 실행) · 마지막 ${shortTime(it.at)}`;
+      return `${it.job} · ${it.key}: ${hoursText(it.staleHours)} 넘게 갱신이 없습니다(기준: ${j ? j.schedule_kst : ''} 실행) · 마지막 ${shortTime(it.at)}`;
     }
     return `${it.job} · ${it.key}: 마지막 갱신 ${shortTime(it.at)} · ${STATE_WORD[it.status] || it.status}`;
   }
@@ -310,7 +317,7 @@
   const api = {
     COLS, COL_LABEL, GROUP_ID, RANK, BOX_H, GAP, MIN_BOX_W, COL_PAD,
     nodeType, nodeName, pageLabel, buildGraph, reach,
-    kstMs, keyState, tableStatus, jobStatus, summarize, shortTime, itemText, dotText,
+    kstMs, keyState, tableStatus, jobStatus, summarize, shortTime, hoursText, itemText, dotText,
     layout, edgePath,
   };
   L.model = api;

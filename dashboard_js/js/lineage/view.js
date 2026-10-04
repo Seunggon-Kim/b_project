@@ -69,7 +69,8 @@
 
   /** 상자에 마우스를 올렸을 때 보이는 설명입니다. */
   function boxTip(n) {
-    if (n.kind === 'collected' || n.kind === 'derived' || n.kind === 'manual') return n.ref.desc || n.label;
+    if (n.kind === 'collected' || n.kind === 'derived' || n.kind === 'manual') return `${n.label}
+${n.ref.desc || ''}`;
     if (n.kind === 'job') return `${n.label}: ${n.sub} 실행`;
     if (n.kind === 'page') return `${n.label} (${n.sub})`;
     if (n.kind === 'group') return n.sub === '접기' ? '누르면 손 작업 표를 접습니다.' : '누르면 손 작업 표를 펼칩니다.';
@@ -79,7 +80,7 @@
   function boxHtml(n, lin, status, style) {
     return `<button type="button" class="lin-box lin-k-${n.kind}" data-id="${esc(n.id)}"${style ? ` style="${style}"` : ''} data-tooltip="${esc(boxTip(n))}">`
       + markHtml(n, lin, status)
-      + `<span class="lin-label">${esc(n.label)}</span>`
+      + `<span class="lin-label">${esc(n.label).replace(/_/g, '_<wbr>')}</span>`
       + (n.sub && n.kind !== 'page' ? `<span class="lin-sub">${esc(n.sub)}</span>` : '')
       + '</button>';
   }
@@ -151,7 +152,7 @@
     if (node.kind === 'collected' || node.kind === 'derived' || node.kind === 'manual') {
       const t = node.ref;
       title += `<span class="lin-kind">${KIND_LABEL[t.kind] || ''}</span>`;
-      const rows = ctx.rows ? (ctx.rows[t.name] === undefined ? '-' : `${Number(ctx.rows[t.name]).toLocaleString('ko-KR')}행`) : '운영 정보 없음';
+      const rows = ctx.rows ? (ctx.rows[t.name] == null ? '-' : `${Number(ctx.rows[t.name]).toLocaleString('ko-KR')}행`) : '운영 정보 없음';
       const st = ctx.status ? ctx.status.tables[t.name] : null;
       const writers = (t.written_by || []).map(function (path) {
         const s = (lin.scripts || []).find(x => x.path === path);
@@ -189,7 +190,7 @@
       });
       body += '<dl class="lin-dl">';
       body += `<dt>실행 시각</dt><dd>${esc(j.schedule_kst)} (GitHub Actions <code>${esc(j.workflow)}</code>)</dd>`;
-      body += `<dt>기준 시간</dt><dd>${esc(j.stale_hours)}시간 넘게 갱신이 없으면 오래됨으로 봅니다.</dd>`;
+      body += `<dt>기준 시간</dt><dd>${esc(m.hoursText(j.stale_hours))} 넘게 갱신이 없으면 오래됨으로 봅니다.</dd>`;
       body += `<dt>마지막 실행</dt><dd>${st ? (st.items.length ? `<ul>${st.items.map(it => statusLine(lin, it)).join('')}</ul>` : '-') : '운영 정보 없음'}</dd>`;
       body += `<dt>단계</dt><dd>${listOrDash(steps)}</dd>`;
       body += `<dt>원천</dt><dd>${listOrDash(ins.map(id => `<li>${esc(label(id))}</li>`))}</dd>`;
@@ -198,7 +199,7 @@
     } else if (node.kind === 'source') {
       const s = node.ref;
       body += '<dl class="lin-dl">';
-      body += `<dt>주소</dt><dd>${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a>` : '-'}</dd>`;
+      body += `<dt>주소</dt><dd>${/^https?:\/\//i.test(s.url) ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a>` : (s.url ? esc(s.url) : '-')}</dd>`;
       body += `<dt>받는 작업</dt><dd>${listOrDash(outs.filter(id => m.nodeType(id) === 'job').map(id => `<li>${esc(label(id))}</li>`))}</dd>`;
       body += `<dt>바로 쓰는 화면</dt><dd>${listOrDash(outs.filter(id => m.nodeType(id) === 'page').map(pageLink).filter(Boolean))}</dd>`;
       body += '</dl>';
@@ -238,19 +239,35 @@
     ]);
     if (res[0].ok) S.lin = res[0].data;
     else S.linError = res[0].error;
-    if (res[1].ok) {
-      S.rows = {};
-      res[1].data.tables.forEach(t => { S.rows[t.name] = t.rows; });
-    } else {
-      S.opsErrors.push(`행 수: ${res[1].error}`);
+    // 운영 정보를 다루다 난 오류는 계보 그림을 가리지 않고 알림으로만 남깁니다.
+    try {
+      if (res[1].ok) {
+        const rows = {};
+        res[1].data.tables.forEach(t => { rows[t.name] = t.rows; });
+        S.rows = rows;
+      } else {
+        S.opsErrors.push(`행 수: ${res[1].error}`);
+      }
+    } catch (e) {
+      S.rows = null;
+      S.opsErrors.push(`행 수: ${(e && e.message) || e}`);
     }
-    const det = res[2].ok ? res[2].data.details : null;
-    if (det && typeof det === 'object' && !Array.isArray(det)) S.details = det;
-    else S.opsErrors.push(`실행 기록: ${res[2].ok ? 'details 가 없습니다' : res[2].error}`);
+    try {
+      const det = res[2].ok ? res[2].data.details : null;
+      if (det && typeof det === 'object' && !Array.isArray(det)) {
+        if (Object.keys(det).length) S.details = det;
+        else S.opsErrors.push('실행 기록: details 가 비어 있습니다');
+      } else {
+        S.opsErrors.push(`실행 기록: ${res[2].ok ? 'details 가 없습니다' : res[2].error}`);
+      }
+    } catch (e) {
+      S.details = null;
+      S.opsErrors.push(`실행 기록: ${(e && e.message) || e}`);
+    }
   }
 
   /** 지금 상태로 그림 전체를 다시 그립니다(데이터를 다시 받지 않음). */
-  function render() {
+  function render(refocus) {
     const box = $('lin-graph');
     if (!box) return;
     tipHide();
@@ -274,11 +291,12 @@
     box.innerHTML = S.mobile
       ? listHtml(S.graph, S.lin, S.status)
       : graphHtml(S.graph, m.layout(S.graph, S.width), S.lin, S.status);
-    applyFocus();
+    applyFocus(refocus);
   }
 
   /** 누른 상자·요약 숫자에 맞춰 진하게/흐리게와 상세 카드를 바꿉니다. */
-  function applyFocus() {
+  function applyFocus(refocus) {
+    tipHide();
     const box = $('lin-graph');
     let on = null, onEdges = null;
     if (S.sel) {
@@ -302,6 +320,10 @@
     } else {
       card.classList.add('hidden');
       card.innerHTML = '';
+    }
+    if (refocus) {
+      const el = document.querySelector(refocus);
+      if (el) el.focus({ preventScroll: true });
     }
   }
 
@@ -339,7 +361,7 @@
         const k = sum.dataset.state;
         S.sel = null;
         S.filter = S.filter === k ? null : k;
-        applyFocus();
+        applyFocus(`.lin-sum-btn[data-state="${k}"]`);
         return;
       }
       if (e.target.closest('[data-close]')) {
@@ -352,7 +374,7 @@
         const id = b.dataset.id;
         if (id === M().GROUP_ID) {
           S.manualOpen = !S.manualOpen;
-          render();
+          render(`.lin-box[data-id="${M().GROUP_ID}"]`);
           return;
         }
         S.filter = null;
@@ -368,16 +390,20 @@
         applyFocus();
       }
     });
+    // 폭이 바뀌면(창 크기, 세로 스크롤바가 생겨 줄어듦 포함) 다시 그립니다.
     let t = null;
-    root.addEventListener('resize', function () {
+    function onResize() {
       clearTimeout(t);
       t = setTimeout(function () {
         const box = $('lin-graph');
-        if (!S.lin || !box || $('tab-lineage').classList.contains('hidden')) return;
+        if (!box || !box.clientWidth) return;
+        if (!S.lin) return;
         const mob = root.matchMedia('(max-width: 640px)').matches;
-        if (box.clientWidth !== S.width || mob !== S.mobile) render();
+        if (mob !== S.mobile || (!mob && box.clientWidth !== S.width)) render();
       }, 150);
-    });
+    }
+    if (typeof root.ResizeObserver === 'function') new root.ResizeObserver(onResize).observe($('lin-graph'));
+    else root.addEventListener('resize', onResize);
     bindTips(tab);
   }
 
