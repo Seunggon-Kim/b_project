@@ -111,7 +111,7 @@
     });
     s += '<line class="pa-mv-axis" x1="' + (C - R) + '" y1="200" x2="' + (C + R) + '" y2="200"/>'
       + '<line class="pa-mv-axis" x1="200" y1="' + (C - R) + '" x2="200" y2="' + (C + R) + '"/>';
-    [30, 60].forEach(function (cm) {
+    RINGS.forEach(function (cm) {
       s += '<text class="pa-mv-tick" x="204" y="' + (C - cm * PX_PER_CM + 12) + '">' + cm + '</text>';
     });
     s += '<g clip-path="url(#pa-mv-clip)">';
@@ -138,20 +138,51 @@
       + '</tbody></table>';
   }
 
-  /** 카드 본문입니다. 그림 + 안내 줄 + 표. 데이터가 없으면 안내 문구입니다. */
+  /** 카드 본문입니다. 그림 + 추적 비율 줄 + 표. 데이터가 없으면 안내 문구입니다. 설명은 카드 제목 옆 툴팁(HELP)에 있습니다. */
   function bodyHtml(pitches, total) {
     const vs = valid(pitches);
     if (!vs.length) return '<p class="pa-mv-empty">이 시즌은 투구 추적 데이터가 없습니다.</p>';
     const summary = summarize(vs);
     return svgHtml(vs, summary)
-      + '<p class="pa-mv-note">포수 시점 · 수평 +는 1루 쪽 · 수직 +는 위</p>'
       + '<p class="pa-mv-note">공 ' + comma(vs.length) + '개 추적'
       + (total > 0 ? ' (정규시즌 ' + comma(total) + '구 대비 ' + Math.min(100, Math.round(vs.length * 100 / total)) + '%)' : '') + '</p>'
-      + (total > 0 ? '<p class="pa-mv-note pa-mv-note--sub">추적 수는 문자중계 기준이라 공식 투구 수와 조금 다를 수 있습니다.</p>' : '')
       + legendHtml(summary);
   }
 
-  const api = { COLORS, colorOf, summarize, seasonsFor, totalsFor, svgHtml, legendHtml, bodyHtml };
+  /** 카드 제목 옆 `?` 툴팁 글자입니다(그림 아래 설명을 옮김). */
+  const HELP = '포수 시점입니다. 수평 +는 1루 쪽, 수직 +는 위입니다.\n'
+    + '추적 수는 문자중계 기준이라 공식 투구 수와 조금 다를 수 있습니다.';
+
+  function pct1(v) {
+    const n = num(v);
+    return n === null ? 0 : Math.max(0, Math.min(100, n));
+  }
+
+  /**
+   * 구종 구사율(Savant Pitch Usage 참고)입니다.
+   * 좌타 상대 % · 왼쪽 막대 · 구종(전체 %) · 오른쪽 막대 · 우타 상대 %. 전체 비율 큰 순.
+   * data 는 /players/{id}/usage 응답입니다.
+   */
+  function usageHtml(data, season) {
+    const title = '<div class="pa-usage-title">' + esc(season) + ' 구종 구사율</div>';
+    const rows = ((data && data.usage) || []).slice().sort(function (a, b) { return pct1(b.usage_all) - pct1(a.usage_all); });
+    if (!rows.length) return title + '<p class="pa-mv-empty">이 시즌은 구종 구사율 데이터가 없습니다.</p>';
+    return title + '<div class="pa-usage-grid">'
+      + '<div class="pa-usage-head"><span>좌타 상대</span><span></span><span>구종 (전체)</span><span></span><span>우타 상대</span></div>'
+      + rows.map(function (u) {
+        const c = colorOf(u.pitch_type), l = pct1(u.usage_l), r = pct1(u.usage_r);
+        return '<div class="pa-usage-row">'
+          + '<span class="pa-usage-pct">' + f1(l) + '%</span>'
+          + '<span class="pa-usage-bar pa-usage-bar--l"><i style="width:' + f1(l) + '%;background:' + c + '"></i></span>'
+          + '<span class="pa-usage-name">' + esc(u.pitch_type) + ' <b>' + f1(pct1(u.usage_all)) + '%</b></span>'
+          + '<span class="pa-usage-bar"><i style="width:' + f1(r) + '%;background:' + c + '"></i></span>'
+          + '<span class="pa-usage-pct">' + f1(r) + '%</span>'
+          + '</div>';
+      }).join('')
+      + '</div>';
+  }
+
+  const api = { COLORS, colorOf, summarize, seasonsFor, totalsFor, svgHtml, legendHtml, bodyHtml, HELP, usageHtml };
   PA.movement = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
