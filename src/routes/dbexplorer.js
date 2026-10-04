@@ -25,7 +25,7 @@ export async function visibleTableNames(env) {
  * 표 목록에 행 수·컬럼 수와 사전의 분류·설명·갱신주기를 붙입니다.
  */
 export async function dbTables(request, env) {
-  const db = env.DB;
+  const db = env.MYSQL;
   const meta = columnDict();
   const tmeta = meta.tables || {};
   const names = await visibleTableNames(env);
@@ -72,7 +72,7 @@ export async function dbTables(request, env) {
  * 확인한 뒤에만** 조회합니다. 원본이 그렇게 하고 있고 그 확인이 곧 방어입니다.
  */
 export async function dbTable(request, env, ctx, params) {
-  const db = env.DB;
+  const db = env.MYSQL;
   const tableName = params.name;
 
   const names = await visibleTableNames(env);
@@ -166,7 +166,7 @@ const CSV_PAGE = 10000;
  * 나눠 읽는 것이 선택이 아니라 필수입니다.
  */
 export async function dbTableCsv(request, env, ctx, params) {
-  const db = env.DB;
+  const db = env.MYSQL;
   const tableName = params.name;
 
   const names = await visibleTableNames(env);

@@ -63,7 +63,7 @@ export function statColumns(alias, columns) {
 
 /** 원본 api/main.py:337-353 입니다. 기록이 있는 시즌 목록을 내림차순으로. */
 export async function statsSeasons(request, env) {
-  const { results } = await env.DB.prepare(`
+  const { results } = await env.MYSQL.prepare(`
     SELECT DISTINCT season FROM (
       SELECT season FROM kbo_official_batter_stats
       UNION
@@ -86,7 +86,7 @@ export async function statsSeasons(request, env) {
  * 씁니다.
  */
 export async function statsRegulation(request, env) {
-  const { results } = await env.DB.prepare(`
+  const { results } = await env.MYSQL.prepare(`
     SELECT season, MAX(games) AS team_games
     FROM kbo_official_batter_stats
     WHERE season IS NOT NULL AND games IS NOT NULL
@@ -160,7 +160,7 @@ export async function statsBatters(request, env) {
   // TEAM AS team_id, p.position, b.on_base_plus_slugging as ops, woba, wraa,
   // wrc_plus` 와 같은 순서입니다(이름이 겹치면 뒤 열 값, 자리는 앞 열).
   // (season, player_id) 가 기본 키라 ORDER 가 행 하나를 정합니다.
-  const results = await jsonRowsOnce(env.DB, [
+  const results = await jsonRowsOnce(env.MYSQL, [
     ...statColumns('b', BATTER_STAT_COLUMNS),
     { expr: 'COALESCE(p.player_name, b.player_name)', name: 'player_name' },
     { expr: TEAM, name: 'team_id' },
@@ -207,7 +207,7 @@ export async function statsPitchers(request, env) {
   // 열과 이름은 예전 질의 `SELECT ps.*, ... AS player_name, TEAM AS team_id,
   // ... as whip, KPCT AS strikeout_per_pa, BBPCT AS base_on_balls_per_pa` 와
   // 같은 순서입니다.
-  const results = await jsonRowsOnce(env.DB, [
+  const results = await jsonRowsOnce(env.MYSQL, [
     ...statColumns('ps', PITCHER_STAT_COLUMNS),
     { expr: 'COALESCE(p.player_name, ps.player_name)', name: 'player_name' },
     { expr: TEAM, name: 'team_id' },

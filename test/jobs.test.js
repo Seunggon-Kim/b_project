@@ -5,7 +5,7 @@ import { jobsStatus } from '../src/routes/jobs.js';
 import { cacheControlFor } from '../src/lib/cachepolicy.js';
 
 function fakeEnv(results) {
-  return { DB: { prepare: () => ({ all: async () => ({ results }) }) } };
+  return { MYSQL: { prepare: () => ({ all: async () => ({ results }) }) } };
 }
 
 test('화면이 쓰는 jobs 맵을 만듭니다', async () => {
@@ -43,7 +43,7 @@ test('기록이 없어도 빈 객체를 줍니다', async () => {
 });
 
 test('results 가 없어도 터지지 않습니다', async () => {
-  const env = { DB: { prepare: () => ({ all: async () => ({}) }) } };
+  const env = { MYSQL: { prepare: () => ({ all: async () => ({}) }) } };
   const res = await jobsStatus({}, env);
   assert.equal((await res.json()).jobs.pbp, undefined);
 });

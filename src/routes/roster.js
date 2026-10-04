@@ -37,7 +37,7 @@ export async function rosterMoves(request, env) {
   if (days === 0) {
     // 가장 최근 하루입니다. **오늘 날짜로 자르지 않습니다.** KBO 가
     // 경기 전에 갱신하므로 새벽에는 아직 어제 것이 최신입니다.
-    const { results: rows } = await env.DB.prepare(
+    const { results: rows } = await env.MYSQL.prepare(
       `SELECT ${COLS} FROM kbo_roster_moves `
       + 'WHERE move_date = (SELECT MAX(move_date) FROM kbo_roster_moves) '
       + 'ORDER BY kind DESC, team, name LIMIT ?',
@@ -46,7 +46,7 @@ export async function rosterMoves(request, env) {
   } else {
     // move_date 는 'YYYY-MM-DD' 문자열입니다. date() 로 비교하면
     // 인덱스를 못 타므로 문자열 범위로 자릅니다.
-    const { results: rows } = await env.DB.prepare(
+    const { results: rows } = await env.MYSQL.prepare(
       `SELECT ${COLS} FROM kbo_roster_moves `
       + 'WHERE move_date >= ? '
       + 'ORDER BY move_date DESC, kind DESC, team, name LIMIT ?',
@@ -106,7 +106,7 @@ export async function roster(request, env) {
     binds.push(team);
   }
   const where = `WHERE ${conds.join(' AND ')}`;
-  const stmt = env.DB.prepare(
+  const stmt = env.MYSQL.prepare(
     'SELECT team, name, back_number, role, player_id, as_of '
     + `FROM kbo_roster ${where} `
     // 포지션 순서를 투수·포수·내야수·외야수로 고정합니다. 사전순으로

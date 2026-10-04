@@ -53,19 +53,19 @@ test('intIdRow: ID 열만 바꾸고 원본은 건드리지 않습니다', () => 
 });
 
 test('/roster: player_id 가 숫자로 돌아옵니다', async () => {
-  const env = { DB: fakeDb(() => [{ team: 'KIA', name: 'a', back_number: '1', role: '투수', player_id: '53609', as_of: 'x' }]) };
+  const env = { MYSQL: fakeDb(() => [{ team: 'KIA', name: 'a', back_number: '1', role: '투수', player_id: '53609', as_of: 'x' }]) };
   const body = await (await roster(req('/roster'), env)).json();
   assert.equal(body.players[0].player_id, 53609);
 });
 
 test('/roster: player_id 가 null 이면 null 입니다', async () => {
-  const env = { DB: fakeDb(() => [{ team: 'KIA', name: 'a', back_number: '1', role: '투수', player_id: null, as_of: 'x' }]) };
+  const env = { MYSQL: fakeDb(() => [{ team: 'KIA', name: 'a', back_number: '1', role: '투수', player_id: null, as_of: 'x' }]) };
   const body = await (await roster(req('/roster'), env)).json();
   assert.equal(body.players[0].player_id, null);
 });
 
 test('/roster/moves: playerId 가 숫자로 돌아옵니다', async () => {
-  const env = { DB: fakeDb(() => [{ move_date: '2026-10-01', kind: '등록', team: 'KIA', name: 'a', position: '투수', player_id: '53609' }]) };
+  const env = { MYSQL: fakeDb(() => [{ move_date: '2026-10-01', kind: '등록', team: 'KIA', name: 'a', position: '투수', player_id: '53609' }]) };
   const body = await (await rosterMoves(req('/roster/moves'), env)).json();
   assert.equal(body.dates[0].added[0].playerId, 53609);
 });
@@ -86,7 +86,7 @@ test('robustPlayerLookup: 숫자와 .0 꼬리는 그대로 찾습니다', async 
 });
 
 test('/players/:id, arsenal, usage: 숫자 모양이 아니면 D1 의 없는 선수 응답입니다', async () => {
-  const env = { DB: fakeDb(() => [{ player_id: '73153' }]) };
+  const env = { MYSQL: fakeDb(() => [{ player_id: '73153' }]) };
   const p = { id: '73153x' };
   const d = await playerDetail(req('/players/73153x'), env, {}, p);
   assert.equal(d.status, 404);
@@ -97,22 +97,22 @@ test('/players/:id, arsenal, usage: 숫자 모양이 아니면 D1 의 없는 선
   const u = await playerUsage(req('/players/73153x/usage'), env, {}, p);
   assert.equal(u.status, 200);
   assert.deepEqual(await u.json(), { error: 'Player not found' });
-  assert.equal(env.DB.calls.length, 0);
+  assert.equal(env.MYSQL.calls.length, 0);
 });
 
 test('/wrc/batter/:id: 숫자 모양이 아니면 D1 의 없는 타자 응답입니다', async () => {
-  const env = { DB: fakeDb(() => [{ season: 2025 }]) };
+  const env = { MYSQL: fakeDb(() => [{ season: 2025 }]) };
   const res = await wrcBatter(req('/wrc/batter/74163x'), env, {}, { id: '74163x' });
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), {
     batter_id: '74163x', player_name: null, history: [], stadium_distribution: [],
   });
-  assert.equal(env.DB.calls.length, 0);
+  assert.equal(env.MYSQL.calls.length, 0);
 });
 
 test('/wrc/leaderboard, top-changes: batter_ID 가 숫자로 돌아옵니다', async () => {
   const rows = [{ batter_ID: '74163', player_name: 'a', season: 2025, PA: 500 }];
-  const env = { DB: fakeDb((sql) => (sql.includes('FROM games') ? [{ g: 100 }] : rows)) };
+  const env = { MYSQL: fakeDb((sql) => (sql.includes('FROM games') ? [{ g: 100 }] : rows)) };
   const lb = await (await wrcLeaderboard(req('/wrc/leaderboard?season=2025&min_pa=1'), env)).json();
   assert.equal(lb[0].batter_ID, 74163);
   const tc = await (await wrcTopChanges(req('/wrc/top-changes?season=2025&min_pa=1'), env)).json();

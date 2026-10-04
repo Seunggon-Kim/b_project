@@ -27,7 +27,7 @@ function fakeDb(rows, { fail = false } = {}) {
 }
 
 function envOf(db) {
-  return { DB: db };
+  return { MYSQL: db };
 }
 
 const req = (qs) => new Request(`https://x.test/stats/movement_avg${qs}`);

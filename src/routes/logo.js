@@ -13,7 +13,7 @@ import { json } from '../lib/respond.js';
 export async function logo(request, env, ctx, params) {
   const code = String(params.code || '').toUpperCase();
 
-  const row = await env.DB
+  const row = await env.MYSQL
     .prepare('SELECT mime, image FROM team_logos WHERE code = ?')
     .bind(code)
     .first();

@@ -1,13 +1,13 @@
-// 요청마다 MySQL(Hyperdrive) 어댑터를 하나 만들어 env.DB 자리에 끼웁니다.
+// 요청마다 MySQL(Hyperdrive) 어댑터를 하나 만들어 env.MYSQL 자리에 끼웁니다.
 //
-// 라우트는 env.DB.prepare(sql).bind(...).all()/.first() 를 부릅니다
+// 라우트는 env.MYSQL.prepare(sql).bind(...).all()/.first() 를 부릅니다
 // (lib/mysqldb.js). 연결은 첫 질의 때 열고, 응답을 보낸 뒤 닫습니다.
 import { hyperdriveDb } from './mysqldb.js';
 import { dbError } from './respond.js';
 
 export function withBackend(env, make = hyperdriveDb) {
   const db = make(env);
-  return { env: { ...env, DB: db }, done: () => db.close(), db };
+  return { env: { ...env, MYSQL: db }, done: () => db.close(), db };
 }
 
 /**

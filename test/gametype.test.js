@@ -29,7 +29,7 @@ test('구종 구사율 질의는 정규시즌 공만 셉니다', async () => {
       };
     },
   };
-  const env = { DB: db };
+  const env = { MYSQL: db };
   const req = new Request('https://x/players/65933/arsenal?season=2026');
   const res = await playerArsenal(req, env, {}, { id: '65933' });
   assert.equal(res.status, 200);

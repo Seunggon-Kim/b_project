@@ -396,9 +396,9 @@ export async function futuresPlayer(request, env, ctx, params) {
     let rosterTeam = null;
     let statsTeam = null;
     if (!picked.season.cells.length && picked.profile.registered
-        && env && env.DB) {
+        && env && env.MYSQL) {
       try {
-        const row = await env.DB.prepare(
+        const row = await env.MYSQL.prepare(
           'SELECT (SELECT team FROM kbo_roster WHERE player_id = p.player_id'
           + ' LIMIT 1) AS roster_team,'
           + ' (SELECT player_team FROM ('
@@ -426,9 +426,9 @@ export async function futuresPlayer(request, env, ctx, params) {
     // 쪽에는 2010년부터 있습니다. `futures_records.py` 가 미리 받아
     // D1 에 넣어 둡니다(13,036행).
     let seasons = [];
-    if (env && env.DB) {
+    if (env && env.MYSQL) {
       try {
-        const { results } = await env.DB.prepare(
+        const { results } = await env.MYSQL.prepare(
           'SELECT * FROM futures_season_stats '
           + 'WHERE player_id = ? AND kind = ? ORDER BY season DESC, team',
         ).bind(id, kind).all();

@@ -53,9 +53,9 @@ export async function pitchValues(request, env, ctx, params) {
     return json({ detail: `구종 가치는 ${PITCH_VALUE_FIRST_SEASON}년부터 수집한 시즌까지만 있습니다` }, 404);
   }
   try {
-    const player = await robustPlayerLookup(env.DB, params.id);
+    const player = await robustPlayerLookup(env.MYSQL, params.id);
     if (!player) return json({ detail: 'Player not found' }, 404);
-    const { results } = await env.DB.prepare(PITCH_VALUES_SQL)
+    const { results } = await env.MYSQL.prepare(PITCH_VALUES_SQL)
       .bind(Number(player.player_id), season).all();
     const res = json({ player_id: params.id, season, rows: shapePitchValues(results) });
     res.headers.set('cache-control', movementCacheControl(season));

@@ -312,7 +312,7 @@ async function attachPitcherIds(env, games) {
       + (hasActive ? ', p.is_active' : '')
       + ' FROM players p WHERE p.player_name IN ('
       + list.map(() => '?').join(',') + ')';
-    const { results } = await env.DB.prepare(sel).bind(...list).all();
+    const { results } = await env.MYSQL.prepare(sel).bind(...list).all();
     for (const r of results) {
       const key = r.player_name + '\u0000' + r.team_id;
       const arr = byNameTeam.get(key);

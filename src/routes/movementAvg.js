@@ -126,7 +126,7 @@ export async function movementAvg(request, env) {
   }
 
   try {
-    const { results } = await env.DB.prepare(MOVEMENT_AVG_SQL)
+    const { results } = await env.MYSQL.prepare(MOVEMENT_AVG_SQL)
       .bind(range.from, range.to).all();
     const res = json({ season, rows: shapeMovementRows(results) });
     res.headers.set('cache-control', movementCacheControl(season));

@@ -22,7 +22,7 @@ export async function games(request, env) {
   const season = queryInt(url, 'season', 2025);
   const limit = queryInt(url, 'limit', 50);
 
-  const { results } = await env.DB.prepare(`
+  const { results } = await env.MYSQL.prepare(`
     SELECT g.*, g.game_date as date,
            COALESCE(t1.team_name, g.home_team_id) as home_team,
            COALESCE(t2.team_name, g.away_team_id) as away_team

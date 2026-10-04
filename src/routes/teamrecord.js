@@ -217,7 +217,7 @@ async function seasonStats(db, franchiseId) {
  * 팀 기록실 한 장입니다. `:id` 는 franchise_id 입니다.
  */
 export async function teamRecord(request, env, ctx, params) {
-  const db = env.DB;
+  const db = env.MYSQL;
   const id = String(params.id || '').trim().toUpperCase();
   if (!/^[A-Z]{2,4}$/.test(id)) {
     return json({ error: 'bad franchise id' }, 400);

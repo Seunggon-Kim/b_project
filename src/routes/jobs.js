@@ -10,7 +10,7 @@
 import { json } from '../lib/respond.js';
 
 export async function jobsStatus(request, env) {
-  const rows = await env.DB.prepare(
+  const rows = await env.MYSQL.prepare(
     'SELECT job, last_run_at, status, note, duration_sec FROM meta_job_runs',
   ).all();
 

@@ -211,7 +211,7 @@ export async function leaders(request, env) {
 
   try {
     if (season === null) {
-      const row = await env.DB
+      const row = await env.MYSQL
         .prepare('SELECT MAX(season) AS s FROM kbo_official_batter_stats')
         .first();
       season = row && row.s ? row.s : 2026;
@@ -221,7 +221,7 @@ export async function leaders(request, env) {
     const hit = cache.get(ckey);
     if (hit) return json(hit);
 
-    const grow = await env.DB
+    const grow = await env.MYSQL
       .prepare('SELECT MAX(games) AS g FROM kbo_official_batter_stats WHERE season=?')
       .bind(season)
       .first();
@@ -238,7 +238,7 @@ export async function leaders(request, env) {
     // 선수가 순위에서 통째로 빠져 **"그해 상위 5명"이 아니라 "지금도
     // 명단에 남은 사람 중 상위 5명"** 이 됩니다. 비어 있는 것보다
     // 나쁩니다. 틀렸는데 맞아 보입니다.
-    const [avgTop, obpTop, slgTop, opsTop] = (await batterTopsOnce(env.DB, season, qualPa))
+    const [avgTop, obpTop, slgTop, opsTop] = (await batterTopsOnce(env.MYSQL, season, qualPa))
       .map((rows, i) => rows.map((d) => ({
         player_id: d.player_id ?? null,
         name: d.name,
@@ -257,7 +257,7 @@ export async function leaders(request, env) {
     // 자릿수는 원본대로 SQL 의 ROUND 가 냅니다. JS 의 toFixed 만 쓰면
     // 두 번 반올림하는 자리에서 값이 어긋날 수 있습니다. 정렬은 원본과
     // 같이 반올림 전 값으로 합니다(wrcTopsOnce).
-    const [wrcRows, wobaRows] = await wrcTopsOnce(env.DB, season, qualPa);
+    const [wrcRows, wobaRows] = await wrcTopsOnce(env.MYSQL, season, qualPa);
 
     const wrcTop = wrcRows.map((d) => ({
       player_id: d.player_id ?? null,
@@ -299,7 +299,7 @@ export async function leaders(request, env) {
     // 모든 행을 JSON 배열로 이은 한 칸으로 받습니다(lib/jsonrows.js
     // jsonRowsOnce, 순서는 기본 키 player_id). 나눗셈으로 만든 K%·BB% 는
     // 글자로 받아 mysql2 와 같은 값으로 읽습니다(float).
-    const pitRows = await jsonRowsOnce(env.DB, [
+    const pitRows = await jsonRowsOnce(env.MYSQL, [
       { expr: 'ps.player_id', name: 'player_id' },
       { expr: 'COALESCE(p.player_name, ps.player_name)', name: 'name' },
       { expr: 'COALESCE(ps.player_team, p.team_id)', name: 'team' },

@@ -154,7 +154,7 @@ function fixture() {
 }
 
 const DB = fixture();
-const MY = { DB };
+const MY = { MYSQL: DB };
 
 // 한 칸(GROUP_CONCAT) 읽기에 실패해 행마다 읽기로 물러서면 경고를
 // 남깁니다. 이 시험에서는 물러서지 않아야 합니다(물러서도 응답은 같아 비교만으로는

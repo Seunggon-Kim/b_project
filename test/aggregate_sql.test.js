@@ -63,7 +63,7 @@ function fixture() {
         sides[(k * 11) % sides.length]);
     }
   }
-  const env = { DB: d1(db) };
+  const env = { MYSQL: d1(db) };
   return { db, env };
 }
 

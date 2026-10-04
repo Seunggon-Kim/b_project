@@ -209,7 +209,7 @@ export async function statsTeamRange(request, env) {
     e = t;
   }
 
-  const db = env.DB;
+  const db = env.MYSQL;
   const teams = new Map();
 
   // 경기 수와 날짜 경계

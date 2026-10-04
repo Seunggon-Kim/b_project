@@ -26,7 +26,7 @@ import { json } from '../lib/respond.js';
 export async function teams(request, env) {
   const season = new URL(request.url).searchParams.get('season');
   if (!season || !/^\d{4}$/.test(season)) {
-    const { results } = await env.DB
+    const { results } = await env.MYSQL
       .prepare('SELECT * FROM teams ORDER BY team_name, team_id')
       .all();
     return json({ teams: results });
@@ -35,7 +35,7 @@ export async function teams(request, env) {
   // team_seasons 는 그 시즌 표기명을, franchises 는 지금 어느 팀인지를
   // 압니다. `teams` 를 LEFT 로 붙여 색·연고 같은 것을 이어 주되,
   // 해체팀(현대·쌍방울)은 현재 팀이 없어 NULL 로 둡니다.
-  const { results } = await env.DB.prepare(`
+  const { results } = await env.MYSQL.prepare(`
     SELECT ts.team_name AS team_id,
            ts.team_name AS team_name,
            ts.franchise_id,
@@ -51,7 +51,7 @@ export async function teams(request, env) {
   // 그 시즌 표가 없으면(아직 안 채운 시즌) 현재 팀으로 물러섭니다.
   // 빈 목록을 주면 필터가 통째로 비어 아무것도 못 고릅니다.
   if (!results.length) {
-    const all = await env.DB
+    const all = await env.MYSQL
       .prepare('SELECT * FROM teams ORDER BY team_name, team_id').all();
     return json({ teams: all.results, season: Number(season), fallback: true });
   }

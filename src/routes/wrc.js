@@ -118,7 +118,7 @@ export async function deltasBySeason(db, rows) {
 export async function wrcSeasons(request, env) {
   const url = new URL(request.url);
   const minPa = queryInt(url, 'min_pa', 300);
-  const db = env.DB;
+  const db = env.MYSQL;
 
   const { results: rows } = await db.prepare(`
     WITH gp AS (
@@ -163,9 +163,9 @@ export async function wrcByStadium(request, env) {
   const url = new URL(request.url);
   const season = queryInt(url, 'season', null);
   if (season === null) return missingSeason();
-  const minPa = await effMinPa(env.DB, season, queryInt(url, 'min_pa', 300));
+  const minPa = await effMinPa(env.MYSQL, season, queryInt(url, 'min_pa', 300));
 
-  const { results } = await env.DB.prepare(`
+  const { results } = await env.MYSQL.prepare(`
     SELECT wpf.home_stadium AS home_stadium,
            sd.primary_team,
            COUNT(*) AS n,
@@ -193,9 +193,9 @@ export async function wrcLeaderboard(request, env) {
   if (season === null) return missingSeason();
   const sortCol = sortColumnOf(queryStr(url, 'sort', 'half'));
   const n = queryInt(url, 'n', 50);
-  const minPa = await effMinPa(env.DB, season, queryInt(url, 'min_pa', 300));
+  const minPa = await effMinPa(env.MYSQL, season, queryInt(url, 'min_pa', 300));
 
-  const { results } = await env.DB.prepare(`
+  const { results } = await env.MYSQL.prepare(`
     SELECT wrc.batter_ID,
            COALESCE(b.player_name, 'Unknown') AS player_name,
            b.player_team,
@@ -231,9 +231,9 @@ export async function wrcTopChanges(request, env) {
   }
   const order = direction === 'up' ? 'DESC' : 'ASC';
   const n = queryInt(url, 'n', 15);
-  const minPa = await effMinPa(env.DB, season, queryInt(url, 'min_pa', 300));
+  const minPa = await effMinPa(env.MYSQL, season, queryInt(url, 'min_pa', 300));
 
-  const { results } = await env.DB.prepare(`
+  const { results } = await env.MYSQL.prepare(`
     SELECT wrc.batter_ID,
            COALESCE(b.player_name, 'Unknown') AS player_name,
            b.player_team,
@@ -256,7 +256,7 @@ export async function wrcTopChanges(request, env) {
 
 /** 원본 966-1007. 선수 한 명의 시즌별 이력과 구장별 타석 분포입니다. */
 export async function wrcBatter(request, env, ctx, params) {
-  const db = env.DB;
+  const db = env.MYSQL;
   const batterId = params.id;
 
   // D1 은 INTEGER 열과 글자를 비교해 숫자 모양이 아닌 입력과 맞는 행이 없었습니다.
@@ -332,7 +332,7 @@ export async function wrcBatterSearch(request, env) {
   }
   sql += ' ORDER BY b.season DESC, b.player_name, b.player_id, b.player_team LIMIT 50';
 
-  const { results } = await env.DB.prepare(sql).bind(...binds).all();
+  const { results } = await env.MYSQL.prepare(sql).bind(...binds).all();
   return json(results);
 }
 
@@ -413,9 +413,9 @@ export async function wrcDistribution(request, env) {
   const url = new URL(request.url);
   const season = queryInt(url, 'season', null);
   if (season === null) return missingSeason();
-  const minPa = await effMinPa(env.DB, season, queryInt(url, 'min_pa', 100));
+  const minPa = await effMinPa(env.MYSQL, season, queryInt(url, 'min_pa', 100));
 
-  const { results } = await env.DB.prepare(`
+  const { results } = await env.MYSQL.prepare(`
     SELECT wRC_home, wRC_half, wRC_weighted
     FROM wrc_plus_comparison
     WHERE PA >= ? AND season = ?

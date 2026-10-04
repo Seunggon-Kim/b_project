@@ -101,7 +101,7 @@ test('JSON 한 칸으로 읽고, 응답은 보통 질의와 같습니다', async
     if (sql.includes('GROUP_CONCAT')) return [{ n: 2, j: JSON_TEXT }];
     throw new Error(`예상 밖 질의: ${sql}`);
   });
-  const env = { DB: db };
+  const env = { MYSQL: db };
   const res = await playerArsenal(new Request('https://x/players/65543/arsenal?season=2019'), env, {}, { id: '65543' });
   const body = await res.text();
   assert.equal(body, JSON.stringify({ player_id: '65543', arsenal: viaMysql2(TEXT_ROWS), count: 2 }));
@@ -120,7 +120,7 @@ test('묶은 글자를 못 풀면 pbp_id 순서의 보통 질의로 다시 읽�
   const warned = [];
   console.warn = (...a) => warned.push(a);
   try {
-    const env = { DB: db };
+    const env = { MYSQL: db };
     const res = await playerArsenal(new Request('https://x/players/65543/arsenal?season=2019'), env, {}, { id: '65543' });
     assert.deepEqual(await res.json(), { player_id: '65543', arsenal: plain, count: 2 });
   } finally {

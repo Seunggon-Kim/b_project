@@ -20,7 +20,7 @@ async function one(db, sql) {
 
 export async function dashboardStats(request, env) {
   try {
-    const db = env.DB;
+    const db = env.MYSQL;
 
     // 원본은 이 네 값을 play_by_play 풀스캔으로 얻었습니다. 한 번 호출에
     // 229,667 × 4 = 약 92만 행을 읽었고, 이 엔드포인트가 홈·팀통계·데이터

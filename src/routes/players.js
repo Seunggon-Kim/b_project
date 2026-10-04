@@ -90,8 +90,8 @@ export async function playersSearch(request, env) {
   // 상세 페이지와 같은 이유로 소속을 그 시즌 기록에서 가져옵니다.
   // `players.team_id` 는 아무도 채우지 않아 대부분 비어 있습니다.
   // 검색 결과만 '-' 로 남으면 상세 페이지와 어긋나 보입니다.
-  const cur = await currentSeason(env.DB);
-  const { results } = await env.DB
+  const cur = await currentSeason(env.MYSQL);
+  const { results } = await env.MYSQL
     .prepare(
       `SELECT p.*, COALESCE((${LATEST_TEAM_SQL}), p.team_id) AS team_id,
               CASE WHEN (${LATEST_SEASON_SQL}) >= ? THEN 1 ELSE 0 END AS is_active
@@ -109,7 +109,7 @@ export async function playersSearch(request, env) {
  * 다른 엔드포인트처럼 감싸지 않습니다.
  */
 export async function playerDetail(request, env, ctx, params) {
-  const db = env.DB;
+  const db = env.MYSQL;
   const player = await robustPlayerLookup(db, params.id);
   if (!player) {
     // 원본은 HTTPException(404, "Player not found") 를 던집니다.
@@ -356,7 +356,7 @@ async function arsenalRowsMysql(db, binds) {
 export async function playerArsenal(request, env, ctx, params) {
   const playerId = params.id;
   try {
-    const db = env.DB;
+    const db = env.MYSQL;
     const player = await robustPlayerLookup(db, playerId);
     if (!player) {
       // 원본은 404 가 아니라 200 + error 를 돌려줍니다.
@@ -475,7 +475,7 @@ function round1(x) {
 export async function playerUsage(request, env, ctx, params) {
   const playerId = params.id;
   try {
-    const db = env.DB;
+    const db = env.MYSQL;
     const player = await robustPlayerLookup(db, playerId);
     if (!player) return json({ error: 'Player not found' });
 

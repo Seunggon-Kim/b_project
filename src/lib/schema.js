@@ -15,7 +15,7 @@ export function sqliteTypeOf(dataType) {
 // `meta_` 로 시작하는 표는 읽기량을 줄이려고 만든 내부 표(`meta_table_counts`
 // 등)라 사용자에게 보일 이유가 없어 뺍니다.
 export async function tableNames(env) {
-  const { results } = await env.DB.prepare(
+  const { results } = await env.MYSQL.prepare(
     'SELECT table_name AS name FROM information_schema.tables '
     + "WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' "
     + "AND table_name NOT LIKE 'meta\\_%' ORDER BY table_name",
@@ -26,7 +26,7 @@ export async function tableNames(env) {
 export async function tableColumns(env, table) {
   // MySQL 8 은 information_schema 의 열 이름을 대문자로 돌려줍니다
   // (COLUMN_NAME 등). 별칭을 모두 붙여 이름을 고정합니다.
-  const { results } = await env.DB.prepare(
+  const { results } = await env.MYSQL.prepare(
     'SELECT column_name AS name, data_type AS dtype, column_key AS ckey, '
     + 'is_nullable AS nullable FROM information_schema.columns '
     + 'WHERE table_schema = DATABASE() AND table_name = ? ORDER BY ordinal_position',
@@ -47,7 +47,7 @@ export async function tableColumns(env, table) {
  * (같은 information_schema.columns 의 행 수).
  */
 export async function columnCounts(env) {
-  const { results } = await env.DB.prepare(
+  const { results } = await env.MYSQL.prepare(
     'SELECT table_name AS name, COUNT(*) AS n FROM information_schema.columns '
     + 'WHERE table_schema = DATABASE() GROUP BY table_name',
   ).all();
@@ -56,7 +56,7 @@ export async function columnCounts(env) {
 
 export async function tableExists(env, name) {
   try {
-    const row = await env.DB.prepare(
+    const row = await env.MYSQL.prepare(
       'SELECT 1 AS x FROM information_schema.tables '
       + 'WHERE table_schema = DATABASE() AND table_name = ?',
     ).bind(name).first();

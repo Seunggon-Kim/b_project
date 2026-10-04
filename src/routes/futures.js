@@ -29,7 +29,7 @@ const FUTURES_SB_URL = 'https://www.koreabaseball.com/ws/Main.asmx/GetKboGameLis
  * D1 을 한 번 읽습니다. 13행짜리 작은 표라 쿼리 1개면 됩니다.
  */
 async function futuresTeamsMap(env) {
-  const { results } = await env.DB.prepare(
+  const { results } = await env.MYSQL.prepare(
     'SELECT code, display_name, division FROM futures_teams',
   ).all();
   return new Map(results.map((r) => [r.code, r]));
@@ -265,10 +265,10 @@ export async function futures(request, env) {
  */
 async function attachPlayerIds(games, env) {
   const names = collectNames(games);
-  if (!names.length || !env || !env.DB) return;
+  if (!names.length || !env || !env.MYSQL) return;
   try {
     const marks = names.map(() => '?').join(',');
-    const { results } = await env.DB.prepare(
+    const { results } = await env.MYSQL.prepare(
       'SELECT player_id, player_name, team FROM futures_season_stats '
       + `WHERE season = (SELECT MAX(season) FROM futures_season_stats) `
       + `AND player_name IN (${marks})`,

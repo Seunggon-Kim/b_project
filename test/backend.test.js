@@ -5,18 +5,18 @@ import {
   withBackend, closeAfterBody, finalizeResponse,
 } from '../src/lib/backend.js';
 
-test('요청마다 MySQL 어댑터를 만들어 env 사본의 DB 에 끼웁니다', async () => {
+test('요청마다 MySQL 어댑터를 만들어 env 사본의 MYSQL 에 끼웁니다', async () => {
   let closed = false;
   const fake = { close: async () => { closed = true; } };
   const env = { HYPERDRIVE: {}, ADMIN_TOKEN: 'x' };
   let made = 0;
   const b = withBackend(env, (e) => { made += 1; assert.equal(e, env); return fake; });
   assert.equal(made, 1);
-  assert.equal(b.env.DB, fake);
+  assert.equal(b.env.MYSQL, fake);
   assert.equal(b.env.ADMIN_TOKEN, 'x');
   assert.equal(b.db, fake);
   // 원래 env 는 바꾸지 않습니다.
-  assert.equal(env.DB, undefined);
+  assert.equal(env.MYSQL, undefined);
   await b.done();
   assert.equal(closed, true);
 });
