@@ -2,6 +2,7 @@ import { json, dbError } from '../lib/respond.js';
 import { regularSeasonSql } from '../lib/gametype.js';
 import { queryInt } from '../lib/router.js';
 import { shardOf, seasonDateRange } from '../lib/shard.js';
+import { isMysql } from '../lib/backendflag.js';
 
 /**
  * 바깥 `p` 행의 가장 최근 시즌 소속을 뽑는 조각입니다.
@@ -244,6 +245,109 @@ export function latestTeam(batterRows, pitcherRows) {
   return best ? best.player_team : null;
 }
 
+/** 구종 카드의 열입니다. 응답 객체의 키 순서도 이 순서입니다. */
+export const ARSENAL_COLUMNS = [
+  'pitch_type', 'px', 'pz', 'speed', 'pitch_result',
+  'pfx_x', 'pfx_z', 'game_date', 'x0', 'z0', 'sz_top', 'sz_bot',
+];
+
+const ARSENAL_SELECT = ARSENAL_COLUMNS.map((c) => `pbp.${c}`).join(', ');
+
+// 묶는 값은 (투수 ID, 시즌 첫날, 다음 시즌 첫날) 순서입니다.
+const ARSENAL_FROM = `
+      FROM play_by_play pbp
+      WHERE pbp.pitcher_ID = ?
+      AND pbp.game_date >= ? AND pbp.game_date < ?
+      AND ${regularSeasonSql('pbp')}
+      AND pbp.px IS NOT NULL
+      AND pbp.pz IS NOT NULL
+      AND pbp.pitch_type IS NOT NULL
+      AND pbp.pitch_type NOT IN ('', '-', 'null')`;
+
+// GROUP_CONCAT 결과의 최대 길이(바이트)입니다. 기본값(1024)이면 잘리므로
+// 이 질의에서만 늘립니다(SET_VAR 힌트). 가장 많이 던진 투수 시즌(2020 년
+// 3,523구)이 약 31만 바이트라 넉넉합니다. 결과 한 행은 max_allowed_packet
+// (32MB)을 넘을 수 없으니 그보다 크게 잡아도 뜻이 없습니다.
+export const ARSENAL_JSON_MAX = 32 * 1024 * 1024;
+
+/**
+ * MySQL 의 구종 질의입니다. 공 한 개를 JSON 배열 하나로 만들고 그것들을
+ * 쉼표로 이은 글자 한 칸과 공 수를 받습니다.
+ *
+ * Worker CPU 를 줄이려는 것입니다(무료 플랜은 요청당 10ms). 공 3천 개를
+ * 보통 행으로 받으면 mysql2 가 3천 행 x 12칸을 하나씩 해석합니다. 글자
+ * 한 칸이면 런타임의 JSON.parse 한 번입니다.
+ *
+ * 순서는 pbp_id 입니다. 예전 질의(ORDER BY 없음)는 idx_pbp_pitcher 를
+ * 타서 (pitcher_ID, pbp_id) 순서로 읽었으므로 같은 순서입니다(EXPLAIN 과
+ * 실제 결과로 확인). GROUP_CONCAT 의 ORDER BY 는 순서가 보장됩니다.
+ */
+export function arsenalJsonSql() {
+  return `SELECT /*+ SET_VAR(group_concat_max_len = ${ARSENAL_JSON_MAX}) */
+      COUNT(*) AS n,
+      GROUP_CONCAT(JSON_ARRAY(${ARSENAL_SELECT}) ORDER BY pbp.pbp_id SEPARATOR ',') AS j
+    ${ARSENAL_FROM}`;
+}
+
+/**
+ * arsenalJsonSql 의 한 행(n, j)을 응답 행 배열로 바꿉니다.
+ *
+ * 공 수(n)와 풀어 낸 배열 길이가 다르거나 글자가 JSON 이 아니면(잘렸으면)
+ * null 을 돌려줍니다. 부르는 쪽이 보통 질의로 다시 읽습니다.
+ *
+ * 값은 보통 질의와 같습니다. 실수 열(px·speed 등)은 소수 셋째 자리까지인
+ * 짧은 값이라, JSON.parse 가 읽은 값과 mysql2 가 글자 프로토콜에서 읽은
+ * 값이 같습니다(이 필터를 지나는 play_by_play 227만 행 x 12칸을 Object.is
+ * 로 대조, 차이 0). 17자리짜리 실수라면 mysql2 가 끝자리를 다르게 읽을 수
+ * 있습니다(lib/jsonrows.js 설명). game_date(INT)·글자 열도 같습니다. 키
+ * 순서는 ARSENAL_COLUMNS 입니다.
+ */
+export function arsenalFromJson(row) {
+  // 집계 질의라 행은 늘 하나입니다. 없으면 이상한 것이니 보통 질의로 물러섭니다.
+  if (!row) return null;
+  const n = Number(row.n);
+  if (row.j === null || row.j === undefined) return n === 0 ? [] : null;
+  if (typeof row.j !== 'string') return null;
+  let arrs;
+  try {
+    arrs = JSON.parse(`[${row.j}]`);
+  } catch {
+    return null;
+  }
+  if (arrs.length !== n) return null;
+  const out = new Array(n);
+  for (let i = 0; i < n; i += 1) {
+    const a = arrs[i];
+    out[i] = {
+      pitch_type: a[0],
+      px: a[1],
+      pz: a[2],
+      speed: a[3],
+      pitch_result: a[4],
+      pfx_x: a[5],
+      pfx_z: a[6],
+      game_date: a[7],
+      x0: a[8],
+      z0: a[9],
+      sz_top: a[10],
+      sz_bot: a[11],
+    };
+  }
+  return out;
+}
+
+/** MySQL 에서 구종 행을 읽습니다. 묶은 글자를 못 풀면 보통 질의로 읽습니다. */
+async function arsenalRowsMysql(pdb, binds) {
+  const rows = arsenalFromJson(await pdb.prepare(arsenalJsonSql()).bind(...binds).first());
+  if (rows) return rows;
+  // 응답은 같고 CPU 만 더 듭니다. tail 에서 보이게 남깁니다.
+  console.warn('arsenal: GROUP_CONCAT 결과를 못 풀어 보통 질의로 읽습니다', binds[0], binds[1]);
+  const { results } = await pdb
+    .prepare(`SELECT ${ARSENAL_SELECT} ${ARSENAL_FROM} ORDER BY pbp.pbp_id`)
+    .bind(...binds).all();
+  return results;
+}
+
 /**
  * 원본 api/main.py:214-248 입니다. 투수의 구종 데이터입니다.
  *
@@ -273,19 +377,10 @@ export async function playerArsenal(request, env, ctx, params) {
 
     // 정규시즌 공만 셉니다(포스트시즌·올스타전 제외, lib/gametype.js). 선수
     // 분석 화면의 구종 카드가 정규시즌 기록과 같은 기준이 되게 합니다(2026-10-04).
-    const { results } = await pdb.prepare(`
-      SELECT pbp.pitch_type, pbp.px, pbp.pz, pbp.speed, pbp.pitch_result,
-             pbp.pfx_x, pbp.pfx_z, pbp.game_date, pbp.x0, pbp.z0,
-             pbp.sz_top, pbp.sz_bot
-      FROM play_by_play pbp
-      WHERE pbp.pitcher_ID = ?
-      AND pbp.game_date >= ? AND pbp.game_date < ?
-      AND ${regularSeasonSql('pbp')}
-      AND pbp.px IS NOT NULL
-      AND pbp.pz IS NOT NULL
-      AND pbp.pitch_type IS NOT NULL
-      AND pbp.pitch_type NOT IN ('', '-', 'null')
-    `).bind(player.player_id, range.from, range.to).all();
+    const binds = [player.player_id, range.from, range.to];
+    const results = isMysql(env)
+      ? await arsenalRowsMysql(pdb, binds)
+      : (await pdb.prepare(`SELECT ${ARSENAL_SELECT} ${ARSENAL_FROM}`).bind(...binds).all()).results;
 
     // 원본은 요청받은 player_id 를 그대로 돌려줍니다. DB 에서 찾은 것이
     // 아닙니다. 문자열과 정수가 섞여 있어 값이 다를 수 있습니다.
