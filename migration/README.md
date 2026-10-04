@@ -7,6 +7,8 @@
 - 2026-10-04: 수집 쪽에서 D1 을 걷어냈습니다. D1 에 쓰거나 D1 을 읽던 도구
   (`d1_to_sqlite.py`, `load_to_d1.py`, `export_to_d1.py`, `shard_*.py`,
   `verify_d1.py`, `mysql/reconcile.py` 등)는 지웠습니다. 필요하면 git 기록에서 찾으십시오.
+- 2026-10-04: API Worker 에서도 D1 을 걷어냈습니다(D1 바인딩·`src/lib/shard.js`·샤드
+  배정표 `shard_plan.json`). play_by_play 시즌 범위는 `src/lib/pbpseasons.js` 가 정합니다.
 
 ## 지금 쓰는 것
 
@@ -52,8 +54,6 @@
 
 ## 남겨 둔 것
 
-- `shard_plan.json`: D1 시절 play_by_play 샤드 배정표입니다. Worker 쪽 사본(`src/lib/shard.js`)과
-  맞는지 `test/shard.test.js` 가 봅니다. Worker 에서 D1 을 걷어낼 때 함께 지웁니다.
 - `*.sql`(`add_indexes.sql`, `delete_*.sql`, `fix_game_type_2016_2017.sql`, `roster_schema.sql`):
   D1 시절 손으로 한 번 돌린 SQL 기록입니다. 코드는 이 파일들을 읽지 않습니다.
 

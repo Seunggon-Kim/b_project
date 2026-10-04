@@ -5,11 +5,10 @@
 //
 // --unordered 를 붙이면 배열을 순서 없는 다중집합으로 견줍니다(동점 행의
 // 순서처럼 DB 마다 다를 수 있는 순서만 다른 경우를 가려냅니다). 기본은
-// 순서까지 견줍니다. 운영 ↔ 스테이징-D1 대조는 기본(순서 있음)으로 돌립니다.
+// 순서까지 견줍니다. 운영 ↔ 스테이징 대조는 기본(순서 있음)으로 돌립니다.
 //
 // 캐시를 피하려고 URL 마다 `_cmp=<시각>` 을 붙입니다(라우트는 모르는
-// 매개변수를 무시합니다). 그만큼 DB 를 실제로 읽으니 D1 쪽은 하루 한도를
-// 보고 돌립니다.
+// 매개변수를 무시합니다). 그만큼 양쪽 모두 DB(MySQL)를 실제로 읽습니다.
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
