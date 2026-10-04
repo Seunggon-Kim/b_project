@@ -140,7 +140,8 @@
                 <div id="pitch-arsenal-section" class="detailed-stats-container fade-in hidden">
                     <div class="section-header-flex">
                         <h3 class="card-title mb-0">Pitch Arsenal</h3>
-                        <div class="flex-group gap-3">
+                        <div class="flex-group gap-3 pa-ars-controls">
+                            <select id="pa-arsenal-season" class="pa-move-season" aria-label="투구 분포 시즌"></select>
                             <div class="view-mode-selector">
                                 <button id="mode-contour" class="mode-btn active"
                                     onclick="setPitchViewMode('contour')">Contour</button>
@@ -171,6 +172,9 @@
     <script src="../js/player-analytics/quicklook.js"></script>
     <script src="../js/player-analytics/percentile.js"></script>
     <script src="../js/player-analytics/movement.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-array@3/dist/d3-array.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-contour@4/dist/d3-contour.min.js"></script>
+    <script src="../js/player-analytics/arsenal.js"></script>
     <script>
 
         // ===== Theme-aware chart helpers =====
@@ -186,19 +190,6 @@
                 isDark: document.documentElement.getAttribute('data-theme') === 'dark',
             };
         }
-        // Re-render charts when theme changes
-        new MutationObserver(() => {
-            if (typeof lastArsenalData !== 'undefined' && lastArsenalData) {
-                // arsenal sub-charts
-                const types = [...new Set(lastArsenalData.map(p => p.pitch_type))];
-                types.forEach(t => {
-                    const id = `canvas-${t.replace(/\s+/g, '-')}`;
-                    const subset = lastArsenalData.filter(p => p.pitch_type === t);
-                    if (typeof renderArsenalChart === 'function') renderArsenalChart(id, subset);
-                });
-            }
-        }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-
         let searchTimeout;
         let currentPlayer = null;
         let currentPitchViewMode = 'contour';
@@ -562,6 +553,7 @@
          * 없는 것인지 고장인지 구분되지 않습니다.
          */
         function hidePbpSections() {
+            arsToken++;
             ['detailed-stats-section', 'advanced-stats-section',
              'pitch-arsenal-section'].forEach(id => {
                 const el = document.getElementById(id);
@@ -1041,36 +1033,13 @@
                     advancedContent.innerHTML = createTable(advancedHeaders, advancedTableRows);
                     paintPercentileColors(player, pctToken).catch(err => console.warn('percentile paint failed:', err));
 
-                    // --- Pitch Arsenal Section (Pitching) ---
-                    console.log("Fetching Arsenal data...");
-                    const arsenalSection = document.getElementById('pitch-arsenal-section');
-                    const arsenalGrid = document.getElementById('pitch-arsenal-grid');
-
-                    // 위 무브먼트 카드와 같은 시즌(처음 연도)을 씁니다. 목록이 비면(2016 이전만) 부르지 않고 감춥니다.
-                    const lowerSeason = window.PlayerAnalytics.movement.seasonsFor(player)[0];
-                    if (!lowerSeason) {
-                        arsenalSection.classList.add('hidden');
-                    } else try {
-                        const arsenalRes = await getArsenalShared(playerId, lowerSeason) || {};
-                        const arsenalData = arsenalRes.arsenal || [];
-                        lastArsenalData = arsenalData; // Store for mode switching
-                        console.log("Arsenal total count:", arsenalData.length);
-
-                        if (arsenalData.length > 0) {
-                            renderPitchArsenalGrid();
-                        } else {
-                            console.log("No pitch arsenal data found for player.");
-                            arsenalSection.classList.add('hidden');
-                        }
-
-                    } catch (err) {
-                        console.error("Error loading arsenal data:", err);
-                        arsenalSection.classList.add('hidden');
-                    }
+                    // --- Pitch Arsenal Section (Pitching): 시즌은 따로 고릅니다 ---
+                    setupArsenalSection(player, playerId);
 
                 } else {
                     detailedSection.classList.add('hidden');
                     document.getElementById('advanced-stats-section').classList.add('hidden');
+                    arsToken++;
                     document.getElementById('pitch-arsenal-section').classList.add('hidden');
                 }
 
@@ -1089,7 +1058,7 @@
 
         function setPitchViewMode(mode) {
             currentPitchViewMode = mode;
-            document.querySelectorAll('#pitch-arsenal-section .view-mode-selector:first-child .mode-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('#mode-contour, #mode-point').forEach(btn => btn.classList.remove('active'));
             const activeBtn = document.getElementById(`mode-${mode}`);
             if (activeBtn) activeBtn.classList.add('active');
             renderPitchArsenalGrid();
@@ -1097,172 +1066,66 @@
 
         function setPitchPerspective(persp) {
             currentPitchPerspective = persp;
-            document.querySelectorAll('#pitch-arsenal-section .view-mode-selector:last-child .mode-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('#persp-catcher, #persp-pitcher').forEach(btn => btn.classList.remove('active'));
             const activeBtn = document.getElementById(`persp-${persp}`);
             if (activeBtn) activeBtn.classList.add('active');
             renderPitchArsenalGrid();
         }
 
-        function renderPitchArsenalGrid() {
-            const arsenalGrid = document.getElementById('pitch-arsenal-grid');
-            const arsenalSection = document.getElementById('pitch-arsenal-section');
-            if (!arsenalGrid || !lastArsenalData || lastArsenalData.length === 0) return;
+        // --- Pitch Arsenal(투구 위치 분포) ---------------------------------
+        // 시즌은 무브먼트와 따로 고릅니다. 늦게 온 응답은 순번(arsToken)으로 버립니다.
+        let arsToken = 0;
 
-            arsenalSection.classList.remove('hidden');
-            arsenalGrid.innerHTML = '';
-
-            const groups = {};
-            lastArsenalData.forEach(p => {
-                if (!groups[p.pitch_type]) groups[p.pitch_type] = [];
-                groups[p.pitch_type].push(p);
-            });
-
-            const sortedTypes = Object.keys(groups).sort((a, b) => groups[b].length - groups[a].length);
-            const totalPitches = lastArsenalData.length;
-
-            sortedTypes.forEach(type => {
-                const pitches = groups[type];
-                const percentage = ((pitches.length / totalPitches) * 100).toFixed(1);
-                const chartId = `canvas-${type.replace(/\s+/g, '-')}`;
-
-                const item = document.createElement('div');
-                item.className = 'pitch-chart-item fade-in';
-                item.innerHTML = `
-                    <div class="pitch-chart-title">${type} - ${pitches.length}구 (${percentage}%)</div>
-                    <div class="pitch-canvas-wrapper">
-                        <canvas id="${chartId}" class="pitch-canvas"></canvas>
-                    </div>
-                `;
-                arsenalGrid.appendChild(item);
-                renderArsenalChart(chartId, pitches);
-            });
+        function setupArsenalSection(player, playerId) {
+            const section = document.getElementById('pitch-arsenal-section');
+            const select = document.getElementById('pa-arsenal-season');
+            const seasons = window.PlayerAnalytics.movement.seasonsFor(player);
+            arsToken++;
+            lastArsenalData = [];
+            if (!seasons.length) { section.classList.add('hidden'); return; }
+            select.innerHTML = seasons.map(y => `<option value="${y}">${y}</option>`).join('');
+            select.value = String(seasons[0]);
+            select.onchange = () => loadArsenal(playerId, Number(select.value));
+            loadArsenal(playerId, seasons[0]);
         }
 
-        function renderArsenalChart(canvasId, pitches) {
-            const canvas = document.getElementById(canvasId);
-            if (!canvas) return;
-
-            const ctx = canvas.getContext('2d');
-            canvas.width = 300;
-            canvas.height = 360;
-            const W = canvas.width;
-            const H = canvas.height;
-
-            const PITCH_COLORS = {
-                '너클볼': '#3C44CD', '스위퍼': '#DDB33A', '슬러브': '#93AFD4',
-                '싱커': '#FE9D00', '투심': '#FE9D00', '직구': '#D22D49',
-                '체인지업': '#1DBE3A', '커브': '#00D1ED', '커터': '#933F2C',
-                '포크': '#3BACAC', '스플리터': '#3BACAC', '슬라이더': '#EEE716'
-            };
-
-            const isPitcherMode = currentPitchPerspective === 'pitcher';
-
-            const L_val = -0.708333, R_val = 0.708333, Bot_val = 1.5, Top_val = 3.5;
-            // Add padding to yMin (User Request: 여유 줄 수 있을까?)
-            const xMin = -1.5 - 0.7, xMax = 1.5 + 0.7;
-            const yMin = -1.8, yMax = 5.0;
-
-            const transformX = (x) => (x - xMin) / (xMax - xMin) * W;
-            const transformY = (y) => H - (y - yMin) / (yMax - yMin) * H;
-
-            const pitchType = pitches[0].pitch_type;
-            const colorKey = pitchType === '싱커' ? '투심' : pitchType;
-            const baseColor = PITCH_COLORS[colorKey] || '#3b82f6';
-
-            // Filter and potentially flip X for Pitcher View
-            const validPitches = pitches.map(p => {
-                const px = parseFloat(p.px);
-                const pz = parseFloat(p.pz);
-                return {
-                    px: isPitcherMode ? -px : px,
-                    pz: pz
-                };
-            }).filter(p => !isNaN(p.px) && !isNaN(p.pz));
-
-            if (currentPitchViewMode === 'contour' && validPitches.length > 0) {
-                const gridSize = 35, sigma = 0.35;
-                const gridStepX = (xMax - xMin) / gridSize;
-                const gridStepY = (yMax - yMin) / gridSize;
-                let grid = [];
-
-                for (let i = 0; i < gridSize; i++) {
-                    for (let j = 0; j < gridSize; j++) {
-                        const gx = xMin + (i + 0.5) * gridStepX;
-                        const gy = yMin + (j + 0.5) * gridStepY;
-                        let dens = 0;
-                        validPitches.forEach(p => {
-                            const dx = gx - p.px, dy = gy - p.pz;
-                            dens += Math.exp(-(dx * dx + dy * dy) / (2 * sigma * sigma));
-                        });
-                        grid.push({ x: gx, y: gy, val: dens });
-                    }
-                }
-
-                const maxDens = Math.max(...grid.map(g => g.val));
-                if (maxDens > 0) {
-                    const cellW = (W / gridSize) + 1, cellH = (H / gridSize) + 1;
-                    const levels = [0.1, 0.25, 0.4, 0.6, 0.8];
-                    levels.forEach((lv, idx) => {
-                        ctx.fillStyle = baseColor;
-                        ctx.globalAlpha = 0.15 + (idx * 0.15);
-                        grid.forEach(g => {
-                            if (g.val >= maxDens * lv) {
-                                ctx.fillRect(transformX(g.x - gridStepX / 2), transformY(g.y + gridStepY / 2), cellW, cellH);
-                            }
-                        });
-                    });
-                    ctx.globalAlpha = 1.0;
-                }
-            } else if (validPitches.length > 0) {
-                validPitches.forEach(p => {
-                    ctx.beginPath();
-                    ctx.arc(transformX(p.px), transformY(p.pz), 3, 0, Math.PI * 2);
-                    ctx.fillStyle = baseColor;
-                    ctx.globalAlpha = 0.6;
-                    ctx.fill();
-                    ctx.strokeStyle = _AC.pointStroke;
-                    ctx.lineWidth = 0.5;
-                    ctx.stroke();
-                });
-                ctx.globalAlpha = 1.0;
+        async function loadArsenal(playerId, season) {
+            const section = document.getElementById('pitch-arsenal-section');
+            const grid = document.getElementById('pitch-arsenal-grid');
+            const token = ++arsToken;
+            lastArsenalData = [];
+            section.classList.remove('hidden');
+            grid.innerHTML = createLoadingSpinner();
+            let rows = [];
+            try {
+                const res = await getArsenalShared(playerId, season) || {};
+                rows = res.arsenal || [];
+            } catch (err) {
+                console.error('Error loading arsenal data:', err);
             }
+            if (token !== arsToken) return;  // 그사이 다른 선수·시즌을 골랐습니다.
+            lastArsenalData = rows;
+            renderPitchArsenalGrid();
+        }
 
-            // --- Draw Overlays (Strike Zone & Plate) on TOP ---
-            const _AC = getThemeColors(); ctx.strokeStyle = _AC.stroke;
-            ctx.lineWidth = 1.8;
-            ctx.setLineDash(_AC.isDark ? [] : [4, 3]);
-            // Strike Zone
-            ctx.strokeRect(transformX(L_val), transformY(Top_val), transformX(R_val) - transformX(L_val), transformY(Bot_val) - transformY(Top_val));
-
-            // Home Plate
-            const offset = 0.1;
-            const L_p = L_val + offset, L_m = L_val - offset;
-            const R_p = R_val + offset, R_m = R_val - offset, Center = 0;
-
-            // Perspective logic for Plate: y values
-            // Original: S_h=0, M_h=-0.6, E_h=-1.0 (Points DOWN)
-            const S_h = 0;
-            const plateX = [R_m, L_p, L_m, Center, R_p, R_m];
-
-            // Flip plate pointing if Pitcher Mode (User: 홈플레이트도 180도 회전시키면 될 거 같은데)
-            let plateY;
-            if (isPitcherMode) {
-                // Tip at 0, Base at -1.0 (Points UP towards pitcher/camera, grounded at same level)
-                plateY = [-1.0, -1.0, -0.4, 0, -0.4, -1.0];
-            } else {
-                // Base at 0, Tip at -1.0 (Points DOWN towards catcher/camera)
-                plateY = [0, 0, -0.6, -1.0, -0.6, 0];
+        function renderPitchArsenalGrid() {
+            const A = window.PlayerAnalytics.arsenal;
+            const grid = document.getElementById('pitch-arsenal-grid');
+            const section = document.getElementById('pitch-arsenal-section');
+            if (!grid) return;
+            const groups = A.groups(lastArsenalData);
+            if (!groups.length) {
+                grid.innerHTML = '<p class="text-secondary pa-ars-empty">이 시즌 투구 위치 자료가 없습니다.</p>';
+                return;
             }
-
-            ctx.setLineDash([]);
-            ctx.beginPath();
-            ctx.strokeStyle = _AC.stroke;
-            ctx.globalAlpha = 0.5;
-            ctx.lineWidth = 1.2;
-            ctx.moveTo(transformX(plateX[0]), transformY(plateY[0]));
-            plateX.forEach((px, i) => ctx.lineTo(transformX(px), transformY(plateY[i])));
-            ctx.stroke();
-            ctx.globalAlpha = 1.0;
+            const zone = A.zone(lastArsenalData);
+            const d3ok = window.d3 && window.d3.contourDensity;
+            const mode = (currentPitchViewMode === 'point' || !d3ok) ? 'point' : 'contour';
+            grid.innerHTML = groups.map(g => {
+                const cs = mode === 'contour' ? A.contours(g, currentPitchPerspective, window.d3) : null;
+                return '<div class="pitch-chart-item pa-ars-card">' + A.titleHtml(g) +
+                    A.cardSvg(g, zone, mode, currentPitchPerspective, cs) + '</div>';
+            }).join('');
         }
 
         /**
