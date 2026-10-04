@@ -1867,7 +1867,7 @@
    "written_by": []
   },
   {
-   "category": "원천 데이터",
+   "category": "수집 데이터",
    "derived_from": [],
    "desc": "퓨처스(2군) 경기 일정과 결과(일자·시각·원정/홈 팀·점수·구장·진행 상태)를 담습니다.",
    "kind": "collected",
@@ -1915,7 +1915,7 @@
    "written_by": []
   },
   {
-   "category": "원천 데이터",
+   "category": "수집 데이터",
    "derived_from": [],
    "desc": "KBO 경기별 기본 메타정보(일자·시즌·경기유형·홈/원정팀·최종 스코어·구장·관중·소요시간·날씨)",
    "kind": "collected",
@@ -2016,7 +2016,7 @@
    ]
   },
   {
-   "category": "원천 데이터",
+   "category": "수집 데이터",
    "derived_from": [],
    "desc": "지금 1군·퓨처스 등록 명단(팀·이름·등번호·포지션·선수 ID·기준일)으로, 바뀐 것만 갱신합니다.",
    "kind": "collected",
@@ -2042,7 +2042,7 @@
    ]
   },
   {
-   "category": "원천 데이터",
+   "category": "수집 데이터",
    "derived_from": [],
    "desc": "날짜별 1군 등록·말소 기록(일자·구분·팀·이름·포지션·선수 ID)으로, 2026-08-28부터 쌓습니다.",
    "kind": "collected",
@@ -2145,7 +2145,7 @@
    "written_by": []
   },
   {
-   "category": "원천 데이터",
+   "category": "수집 데이터",
    "derived_from": [],
    "desc": "KBO 투구 단위 플레이바이플레이 원천 기록(투구 트래킹·카운트·주자·수비배치·타석 결과)",
    "kind": "collected",

@@ -2,7 +2,7 @@
   "categories": [
     {
       "key": "raw",
-      "label": "원천 데이터",
+      "label": "수집 데이터",
       "tables": [
         "play_by_play",
         "games",
@@ -73,7 +73,7 @@
   ],
   "tables": {
     "games": {
-      "category": "원천 데이터",
+      "category": "수집 데이터",
       "table_desc": "KBO 경기별 기본 메타정보(일자·시즌·경기유형·홈/원정팀·최종 스코어·구장·관중·소요시간·날씨)",
       "update_freq": "매일 자동 (KST 03:30, PBP 수집 시 함께)",
       "columns": {
@@ -330,7 +330,7 @@
       }
     },
     "play_by_play": {
-      "category": "원천 데이터",
+      "category": "수집 데이터",
       "table_desc": "KBO 투구 단위 플레이바이플레이 원천 기록(투구 트래킹·카운트·주자·수비배치·타석 결과)",
       "update_freq": "매일 03:33 (daily)",
       "columns": {
@@ -592,7 +592,7 @@
       "table_desc": "구단(프랜차이즈) 정체성 표로, 프랜차이즈 ID·현재 이름·첫 시즌·마지막 시즌을 담습니다."
     },
     "futures_games": {
-      "category": "원천 데이터",
+      "category": "수집 데이터",
       "table_desc": "퓨처스(2군) 경기 일정과 결과(일자·시각·원정/홈 팀·점수·구장·진행 상태)를 담습니다."
     },
     "futures_season_stats": {
@@ -604,11 +604,11 @@
       "table_desc": "퓨처스(2군) 팀 목록으로, 팀 코드·표기명·엠블럼 코드·디비전·팀 유형을 담습니다."
     },
     "kbo_roster": {
-      "category": "원천 데이터",
+      "category": "수집 데이터",
       "table_desc": "지금 1군·퓨처스 등록 명단(팀·이름·등번호·포지션·선수 ID·기준일)으로, 바뀐 것만 갱신합니다."
     },
     "kbo_roster_moves": {
-      "category": "원천 데이터",
+      "category": "수집 데이터",
       "table_desc": "날짜별 1군 등록·말소 기록(일자·구분·팀·이름·포지션·선수 ID)으로, 2026-08-28부터 쌓습니다."
     },
     "korean_series_champion": {
