@@ -74,6 +74,9 @@ function getTeam(teams, t) {
  */
 export function accumulatePa(teams, rows) {
   for (const row of rows) {
+    // 같은 (초/말, 결과, 홈, 원정) 타석을 DB 가 세어 준 행이면 n 이 그
+    // 타석 수입니다. n 이 없으면 타석 하나입니다.
+    const n = row.n === undefined ? 1 : Number(row.n);
     const tb = row.inning_topbot;
     const res = row.pa_result;
     const bat = tb === TOP ? row.away_team_id : row.home_team_id;
@@ -81,31 +84,31 @@ export function accumulatePa(teams, rows) {
     const b = getTeam(teams, bat);
     const pp = getTeam(teams, pit);
 
-    b.PA += 1;
+    b.PA += n;
     if (TR_AB.has(res)) {
-      b.AB += 1;
-      pp.ABf += 1;
+      b.AB += n;
+      pp.ABf += n;
     }
     if (TR_HIT.has(res)) {
-      b.H += 1;
-      pp.Hd += 1;
-      if (TR_D2.has(res)) b['2B'] += 1;
-      else if (TR_D3.has(res)) b['3B'] += 1;
+      b.H += n;
+      pp.Hd += n;
+      if (TR_D2.has(res)) b['2B'] += n;
+      else if (TR_D3.has(res)) b['3B'] += n;
       else if (TR_HR.has(res)) {
-        b.HR += 1;
-        pp.HRd += 1;
+        b.HR += n;
+        pp.HRd += n;
       }
     }
     if (TR_WALK.has(res)) {
-      b.BB += 1;
-      pp.BBd += 1;
+      b.BB += n;
+      pp.BBd += n;
     }
-    if (TR_HBP.has(res)) b.HBP += 1;
-    if (TR_SACF.has(res)) b.SF += 1;
-    if (TR_SACB.has(res)) b.SH += 1;
+    if (TR_HBP.has(res)) b.HBP += n;
+    if (TR_SACF.has(res)) b.SF += n;
+    if (TR_SACB.has(res)) b.SH += n;
     if (TR_SOK.has(res)) {
-      b.SO += 1;
-      pp.SOd += 1;
+      b.SO += n;
+      pp.SOd += n;
     }
   }
   return teams;
@@ -234,12 +237,27 @@ export async function statsTeamRange(request, env) {
   const seasons = seasonsBetween(s, e);
 
   // 타석 단위 집계
+  //
+  // 타석 행(한 달에 약 1만 행)을 그대로 받으면 행을 푸는 데 Worker CPU 가
+  // 많이 듭니다(무료 플랜은 요청당 10ms). 같은 (초/말, 결과, 홈, 원정)
+  // 조합을 DB 에서 세어(n) 수백 행으로 받습니다. accumulatePa 는 n 만큼
+  // 더하므로 합계가 같습니다.
+  //
+  // 묶음 기준은 값의 바이트(HEX)입니다. MySQL 의 글자 비교 규칙
+  // (utf8mb4_0900_ai_ci)은 대소문자·악센트·전각을 같게 보아 서로 다른
+  // 글자를 한 묶음으로 합칠 수 있는데, JS 는 글자가 정확히 같아야 같은
+  // 분류로 셉니다. 바이트가 같은 묶음 안의 값은 모두 같으므로 MIN 이 곧
+  // 그 값입니다. SQLite(D1)에도 HEX·MIN 이 있어 같은 SQL 을 씁니다.
   const paRows = await fanOut(env, seasons, async (pdb) => {
     const r = await pdb.prepare(
-      'SELECT p.inning_topbot, p.pa_result, gm.home_team_id, gm.away_team_id '
+      'SELECT MIN(p.inning_topbot) AS inning_topbot, MIN(p.pa_result) AS pa_result, '
+      + 'MIN(gm.home_team_id) AS home_team_id, MIN(gm.away_team_id) AS away_team_id, '
+      + 'COUNT(*) AS n '
       + 'FROM play_by_play p JOIN games gm ON gm.game_id = p.gameID '
       + "WHERE gm.game_date>=? AND gm.game_date<=? AND gm.game_type='정규시즌' "
-      + "AND p.pa_result IS NOT NULL AND p.pa_result<>''",
+      + "AND p.pa_result IS NOT NULL AND p.pa_result<>'' "
+      + 'GROUP BY HEX(p.inning_topbot), HEX(p.pa_result), '
+      + 'HEX(gm.home_team_id), HEX(gm.away_team_id)',
     ).bind(s, e).all();
     return r.results;
   });
