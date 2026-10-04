@@ -187,13 +187,13 @@ D1 의 깨진 포스트시즌 행은 고치지 않음, 키 대신 WIF, 보강 4�
 ### 4단계 결과
 
 - **`EXTERNAL_QUERY` 는 쓸 수 없습니다.** 빅쿼리의 Cloud SQL 연합 쿼리는 MySQL 8.4 를 읽지 못합니다. 빅쿼리 쪽 MySQL 클라이언트가 `caching_sha2_password` 를 지원하지 않고, 8.4 는 `mysql_native_password` 계정을 받지 않습니다. 구글 문서에도 우회 방법이 없습니다(https://docs.cloud.google.com/bigquery/docs/cloud-sql-federated-queries). 그래서 위 계획의 Cloud SQL 연결과 `bstats_bq` 계정은 만들지 않았습니다.
-- **evan 결정: 매주 통째로 바꾸기.** 주간 작업(`weekly.yml`)이 결과 표를 MySQL 에 올린 뒤 "빅쿼리 복사" 단계에서 `migration/mysql/sqlite_to_bigquery.py` 로 표를 빅쿼리에 통째로 바꿔 넣습니다(표마다 Parquet 파일 하나, 적재 작업 하나, `WRITE_TRUNCATE`). 올린 뒤 행 수를 맞춰 봅니다. 정본은 MySQL 이고 빅쿼리는 길게는 한 주 늦은 읽기용 사본입니다. 복사가 실패하면 실행이 빨갛게 끝나지만 MySQL 적재는 그대로입니다. 실행 기록 키는 `bq_copy` 입니다.
+- **evan 결정: 매주 통째로 바꾸기.** 주간 작업(`weekly.yml`)이 결과 표를 MySQL 에 올린 뒤 "빅쿼리 복사" 단계에서 `migration/mysql/sqlite_to_bigquery.py` 로 MySQL 의 모든 표를 빅쿼리에 통째로 바꿔 넣습니다(표마다 Parquet 파일 하나, 적재 작업 하나, `WRITE_TRUNCATE`). 올린 뒤 행 수를 맞춰 봅니다. 정본은 MySQL 이고 빅쿼리는 길게는 한 주 늦은 읽기용 사본입니다. 복사가 실패하면 실행이 빨갛게 끝나지만 MySQL 적재는 그대로입니다. 실행 기록 키는 `bq_copy` 입니다.
 - 데이터셋: `bstats-kbo:bstats`, 위치 asia-northeast3. 수집 서비스 계정이 데이터셋 쓰기와 프로젝트 `roles/bigquery.jobUser` 를 가집니다. 키 없이 WIF 로 붙습니다.
-- 복사하는 표: 주간 작업이 내려받는 표(`mysql_to_sqlite.PIPELINE_TABLES` 15개) 가운데 14개입니다. 주간 계산이 로컬에서만 고치는 `team_stadium_by_season` 은 MySQL 과 달라서 뺍니다. 나머지 MySQL 표 16개(players, kbo_roster, team_season_rank, futures_*, meta_* 등)는 주간 작업이 내려받지 않아 지금은 복사하지 않습니다(아래 결정 대기 4).
+- 복사하는 표: MySQL `information_schema` 에 있는 표 전부(2026-10-04 기준 31개)입니다. 표마다 읽을 곳을 고릅니다. 주간 작업이 SQLite 로 받아 둔 표(`mysql_to_sqlite.PIPELINE_TABLES` 15개 가운데 아래 `team_stadium_by_season` 을 뺀 14개, play_by_play 포함)는 SQLite 에서 읽어 MySQL 을 한 번 더 읽지 않습니다. 받아 두지 않은 표 16개(players, kbo_roster, team_season_rank, futures_*, meta_*, pitch_run_value 등)와, 주간 계산이 로컬에서만 고치고 올리지 않는 `team_stadium_by_season` 은 MySQL 에서 바로 읽습니다(수집 계정, 읽기만, 한 스냅샷). 이 목록(`LOCAL_ONLY_EDITS`)에 빠진 표가 생기면 테스트가 실패합니다.
 - 읽는 법: 빅쿼리 콘솔에서 프로젝트 `bstats-kbo`, 위치 asia-northeast3 로 질의합니다. 예: ``SELECT season, COUNT(*) FROM `bstats-kbo.bstats.games` GROUP BY season``. 표 설명에 복사 시각(KST)이 있고, 열 설명에 MySQL 타입이 있습니다. 열 이름은 MySQL 과 같습니다(지금 바꾼 이름은 없습니다). 예약어와 같은 `self_park_factor.window` 는 백틱으로 감쌉니다. 타입은 정수 → INT64, double → FLOAT64, varchar → STRING, date → DATE, datetime → DATETIME(시간대 없음)입니다.
 - 비용: 적재 작업은 무료입니다. 저장은 월 10GiB 까지 무료이고 MySQL 전체가 약 3.6GB 라 전부 복사해도 그 안입니다. 조회는 월 1TiB 까지 무료입니다.
 - 파크팩터·wRC+·RE24 계산을 빅쿼리 SQL 로 옮기는 일은 하지 않았습니다.
-- 로컬 확인(2026-10-04): teams 14행, players 1,760행, team_season_rank 373행, games 12,671행을 표마다 3~4초에 올렸고, 빅쿼리에서 `games` 를 세어 12,671행을 확인했습니다. players·team_season_rank 는 주간 복사 대상이 아니라 그대로 두면 이날 값에 머뭅니다.
+- 로컬 확인(2026-10-04): SQLite 에서 teams 14행, MySQL 에서 players 1,760행·team_season_rank 373행·kbo_roster 617행·team_stadium_by_season 178행·team_logos 13행을 표마다 2~4초에 올렸습니다. 앞서 SQLite 에서 games 12,671행도 올렸고, 빅쿼리에서 세어 같은 수를 확인했습니다. DATE(kbo_roster.as_of)·DATETIME(players)·BYTES(team_logos.image) 적재를 모두 확인했습니다.
 
 ### 5단계: 전환과 정리
 
@@ -229,4 +229,3 @@ D1 의 깨진 포스트시즌 행은 고치지 않음, 키 대신 WIF, 보강 4�
 1. 0단계 나머지(0-3·0-4·0-5) 승인. D1 무료 유지 중 남은 큰 위험은 주 1회 파크팩터 작업(한 번에 약 800만 행)이라 전환 전까지 끄는 0-5 를 우선합니다.
 2. 결정됨: 혼합 스냅샷으로 2026-10-02 에 실행했습니다.
 3. 결정됨: 1단계 브랜치를 2026-10-02 main 에 병합했습니다.
-4. 빅쿼리에 나머지 MySQL 표(16개)도 복사할지. 주간 작업이 그 표들도 내려받게 하면(`mysql_to_sqlite` 에 전체 표 선택을 더함) 지금 스크립트가 그대로 복사합니다. 다만 `pitch_run_value`·`run_expectancy` 는 `schema_types.json` 에 없어 지금 내려받기 도구로는 받지 못합니다.

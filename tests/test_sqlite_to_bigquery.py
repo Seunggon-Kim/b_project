@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """주간 빅쿼리 복사(migration/mysql/sqlite_to_bigquery.py)를 봅니다.
 
-빅쿼리에는 붙지 않습니다. 적재는 가짜 클라이언트로 부른 모양만 봅니다.
+빅쿼리와 MySQL 에는 붙지 않습니다. 적재는 가짜 클라이언트로 부른 모양만 보고,
+MySQL 은 SQLite 에 기댄 가짜 연결로 대신합니다.
 """
 import datetime
 import decimal
@@ -12,6 +13,7 @@ import sys
 from pathlib import Path
 
 import pyarrow.parquet as pq
+import pymysql
 import pytest
 import yaml
 from google.cloud import bigquery
@@ -124,23 +126,25 @@ SPECS = {
 }
 
 
-def test_MySQL_에_없는_표와_로컬에_없는_표를_뺍니다():
+def test_MySQL_표는_모두_복사하고_읽을_곳을_고릅니다():
     local = {"games", "teams", "truncated_games", "kbo_woba_weights_by_season_bak",
              "team_stadium_by_season"}
     copy, skipped = m.plan(SPECS, local)
-    assert copy == ["games", "teams"]
+    assert copy == [("games", "sqlite"),
+                    ("players", "mysql"),                  # 로컬에 없는 표
+                    ("team_stadium_by_season", "mysql"),   # 로컬에서만 고친 표
+                    ("teams", "sqlite")]
+    # MySQL 표가 아닌 계산용 표만 건너뜁니다.
     why = dict(skipped)
-    assert "MySQL 에 없는" in why["truncated_games"]
-    assert "MySQL 에 없는" in why["kbo_woba_weights_by_season_bak"]
-    assert "로컬 SQLite 에 없습니다" in why["players"]
-    assert "build_wrc_plus" in why["team_stadium_by_season"]
+    assert set(why) == {"truncated_games", "kbo_woba_weights_by_season_bak"}
+    assert all("MySQL 에 없는" in w for w in why.values())
 
 
 def test_고른_표만_봅니다():
-    copy, skipped = m.plan(SPECS, {"games", "teams", "players"}, ["teams", "players"])
-    assert copy == ["teams", "players"] and skipped == []
+    copy, skipped = m.plan(SPECS, {"games", "teams"}, ["teams", "players"])
+    assert copy == [("teams", "sqlite"), ("players", "mysql")] and skipped == []
     copy, skipped = m.plan(SPECS, {"games"}, ["games", "nope"])
-    assert copy == ["games"] and [t for t, _ in skipped] == ["nope"]
+    assert copy == [("games", "sqlite")] and [t for t, _ in skipped] == ["nope"]
 
 
 def test_SQLite_내부_표는_목록에_없습니다(tmp_path):
@@ -176,6 +180,124 @@ def test_MySQL_열_목록을_순서대로_읽습니다():
                    "u": [("x", "date", "date", None, None)]}
 
 
+# --- 가짜 MySQL -------------------------------------------------------------
+
+class FakeMyCur:
+    def __init__(self, con, cls):
+        self.con, self.cls, self.cur = con, cls, None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        self.close()
+        return False
+
+    def close(self):
+        self.con.log.append(("close", self.cls))
+
+    def execute(self, sql, args=None):
+        self.con.log.append((sql, self.cls))
+        if "information_schema" in sql:
+            self.cur = iter([(t,) + tuple(c) for t, cols in self.con.specs.items() for c in cols])
+        elif sql.startswith("START TRANSACTION"):
+            self.cur = iter([])
+        else:
+            self.cur = self.con.db.execute(sql.replace("`", '"'))
+
+    def fetchall(self):
+        return list(self.cur)
+
+    def fetchone(self):
+        return next(iter(self.cur))
+
+    def fetchmany(self, n):
+        return self.cur.fetchmany(n)
+
+
+class FakeMySQL:
+    """pymysql 연결을 흉내 냅니다. information_schema 는 specs 로 답하고,
+    나머지 질의는 SQLite 로 넘깁니다(백틱을 큰따옴표로)."""
+
+    def __init__(self, specs, db):
+        self.specs, self.db, self.log = specs, db, []
+        self.closed = False
+
+    def cursor(self, cls=None):
+        return FakeMyCur(self, cls)
+
+    def rollback(self):
+        self.log.append("rollback")
+
+    def close(self):
+        self.closed = True
+
+
+PLAYERS_SPECS = [
+    ("player_id", "int", "int unsigned", 10, 0),
+    ("player_name", "varchar", "varchar(16)", None, None),
+    ("as_of", "date", "date", None, None),
+    ("updated_at", "datetime", "datetime", None, None),
+    ("salary", "decimal", "decimal(12,2)", 12, 2),
+    ("logo", "mediumblob", "mediumblob", None, None),
+    ("play_time", "time", "time", None, None),
+]
+
+
+def mysql_db(rows=3):
+    """가짜 MySQL 이 읽을 표를 담은 SQLite 입니다. pymysql 값 모양은 따로 봅니다."""
+    db = sqlite3.connect(":memory:", detect_types=0)
+    db.execute('CREATE TABLE "players" (%s)' % ", ".join('"%s"' % c[0] for c in PLAYERS_SPECS))
+    db.executemany('INSERT INTO "players" VALUES (?,?,?,?,?,?,?)', [
+        (i, "선수%d" % i, "2026-10-0%d" % (i % 9 + 1), "2026-10-04 01:02:03", "1234.5",
+         b"\x89PNG" if i == 0 else None, None) for i in range(rows)])
+    return db
+
+
+def test_MySQL_은_버퍼_없는_커서로_덩어리씩_읽습니다():
+    my = FakeMySQL({}, mysql_db(5))
+    cols = m.table_columns(PLAYERS_SPECS)
+    got = list(m.mysql_batches(my, "players", cols, chunk_rows=2))
+    assert [len(b) for b in got] == [2, 2, 1]
+    sql, cls = my.log[0]
+    assert cls is pymysql.cursors.SSCursor
+    assert sql.startswith("SELECT `player_id`, `player_name`") and sql.endswith("FROM `players`")
+    assert my.log[-1] == ("close", pymysql.cursors.SSCursor)
+
+
+def test_MySQL_읽기가_중간에_실패해도_커서를_닫습니다(tmp_path):
+    my = FakeMySQL({}, mysql_db(5))
+    spec = [("player_name", "int", "int", 10, 0)]                # 글자를 정수 열로: 실패
+    cols = m.table_columns(spec)
+    with pytest.raises(ValueError, match=r"^players\.player_name: "):
+        m.write_parquet(m.mysql_batches(my, "players", cols, 2), "players", cols,
+                        tmp_path / "p.parquet")
+    assert my.log[-1] == ("close", pymysql.cursors.SSCursor)
+
+
+def test_MySQL_이_주는_값_모양을_맞춥니다(tmp_path):
+    cols = m.table_columns(PLAYERS_SPECS)
+    rows = [(1, "가", datetime.date(2026, 10, 4), datetime.datetime(2026, 10, 4, 1, 2, 3),
+             decimal.Decimal("1234.50"), b"\x00", datetime.timedelta(hours=838, minutes=59, seconds=59)),
+            (2, None, None, None, None, None, -datetime.timedelta(hours=1, minutes=30))]
+    out = tmp_path / "p.parquet"
+    assert m.write_parquet([rows], "players", cols, out) == 2
+    got = pq.read_table(str(out)).to_pydict()
+    assert got["as_of"] == [datetime.date(2026, 10, 4), None]
+    assert got["updated_at"] == [datetime.datetime(2026, 10, 4, 1, 2, 3), None]
+    assert got["salary"] == [decimal.Decimal("1234.5"), None]
+    assert got["logo"] == [b"\x00", None]
+    assert got["play_time"] == ["838:59:59", "-01:30:00"]
+
+
+def test_MySQL_TIME_글자():
+    td = datetime.timedelta
+    assert m.mysql_time_text(td(hours=8, minutes=5)) == "08:05:00"
+    assert m.mysql_time_text(td(hours=838, minutes=59, seconds=59)) == "838:59:59"
+    assert m.mysql_time_text(-td(hours=1, minutes=30)) == "-01:30:00"
+    assert m.mysql_time_text(td(seconds=1, microseconds=5)) == "00:00:01.000005"
+
+
 # --- Parquet ---------------------------------------------------------------
 
 MIXED_SPECS = [
@@ -207,11 +329,15 @@ def make_db(path, rows=MIXED_ROWS, specs=MIXED_SPECS, table="mixed"):
     return sq
 
 
+def write_sqlite(sq, table, cols, out, chunk_rows=m.CHUNK_ROWS):
+    return m.write_parquet(m.sqlite_batches(sq, table, cols, chunk_rows), table, cols, out)
+
+
 def test_Parquet_을_덩어리로_나눠_쓰고_값을_맞춥니다(tmp_path):
     sq = make_db(tmp_path / "x.db")
     cols = m.table_columns(MIXED_SPECS)
     out = tmp_path / "mixed.parquet"
-    assert m.write_parquet(sq, "mixed", cols, out, chunk_rows=2) == 5
+    assert write_sqlite(sq, "mixed", cols, out, chunk_rows=2) == 5
     f = pq.ParquetFile(str(out))
     assert f.metadata.num_rows == 5
     assert f.metadata.num_row_groups == 3          # 2 + 2 + 1행
@@ -236,7 +362,7 @@ def test_Parquet_을_덩어리로_나눠_쓰고_값을_맞춥니다(tmp_path):
 def test_빈_표도_파일을_만듭니다(tmp_path):
     sq = make_db(tmp_path / "x.db", rows=[])
     out = tmp_path / "e.parquet"
-    assert m.write_parquet(sq, "mixed", m.table_columns(MIXED_SPECS), out) == 0
+    assert write_sqlite(sq, "mixed", m.table_columns(MIXED_SPECS), out) == 0
     assert pq.ParquetFile(str(out)).metadata.num_rows == 0
 
 
@@ -250,20 +376,20 @@ def test_빈_표도_파일을_만듭니다(tmp_path):
 def test_못_바꾸는_값은_표와_열_이름을_달고_실패합니다(tmp_path, bad, spec):
     sq = make_db(tmp_path / "x.db", rows=[(bad,)], specs=[spec], table="t")
     with pytest.raises(ValueError, match=r"^t\.n: "):
-        m.write_parquet(sq, "t", m.table_columns([spec]), tmp_path / "t.parquet")
+        write_sqlite(sq, "t", m.table_columns([spec]), tmp_path / "t.parquet")
 
 
 def test_SQLite_에_MySQL_열이_없으면_실패합니다(tmp_path):
     sq = make_db(tmp_path / "x.db", rows=[(1,)], specs=[("n", "int", "int", 10, 0)], table="t")
     cols = m.table_columns([("n", "int", "int", 10, 0), ("gone", "int", "int", 10, 0)])
     with pytest.raises(ValueError, match="gone"):
-        m.write_parquet(sq, "t", cols, tmp_path / "t.parquet")
+        write_sqlite(sq, "t", cols, tmp_path / "t.parquet")
 
 
 def test_열_이름은_대소문자를_가리지_않고_찾습니다(tmp_path):
     sq = make_db(tmp_path / "x.db", rows=[(1,)], specs=[("batter_id", "int", "int", 10, 0)], table="t")
     cols = m.table_columns([("batter_ID", "int", "int unsigned", 10, 0)])
-    assert m.write_parquet(sq, "t", cols, tmp_path / "t.parquet") == 1
+    assert write_sqlite(sq, "t", cols, tmp_path / "t.parquet") == 1
 
 
 # --- 적재 ------------------------------------------------------------------
@@ -310,24 +436,30 @@ class FakeClient:
 
 
 def two_table_db(tmp_path):
+    """SQLite 에 mixed·teams 가 있고, MySQL(가짜)에만 players 가 있습니다."""
     sq = make_db(tmp_path / "x.db")
     sq.execute('CREATE TABLE "teams" ("team_id", "name")')
     sq.executemany('INSERT INTO "teams" VALUES (?, ?)', [("LG", "LG"), ("SS", "삼성")])
     sq.commit()
     specs = {"mixed": MIXED_SPECS,
              "teams": [("team_id", "varchar", "varchar(16)", None, None),
-                       ("name", "varchar", "varchar(32)", None, None)]}
-    return sq, specs
+                       ("name", "varchar", "varchar(32)", None, None)],
+             "players": PLAYERS_SPECS}
+    return sq, specs, FakeMySQL(specs, mysql_db(3))
 
 
-def test_표마다_WRITE_TRUNCATE_와_명시_스키마로_올립니다(tmp_path):
-    sq, specs = two_table_db(tmp_path)
+ALL3 = [("mixed", "sqlite"), ("players", "mysql"), ("teams", "sqlite")]
+
+
+def test_표마다_WRITE_TRUNCATE_와_명시_스키마로_올립니다(tmp_path, capsys):
+    sq, specs, my = two_table_db(tmp_path)
     client = FakeClient()
     now = datetime.datetime(2026, 10, 6, 5, 47, tzinfo=m.KST)
-    res = m.copy_tables(sq, specs, ["mixed", "teams"], client, tmp_path, now=now)
-    assert [(r.table, r.rows, r.error) for r in res] == [("mixed", 5, None), ("teams", 2, None)]
-    assert [ld["table_id"] for ld in client.loads] == ["bstats-kbo.bstats.mixed",
-                                                       "bstats-kbo.bstats.teams"]
+    res = m.copy_tables(sq, my, specs, ALL3, client, tmp_path, now=now)
+    assert [(r.table, r.source, r.rows, r.error) for r in res] == [
+        ("mixed", "sqlite", 5, None), ("players", "mysql", 3, None), ("teams", "sqlite", 2, None)]
+    assert [ld["table_id"] for ld in client.loads] == [
+        "bstats-kbo.bstats.mixed", "bstats-kbo.bstats.players", "bstats-kbo.bstats.teams"]
     for ld in client.loads:
         cfg = ld["config"]
         assert cfg.write_disposition == bigquery.WriteDisposition.WRITE_TRUNCATE
@@ -338,65 +470,99 @@ def test_표마다_WRITE_TRUNCATE_와_명시_스키마로_올립니다(tmp_path)
         ("n", "INT64", "NULLABLE"), ("f", "FLOAT64", "NULLABLE"), ("s", "STRING", "NULLABLE"),
         ("d", "DATE", "NULLABLE"), ("dt", "DATETIME", "NULLABLE"),
         ("num", "NUMERIC", "NULLABLE"), ("b", "BYTES", "NULLABLE"), ("big", "INT64", "NULLABLE")]
-    assert client.updates[1] == (
+    assert client.updates[2] == (
         "MySQL bstats.teams 의 주간 사본입니다. 정본은 MySQL 이고, 주간 작업이 매주 통째로 "
         "바꿉니다. 복사 시각 2026-10-06 05:47 KST.", ["description"])
+    # MySQL 에서 읽은 표는 MySQL 에서 행 수를 셉니다.
+    assert ("SELECT COUNT(*) FROM `players`", None) in my.log
+    # 줄마다 표 이름, 읽은 곳, 행 수, 초를 찍습니다.
+    out = capsys.readouterr().out
+    assert re.search(r"players\s+mysql\s+3행\s+[\d.]+초  복사", out), out
+    assert re.search(r"teams\s+sqlite\s+2행\s+[\d.]+초  복사", out), out
     # 올린 뒤 임시 Parquet 은 지웁니다.
     assert not list(tmp_path.glob("*.parquet"))
 
 
 def test_행_수가_다르면_실패하고_나머지_표는_마저_합니다(tmp_path):
-    sq, specs = two_table_db(tmp_path)
+    sq, specs, my = two_table_db(tmp_path)
     client = FakeClient(rows_delta=-1)
-    res = m.copy_tables(sq, specs, ["mixed", "teams"], client, tmp_path)
-    assert len(client.loads) == 2
+    res = m.copy_tables(sq, my, specs, ALL3, client, tmp_path)
+    assert len(client.loads) == 3
     assert all("빅쿼리 행 수가 다릅니다" in r.error for r in res)
+    assert "mysql 3 / 빅쿼리 2" in res[1].error
+
+
+def test_읽은_쪽_행_수와_Parquet_행_수가_다르면_실패합니다(tmp_path, monkeypatch):
+    sq, specs, my = two_table_db(tmp_path)
+    monkeypatch.setattr(m, "count_rows", lambda sq, my, t, source: 99)
+    client = FakeClient()
+    res = m.copy_tables(sq, my, specs, [("players", "mysql")], client, tmp_path)
+    assert "Parquet 행 수가 다릅니다. mysql 99 / Parquet 3" in res[0].error
+    assert client.loads == []
 
 
 def test_적재_오류가_나도_나머지_표는_마저_합니다(tmp_path):
-    sq, specs = two_table_db(tmp_path)
+    sq, specs, my = two_table_db(tmp_path)
     client = FakeClient(fail={"mixed"})
-    res = m.copy_tables(sq, specs, ["mixed", "teams"], client, tmp_path)
-    assert "적재 실패" in res[0].error and res[1].error is None
-    assert m.summary_note(res) == "1개 표 2행, 실패 mixed"
+    res = m.copy_tables(sq, my, specs, ALL3, client, tmp_path)
+    assert "적재 실패" in res[0].error and res[1].error is None and res[2].error is None
+    assert m.summary_note(res) == "2개 표 5행, 실패 mixed"
 
 
 def test_dry_run_은_올리지_않습니다(tmp_path, capsys):
-    sq, specs = two_table_db(tmp_path)
-    res = m.copy_tables(sq, specs, ["teams"], None, tmp_path, dry_run=True)
-    assert res[0].error is None and res[0].rows == 2
+    sq, specs, my = two_table_db(tmp_path)
+    res = m.copy_tables(sq, my, specs, [("teams", "sqlite"), ("players", "mysql")], None,
+                        tmp_path, dry_run=True)
+    assert [(r.error, r.rows) for r in res] == [(None, 2), (None, 3)]
     out = capsys.readouterr().out
     assert "team_id" in out and "STRING" in out and "varchar(16)" in out
+    assert "play_time" in out and "MySQL time" in out
 
 
 def run_main(tmp_path, monkeypatch, client, argv=()):
-    sq, specs = two_table_db(tmp_path)
+    sq, specs, my = two_table_db(tmp_path)
     sq.execute('CREATE TABLE "truncated_games" ("game_id")')
     sq.commit()
     sq.close()
-    monkeypatch.setattr(m, "read_specs", lambda: specs)
+    monkeypatch.setattr(m, "open_mysql", lambda: my)
     monkeypatch.setattr(m, "make_client", lambda token_env=None: client)
     out = tmp_path / "gh_output.txt"
     monkeypatch.setenv("GITHUB_OUTPUT", str(out))
     code = m.main(["--db", str(tmp_path / "x.db"), *argv])
-    return code, out.read_text(encoding="utf-8") if out.exists() else ""
+    return code, out.read_text(encoding="utf-8") if out.exists() else "", my
 
 
-def test_main_은_모두_맞으면_0_이고_메모를_남깁니다(tmp_path, monkeypatch, capsys):
-    code, note = run_main(tmp_path, monkeypatch, FakeClient())
+def test_main_은_모든_MySQL_표를_복사하고_메모를_남깁니다(tmp_path, monkeypatch, capsys):
+    client = FakeClient()
+    code, note, my = run_main(tmp_path, monkeypatch, client)
     assert code == 0
-    assert note == "note=2개 표 7행\n"
-    assert "truncated_games" in capsys.readouterr().out
+    assert note == "note=3개 표 10행\n"
+    assert sorted(ld["table_id"].split(".")[-1] for ld in client.loads) == [
+        "mixed", "players", "teams"]
+    out = capsys.readouterr().out
+    assert "truncated_games" in out                      # MySQL 표가 아니라 건너뜀
+    assert "SQLite 에서 2개, MySQL 에서 1개" in out
+    # MySQL 은 한 스냅샷에서 읽기만 하고 닫습니다.
+    assert ("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY", None) in my.log
+    assert "rollback" in my.log and my.closed
 
 
 def test_main_은_행_수가_다르면_0_이_아닙니다(tmp_path, monkeypatch):
-    code, note = run_main(tmp_path, monkeypatch, FakeClient(rows_delta=1))
-    assert code == 1 and "실패 mixed, teams" in note
+    code, note, _ = run_main(tmp_path, monkeypatch, FakeClient(rows_delta=1))
+    assert code == 1 and "실패 mixed, players, teams" in note
 
 
-def test_main_은_고른_표가_없으면_멈춥니다(tmp_path, monkeypatch):
+def test_main_은_MySQL_에_없는_표를_고르면_멈춥니다(tmp_path, monkeypatch):
     with pytest.raises(SystemExit, match="nope"):
         run_main(tmp_path, monkeypatch, FakeClient(), ["--tables", "teams,nope"])
+
+
+def test_main_은_고른_표를_읽을_곳에서_읽습니다(tmp_path, monkeypatch, capsys):
+    client = FakeClient()
+    code, _, _ = run_main(tmp_path, monkeypatch, client, ["--tables", "players,teams"])
+    assert code == 0
+    assert [ld["table_id"].split(".")[-1] for ld in client.loads] == ["players", "teams"]
+    assert "SQLite 에서 1개, MySQL 에서 1개" in capsys.readouterr().out
 
 
 def test_토큰_환경_변수로_자격을_만듭니다(monkeypatch):
@@ -423,11 +589,12 @@ def weekly_park_scripts():
                                  WEEKLY.read_text(encoding="utf-8"))))
 
 
-def test_주간_계산이_고치는_MySQL_표는_올리거나_복사에서_뺍니다():
+def test_주간_계산이_로컬에서만_고치는_MySQL_표는_MySQL_에서_읽습니다():
     """로컬에서 고친 표를 MySQL 에 올리지 않으면 SQLite 와 MySQL 이 다릅니다.
 
-    그런 표를 빅쿼리에 복사하면 MySQL 에 없는 값이 빅쿼리에 들어갑니다.
-    sqlite_to_d1.DERIVED_TABLES(올림)나 LOCAL_ONLY_EDITS(복사에서 뺌)에 있어야 합니다.
+    그런 표를 SQLite 에서 복사하면 MySQL 에 없는 값이 빅쿼리에 들어갑니다.
+    sqlite_to_d1.DERIVED_TABLES(올림)에 있거나, LOCAL_ONLY_EDITS 에 있어 MySQL 에서
+    읽어야 합니다. 건너뛰지 않습니다.
     """
     known = lx.schema_tables((ROOT / "migration" / "mysql" / "schema.sql").read_text(encoding="utf-8"))
     scripts = weekly_park_scripts()
@@ -437,9 +604,14 @@ def test_주간_계산이_고치는_MySQL_표는_올리거나_복사에서_뺍�
         src = (ROOT / rel).read_text(encoding="utf-8")
         edited |= {t for t in WRITE_SQL.findall(src) + TO_SQL.findall(src) if t in known}
     assert "team_stadium_by_season" in edited       # 검사가 헛돌지 않습니다
-    loose = sorted(edited - set(sqlite_to_d1.DERIVED_TABLES) - set(m.LOCAL_ONLY_EDITS))
-    assert not loose, "주간 계산이 고치지만 올리지도, 복사에서 빼지도 않는 표: %s" % loose
-    # 올리게 되면 MySQL 과 같아지므로 빼는 목록에서 지웁니다.
+    local_only = edited - set(sqlite_to_d1.DERIVED_TABLES)
+    loose = sorted(local_only - set(m.LOCAL_ONLY_EDITS))
+    assert not loose, "주간 계산이 고치지만 올리지 않는데 LOCAL_ONLY_EDITS 에도 없는 표: %s" % loose
+    # SQLite 에 있어도 MySQL 에서 읽고, 건너뛰지 않습니다.
+    specs = {t: [("x", "int", "int", 10, 0)] for t in local_only}
+    copy, skipped = m.plan(specs, set(local_only))
+    assert copy == [(t, "mysql") for t in sorted(local_only)] and skipped == []
+    # 올리게 되면 MySQL 과 같아지므로 목록에서 지웁니다(SQLite 에서 읽어도 됩니다).
     assert not set(m.LOCAL_ONLY_EDITS) & set(sqlite_to_d1.DERIVED_TABLES)
 
 

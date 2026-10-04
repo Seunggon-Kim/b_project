@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""주간 작업의 로컬 SQLite 를 빅쿼리 `bstats` 데이터셋에 통째로 복사합니다(4단계).
+"""MySQL 의 모든 표를 빅쿼리 `bstats` 데이터셋에 매주 통째로 복사합니다(4단계).
 
 ## 왜 이렇게 하나
 
@@ -11,24 +11,27 @@ MySQL 이고, 빅쿼리는 길게는 한 주 늦은 읽기용 사본입니다.
 
 ## 무엇을 복사하나
 
-- 행은 주간 작업의 로컬 SQLite(`$KBO_DB`)에서 읽습니다. `mysql_to_sqlite` 가
-  MySQL 에서 내려받고, 주간 계산이 결과 표를 다시 만든 뒤 "결과 표 적재"가
-  그 결과를 MySQL 에 올린 파일입니다. MySQL 을 한 번 더 읽지 않습니다.
-- 표 목록과 열 타입은 MySQL `information_schema.columns` 에서 읽습니다. MySQL 에
-  있는 표만 복사합니다. SQLite 에만 있는 계산용 표(truncated_games, _bak 백업)는
-  뺍니다.
-- 주간 작업은 계산에 쓰는 표(`mysql_to_sqlite.PIPELINE_TABLES`)만 내려받습니다.
-  SQLite 에 없는 MySQL 표는 복사하지 않고 이름만 찍습니다.
-- 주간 계산이 로컬에서 고치지만 MySQL 에 올리지 않는 표(LOCAL_ONLY_EDITS)는
-  MySQL 과 내용이 달라서 뺍니다.
+- 표 목록과 열 타입은 MySQL `information_schema.columns` 에서 읽습니다. MySQL 의
+  표를 하나도 빼지 않고 복사합니다. SQLite 에만 있는 계산용 표(truncated_games,
+  _bak 백업)는 MySQL 표가 아니라 복사하지 않습니다.
+- 표마다 행을 어디서 읽을지 고릅니다(plan).
+  - sqlite: 주간 작업의 로컬 SQLite(`$KBO_DB`)에 있는 표입니다. `mysql_to_sqlite`
+    가 MySQL 에서 내려받았고, 주간 계산이 다시 만든 결과 표는 "결과 표 적재"가
+    MySQL 에 올렸으므로 MySQL 과 같습니다. play_by_play 처럼 큰 표를 MySQL 에서
+    한 번 더 읽지 않으려는 것입니다.
+  - mysql: SQLite 에 없는 표(주간 작업은 계산에 쓰는 표만 내려받습니다)와,
+    주간 계산이 로컬에서만 고치고 MySQL 에 올리지 않는 표(LOCAL_ONLY_EDITS)는
+    MySQL 에서 바로 읽습니다. MySQL 에서 읽는 표는 모두 한 시점(일관된
+    스냅샷)에서 읽습니다.
 
 ## 어떻게
 
-표마다 Parquet 파일 하나를 만듭니다. SQLite 커서로 20만 행씩 읽어 행 그룹
-하나로 씁니다. play_by_play 를 통째로 메모리에 올리지 않습니다. 그 파일을 적재
-작업 하나로 올립니다(WRITE_TRUNCATE, 명시 스키마). 올린 뒤 빅쿼리 행 수가
-SQLite 행 수와 같은지 봅니다. 표 하나가 실패해도 나머지를 마저 하고, 하나라도
-실패하면 0 이 아닌 값으로 끝납니다.
+표마다 Parquet 파일 하나를 만듭니다. SQLite 커서나 MySQL 서버 쪽(버퍼 없는)
+커서로 20만 행씩 읽어 행 그룹 하나로 씁니다. play_by_play 를 통째로 메모리에
+올리지 않습니다. 그 파일을 적재 작업 하나로 올립니다(WRITE_TRUNCATE, 명시
+스키마). 올린 뒤 빅쿼리 행 수가 읽은 쪽(SQLite 나 MySQL) 행 수와 같은지 봅니다.
+표 하나가 실패해도 나머지를 마저 하고, 하나라도 실패하면 0 이 아닌 값으로
+끝납니다.
 
 ## 타입 규칙(MySQL → 빅쿼리, 모든 열 NULLABLE)
 
@@ -55,8 +58,11 @@ GitHub Actions 에서는 google-github-actions/auth 가 만든 자격 파일(ADC
 씁니다. 로컬에서는 --token-env 로 OAuth 액세스 토큰이 든 환경 변수 이름을
 넘깁니다. `gcloud auth application-default login` 은 쓰지 않습니다.
 
+MySQL 접속은 `migration.mysql.conn` 을 씁니다(BSTATS_MYSQL_SETTINGS, CI 는 수집
+계정 bstats_loader 로 SELECT 만 합니다).
+
     python -m migration.mysql.sqlite_to_bigquery --db "$KBO_DB"
-    py -m migration.mysql.sqlite_to_bigquery --db x.db --tables teams,games --token-env BQ_TOKEN
+    py -m migration.mysql.sqlite_to_bigquery --db x.db --tables teams,players --token-env BQ_TOKEN
     py -m migration.mysql.sqlite_to_bigquery --db x.db --dry-run
 """
 import argparse
@@ -73,6 +79,7 @@ from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+import pymysql
 from google.cloud import bigquery
 
 from migration.mysql.typemap import EMPTY_TEXT, INT_LIKE, NUM_LIKE
@@ -84,13 +91,15 @@ MYSQL_DATABASE = "bstats"
 CHUNK_ROWS = 200_000
 KST = datetime.timezone(datetime.timedelta(hours=9))
 
-# 주간 계산이 로컬 SQLite 에서만 고치고 MySQL 에 올리지 않는 표입니다. 복사하면
-# 빅쿼리가 MySQL 과 달라지므로 뺍니다. tests/test_sqlite_to_bigquery.py 가
-# park_factors 스크립트를 훑어 빠진 표가 없는지 봅니다.
+# 주간 계산이 로컬 SQLite 에서만 고치고 MySQL 에 올리지 않는 표입니다. SQLite 의
+# 것은 MySQL 과 다르므로 MySQL 에서 바로 읽습니다. tests/test_sqlite_to_bigquery.py
+# 가 park_factors 스크립트를 훑어 빠진 표가 없는지 봅니다.
 LOCAL_ONLY_EDITS = {
     "team_stadium_by_season":
         "build_wrc_plus.py 가 올 시즌 행을 로컬에서만 채우고 MySQL 에 올리지 않습니다",
 }
+
+SQLITE, MYSQL = "sqlite", "mysql"
 
 INT_TYPES = {"tinyint", "smallint", "mediumint", "int", "integer", "bigint", "year", "bit"}
 FLOAT_TYPES = {"float", "double", "real"}
@@ -112,7 +121,7 @@ RESERVED_PREFIXES = ("_TABLE_", "_FILE_", "_PARTITION", "_ROW_TIMESTAMP", "__ROO
                      "_CHANGE_TIMESTAMP")
 
 Column = namedtuple("Column", "name bq_name bq_type mysql_type")
-Result = namedtuple("Result", "table rows seconds error")
+Result = namedtuple("Result", "table source rows seconds error")
 
 
 # --- 타입과 이름 -----------------------------------------------------------
@@ -242,9 +251,23 @@ def to_numeric(v):
     return d.quantize(NUMERIC_QUANTUM, rounding=decimal.ROUND_HALF_EVEN)
 
 
+def mysql_time_text(td):
+    """MySQL TIME 값(파이썬 timedelta)을 MySQL 이 보여 주는 글자로 바꿉니다.
+
+    24시간을 넘거나 음수일 수 있습니다: '838:59:59', '-01:30:00'.
+    """
+    sign = "-" if td < datetime.timedelta(0) else ""
+    td = abs(td)
+    h, rem = divmod(td.days * 86400 + td.seconds, 3600)
+    out = "%s%02d:%02d:%02d" % (sign, h, rem // 60, rem % 60)
+    return out + (".%06d" % td.microseconds if td.microseconds else "")
+
+
 def to_string(v):
     if isinstance(v, (bytes, bytearray)):
         return bytes(v).decode("utf-8")
+    if isinstance(v, datetime.timedelta):
+        return mysql_time_text(v)
     return str(v)
 
 
@@ -308,7 +331,13 @@ def cast_column(values, bq):
 # --- 읽기와 쓰기 -----------------------------------------------------------
 
 def qi(name):
+    """SQLite 이름 따옴표입니다."""
     return '"%s"' % name.replace('"', '""')
+
+
+def qm(name):
+    """MySQL 이름 따옴표입니다."""
+    return "`%s`" % name.replace("`", "``")
 
 
 def mysql_columns(con, database=MYSQL_DATABASE):
@@ -335,55 +364,93 @@ def sqlite_tables(sq):
 
 
 def plan(specs, local, wanted=None):
-    """복사할 표와 건너뛸 표(까닭)를 고릅니다.
+    """복사할 표와 읽을 곳, 건너뛸 표(까닭)를 고릅니다.
 
     specs 는 MySQL 표 -> 열 목록, local 은 SQLite 표 이름들입니다. wanted 를 주면
-    그 표만 봅니다.
+    그 표만 봅니다. MySQL 표는 모두 복사합니다. SQLite 에 있고 주간 계산이 로컬에서만
+    고치지 않는 표는 SQLite 에서, 나머지는 MySQL 에서 읽습니다.
+    돌려주는 값: ([(표, "sqlite"|"mysql")], [(건너뛴 표, 까닭)])
     """
     names = wanted if wanted else sorted(set(specs) | set(local))
     copy, skipped = [], []
     for t in names:
         if t not in specs:
             skipped.append((t, "MySQL 에 없는 표입니다(로컬 계산용)"))
-        elif t not in local:
-            skipped.append((t, "로컬 SQLite 에 없습니다(주간 작업이 내려받지 않는 표)"))
-        elif t in LOCAL_ONLY_EDITS:
-            skipped.append((t, LOCAL_ONLY_EDITS[t]))
+        elif t in local and t not in LOCAL_ONLY_EDITS:
+            copy.append((t, SQLITE))
         else:
-            copy.append(t)
+            copy.append((t, MYSQL))
     return copy, skipped
 
 
-def write_parquet(sq, table, columns, path, chunk_rows=CHUNK_ROWS):
-    """SQLite 표 하나를 Parquet 파일로 씁니다. chunk_rows 행마다 행 그룹 하나입니다.
-
-    쓴 행 수를 돌려줍니다. 값을 못 바꾸면 '표.열: 까닭' 으로 ValueError 입니다.
-    """
+def sqlite_batches(sq, table, columns, chunk_rows=CHUNK_ROWS):
+    """SQLite 표에서 chunk_rows 행씩 내놓습니다. MySQL 열이 빠져 있으면 ValueError."""
     have = {r[1].lower() for r in sq.execute("PRAGMA table_info(%s)" % qi(table))}
     missing = [c.name for c in columns if c.name.lower() not in have]
     if missing:
         raise ValueError("로컬 SQLite 의 %s 에 MySQL 열이 없습니다: %s"
                          % (table, ", ".join(missing)))
-    schema = pa.schema([pa.field(c.bq_name, CASTS[c.bq_type][2]) for c in columns])
     cur = sq.execute("SELECT %s FROM %s" % (", ".join(qi(c.name) for c in columns), qi(table)))
-    n = 0
-    with pq.ParquetWriter(str(path), schema, compression="snappy") as w:
+    while True:
+        rows = cur.fetchmany(chunk_rows)
+        if not rows:
+            return
+        yield rows
+
+
+def mysql_batches(con, table, columns, chunk_rows=CHUNK_ROWS):
+    """MySQL 표에서 chunk_rows 행씩 내놓습니다.
+
+    서버 쪽(버퍼 없는) 커서라 표 전체를 메모리에 올리지 않습니다. 중간에 멈추면
+    커서를 닫으며 남은 행을 마저 읽어 버립니다(같은 연결로 다음 질의를 하려면
+    필요합니다).
+    """
+    sql = "SELECT %s FROM %s" % (", ".join(qm(c.name) for c in columns), qm(table))
+    with con.cursor(pymysql.cursors.SSCursor) as cur:
+        cur.execute(sql)
         while True:
             rows = cur.fetchmany(chunk_rows)
             if not rows:
-                break
-            arrays = []
-            for c, values in zip(columns, zip(*rows)):
-                try:
-                    arrays.append(pa.array(cast_column(values, c.bq_type),
-                                           type=CASTS[c.bq_type][2]))
-                except (ValueError, TypeError, ArithmeticError, pa.ArrowException) as e:
-                    raise ValueError("%s.%s: %s" % (table, c.name, e)) from None
-            w.write_table(pa.Table.from_arrays(arrays, schema=schema),
-                          row_group_size=len(rows))
-            n += len(rows)
-            del rows, arrays
+                return
+            yield rows
+
+
+def write_parquet(batches, table, columns, path):
+    """행 묶음들을 Parquet 파일 하나로 씁니다. 묶음 하나가 행 그룹 하나입니다.
+
+    batches 는 sqlite_batches·mysql_batches 가 내놓는 반복자입니다. 쓴 행 수를
+    돌려줍니다. 값을 못 바꾸면 '표.열: 까닭' 으로 ValueError 입니다.
+    """
+    schema = pa.schema([pa.field(c.bq_name, CASTS[c.bq_type][2]) for c in columns])
+    n = 0
+    try:
+        with pq.ParquetWriter(str(path), schema, compression="snappy") as w:
+            for rows in batches:
+                arrays = []
+                for c, values in zip(columns, zip(*rows)):
+                    try:
+                        arrays.append(pa.array(cast_column(values, c.bq_type),
+                                               type=CASTS[c.bq_type][2]))
+                    except (ValueError, TypeError, ArithmeticError, pa.ArrowException) as e:
+                        raise ValueError("%s.%s: %s" % (table, c.name, e)) from None
+                w.write_table(pa.Table.from_arrays(arrays, schema=schema),
+                              row_group_size=len(rows))
+                n += len(rows)
+                del rows, arrays
+    finally:
+        close = getattr(batches, "close", None)
+        if close:
+            close()
     return n
+
+
+def count_rows(sq, my, table, source):
+    """읽은 쪽(SQLite 나 MySQL)의 행 수입니다. MySQL 은 같은 스냅샷 안에서 셉니다."""
+    if source == SQLITE:
+        return sq.execute("SELECT COUNT(*) FROM %s" % qi(table)).fetchone()[0]
+    with my.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM %s" % qm(table))
+        return cur.fetchone()[0]
 
 
 def bq_schema(columns):
@@ -427,22 +494,27 @@ def one_line(e):
     return ("%s: %s" % (type(e).__name__, e)).replace("\n", " ")[:300]
 
 
-def copy_tables(sq, specs, tables, client, workdir, dry_run=False,
+def copy_tables(sq, my, specs, tables, client, workdir, dry_run=False,
                 chunk_rows=CHUNK_ROWS, now=None, dataset="%s.%s" % (PROJECT, DATASET)):
-    """표마다 Parquet 을 만들고 올립니다. 실패해도 다음 표로 넘어갑니다. Result 목록."""
+    """표마다 Parquet 을 만들고 올립니다. 실패해도 다음 표로 넘어갑니다. Result 목록.
+
+    tables 는 plan() 이 고른 (표, "sqlite"|"mysql") 목록입니다.
+    """
     now = now or datetime.datetime.now(KST)
     results = []
-    for i, t in enumerate(tables, start=1):
+    for i, (t, source) in enumerate(tables, start=1):
         t0 = time.time()
         path = Path(workdir) / ("%s.parquet" % t)
         rows, error = None, None
         try:
             cols = table_columns(specs[t])
-            rows = write_parquet(sq, t, cols, path, chunk_rows)
-            want = sq.execute("SELECT COUNT(*) FROM %s" % qi(t)).fetchone()[0]
+            batches = (sqlite_batches(sq, t, cols, chunk_rows) if source == SQLITE
+                       else mysql_batches(my, t, cols, chunk_rows))
+            rows = write_parquet(batches, t, cols, path)
+            want = count_rows(sq, my, t, source)
             if rows != want:
-                raise RuntimeError("Parquet 행 수가 다릅니다. SQLite %s / Parquet %s"
-                                   % (format(want, ","), format(rows, ",")))
+                raise RuntimeError("Parquet 행 수가 다릅니다. %s %s / Parquet %s"
+                                   % (source, format(want, ","), format(rows, ",")))
             if dry_run:
                 print("  %s (%.1fMB)" % (t, path.stat().st_size / 1e6))
                 for c in cols:
@@ -451,17 +523,17 @@ def copy_tables(sq, specs, tables, client, workdir, dry_run=False,
                 got = load_table(client, "%s.%s" % (dataset, t), path, bq_schema(cols),
                                  table_description(t, cols, now))
                 if got != rows:
-                    raise RuntimeError("빅쿼리 행 수가 다릅니다. SQLite %s / 빅쿼리 %s"
-                                       % (format(rows, ","), format(got or 0, ",")))
+                    raise RuntimeError("빅쿼리 행 수가 다릅니다. %s %s / 빅쿼리 %s"
+                                       % (source, format(rows, ","), format(got or 0, ",")))
         except Exception as e:  # noqa: BLE001  표 하나가 실패해도 나머지를 마저 합니다
             error = one_line(e)
         finally:
             if path.exists():
                 path.unlink()
         secs = time.time() - t0
-        results.append(Result(t, rows, secs, error))
-        print("[%2d/%d] %-32s %11s행 %6.1f초  %s"
-              % (i, len(tables), t, "-" if rows is None else format(rows, ","), secs,
+        results.append(Result(t, source, rows, secs, error))
+        print("[%2d/%d] %-32s %-6s %11s행 %6.1f초  %s"
+              % (i, len(tables), t, source, "-" if rows is None else format(rows, ","), secs,
                  "실패: " + error if error else ("확인" if dry_run else "복사")), flush=True)
     return results
 
@@ -478,14 +550,10 @@ def make_client(token_env=None, project=PROJECT):
     return bigquery.Client(project=project, credentials=creds, location=LOCATION)
 
 
-def read_specs():
-    """MySQL information_schema 에서 표·열 목록을 읽습니다."""
+def open_mysql():
+    """MySQL 연결입니다(BSTATS_MYSQL_SETTINGS). 읽기만 합니다."""
     from migration.mysql import conn as myconn
-    con = myconn.connect()
-    try:
-        return mysql_columns(con)
-    finally:
-        con.close()
+    return myconn.connect()
 
 
 def summary_note(results):
@@ -498,9 +566,10 @@ def summary_note(results):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="로컬 SQLite 의 MySQL 표를 빅쿼리로 통째로 복사합니다")
-    ap.add_argument("--db", required=True, help="주간 작업의 SQLite 파일")
-    ap.add_argument("--tables", default=None, help="쉼표로 구분. 기본값은 복사할 수 있는 표 전부")
+    ap = argparse.ArgumentParser(description="MySQL 의 모든 표를 빅쿼리로 통째로 복사합니다")
+    ap.add_argument("--db", required=True,
+                    help="주간 작업의 SQLite 파일. 여기 있는 표는 여기서 읽습니다")
+    ap.add_argument("--tables", default=None, help="쉼표로 구분. 기본값은 MySQL 의 모든 표")
     ap.add_argument("--dry-run", action="store_true", help="Parquet 을 만들고 스키마만 찍습니다")
     ap.add_argument("--token-env", default=None,
                     help="로컬 실행용. OAuth 액세스 토큰이 든 환경 변수 이름")
@@ -512,24 +581,39 @@ def main(argv=None):
     wanted = ([t.strip() for t in args.tables.split(",") if t.strip()]
               if args.tables else None)
 
-    specs = read_specs()
     t0 = time.time()
-    sq = sqlite3.connect(db.resolve().as_uri() + "?mode=ro", uri=True)
+    my = open_mysql()
     try:
-        tables, skipped = plan(specs, sqlite_tables(sq), wanted)
-        for t, why in skipped:
-            print("건너뜀: %-32s %s" % (t, why))
-        if wanted and skipped:
-            raise SystemExit("--tables 에 복사할 수 없는 표가 있습니다: %s"
-                             % ", ".join(t for t, _ in skipped))
-        if not tables:
-            print("복사할 표가 없습니다.")
-            return 1
-        client = None if args.dry_run else make_client(args.token_env)
-        with tempfile.TemporaryDirectory(prefix="bq_copy_") as work:
-            results = copy_tables(sq, specs, tables, client, work, dry_run=args.dry_run)
+        specs = mysql_columns(my)
+        # MySQL 에서 읽는 표를 모두 한 시점에서 읽습니다. 쓰지 않습니다.
+        with my.cursor() as cur:
+            cur.execute("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY")
+        sq = sqlite3.connect(db.resolve().as_uri() + "?mode=ro", uri=True)
+        try:
+            tables, skipped = plan(specs, sqlite_tables(sq), wanted)
+            for t, why in skipped:
+                print("건너뜀: %-32s %s" % (t, why))
+            if wanted and skipped:
+                raise SystemExit("--tables 에 MySQL 에 없는 표가 있습니다: %s"
+                                 % ", ".join(t for t, _ in skipped))
+            if not tables:
+                print("복사할 표가 없습니다.")
+                return 1
+            from_mysql = [t for t, s in tables if s == MYSQL]
+            print("복사할 표 %d개: SQLite 에서 %d개, MySQL 에서 %d개"
+                  % (len(tables), len(tables) - len(from_mysql), len(from_mysql)))
+            for t in from_mysql:
+                if t in LOCAL_ONLY_EDITS:
+                    print("  %s 는 MySQL 에서 읽습니다: %s" % (t, LOCAL_ONLY_EDITS[t]))
+            client = None if args.dry_run else make_client(args.token_env)
+            with tempfile.TemporaryDirectory(prefix="bq_copy_") as work:
+                results = copy_tables(sq, my, specs, tables, client, work,
+                                      dry_run=args.dry_run)
+        finally:
+            sq.close()
+        my.rollback()
     finally:
-        sq.close()
+        my.close()
 
     note = summary_note(results)
     print("%s%s (%.0f초)" % ("[dry-run] 올리지 않았습니다. " if args.dry_run else "빅쿼리 복사: ",
