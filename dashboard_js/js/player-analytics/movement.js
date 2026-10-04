@@ -13,7 +13,7 @@
   // 기존 카드(옛 Movement Profile 카드(지웠음))의 색표와 같습니다.
   const COLORS = {
     '너클볼': '#3C44CD', '스위퍼': '#DDB33A', '슬러브': '#93AFD4',
-    '싱커': '#FE9D00', '투심': '#FE9D00', '직구': '#D22D49',
+    '싱커': '#FE9D00', '투심': '#FE9D00', '직구': '#D22D49', '포심 패스트볼': '#D22D49',
     '체인지업': '#1DBE3A', '커브': '#00D1ED', '커터': '#933F2C',
     '포크': '#3BACAC', '스플리터': '#3BACAC', '슬라이더': '#EEE716',
   };
@@ -24,6 +24,12 @@
   const RINGS = [15, 30, 45, 60];
   const FIRST_SEASON = 2016;
   const MIN_AVG_N = 100;   // 리그 평균은 이 공 수 이상인 구종만
+
+  // 화면에 보이는 구종 이름입니다(데이터·API 는 원래 이름 그대로).
+  const NAMES = { '직구': '포심 패스트볼', '투심': '싱커' };
+  function pitchName(raw) {
+    return Object.prototype.hasOwnProperty.call(NAMES, raw) ? NAMES[raw] : raw;
+  }
 
   function colorOf(type) {
     return Object.prototype.hasOwnProperty.call(COLORS, type) ? COLORS[type] : FALLBACK;
@@ -67,7 +73,8 @@
     const vs = valid(pitches);
     const by = Object.create(null);
     vs.forEach(function (p) {
-      const g = by[p.pitch_type] || (by[p.pitch_type] = { type: p.pitch_type, n: 0, sx: 0, sz: 0, sv: 0, nv: 0 });
+      const t = pitchName(p.pitch_type);
+      const g = by[t] || (by[t] = { type: t, n: 0, sx: 0, sz: 0, sv: 0, nv: 0 });
       g.n++;
       g.sx += num(p.pfx_x) * IN2CM;
       g.sz += num(p.pfx_z) * IN2CM;
@@ -112,13 +119,21 @@
 
   /** /stats/movement_avg 응답에서 같은 손·100구 이상 구종만 { 구종: {x,z,speed,n} }(cm)로 만듭니다. */
   function avgFor(data, throws) {
-    const out = {};
+    const out = {}, acc = Object.create(null);
     if (throws !== 'L' && throws !== 'R') return out;
     ((data && data.rows) || []).forEach(function (r) {
       if (!r || r.throws !== throws || !r.pitch_type) return;
       const n = num(r.n), x = num(r.pfx_x), z = num(r.pfx_z);
-      if (n === null || n < MIN_AVG_N || x === null || z === null) return;
-      out[r.pitch_type] = { x: x * IN2CM, z: z * IN2CM, speed: num(r.speed), n: n };
+      if (n === null || x === null || z === null) return;
+      const t = pitchName(r.pitch_type), v = num(r.speed);
+      const g = acc[t] || (acc[t] = { n: 0, sx: 0, sz: 0, sv: 0, nv: 0 });
+      g.n += n; g.sx += x * n; g.sz += z * n;
+      if (v !== null) { g.sv += v * n; g.nv += n; }
+    });
+    Object.keys(acc).forEach(function (t) {
+      const g = acc[t];
+      if (g.n < MIN_AVG_N) return;
+      out[t] = { x: g.sx / g.n * IN2CM, z: g.sz / g.n * IN2CM, speed: g.nv ? g.sv / g.nv : null, n: g.n };
     });
     return out;
   }
@@ -212,6 +227,42 @@
       + legendHtml(summary, view, ctx);
   }
 
+  /** 구사율 행을 바뀐 이름별로 합칩니다(같은 투수·같은 분모라 비율은 더해도 됩니다). */
+  function mergeUsage(rows) {
+    const by = Object.create(null), order = [];
+    rows.forEach(function (u) {
+      if (!u) return;
+      const t = pitchName(u.pitch_type);
+      let g = by[t];
+      if (!g) { g = by[t] = { pitch_type: t, count: 0, usage_all: 0, usage_l: 0, usage_r: 0 }; order.push(g); }
+      g.count += num(u.count) || 0;
+      g.usage_all += num(u.usage_all) || 0;
+      g.usage_l += num(u.usage_l) || 0;
+      g.usage_r += num(u.usage_r) || 0;
+    });
+    return order;
+  }
+
+  /** 구종 가치 행을 바뀐 이름별로 합칩니다. rv 는 소수 한 자리로 다시 반올림합니다. */
+  function mergePv(rows) {
+    const by = Object.create(null), order = [];
+    const KEYS = ['n_l', 'rv_l', 'n_r', 'rv_r', 'n', 'rv'];
+    rows.forEach(function (p) {
+      if (!p) return;
+      const t = pitchName(p.pitch_type);
+      let g = by[t];
+      if (!g) { g = by[t] = { pitch_type: t }; KEYS.forEach(function (k) { g[k] = null; }); order.push(g); }
+      KEYS.forEach(function (k) {
+        const v = num(p[k]);
+        if (v !== null) g[k] = (g[k] || 0) + v;
+      });
+    });
+    order.forEach(function (g) {
+      ['rv_l', 'rv_r', 'rv'].forEach(function (k) { if (g[k] !== null) g[k] = Math.round(g[k] * 10) / 10; });
+    });
+    return order;
+  }
+
   function pct1(v) {
     const n = num(v);
     return n === null ? 0 : Math.max(0, Math.min(100, n));
@@ -224,9 +275,9 @@
    */
   function usageHtml(data, season, pv) {
     const title = '<div class="pa-usage-title">' + esc(season) + ' 구종 구사율</div>';
-    const rows = ((data && data.usage) || []).slice().sort(function (a, b) { return pct1(b.usage_all) - pct1(a.usage_all); });
+    const rows = mergeUsage((data && data.usage) || []).sort(function (a, b) { return pct1(b.usage_all) - pct1(a.usage_all); });
     if (!rows.length) return title + '<p class="pa-mv-empty">이 시즌은 구종 구사율 데이터가 없습니다.</p>';
-    const pvRows = (pv && pv.rows) || [];
+    const pvRows = mergePv((pv && pv.rows) || []);
     if (pvRows.length) return title + rvGridHtml(rows, pvRows);
     return title + '<div class="pa-usage-grid' + (rows.length >= 7 ? ' pa-usage-grid--dense' : '') + '">'
       + '<div class="pa-usage-head"><span>좌타 상대</span><span></span><span>구종 (전체)</span><span></span><span>우타 상대</span></div>'
@@ -280,7 +331,7 @@
       + '</div>';
   }
 
-  const api = { COLORS, colorOf, summarize, seasonsFor, totalsFor, svgHtml, legendHtml, bodyHtml, avgFor, handLabel, HELP, helpFor, usageHtml };
+  const api = { COLORS, colorOf, pitchName, summarize, seasonsFor, totalsFor, svgHtml, legendHtml, bodyHtml, avgFor, handLabel, HELP, helpFor, usageHtml };
   PA.movement = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

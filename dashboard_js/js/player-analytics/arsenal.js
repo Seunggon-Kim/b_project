@@ -37,8 +37,9 @@
     const by = {};
     (pitches || []).forEach(function (p) {
       if (num(p.px) === null || num(p.pz) === null) return;
-      const t = p.pitch_type;
-      if (t === null || t === undefined || t === '') return;
+      if (p.pitch_type === null || p.pitch_type === undefined || p.pitch_type === '') return;
+      const M = PA.movement;
+      const t = M && M.pitchName ? M.pitchName(p.pitch_type) : p.pitch_type;
       (by[t] = by[t] || []).push(p);
     });
     const total = Object.keys(by).reduce(function (s, t) { return s + by[t].length; }, 0);
