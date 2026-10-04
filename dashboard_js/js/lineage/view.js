@@ -15,14 +15,14 @@
       .replace(/[&<>"]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
   }
 
-  const STATE_LABEL = { ok: '정상', fail: '실패', stale: '오래됨', none: '기록 없음', manual: '손 작업' };
-  const KIND_LABEL = { collected: '받아 온 표', derived: '계산 표', manual: '손 작업 표' };
+  const STATE_LABEL = { ok: '정상', fail: '실패', stale: '오래됨', none: '기록 없음', manual: '기준 표' };
+  const KIND_LABEL = { collected: '받아 온 표', derived: '계산 표', manual: '기준 표' };
   const SUM_TIP = {
     ok: '이 표를 쓰는 작업의 마지막 실행이 성공했고 기준 시간 안에 갱신된 표입니다.',
     fail: '이 표를 쓰는 작업 가운데 마지막 실행이 실패한 것이 있는 표입니다.',
     stale: '기준 시간(daily·roster 36시간, weekly 8일, monthly 35일)보다 오래 갱신되지 않은 표입니다.',
     none: '이 표를 쓰는 작업의 실행 기록이 아직 없는 표입니다.',
-    manual: '수집 작업 없이 손으로 채운 표입니다. 상태 점을 붙이지 않습니다.',
+    manual: '정기 수집 작업 없이 직접 채워 두는 기준 표(팀·구장 등)입니다. 상태 점을 붙이지 않습니다.',
   };
 
   /** 화면 경로(계보 파일의 pages[].path)를 pages/ 안에서 여는 주소로 바꿉니다. */
@@ -53,15 +53,15 @@
     const btn = k => `<button type="button" class="lin-sum-btn${active === k ? ' on' : ''}" data-state="${k}" data-tooltip="${esc(tip(k))}">`
       + `<span class="lin-dot lin-${k}"></span>${STATE_LABEL[k]} <b>${sum[k]}</b></button>`;
     return ['ok', 'fail', 'stale', 'none'].map(btn).join('')
-      + `<span class="lin-sum-manual" data-tooltip="${esc(SUM_TIP.manual)}">손 작업 <b>${sum.manual}</b></span>`;
+      + `<span class="lin-sum-manual" data-tooltip="${esc(SUM_TIP.manual)}">기준 표 <b>${sum.manual}</b></span>`;
   }
 
-  /** 상자 안 상태 표시(점 또는 '손 작업')입니다. 표·작업만 붙입니다. */
+  /** 상자 안 상태 표시(점 또는 '기준')입니다. 표·작업만 붙입니다. */
   function markHtml(n, lin, status) {
     if (!status) return '';
     const m = M();
     if (n.kind === 'manual') {
-      return `<span class="lin-tag" data-tooltip="${esc(m.dotText(lin, { state: 'manual', items: [] }, n.ref.manual_note))}">손 작업</span>`;
+      return `<span class="lin-tag" data-tooltip="${esc(m.dotText(lin, { state: 'manual', items: [] }, n.ref.manual_note))}">기준</span>`;
     }
     let st = null;
     if (n.kind === 'collected' || n.kind === 'derived') st = status.tables[n.ref.name];
@@ -75,7 +75,7 @@
     if (n.kind === 'collected' || n.kind === 'derived' || n.kind === 'manual') return n.ref.desc ? `${n.label}\n${n.ref.desc}` : n.label;
     if (n.kind === 'job') return `${n.label}: ${n.sub} 실행`;
     if (n.kind === 'page') return `${n.label} (${n.sub})`;
-    if (n.kind === 'group') return n.sub === '접기' ? '누르면 손 작업 표를 접습니다.' : '누르면 손 작업 표를 펼칩니다.';
+    if (n.kind === 'group') return n.sub === '접기' ? '누르면 기준 표를 접습니다.' : '누르면 기준 표를 펼칩니다.';
     return n.label;
   }
 
@@ -180,7 +180,7 @@
         body += `<dt>쓰는 스크립트</dt><dd>${listOrDash(writers)}</dd>`;
         body += `<dt>마지막 실행</dt><dd>${st ? (st.items.length ? `<ul>${st.items.map(it => statusLine(lin, it)).join('')}</ul>` : '실행 기록을 남기는 단계가 없습니다.') : '운영 정보 없음'}</dd>`;
       } else {
-        body += `<dt>손 작업</dt><dd>${esc(t.manual_note || '손으로 채운 표입니다.')}</dd>`;
+        body += `<dt>채우는 방법</dt><dd>${esc(t.manual_note || '정기 작업 없이 직접 채운 표입니다.')}</dd>`;
       }
       if ((t.derived_from || []).length) body += `<dt>재료 표</dt><dd>${listOrDash(t.derived_from.map(x => `<li><code>${esc(x)}</code></li>`))}</dd>`;
       body += `<dt>읽는 API 주소</dt><dd>${(t.routes || []).length ? listOrDash(t.routes.map(r => `<li><code>${esc(r)}</code></li>`)) : '데이터 탐색 주소(/db/table)로 읽습니다.'}</dd>`;
@@ -470,7 +470,7 @@
     return '';
   }
 
-  /** 다른 탭에서 넘어올 때 표 하나를 고른 채 엽니다. 손 작업 표면 묶음을 펼칩니다. */
+  /** 다른 탭에서 넘어올 때 표 하나를 고른 채 엽니다. 기준 표면 묶음을 펼칩니다. */
   function select(id) {
     const note = missingTableNote(S.lin, id);
     if (note) {

@@ -16,7 +16,7 @@
   // 경계: 우리 공식으로 계산했으면 마트, 받은 것을 정리만 했으면 웨어하우스입니다(games·players 는 웨어하우스).
   const LAYERS = [
     { id: 'source', col: 'source', label: '원천', tip: '데이터를 받아 오는 바깥 사이트입니다(KBO 기록실, 네이버 중계 등). 우리 데이터베이스 밖에 있습니다.' },
-    { id: 'dw', col: 'table', label: '데이터 웨어하우스', tip: '원천에서 받아 온 그대로이거나 정리만 한 표와, 손으로 관리하는 기준표(팀·구장 등)입니다. 우리 공식으로 계산하지 않은 표는 여기에 둡니다.' },
+    { id: 'dw', col: 'table', label: '데이터 웨어하우스', tip: '원천에서 받아 온 그대로이거나 정리만 한 표와, 직접 채워 두는 기준 표(팀·구장 등)입니다. 우리 공식으로 계산하지 않은 표는 여기에 둡니다.' },
     { id: 'mart', col: 'derived', label: '데이터 마트', tip: '웨어하우스 표로 우리 공식(wOBA 가중치, wRC+, RE24, 파크팩터 등)을 계산해 저장한 표입니다. 화면 숫자 가운데 많은 수는 저장된 표 없이 API 주소가 웨어하우스 표를 바로 계산해 만들므로 이 칸에 다 나오지는 않습니다.' },
   ];
   const GROUP_ID = 'group:manual';
@@ -32,18 +32,18 @@
 
   /**
    * 그림에 쓸 노드와 선입니다.
-   *   opts.manualOpen  손 작업 표를 펼쳤으면 true
+   *   opts.manualOpen  기준 표를 펼쳤으면 true
    * 반환 { cols: {source:[], job:[], table:[], derived:[], page:[]}, nodes: {id: node}, edges: [{from, to}] }
    *   node = { id, col, label, sub, kind, ref }   ref 는 계보 파일의 원래 항목
-   * 숨김: kind 'meta' 표, explorer 페이지. 손 작업 표가 접혀 있으면 묶음 노드 하나로 바꾸고,
-   * 펼쳐 있으면 묶음 노드(접기)를 맨 위에 두고 손 작업 표를 그 아래에 둡니다.
+   * 숨김: kind 'meta' 표, explorer 페이지. 기준 표가 접혀 있으면 묶음 노드 하나로 바꾸고,
+   * 펼쳐 있으면 묶음 노드(접기)를 맨 위에 두고 기준 표를 그 아래에 둡니다.
    */
   function buildGraph(lin, opts) {
     opts = opts || {};
     const cols = { source: [], job: [], table: [], derived: [], page: [] };
     const nodes = {};
     const add = function (n) { nodes[n.id] = n; cols[n.col].push(n); };
-    const alias = {};   // 원래 id → 그림 id (접힌 손 작업 표 → 묶음)
+    const alias = {};   // 원래 id → 그림 id (접힌 기준 표 → 묶음)
 
     (lin.sources || []).slice().sort((a, b) => byName(a.id, b.id)).forEach(function (s) {
       add({ id: 'source:' + s.id, col: 'source', label: s.name, sub: '', kind: 'source', ref: s });
@@ -55,10 +55,10 @@
     tables.filter(t => t.kind === 'collected').forEach(function (t) {
       add({ id: 'table:' + t.name, col: 'table', label: t.name, sub: '', kind: 'collected', ref: t });
     });
-    // 손 작업 표 묶음 상자는 접었을 때 '펼치기', 펼쳤을 때 '접기' 로 늘 둡니다(다시 접을 수 있게).
+    // 기준 표 묶음 상자는 접었을 때 '펼치기', 펼쳤을 때 '접기' 로 늘 둡니다(다시 접을 수 있게).
     const manual = tables.filter(t => t.kind === 'manual');
     if (manual.length) {
-      add({ id: GROUP_ID, col: 'table', label: `손 작업 표 ${manual.length}개`, sub: opts.manualOpen ? '접기' : '펼치기', kind: 'group', ref: { members: manual.map(t => t.name) } });
+      add({ id: GROUP_ID, col: 'table', label: `기준 표 ${manual.length}개`, sub: opts.manualOpen ? '접기' : '펼치기', kind: 'group', ref: { members: manual.map(t => t.name) } });
     }
     manual.forEach(function (t) {
       if (opts.manualOpen) add({ id: 'table:' + t.name, col: 'table', label: t.name, sub: '', kind: 'manual', ref: t });
@@ -192,7 +192,7 @@
   function scriptByPath(lin, path) { return (lin.scripts || []).find(s => s.path === path) || null; }
 
   /**
-   * 표의 상태입니다. 손 작업 표는 'manual'.
+   * 표의 상태입니다. 기준 표는 'manual'.
    * 반환 { state, items: [{ script, job, key, state, at, status, note, staleHours }] }
    * details 는 /jobs/status 의 details 객체입니다.
    */
@@ -280,9 +280,9 @@
       .map(h => `${groups[h].sort().join('·')} ${hoursText(h)}`).join(', ');
   }
 
-  /** 점에 붙일 설명 문구입니다. st = tableStatus/jobStatus 결과. manualNote 는 손 작업 표 설명. */
+  /** 점에 붙일 설명 문구입니다. st = tableStatus/jobStatus 결과. manualNote 는 기준 표 설명. */
   function dotText(lin, st, manualNote) {
-    if (st.state === 'manual') return `손 작업으로 채운 표입니다${manualNote ? ': ' + manualNote : ''}`;
+    if (st.state === 'manual') return `정기 수집 작업 없이 직접 채워 두는 기준 표입니다${manualNote ? ': ' + manualNote : ''}`;
     if (!st.items.length) return '실행 기록이 아직 없습니다';
     return st.items.map(it => itemText(lin, it)).join('\n');
   }

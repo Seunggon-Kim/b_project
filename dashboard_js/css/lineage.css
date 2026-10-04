@@ -39,7 +39,7 @@
 [data-theme="dark"] .lin-k-derived { border-color: #a78bfa; }
 [data-theme="dark"] .lin-k-page { border-color: #fb7185; }
 
-/* 상태 점(초록 정상·빨강 실패·회색 오래됨·기록 없음)과 손 작업 표시 */
+/* 상태 점(초록 정상·빨강 실패·회색 오래됨·기록 없음)과 기준 표 표시 */
 .lin-dot { flex: 0 0 auto; display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
 .lin-ok { background: var(--success); }
 .lin-fail { background: var(--danger); }
