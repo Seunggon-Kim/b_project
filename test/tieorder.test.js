@@ -25,8 +25,10 @@ const GUARDS = [
   ['roster.js', "'ORDER BY kind DESC, team, name LIMIT ?'"],
   ['roster.js', "'ORDER BY move_date DESC, kind DESC, team, name LIMIT ?'"],
   ['roster.js', 'CAST(back_number AS SIGNED), name, player_id"'],
-  ['stats.js', 'ORDER BY b.batting_average DESC, b.player_id LIMIT ?'],
-  ['stats.js', 'ORDER BY ps.earned_run_average ASC, ps.player_id LIMIT ?'],
+  // 두 길(D1 의 ORDER BY, MySQL 의 ROW_NUMBER)이 같은 ORDER 를 씁니다.
+  ['stats.js', "const ORDER = 'b.batting_average DESC, b.player_id';"],
+  ['stats.js', "const ORDER = 'ps.earned_run_average ASC, ps.player_id';"],
+  ['stats.js', 'ORDER BY ${ORDER} LIMIT ?'],
   ['teamrecord.js', 'ORDER BY r.season DESC, r.league, r.team_name`'],
   ['teamrecord.js', "ORDER BY season, team_name'"],
   ['teamrecord.js', "ORDER BY s.season, s.stadium'"],
