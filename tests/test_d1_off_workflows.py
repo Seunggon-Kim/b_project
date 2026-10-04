@@ -102,19 +102,34 @@ def test_MySQL_판정은_조건_없이_늘_돕니다(name):
     assert "steps.mirror_check.outcome != 'success'" in cond
 
 
-def test_monthly_는_꺼져_있으면_MySQL_에서_내려받습니다():
+def test_monthly_는_늘_MySQL_에서_내려받습니다():
+    """D1_WRITE 와 상관없이 MySQL 이 원본입니다.
+
+    되돌리기(D1_WRITE=on) 때 낡은 D1 players 를 받으면 sqlite_to_d1 의 mirror
+    (DELETE 후 INSERT)가 그것으로 MySQL players(사이트가 읽는 값)를 덮습니다.
+    """
     _, ss = steps("monthly")
     pull = next(s for s in ss if s.get("id") == "pull")
     run = pull["run"]
-    assert 'if [ "$BSTATS_D1" = "on" ]; then' in run
-    on_part, off_part = run.split("else", 1)
-    assert "migration/d1_to_sqlite.py" in on_part
-    assert "python -m migration.mysql.mysql_to_sqlite" in off_part
-    assert "d1_to_sqlite" not in off_part
+    assert "python -m migration.mysql.mysql_to_sqlite" in run
     assert "players,kbo_official_batter_stats,kbo_official_pitcher_stats" in run
+    assert "BSTATS_D1" not in run and "if" not in pull
 
 
-def test_monthly_내려받기_분기가_bash_에서_실제로_갈립니다(tmp_path):
+def test_monthly_는_d1_to_sqlite_를_부르지_않습니다():
+    import sys
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import lineage_extract as lx
+
+    text = (WF / "monthly.yml").read_text(encoding="utf-8")
+    scripts = {s["script"] for s in lx.parse_workflow(text)["steps"]}
+    assert "migration/d1_to_sqlite.py" not in scripts, scripts
+    assert "migration/mysql/mysql_to_sqlite.py" in scripts
+    _, ss = steps("monthly")
+    assert not any("d1_to_sqlite" in (s.get("run") or "") for s in ss)
+
+
+def test_monthly_내려받기가_bash_에서_D1_스위치와_상관없이_MySQL_을_부릅니다(tmp_path):
     import shutil
     import subprocess
 
@@ -124,14 +139,46 @@ def test_monthly_내려받기_분기가_bash_에서_실제로_갈립니다(tmp_p
     _, ss = steps("monthly")
     run = next(s for s in ss if s.get("id") == "pull")["run"]
     script = "python() { echo \"python $*\"; }\n" + run
-    for mode, want, not_want in (("off", "mysql_to_sqlite", "d1_to_sqlite"),
-                                 ("on", "d1_to_sqlite", "mysql_to_sqlite")):
+    for mode in ("off", "on"):
         res = subprocess.run([bash, "-c", script], text=True, capture_output=True,
                              encoding="utf-8",
                              env=dict(os.environ, BSTATS_D1=mode,
                                       KBO_DB=str(tmp_path / "x.db")))
         assert res.returncode == 0, res.stderr
-        assert want in res.stdout and not_want not in res.stdout, (mode, res.stdout)
+        assert "mysql_to_sqlite" in res.stdout and "d1_to_sqlite" not in res.stdout, (
+            mode, res.stdout)
+
+
+@pytest.mark.parametrize("name", ["daily", "roster", "monthly"])
+def test_MySQL_준비_단계는_D1_이_꺼져_있으면_바로_실패합니다(name):
+    """off 이면 MySQL 이 유일한 저장소라 붙지 못하면 뒤 수집을 돌릴 이유가 없습니다.
+
+    continue-on-error 는 되돌리기(D1_WRITE=on) 때만 켭니다.
+    """
+    _, ss = steps(name)
+    gcp = next(s for s in ss if "google-github-actions/auth" in (s.get("uses") or ""))
+    proxy = next(s for s in ss if "migration/mysql/ci_proxy.sh" in (s.get("run") or ""))
+    for s in (gcp, proxy):
+        assert s.get("continue-on-error") == "${{ vars.D1_WRITE == 'on' }}", (name, s.get("name"))
+    # 프록시는 GCP 인증이 된 때만, 실패 확인은 프록시가 된 때만 돕니다.
+    assert proxy["if"] == "${{ steps.gcp.outcome == 'success' }}"
+    check = next(s for s in ss if s.get("id") == "mirror_check")
+    assert "steps.mysql.outcome == 'success'" in check["if"]
+
+
+def test_weekly_MySQL_준비_단계는_예전처럼_늘_실패를_올립니다():
+    _, ss = steps("weekly")
+    gcp = next(s for s in ss if "google-github-actions/auth" in (s.get("uses") or ""))
+    proxy = next(s for s in ss if "migration/mysql/ci_proxy.sh" in (s.get("run") or ""))
+    assert "continue-on-error" not in gcp and "continue-on-error" not in proxy
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_되돌리기_주의를_머리_주석에_적었습니다(name):
+    text = (WF / (name + ".yml")).read_text(encoding="utf-8")
+    head = text.split("\non:", 1)[0]
+    assert "D1·MySQL 대조가 빨갛습니다" in head, name
+    assert "roster_to_d1 은 낡은 D1 players" in head, name
 
 
 def test_weekly_는_MYSQL_MIRROR_확인_단계를_뺐습니다():

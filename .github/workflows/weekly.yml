@@ -24,6 +24,12 @@ name: weekly
 #
 # 수집은 MySQL 에만 씁니다. 되돌리려면 저장소 변수 D1_WRITE 를 on 으로
 # 두십시오. 그러면 D1 에도 씁니다(이중 적재). 자세한 사정은 daily.yml 에 적었습니다.
+#
+# 되돌린 뒤(D1_WRITE=on) 알아 둘 것:
+# - D1 에는 꺼져 있던 동안의 값이 없습니다. MySQL 에서 D1 으로 채우는 도구가
+#   아직 없어, 채우기 전까지 daily 의 D1·MySQL 대조가 빨갛습니다.
+# - roster_to_d1 은 낡은 D1 players 로 선수 ID 를 찾습니다. 같은 실행의
+#   add_new_players 가 대부분 고칩니다.
 
 on:
   # 월요일 20:47 UTC = 화요일 05:47 KST. 일일 수집이 끝난 뒤입니다.

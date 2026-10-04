@@ -114,7 +114,10 @@ def main():
         t0 = time.time()
         run_d1_file(path)
         refresh_count(table)
-        print("  올림 %.0f초" % (time.time() - t0))
+        if d1_enabled():
+            print("  올림 %.0f초" % (time.time() - t0))
+        else:
+            print("  D1 꺼짐(건너뜀)")
         pushed.append((table, len(rows)))
         mirrored.append((table, cols, rows))
 
@@ -128,7 +131,11 @@ def main():
         print("[dry-run] 올리지 않았습니다.")
         return 0
     for t, n in pushed:
-        print("올림: %-32s %s행" % (t, format(n, ",")))
+        if d1_enabled():
+            print("올림: %-32s %s행" % (t, format(n, ",")))
+        else:
+            # D1 에는 올리지 않았습니다. 위 mirror 가 MySQL 에 썼습니다.
+            print("MySQL 반영: %-28s %s행 (D1 꺼짐(건너뜀))" % (t, format(n, ",")))
     for t, why in skipped:
         print("건너뜀: %-30s %s" % (t, why))
     # 하나도 못 올렸으면 실패입니다. 조용히 성공으로 끝내면 화면이

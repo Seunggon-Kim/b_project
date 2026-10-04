@@ -58,12 +58,11 @@ def test_월간_워크플로가_공식기록_표를_내려받습니다():
 
     주석에도 `--tables players` 라는 글자가 있어서, 처음 나오는 것만
     보면 주석을 읽고 통과·실패가 뒤집힙니다. 내려받기 명령에 붙은 것만
-    봅니다. D1 이 꺼져 있으면 MySQL(`mysql_to_sqlite`)에서, 켜져 있으면
-    (D1_WRITE=on) D1(`d1_to_sqlite.py`)에서 받으므로 둘 다 봅니다.
+    봅니다. D1_WRITE 와 상관없이 늘 MySQL(`mysql_to_sqlite`)에서 받습니다.
     """
     # 줄 끝 `\` 이음을 먼저 펴서 명령 한 줄로 만듭니다.
     src = re.sub(r"\\\s*\n\s*", " ", MONTHLY.read_text(encoding="utf-8"))
-    for cmd in (r"d1_to_sqlite\.py", r"-m migration\.mysql\.mysql_to_sqlite"):
+    for cmd in (r"-m migration\.mysql\.mysql_to_sqlite",):
         m = re.search(cmd + r"[^\n]*", src)
         assert m, "monthly.yml 에서 %s 호출을 찾지 못했습니다" % cmd
         t = re.search(r"--tables\s+([A-Za-z0-9_,]+)", m.group(0))

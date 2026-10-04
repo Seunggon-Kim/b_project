@@ -224,6 +224,7 @@ def query(sql, db_name=DB_NAME):
 # 바꿉니다. 끝의 `;` 를 떼고, 큰따옴표 이름("x")을 백틱(`x`)으로 바꿉니다.
 # MySQL 은 큰따옴표를 글자로 읽어 `SELECT "name"` 이 열이 아니라 글자
 # 'name' 이 되기 때문입니다. 작은따옴표 안의 글자는 건드리지 않습니다.
+# 글자 밖의 `||`(SQLite 글자 잇기, MySQL 에서는 OR)는 바꾸지 않고 거절합니다.
 #
 # SQLite 에만 있는 표 정보 읽기 두 가지는 information_schema 로 바꿉니다.
 #   PRAGMA table_info(x)                              -> information_schema.columns
@@ -278,6 +279,11 @@ def _quote_idents(sql):
                 raise ValueError("닫히지 않은 큰따옴표가 있습니다: %s" % sql[:120])
             out.append("`%s`" % "".join(name).replace("`", "``"))
             i = j + 1
+        elif ch == "|" and i + 1 < n and sql[i + 1] == "|":
+            # SQLite 의 `||` 는 글자 잇기지만 MySQL(기본 sql_mode)에서는 OR 입니다.
+            # 오류 없이 0·1 이 나와 틀렸는데 맞아 보이므로 바꾸지 않고 멈춥니다.
+            raise ValueError("SQLite 글자 잇기(||)는 MySQL 에서 OR 로 읽힙니다. "
+                             "CONCAT() 으로 바꾸십시오: %s" % sql[:120])
         else:
             out.append(ch)
             i += 1

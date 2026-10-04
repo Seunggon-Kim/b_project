@@ -210,7 +210,7 @@
       "sources": [],
       "writes": [],
       "reads": [],
-      "note": "월간 작업용으로 D1 을 로컬 SQLite 로 내려받습니다. D1 을 켰을 때(D1_WRITE=on)만 씁니다."
+      "note": "D1 을 로컬 SQLite 로 내려받는 손 도구입니다. 워크플로는 더 부르지 않습니다(월간도 MySQL 에서 받음)."
     },
     "migration/sqlite_to_d1.py": {
       "sources": [],

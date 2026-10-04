@@ -12,9 +12,11 @@ MySQL 만 쓰게 했습니다. 스위치는 하나(`d1_load.d1_enabled`)이고, 
 - mirror() 는 MySQL 이 유일한 저장소라 실패하면 작업을 실패시킵니다.
 - D1 이 있어야만 뜻이 있는 도구(대조 등)는 아예 멈춥니다.
 """
+import ast
 import datetime
 import decimal
 import json
+import re
 import sqlite3
 import subprocess
 import sys
@@ -163,6 +165,22 @@ def test_이름_안의_큰따옴표와_백틱을_옮깁니다():
 def test_SELECT_가_아니면_거절합니다(sql):
     with pytest.raises(ValueError, match="SELECT"):
         dl.to_mysql(sql)
+
+
+@pytest.mark.parametrize("sql", [
+    "SELECT a || b FROM t",
+    "SELECT name FROM players WHERE team_id || '' = 'LG'",
+    'SELECT "a"||"b" FROM t',
+])
+def test_글자_밖의_연결_연산자는_거절합니다(sql):
+    # SQLite 의 || 는 글자 잇기지만 MySQL 에서는 OR 라 조용히 0·1 이 나옵니다.
+    with pytest.raises(ValueError, match="CONCAT"):
+        dl.to_mysql(sql)
+
+
+def test_글자_안의_연결_연산자는_그대로_둡니다():
+    sql, _ = dl.to_mysql("SELECT name FROM t WHERE note = 'a||b' OR x = '|'")
+    assert sql == "SELECT name FROM t WHERE note = 'a||b' OR x = '|'"
 
 
 def test_닫히지_않은_큰따옴표는_거절합니다():
@@ -339,6 +357,10 @@ def test_결과_표_올리기는_꺼져_있으면_MySQL_에만_씁니다(d1_off,
     assert seen["job"] == "sqlite_push"
     out = capsys.readouterr().out
     assert "D1 꺼짐:" in out and "D1 에 없어 새로 만듭니다" not in out
+    # D1 에 올리지 않았는데 "올림" 이라고 찍지 않습니다.
+    assert "올림" not in out
+    assert "D1 꺼짐(건너뜀)" in out
+    assert "MySQL 반영: self_park_factor" in out
 
 
 def test_실행_기록은_꺼져_있으면_MySQL_에만_남깁니다(d1_off, monkeypatch, capsys):
@@ -377,3 +399,90 @@ def test_사진_보정_질의는_파생_표에_별칭이_있습니다():
         "INSERT INTO kbo_official_pitcher_stats VALUES (1, 2026);")
     assert con.execute(seen[0].rstrip(";")).fetchone()[0] == 2026
     assert con.execute(seen[1].rstrip(";")).fetchall() == [(1, "u", 2026)]
+
+
+# --- 워크플로 수집 스크립트의 실제 질의 -------------------------------------------
+#
+# 워크플로가 부르는 파이썬 파일에서 `query(...)` 에 넘기는 SQL 글자를 모아,
+# 하나하나 MySQL 로 바뀌는지 봅니다. 새 질의가 SQLite 에만 있는 말투(||,
+# 별칭 없는 sqlite_master 질의 등)를 쓰면 D1 이 꺼진 날 러너에서야 죽으므로
+# 여기서 먼저 잡습니다. `%` 서식 자리는 1 이나 x 로 채웁니다.
+
+_FMT = re.compile(r"%(?:\([^)]*\))?[-#0 +]*\d*(?:\.\d+)?[sdifr%]")
+# 글자를 모을 수 없는 곳입니다. 대조는 D1 이 꺼져 있으면 멈춥니다(require_d1).
+_DYNAMIC_OK = {"migration/mysql/reconcile.py"}
+
+
+def _fill(fmt):
+    return _FMT.sub(lambda m: {"%": "%", "d": "1", "i": "1", "f": "1.0"}.get(
+        m.group(0)[-1], "x"), fmt)
+
+
+def _const_str(node, consts):
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.Name):
+        return consts.get(node.id)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        a, b = _const_str(node.left, consts), _const_str(node.right, consts)
+        return None if a is None or b is None else a + b
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mod):
+        a = _const_str(node.left, consts)
+        return None if a is None else _fill(a)
+    if isinstance(node, ast.JoinedStr):
+        return "".join(v.value if isinstance(v, ast.Constant) else "x" for v in node.values)
+    return None
+
+
+def _workflow_scripts():
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import lineage_extract as lx
+    out = set()
+    for name in ("daily", "roster", "weekly", "monthly"):
+        text = (ROOT / ".github" / "workflows" / (name + ".yml")).read_text(encoding="utf-8")
+        out |= {st["script"] for st in lx.parse_workflow(text)["steps"]
+                if st["script"].endswith(".py")}
+    return sorted(out)
+
+
+def _collected_queries():
+    found, unknown = [], []
+    for rel in _workflow_scripts():
+        tree = ast.parse((ROOT / rel).read_text(encoding="utf-8"))
+        consts = {}
+        for n in tree.body:
+            if (isinstance(n, ast.Assign) and isinstance(n.value, ast.Constant)
+                    and isinstance(n.value.value, str)):
+                for t in n.targets:
+                    if isinstance(t, ast.Name):
+                        consts[t.id] = n.value.value
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                    and node.func.id == "query" and node.args):
+                sql = _const_str(node.args[0], consts)
+                if sql is None:
+                    unknown.append((rel, node.lineno))
+                else:
+                    found.append((rel, node.lineno, sql))
+    return found, unknown
+
+
+def test_워크플로_수집_스크립트의_질의가_모두_MySQL_로_바뀝니다():
+    found, unknown = _collected_queries()
+    files = {rel for rel, _, _ in found}
+    # 헛돌지 않게, 읽기가 있는 수집 스크립트가 모두 잡혔는지 봅니다.
+    for rel in ("data_collection/team_ranks.py", "data_collection/roster_to_d1.py",
+                "data_collection/sync_players_from_roster.py",
+                "data_collection/add_new_players.py", "data_collection/heal_player_photos.py",
+                "data_collection/daily_games_to_d1.py", "data_collection/daily_pbp_to_d1.py",
+                "migration/sqlite_to_d1.py"):
+        assert rel in files, rel
+    assert len(found) >= 12, found
+    assert {rel for rel, _ in unknown} <= _DYNAMIC_OK, unknown
+    bad = []
+    for rel, line, sql in found:
+        try:
+            dl.to_mysql(sql)
+        except ValueError as e:
+            bad.append("%s:%d %s" % (rel, line, e))
+    assert not bad, bad

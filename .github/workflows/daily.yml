@@ -22,6 +22,12 @@ name: daily
 # D1 에 쓰고 MySQL 에도 씁니다(이중 적재). MySQL 은 어느 쪽이든 반드시
 # 붙어야 합니다. 사이트가 MySQL 을 읽기 때문입니다.
 #
+# 되돌린 뒤(D1_WRITE=on) 알아 둘 것:
+# - D1 에는 꺼져 있던 동안의 값이 없습니다. MySQL 에서 D1 으로 채우는 도구가
+#   아직 없어, 채우기 전까지 daily 의 D1·MySQL 대조가 빨갛습니다.
+# - roster_to_d1 은 낡은 D1 players 로 선수 ID 를 찾습니다. 같은 실행의
+#   add_new_players 가 대부분 고칩니다.
+#
 # ## 필요한 시크릿
 #
 #   GCP_WIF_PROVIDER / GCP_LOADER_SA / CLOUDSQL_INSTANCE / MYSQL_LOADER_PASSWORD / MYSQL_SERVER_PUBKEY   MySQL 적재(늘)
@@ -97,12 +103,13 @@ jobs:
 
       # --- MySQL 연결 ---------------------------------------------------
       # 늘 붙습니다. 사이트가 MySQL 을 읽고, D1 이 꺼져 있으면 MySQL 이 유일한
-      # 저장소입니다. continue-on-error 는 D1 을 켠 되돌리기 때 MySQL 이 죽어도
-      # D1 적재는 계속하려는 것입니다. 어느 쪽이든 마지막 판정이 빨갛습니다.
+      # 저장소입니다. D1 이 꺼져 있으면 여기서 실패할 때 바로 멈춥니다(뒤 수집이
+      # 쓸 곳이 없음). continue-on-error 는 D1 을 켠 되돌리기 때만 켭니다. 그때는
+      # MySQL 이 죽어도 D1 적재는 계속하고, 마지막 판정이 빨갛습니다.
       # 예전 저장소 변수 MYSQL_MIRROR 는 더 보지 않습니다.
       - name: GCP 인증(키 없음)
         id: gcp
-        continue-on-error: true
+        continue-on-error: ${{ vars.D1_WRITE == 'on' }}
         uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
@@ -111,7 +118,7 @@ jobs:
       - name: MySQL 연결
         id: mysql
         if: ${{ steps.gcp.outcome == 'success' }}
-        continue-on-error: true
+        continue-on-error: ${{ vars.D1_WRITE == 'on' }}
         env:
           CLOUDSQL_INSTANCE: ${{ secrets.CLOUDSQL_INSTANCE }}
           MYSQL_LOADER_PASSWORD: ${{ secrets.MYSQL_LOADER_PASSWORD }}
