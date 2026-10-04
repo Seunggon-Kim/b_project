@@ -8,9 +8,9 @@
   const PA = root.PlayerAnalytics = root.PlayerAnalytics || {};
 
   const SIZE = 300;                 // viewBox 한 변
-  const X_MAX = 3;                  // 좌우 ±3ft
-  const Z_TOP = 5.5;                // 높이 -0.5~5.5ft (존이 가운데)
-  const K = SIZE / (X_MAX * 2);     // ft → 좌표(50)
+  const X_MAX = 4;                  // 좌우 ±4ft (밖으로 나가 끝에 붙는 공을 줄이려고 넓힘, evan)
+  const Z_TOP = 6.5;                // 높이 -1.5~6.5ft (존이 가운데)
+  const K = SIZE / (X_MAX * 2);     // ft → 좌표(37.5)
   const HALF_ZONE = 17 / 12 / 2;    // 0.708ft
   const MIN_CONTOUR_N = 15;
   const LEVELS = 5;
@@ -89,7 +89,7 @@
 
   /** 홈플레이트(납작한 오각형)입니다. 좌표는 viewBox. */
   function plateD() {
-    const cx = SIZE / 2, w = HALF_ZONE * K, y0 = SIZE - 44, y1 = y0 + 9, y2 = y0 + 20;
+    const cx = SIZE / 2, w = HALF_ZONE * K, y0 = (Z_TOP - 0.38) * K, y1 = y0 + 0.18 * K, y2 = y0 + 0.4 * K;  // 높이 약 0.4ft, 범위와 함께 줄어듦
     return 'M' + r1(cx - w) + ' ' + y0 + 'L' + r1(cx + w) + ' ' + y0 + 'L' + r1(cx + w) + ' ' + y1 +
       'L' + cx + ' ' + y2 + 'L' + r1(cx - w) + ' ' + y1 + 'Z';
   }
@@ -135,7 +135,7 @@
     const data = densityData(g, view);
     if (data.length < MIN_CONTOUR_N) return null;
     const out = d3.contourDensity().x(function (d) { return d[0]; }).y(function (d) { return d[1]; })
-      .size([SIZE, SIZE]).bandwidth(9).thresholds(LEVELS + 1)(data);
+      .size([SIZE, SIZE]).bandwidth(0.18 * K).thresholds(LEVELS + 1)(data);
     return out.length > LEVELS ? out.slice(out.length - LEVELS) : out;
   }
 

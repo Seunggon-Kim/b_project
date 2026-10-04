@@ -151,7 +151,7 @@
     const vs = valid(pitches);
     if (!vs.length) return '';
     const R = RINGS[RINGS.length - 1] * PX_PER_CM;
-    let s = '<svg class="pa-mv-svg" viewBox="0 0 400 400" role="img" aria-label="구종별 무브먼트">'
+    let s = '<svg class="pa-mv-svg" viewBox="0 0 400 412" role="img" aria-label="구종별 무브먼트">'
       + '<defs><clipPath id="pa-mv-clip"><circle cx="200" cy="200" r="' + R + '"/></clipPath>'
       + (ctx ? '<pattern id="pa-mv-hatch" patternUnits="userSpaceOnUse" width="6" height="6"><rect class="pa-mv-hatch-bg" width="6" height="6"/><path class="pa-mv-hatch-line" d="M-1,1 l2,-2 M0,6 l6,-6 M5,7 l2,-2"/></pattern>' : '')
       + '</defs>'
@@ -171,14 +171,14 @@
       + '<text class="pa-mv-dir" x="194" y="374" text-anchor="end">더 떨어짐</text>'
       + '<text class="pa-mv-dir" x="26" y="214">' + sideL + '</text>'
       + '<text class="pa-mv-dir" x="374" y="214" text-anchor="end">' + sideR + '</text>';
-    // 범례: 오른쪽 아래(5시) 한 줄. 선수 평균, 그 오른쪽에 리그 평균(evan 의견).
+    // 범례: 오른쪽 아래(5시) 한 줄. 그림과 조금 띄우려고 viewBox 높이를 412 로 늘렸습니다(evan). 선수 평균, 그 오른쪽에 리그 평균(evan 의견).
     // 고정 자리라 투수 시점에도 안 바뀝니다. 리그 평균이 없으면 선수 평균만 오른쪽 끝.
     const ownX = ctx ? 242 : 344;
-    s += '<circle class="pa-mv-key-own" cx="' + ownX + '" cy="391" r="7"/>'
-      + '<text class="pa-mv-key" x="' + (ownX + 12) + '" y="396">선수 평균</text>';
+    s += '<circle class="pa-mv-key-own" cx="' + ownX + '" cy="401" r="7"/>'
+      + '<text class="pa-mv-key" x="' + (ownX + 12) + '" y="406">선수 평균</text>';
     if (ctx) {
-      s += '<circle class="pa-mv-key-lg" cx="344" cy="391" r="8" fill="url(#pa-mv-hatch)"/>'
-        + '<text class="pa-mv-key" x="356" y="396">' + esc(ctx.label) + ' 평균</text>';
+      s += '<circle class="pa-mv-key-lg" cx="344" cy="401" r="8" fill="url(#pa-mv-hatch)"/>'
+        + '<text class="pa-mv-key" x="356" y="406">' + esc(ctx.label) + ' 평균</text>';
     }
     s += '<g clip-path="url(#pa-mv-clip)">';
     vs.forEach(function (p) {
@@ -273,8 +273,15 @@
    * 좌타 상대 % · 왼쪽 막대 · 구종(전체 %) · 오른쪽 막대 · 우타 상대 %. 전체 비율 큰 순.
    * data 는 /players/{id}/usage 응답입니다. 투구 수 합계 줄은 두지 않습니다(evan 의견).
    */
-  /** 구종 구사율 칸에서만 쓰는 짧은 이름입니다(막대 자리를 남기려고, evan 결정). */
-  function usageLabel(name) { return name === '포심 패스트볼' ? '포심' : name; }
+  /** 구종 구사율 칸에서만 쓰는 Savant 영어 약자입니다(막대 자리를 남기려고, evan 결정). 마우스를 올리면 한글 이름. */
+  const CODES = {
+    '포심 패스트볼': 'FF', '싱커': 'SI', '슬라이더': 'SL', '스위퍼': 'ST', '커터': 'FC',
+    '커브': 'CU', '체인지업': 'CH', '포크': 'FS', '스플리터': 'FS', '슬러브': 'SV', '너클볼': 'KN',
+  };
+  function pitchCode(name) { return CODES[name] || name; }
+  function usageNameHtml(name, pct) {
+    return '<span class="pa-usage-name" title="' + esc(name) + '">' + esc(pitchCode(name)) + ' <b>' + pct + '%</b></span>';
+  }
 
   function usageHtml(data, season, pv) {
     const title = '<div class="pa-usage-title">' + esc(season) + ' 구종 구사율</div>';
@@ -289,7 +296,7 @@
         return '<div class="pa-usage-row">'
           + '<span class="pa-usage-pct">' + f1(l) + '%</span>'
           + '<span class="pa-usage-bar pa-usage-bar--l"><i style="width:' + f1(l) + '%;background:' + c + '"></i></span>'
-          + '<span class="pa-usage-name">' + esc(usageLabel(u.pitch_type)) + ' <b>' + f1(pct1(u.usage_all)) + '%</b></span>'
+          + usageNameHtml(u.pitch_type, f1(pct1(u.usage_all)))
           + '<span class="pa-usage-bar"><i style="width:' + f1(r) + '%;background:' + c + '"></i></span>'
           + '<span class="pa-usage-pct">' + f1(r) + '%</span>'
           + '</div>';
@@ -325,7 +332,7 @@
           + '<span class="pa-usage-pct">' + f1(l) + '%</span>'
           + '<span class="pa-usage-bar pa-usage-bar--l"><i style="width:' + f1(l) + '%;background:' + c + '"></i></span>'
           + rvCell(p, 'l')
-          + '<span class="pa-usage-name">' + esc(usageLabel(u.pitch_type)) + ' <b>' + f1(pct1(u.usage_all)) + '%</b></span>'
+          + usageNameHtml(u.pitch_type, f1(pct1(u.usage_all)))
           + rvCell(p, 'r')
           + '<span class="pa-usage-bar"><i style="width:' + f1(r) + '%;background:' + c + '"></i></span>'
           + '<span class="pa-usage-pct">' + f1(r) + '%</span>'
@@ -334,7 +341,7 @@
       + '</div>';
   }
 
-  const api = { COLORS, colorOf, pitchName, summarize, seasonsFor, totalsFor, svgHtml, legendHtml, bodyHtml, avgFor, handLabel, HELP, helpFor, usageHtml };
+  const api = { COLORS, colorOf, pitchName, pitchCode, summarize, seasonsFor, totalsFor, svgHtml, legendHtml, bodyHtml, avgFor, handLabel, HELP, helpFor, usageHtml };
   PA.movement = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
