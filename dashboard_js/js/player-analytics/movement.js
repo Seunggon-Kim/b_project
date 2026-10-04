@@ -94,12 +94,26 @@
     return out.sort(function (a, b) { return b - a; });
   }
 
+  /** 시점별 툴팁 글자입니다. view: 'catcher'(기본) | 'pitcher' */
+  function helpFor(view) {
+    return (view === 'pitcher'
+      ? '투수 시점입니다. 수평 +는 3루 쪽, 수직 +는 위입니다.\n'
+      : '포수 시점입니다. 수평 +는 1루 쪽, 수직 +는 위입니다.\n')
+      + '추적 수는 문자중계 기준이라 공식 투구 수와 조금 다를 수 있습니다.';
+  }
+  const HELP = helpFor('catcher');
+
+  /** 투수 시점이면 수평을 뒤집습니다(포수 시점 기준 값에 곱함). */
+  function flipOf(view) { return view === 'pitcher' ? -1 : 1; }
+
   function f1(v) { return v.toFixed(1); }
-  function px(cmX) { return f1(C + cmX * PX_PER_CM); }
+  /** 수평 값을 시점에 맞춰 글자로 만듭니다(-0.0 방지). */
+  function fx(v, view) { return f1(v * flipOf(view) + 0); }
+  function px(cmX, view) { return f1(C + cmX * flipOf(view) * PX_PER_CM); }
   function py(cmZ) { return f1(C - cmZ * PX_PER_CM); }
 
   /** 원형 무브먼트 그림입니다. 유효한 공이 없으면 빈 글자입니다. */
-  function svgHtml(pitches, summary) {
+  function svgHtml(pitches, summary, view) {
     const vs = valid(pitches);
     if (!vs.length) return '';
     const R = RINGS[RINGS.length - 1] * PX_PER_CM;
@@ -116,42 +130,38 @@
     });
     s += '<g clip-path="url(#pa-mv-clip)">';
     vs.forEach(function (p) {
-      s += '<circle class="pa-mv-pt" cx="' + px(num(p.pfx_x) * IN2CM) + '" cy="' + py(num(p.pfx_z) * IN2CM)
+      s += '<circle class="pa-mv-pt" cx="' + px(num(p.pfx_x) * IN2CM, view) + '" cy="' + py(num(p.pfx_z) * IN2CM)
         + '" r="2.5" fill="' + colorOf(p.pitch_type) + '"/>';
     });
     (summary || []).forEach(function (g) {
-      s += '<circle class="pa-mv-avg" cx="' + px(g.x) + '" cy="' + py(g.z) + '" r="9" fill="' + g.color + '">'
-        + '<title>' + esc(g.type) + ' ' + f1(g.pct) + '% · 수직 ' + f1(g.z) + 'cm · 수평 ' + f1(g.x) + 'cm</title></circle>';
+      s += '<circle class="pa-mv-avg" cx="' + px(g.x, view) + '" cy="' + py(g.z) + '" r="9" fill="' + g.color + '">'
+        + '<title>' + esc(g.type) + ' ' + f1(g.pct) + '% · 수직 ' + f1(g.z) + 'cm · 수평 ' + fx(g.x, view) + 'cm</title></circle>';
     });
     return s + '</g></svg>';
   }
 
   /** 구종 표입니다. 빈 배열이면 빈 글자입니다. */
-  function legendHtml(summary) {
+  function legendHtml(summary, view) {
     if (!summary || !summary.length) return '';
     return '<table class="pa-mv-legend"><thead><tr><th>구종</th><th>비율</th><th>구속(km/h)</th><th>수직(cm)</th><th>수평(cm)</th></tr></thead><tbody>'
       + summary.map(function (g) {
         return '<tr><td><span class="pa-mv-dot" style="background:' + g.color + '"></span>' + esc(g.type) + '</td>'
           + '<td>' + f1(g.pct) + '%</td><td>' + (g.speed === null ? '-' : f1(g.speed)) + '</td>'
-          + '<td>' + f1(g.z) + '</td><td>' + f1(g.x) + '</td></tr>';
+          + '<td>' + f1(g.z) + '</td><td>' + fx(g.x, view) + '</td></tr>';
       }).join('')
       + '</tbody></table>';
   }
 
   /** 카드 본문입니다. 그림 + 추적 비율 줄 + 표. 데이터가 없으면 안내 문구입니다. 설명은 카드 제목 옆 툴팁(HELP)에 있습니다. */
-  function bodyHtml(pitches, total) {
+  function bodyHtml(pitches, total, view) {
     const vs = valid(pitches);
     if (!vs.length) return '<p class="pa-mv-empty">이 시즌은 투구 추적 데이터가 없습니다.</p>';
     const summary = summarize(vs);
-    return svgHtml(vs, summary)
+    return svgHtml(vs, summary, view)
       + '<p class="pa-mv-note">공 ' + comma(vs.length) + '개 추적'
       + (total > 0 ? ' (정규시즌 ' + comma(total) + '구 대비 ' + Math.min(100, Math.round(vs.length * 100 / total)) + '%)' : '') + '</p>'
-      + legendHtml(summary);
+      + legendHtml(summary, view);
   }
-
-  /** 카드 제목 옆 `?` 툴팁 글자입니다(그림 아래 설명을 옮김). */
-  const HELP = '포수 시점입니다. 수평 +는 1루 쪽, 수직 +는 위입니다.\n'
-    + '추적 수는 문자중계 기준이라 공식 투구 수와 조금 다를 수 있습니다.';
 
   function pct1(v) {
     const n = num(v);
@@ -182,7 +192,7 @@
       + '</div>';
   }
 
-  const api = { COLORS, colorOf, summarize, seasonsFor, totalsFor, svgHtml, legendHtml, bodyHtml, HELP, usageHtml };
+  const api = { COLORS, colorOf, summarize, seasonsFor, totalsFor, svgHtml, legendHtml, bodyHtml, HELP, helpFor, usageHtml };
   PA.movement = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

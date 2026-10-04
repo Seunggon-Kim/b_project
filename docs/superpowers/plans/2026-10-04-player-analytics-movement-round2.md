@@ -289,3 +289,101 @@ git diff --stat -- dashboard_js/data/table_lineage.json
 - [ ] 캡처해서 `C:/Users/김승곤/Desktop/pa8_<이름>.png` 로 복사하고 Read 로 봅니다: `pitcher`(1789 light), `pitcher_help`(툴팁 펼친 상태), `pitcher_2019`, `dark`, `mobile`, `w1100`(W=1100), `batter`.
 - [ ] 확인: 세 카드 높이(1789)·구사율 막대 좌우 방향·색·글자 겹침 없음·휴대폰 가로 넘침 없음·툴팁이 카드에 잘리지 않음.
 - [ ] 시험 다시 실행, `git log origin/main..main --oneline` 을 보고서에 적습니다.
+
+---
+
+### Task 2b: 포수·투수 시점 전환 (evan 요청, Task 2 뒤)
+
+**Files:** `dashboard_js/js/player-analytics/movement.js`, `dashboard_js/pages/player-analytics.html`, `dashboard_js/css/player-analytics.css`, 시험 `movement.test.js`·`page-html.test.js`
+
+- [ ] **Step 1: 시험 먼저(실패하게)** — `movement.test.js` 끝에:
+
+```js
+test('시점 전환: 투수 시점은 수평을 뒤집음, 툴팁 글자', () => {
+  const s = M.summarize(P);
+  assert.equal(M.HELP, M.helpFor('catcher'));
+  assert.equal(M.helpFor('pitcher'), '투수 시점입니다. 수평 +는 3루 쪽, 수직 +는 위입니다.\n추적 수는 문자중계 기준이라 공식 투구 수와 조금 다를 수 있습니다.');
+  assert.ok(M.svgHtml(P, s, 'pitcher').includes('cx="123.8" cy="123.8"'), '직구 첫 공이 왼쪽으로');
+  assert.ok(M.svgHtml(P, s).includes('cx="276.2" cy="123.8"'), '기본은 포수 시점');
+  const lp = M.legendHtml(s, 'pitcher');
+  assert.ok(lp.includes('직구</td><td>50.0%</td><td>142.0</td><td>25.4</td><td>-12.7</td>'));
+  assert.ok(lp.includes('커브</td><td>25.0%</td><td>-</td><td>-12.7</td><td>12.7</td>'));
+  assert.ok(M.svgHtml(P, s, 'pitcher').includes('수평 -12.7cm'));
+  assert.equal(M.bodyHtml(P, 8), M.bodyHtml(P, 8, 'catcher'));
+  assert.notEqual(M.bodyHtml(P, 8, 'pitcher'), M.bodyHtml(P, 8, 'catcher'));
+});
+```
+
+`page-html.test.js` 의 2차 시험에서 `'M.HELP'` 를 `'M.helpFor('` 로 바꾸고, 시험을 더합니다:
+
+```js
+test('시점 전환 단추', () => {
+  assert.match(html, /<div class="pa-mv-view" role="group" aria-label="무브먼트 시점">/);
+  assert.match(html, /<button type="button" class="pa-mv-view-btn active" data-view="catcher" aria-pressed="true">포수 시점<\/button>/);
+  assert.match(html, /<button type="button" class="pa-mv-view-btn" data-view="pitcher" aria-pressed="false">투수 시점<\/button>/);
+  for (const used of ["let mvView = 'catcher'", 'M.bodyHtml(pitches, total, mvView)', 'mvLast']) assert.ok(html.includes(used), used);
+});
+```
+
+- [ ] **Step 2: movement.js**
+
+`HELP` 정의를 아래로 바꿉니다(HELP 는 포수 시점 글자 그대로):
+
+```js
+  /** 시점별 툴팁 글자입니다. view: 'catcher'(기본) | 'pitcher' */
+  function helpFor(view) {
+    return (view === 'pitcher'
+      ? '투수 시점입니다. 수평 +는 3루 쪽, 수직 +는 위입니다.\n'
+      : '포수 시점입니다. 수평 +는 1루 쪽, 수직 +는 위입니다.\n')
+      + '추적 수는 문자중계 기준이라 공식 투구 수와 조금 다를 수 있습니다.';
+  }
+  const HELP = helpFor('catcher');
+
+  /** 투수 시점이면 수평을 뒤집습니다(포수 시점 기준 값에 곱함). */
+  function flipOf(view) { return view === 'pitcher' ? -1 : 1; }
+```
+
+(HELP 와 flipOf 는 svgHtml 보다 **위**에 둡니다.) `svgHtml(pitches, summary, view)`·`legendHtml(summary, view)`·`bodyHtml(pitches, total, view)` 에 view 인자를 더하고, 수평 값(점 cx, 평균 원 cx, title 의 `수평`, 표의 수평 칸)에 `flipOf(view)` 를 곱합니다. 수직은 그대로입니다. `bodyHtml` 은 view 를 svgHtml·legendHtml 에 넘깁니다. `api` 에 `helpFor` 를 더합니다.
+
+- [ ] **Step 3: 페이지** — 무브먼트 카드에서 `<div class="pa-card-body" id="pa-move-body"></div>` 바로 앞에:
+
+```html
+                    <div class="pa-mv-view" role="group" aria-label="무브먼트 시점">
+                        <button type="button" class="pa-mv-view-btn active" data-view="catcher" aria-pressed="true">포수 시점</button>
+                        <button type="button" class="pa-mv-view-btn" data-view="pitcher" aria-pressed="false">투수 시점</button>
+                    </div>
+```
+
+스크립트: `mvCache` 선언 근처에 `let mvView = 'catcher';` 와 `let mvLast = null;  // 마지막으로 그린 {pitches, total}(시점만 바꿀 때 다시 부르지 않음)`. `loadMovement` 의 그리기 줄을 `mvLast = { pitches, total };` 다음 `body.innerHTML = M.bodyHtml(pitches, total, mvView);` 로 바꿉니다. `hideMovementCard` 에서 `mvLast = null;`. `setupMovementCard` 의 툴팁 줄을 `help.dataset.tip = M.helpFor(mvView); help.title = help.dataset.tip;` 로 바꿉니다. 단추 처리(한 번만 등록, 스크립트 아래쪽 popstate 처리 근처):
+
+```js
+        // 무브먼트 포수·투수 시점 전환입니다. 데이터는 다시 부르지 않고 다시 그립니다.
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('.pa-mv-view-btn');
+            if (!btn || btn.dataset.view === mvView) return;
+            const M = window.PlayerAnalytics.movement;
+            mvView = btn.dataset.view;
+            document.querySelectorAll('.pa-mv-view-btn').forEach(b => {
+                const on = b === btn;
+                b.classList.toggle('active', on);
+                b.setAttribute('aria-pressed', on ? 'true' : 'false');
+            });
+            const help = document.getElementById('pa-move-help');
+            if (help) { help.dataset.tip = M.helpFor(mvView); help.title = help.dataset.tip; }
+            if (mvLast) document.getElementById('pa-move-body').innerHTML = M.bodyHtml(mvLast.pitches, mvLast.total, mvView);
+        });
+```
+
+- [ ] **Step 4: CSS** — 끝에:
+
+```css
+.pa-mv-view { display: flex; justify-content: flex-end; padding: 0.5rem 0.75rem 0; }
+.pa-mv-view-btn { padding: 0.2rem 0.6rem; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-secondary); font: inherit; font-size: 0.75rem; font-weight: 600; cursor: pointer; }
+.pa-mv-view-btn:first-child { border-radius: 6px 0 0 6px; }
+.pa-mv-view-btn:last-child { border-radius: 0 6px 6px 0; border-left: 0; }
+.pa-mv-view-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+```
+
+- [ ] **Step 5: 확인** — 시험 모두 PASS. 캡처: 65933 포수 시점·투수 시점(CDP 로 `.pa-mv-view-btn[data-view=pitcher]` 클릭) 두 장, 그림이 좌우로 뒤집히고 표 수평 부호가 바뀌는지, 툴팁 글자가 바뀌는지(`#pa-move-help` 의 data-tip). 투수 시점 상태에서 연도를 2019 로 바꿔도 투수 시점이 유지되는지.
+
+- [ ] **Step 6: 커밋** — `git commit -m "feat(player-analytics): 무브먼트 포수·투수 시점 전환" -- dashboard_js/js/player-analytics/movement.js dashboard_js/pages/player-analytics.html dashboard_js/css/player-analytics.css`

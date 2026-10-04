@@ -102,9 +102,14 @@
                     <div class="pa-card-tabs">
                         <span class="pa-card-tabs-left">
                             <span class="pa-card-tab">무브먼트 (Induced Break)</span>
-                            <button type="button" class="pa-help" id="pa-move-help" aria-label="무브먼트 설명">?</button>
+                            <button type="button" class="pa-help" id="pa-move-help" aria-label="무브먼트 설명" aria-describedby="pa-move-help-text">?</button>
+                            <span id="pa-move-help-text" class="sr-only"></span>
                         </span>
                         <select id="pa-move-season" class="pa-move-season" aria-label="무브먼트 시즌"></select>
+                    </div>
+                    <div class="pa-mv-view" role="group" aria-label="무브먼트 시점">
+                        <button type="button" class="pa-mv-view-btn active" data-view="catcher" aria-pressed="true">포수 시점</button>
+                        <button type="button" class="pa-mv-view-btn" data-view="pitcher" aria-pressed="false">투수 시점</button>
                     </div>
                     <div class="pa-card-body" id="pa-move-body"></div>
                 </div>
@@ -603,9 +608,22 @@
         const mvCache = {};
         const usageCache = {};
         let mvToken = 0;
+        let mvView = 'catcher';
+        let mvLast = null;  // 마지막으로 그린 {pitches, total}(시점만 바꿀 때 다시 부르지 않음)
+
+        // 툴팁 글자를 시점에 맞춰 바꿉니다(눈에 보이는 툴팁 + 스크린리더용 숨은 글자).
+        function setMovementHelp() {
+            const M = window.PlayerAnalytics.movement;
+            const help = document.getElementById('pa-move-help');
+            const text = document.getElementById('pa-move-help-text');
+            const tip = M.helpFor(mvView);
+            if (help) help.dataset.tip = tip;
+            if (text) text.textContent = tip;
+        }
 
         function hideMovementCard() {
             mvToken++;  // 아직 오는 중인 응답을 버립니다.
+            mvLast = null;
             const card = document.getElementById('pa-move-card');
             if (card) card.classList.add('hidden');
             const grid = document.querySelector('.player-details-grid');
@@ -614,8 +632,7 @@
 
         function setupMovementCard(player, playerId) {
             const M = window.PlayerAnalytics.movement;
-            const help = document.getElementById('pa-move-help');
-            if (help) { help.dataset.tip = M.HELP; help.title = M.HELP; }
+            setMovementHelp();
             const seasons = player.position === '투수' ? M.seasonsFor(player) : [];
             const totals = M.totalsFor(player);
             if (!seasons.length) { hideMovementCard(); return; }
@@ -654,7 +671,8 @@
                 if (!usage) { usage = u || { usage: [] }; if ((usage.usage || []).length) usageCache[key] = usage; }
             }
             if (token !== mvToken) return;  // 그사이 다른 선수·시즌을 골랐습니다.
-            body.innerHTML = M.bodyHtml(pitches, total);
+            mvLast = { pitches, total };
+            body.innerHTML = M.bodyHtml(pitches, total, mvView);
             if (usageBox) usageBox.innerHTML = M.usageHtml(usage, season);
         }
 
@@ -1328,6 +1346,30 @@
         }
 
         // 뒤로 가기로 앞서 본 선수로 돌아갑니다.
+        // 무브먼트 포수·투수 시점 전환입니다. 데이터는 다시 부르지 않고 다시 그립니다.
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('.pa-mv-view-btn');
+            if (!btn || btn.dataset.view === mvView) return;
+            const M = window.PlayerAnalytics.movement;
+            mvView = btn.dataset.view;
+            document.querySelectorAll('.pa-mv-view-btn').forEach(b => {
+                const on = b === btn;
+                b.classList.toggle('active', on);
+                b.setAttribute('aria-pressed', on ? 'true' : 'false');
+            });
+            setMovementHelp();
+            if (mvLast) document.getElementById('pa-move-body').innerHTML = M.bodyHtml(mvLast.pitches, mvLast.total, mvView);
+        });
+
+        // 무브먼트 `?` 툴팁: 터치에서는 눌러 열고, 다른 곳을 누르거나 Esc 로 닫습니다.
+        (function () {
+            const help = document.getElementById('pa-move-help');
+            if (!help) return;
+            help.addEventListener('click', () => help.classList.toggle('open'));
+            help.addEventListener('blur', () => help.classList.remove('open'));
+            help.addEventListener('keydown', (e) => { if (e.key === 'Escape') help.classList.remove('open'); });
+        })();
+
         window.addEventListener('popstate', () => {
             const p = new URLSearchParams(window.location.search);
             const id = p.get('id');
