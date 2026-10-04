@@ -12,10 +12,18 @@ name: weekly
 # 다 썼습니다(2단계에서 바꿈). 파크팩터는 하루 새 경기 다섯 개로 소수점
 # 아래가 흔들리는 정도라 주 1회면 충분합니다.
 #
+# 계산 결과는 MySQL 에 씁니다. D1 은 켜져 있을 때(D1_WRITE=on)만 씁니다.
+#
 # ## 필요한 시크릿
 #
-#   CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID / ADMIN_TOKEN
-#   GCP_WIF_PROVIDER / GCP_LOADER_SA / CLOUDSQL_INSTANCE / MYSQL_LOADER_PASSWORD / MYSQL_SERVER_PUBKEY   MySQL 이중 적재(변수 MYSQL_MIRROR=on 일 때)
+#   GCP_WIF_PROVIDER / GCP_LOADER_SA / CLOUDSQL_INSTANCE / MYSQL_LOADER_PASSWORD / MYSQL_SERVER_PUBKEY   MySQL 적재(늘)
+#   ADMIN_TOKEN            적재 뒤 캐시 비우기
+#   CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID   D1 적재(변수 D1_WRITE=on 일 때만)
+#
+# ## D1 끄기(BSTATS_D1)
+#
+# 수집은 MySQL 에만 씁니다. 되돌리려면 저장소 변수 D1_WRITE 를 on 으로
+# 두십시오. 그러면 D1 에도 씁니다(이중 적재). 자세한 사정은 daily.yml 에 적었습니다.
 
 on:
   # 월요일 20:47 UTC = 화요일 05:47 KST. 일일 수집이 끝난 뒤입니다.
@@ -52,19 +60,16 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # D1 스위치입니다(data_collection/d1_load.py 의 d1_enabled). 저장소 변수
+      # D1_WRITE 가 on 일 때만 on 이고, 없거나 다른 값이면 off 입니다.
+      BSTATS_D1: ${{ vars.D1_WRITE == 'on' && 'on' || 'off' }}
 
     steps:
       - uses: actions/checkout@v7
 
-      # MySQL 이 D1 과 같다는 매일 대조가 켜진 뒤에만 돕니다. 그 전에 돌면
-      # 낡은 MySQL 로 계산한 값을 D1 에 올리게 됩니다. 무엇보다 먼저 확인합니다.
-      - name: MySQL 이중 적재 켜짐 확인
-        id: guard
-        run: |
-          if [ "${{ vars.MYSQL_MIRROR }}" != "on" ]; then
-            echo "저장소 변수 MYSQL_MIRROR 가 on 이 아닙니다. 2B Task 9 뒤에 돌리십시오."
-            exit 1
-          fi
+      # 예전에는 여기서 저장소 변수 MYSQL_MIRROR 가 on 인지 먼저 봤습니다(낡은
+      # MySQL 로 계산한 값을 D1 에 올리지 않으려고). 이제 사이트가 MySQL 을 읽고
+      # MySQL 이 원본이라 그 확인을 뺐습니다.
 
       - uses: actions/setup-python@v7
         with:
@@ -75,7 +80,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install pandas numpy pymysql cryptography
 
+      # D1 을 켰을 때(D1_WRITE=on)만 봅니다. `d1 info` 도 D1 을 부르는 일입니다.
       - name: 인증 확인
+        if: ${{ vars.D1_WRITE == 'on' }}
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
             echo "CLOUDFLARE_API_TOKEN 이 없습니다."
@@ -138,8 +145,9 @@ jobs:
         if: steps.wrc.outcome == 'success'
         run: python park_factors/build_re24_run_values.py --write
 
-      # 계산 결과를 D1 에 올리고 MySQL 에도 씁니다(sqlite_to_d1 의 mirror).
-      - name: 결과 표 D1 적재
+      # 계산 결과를 MySQL 에 씁니다(sqlite_to_d1 의 mirror). D1 은 켜져 있을
+      # 때(D1_WRITE=on)만 올립니다.
+      - name: 결과 표 적재
         id: push
         if: steps.re24.outcome == 'success'
         run: python migration/sqlite_to_d1.py --db "$KBO_DB"
@@ -199,7 +207,7 @@ jobs:
           test "$code" = "200"
 
       - name: 결과 기록
-        if: ${{ always() && steps.guard.outcome == 'success' }}
+        if: always()
         continue-on-error: true
         run: |
           python data_collection/record_job_run.py --job park_factors \
@@ -231,13 +239,14 @@ jobs:
             echo "| 파크팩터 | ${{ steps.pf.outcome }} |"
             echo "| wRC+ | ${{ steps.wrc.outcome }} |"
             echo "| RE24 | ${{ steps.re24.outcome }} |"
-            echo "| D1 적재 | ${{ steps.push.outcome }} |"
+            echo "| 결과 표 적재 | ${{ steps.push.outcome }} |"
             echo "| 캐시 비우기 | ${{ steps.purge.outcome }} |"
             echo "| MySQL 이중 적재 | ${{ steps.mirror_check.outcome }} |"
+            echo "| D1 (D1_WRITE) | ${{ env.BSTATS_D1 }} |"
           } >> $GITHUB_STEP_SUMMARY
 
       - name: MySQL 이중 적재 판정
-        if: ${{ always() && steps.guard.outcome == 'success' && (steps.mysql.outcome != 'success' || steps.mirror_check.outcome != 'success') }}
+        if: ${{ always() && (steps.mysql.outcome != 'success' || steps.mirror_check.outcome != 'success') }}
         run: |
           echo "MySQL 연결 또는 이중 적재가 실패했습니다. 요약 표를 보십시오."
           exit 1

@@ -16,7 +16,8 @@ def test_collect_workflows_have_mirror_steps():
     for name in ("daily.yml", "roster.yml", "monthly.yml"):
         t = (WF / name).read_text(encoding="utf-8")
         assert "id-token: write" in t, name
-        assert "vars.MYSQL_MIRROR == 'on'" in t, name
+        # MySQL 은 늘 붙습니다(D1 끄기 뒤로 MYSQL_MIRROR 변수를 보지 않음).
+        assert "vars.MYSQL_MIRROR" not in t, name
         assert "bash migration/mysql/ci_proxy.sh" in t, name
         assert "pymysql" in t, name
         assert "cryptography" in t, name

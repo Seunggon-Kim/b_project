@@ -57,22 +57,24 @@ def test_월간_워크플로가_공식기록_표를_내려받습니다():
     """이게 빠지면 스크래퍼가 첫 질의에서 죽습니다.
 
     주석에도 `--tables players` 라는 글자가 있어서, 처음 나오는 것만
-    보면 주석을 읽고 통과·실패가 뒤집힙니다. 내려받기 명령
-    (`d1_to_sqlite.py`)에 붙은 것만 봅니다.
+    보면 주석을 읽고 통과·실패가 뒤집힙니다. 내려받기 명령에 붙은 것만
+    봅니다. D1 이 꺼져 있으면 MySQL(`mysql_to_sqlite`)에서, 켜져 있으면
+    (D1_WRITE=on) D1(`d1_to_sqlite.py`)에서 받으므로 둘 다 봅니다.
     """
     # 줄 끝 `\` 이음을 먼저 펴서 명령 한 줄로 만듭니다.
     src = re.sub(r"\\\s*\n\s*", " ", MONTHLY.read_text(encoding="utf-8"))
-    m = re.search(r"d1_to_sqlite\.py[^\n]*", src)
-    assert m, "monthly.yml 에서 d1_to_sqlite.py 호출을 찾지 못했습니다"
-    t = re.search(r"--tables\s+([A-Za-z0-9_,]+)", m.group(0))
-    assert t, "내려받기 명령에 --tables 가 없습니다: %s" % m.group(0)
-    listed = {x for x in t.group(1).split(",") if x}
-    for name in ("players",) + NEEDED_TABLES:
-        assert name in listed, (
-            "monthly.yml 이 %s 를 내려받지 않습니다. "
-            "player_info_scraper 가 그 표를 읽습니다. 받는 것: %s"
-            % (name, sorted(listed))
-        )
+    for cmd in (r"d1_to_sqlite\.py", r"-m migration\.mysql\.mysql_to_sqlite"):
+        m = re.search(cmd + r"[^\n]*", src)
+        assert m, "monthly.yml 에서 %s 호출을 찾지 못했습니다" % cmd
+        t = re.search(r"--tables\s+([A-Za-z0-9_,]+)", m.group(0))
+        assert t, "내려받기 명령에 --tables 가 없습니다: %s" % m.group(0)
+        listed = {x for x in t.group(1).split(",") if x}
+        for name in ("players",) + NEEDED_TABLES:
+            assert name in listed, (
+                "monthly.yml 이 %s 를 내려받지 않습니다(%s). "
+                "player_info_scraper 가 그 표를 읽습니다. 받는 것: %s"
+                % (name, cmd, sorted(listed))
+            )
 
 
 # ------------------------------------------------------- 명단을 뽑는 규칙

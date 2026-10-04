@@ -565,12 +565,17 @@
      "status_key": null
     },
     {
+     "name": "players·공식기록 내려받기",
+     "script": "migration/mysql/mysql_to_sqlite.py",
+     "status_key": null
+    },
+    {
      "name": "선수 프로필 수집",
      "script": "data_collection/player_info_scraper.py",
      "status_key": "player_info"
     },
     {
-     "name": "players D1 적재",
+     "name": "players 적재",
      "script": "migration/sqlite_to_d1.py",
      "status_key": null
     },
@@ -678,7 +683,7 @@
      "status_key": "park_factors"
     },
     {
-     "name": "결과 표 D1 적재",
+     "name": "결과 표 적재",
      "script": "migration/sqlite_to_d1.py",
      "status_key": null
     },
@@ -1617,7 +1622,7 @@
    "jobs": [
     "monthly"
    ],
-   "note": "월간 작업용으로 D1 을 로컬 SQLite 로 내려받습니다.",
+   "note": "월간 작업용으로 D1 을 로컬 SQLite 로 내려받습니다. D1 을 켰을 때(D1_WRITE=on)만 씁니다.",
    "path": "migration/d1_to_sqlite.py",
    "reads": [],
    "sources": [],
@@ -1642,7 +1647,7 @@
     "roster",
     "weekly"
    ],
-   "note": "러너에서 Cloud SQL 프록시를 띄워 뒤 단계가 MySQL 에도 쓰게 합니다(이중 적재). 표는 쓰지 않습니다.",
+   "note": "러너에서 Cloud SQL 프록시를 띄워 뒤 단계가 MySQL 에 쓰게 합니다. 표는 쓰지 않습니다.",
    "path": "migration/mysql/ci_proxy.sh",
    "reads": [],
    "sources": [],
@@ -1651,9 +1656,10 @@
   },
   {
    "jobs": [
+    "monthly",
     "weekly"
    ],
-   "note": "주간 계산용으로 MySQL 을 로컬 SQLite 로 내려받습니다.",
+   "note": "주간 계산과 월간 선수 프로필 수집용으로 MySQL 을 로컬 SQLite 로 내려받습니다.",
    "path": "migration/mysql/mysql_to_sqlite.py",
    "reads": [],
    "sources": [],
@@ -1664,7 +1670,7 @@
    "jobs": [
     "daily"
    ],
-   "note": "D1 과 MySQL 의 행 수·값을 견줍니다. 표는 쓰지 않습니다.",
+   "note": "D1 과 MySQL 의 행 수·값을 견줍니다. D1 을 켰을 때(D1_WRITE=on)만 돕니다. 표는 쓰지 않습니다.",
    "path": "migration/mysql/reconcile.py",
    "reads": [],
    "sources": [],
@@ -1678,7 +1684,7 @@
     "monthly",
     "weekly"
    ],
-   "note": "계산 결과 표를 D1·MySQL 에 올립니다. 올리는 표는 계산한 스크립트에 적었습니다.",
+   "note": "계산 결과 표를 MySQL 에 올립니다(D1 은 켜져 있을 때만). 올리는 표는 계산한 스크립트에 적었습니다.",
    "path": "migration/sqlite_to_d1.py",
    "reads": [],
    "sources": [],

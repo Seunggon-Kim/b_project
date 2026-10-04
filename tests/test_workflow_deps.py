@@ -82,6 +82,8 @@ ENTRYPOINTS = {
         "data_collection/record_job_run.py",
     ],
     "monthly.yml": [
+        # D1 이 꺼져 있으면 MySQL 에서, 켜져 있으면(D1_WRITE=on) D1 에서 받습니다.
+        "migration/mysql/mysql_to_sqlite.py",
         "migration/d1_to_sqlite.py",
         "data_collection/player_info_scraper.py",
         "migration/sqlite_to_d1.py",

@@ -25,10 +25,14 @@ name: roster
 #
 # ## 필요한 시크릿
 #
-#   CLOUDFLARE_API_TOKEN   D1 적재
-#   CLOUDFLARE_ACCOUNT_ID  D1 적재
+#   GCP_WIF_PROVIDER / GCP_LOADER_SA / CLOUDSQL_INSTANCE / MYSQL_LOADER_PASSWORD / MYSQL_SERVER_PUBKEY   MySQL 적재(늘)
 #   ADMIN_TOKEN            적재 뒤 캐시 비우기
-#   GCP_WIF_PROVIDER / GCP_LOADER_SA / CLOUDSQL_INSTANCE / MYSQL_LOADER_PASSWORD / MYSQL_SERVER_PUBKEY   MySQL 이중 적재(변수 MYSQL_MIRROR=on 일 때)
+#   CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID   D1 적재(변수 D1_WRITE=on 일 때만)
+#
+# ## D1 끄기(BSTATS_D1)
+#
+# 수집은 MySQL 에만 씁니다. 되돌리려면 저장소 변수 D1_WRITE 를 on 으로
+# 두십시오. 그러면 D1 에도 씁니다(이중 적재). 자세한 사정은 daily.yml 에 적었습니다.
 
 on:
   schedule:
@@ -53,6 +57,10 @@ jobs:
   roster:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      # D1 스위치입니다(data_collection/d1_load.py 의 d1_enabled). 저장소 변수
+      # D1_WRITE 가 on 일 때만 on 이고, 없거나 다른 값이면 off 입니다.
+      BSTATS_D1: ${{ vars.D1_WRITE == 'on' && 'on' || 'off' }}
     steps:
       - uses: actions/checkout@v5
 
@@ -60,26 +68,31 @@ jobs:
         with:
           python-version: '3.12'
 
+      # node 는 wrangler(D1) 에만 씁니다. D1 이 꺼져 있으면 깔지 않습니다.
       - uses: actions/setup-node@v5
+        if: ${{ vars.D1_WRITE == 'on' }}
         with:
           node-version: '24'
 
       - name: 의존성 설치
         run: pip install requests pymysql cryptography
 
+      # D1 을 켰을 때(D1_WRITE=on)만 봅니다.
       - name: 인증 확인
+        if: ${{ vars.D1_WRITE == 'on' }}
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
             echo "CLOUDFLARE_API_TOKEN 이 없습니다."
             exit 1
           fi
 
-      # --- MySQL 이중 적재(2단계) --------------------------------------
-      # 저장소 변수 MYSQL_MIRROR 가 on 일 때만 붙습니다. 실패해도 D1 적재는
-      # 계속합니다(사이트는 아직 D1 을 읽습니다). 대신 마지막 판정이 빨갛습니다.
+      # --- MySQL 연결 ---------------------------------------------------
+      # 늘 붙습니다. 사이트가 MySQL 을 읽고, D1 이 꺼져 있으면 MySQL 이 유일한
+      # 저장소입니다. continue-on-error 는 D1 을 켠 되돌리기 때 MySQL 이 죽어도
+      # D1 적재는 계속하려는 것입니다. 어느 쪽이든 마지막 판정이 빨갛습니다.
+      # 예전 저장소 변수 MYSQL_MIRROR 는 더 보지 않습니다.
       - name: GCP 인증(키 없음)
         id: gcp
-        if: ${{ vars.MYSQL_MIRROR == 'on' }}
         continue-on-error: true
         uses: google-github-actions/auth@v3
         with:
@@ -188,6 +201,7 @@ jobs:
             echo "| 퓨처스 올 시즌 기록 | ${{ steps.futures.outcome }} |"
             echo "| MySQL 연결 | ${{ steps.mysql.outcome }} |"
             echo "| MySQL 이중 적재 | ${{ steps.mirror_check.outcome }} |"
+            echo "| D1 (D1_WRITE) | ${{ env.BSTATS_D1 }} |"
           } >> $GITHUB_STEP_SUMMARY
 
       # 실패를 초록색으로 덮지 않습니다. 조용히 멈춘 수집을 몇 주 뒤에
@@ -198,8 +212,9 @@ jobs:
           echo "명단 갱신이 실패했습니다."
           exit 1
 
+      # MySQL 연결·적재는 늘 성공해야 합니다(사이트가 MySQL 을 읽습니다).
       - name: MySQL 이중 적재 판정
-        if: ${{ always() && vars.MYSQL_MIRROR == 'on' && (steps.mysql.outcome != 'success' || steps.mirror_check.outcome != 'success') }}
+        if: ${{ always() && (steps.mysql.outcome != 'success' || steps.mirror_check.outcome != 'success') }}
         run: |
           echo "MySQL 연결 또는 이중 적재가 실패했습니다. 요약 표를 보십시오."
           exit 1
