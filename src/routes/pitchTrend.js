@@ -28,6 +28,8 @@ const B1 = ['안타', '내야안타', '번트 안타'];
 const BB = ['볼넷', '고의4구', '자동 고의4구', '고의 4구', '자동 고의 4구'];
 const SO = ['삼진', '낫아웃 출루', '낫아웃 다른 주자 수비'];
 const HBP = ['몸에 맞는 볼', '몸에 맞는 공'];
+// wOBA 분모의 SF 입니다. KBO 공식 기록 sacrifice_fly 합과 맞습니다(2019 505 = 501 + 실책 4).
+const SF = ['희생플라이', '희생플라이 실책'];
 const SAC = ['희생번트', '희생번트 실책', '희생번트 야수선택', '희생플라이', '희생플라이 실책'];
 const CI = ['타격방해'];
 const HIT = [...B1, '2루타', '3루타', '홈런'];
@@ -48,6 +50,10 @@ const CNT = 'CASE WHEN pbp.balls IS NULL OR pbp.strikes IS NULL THEN NULL '
   + `WHEN ${S} > ${B} THEN 'ahead' `
   + `WHEN ${B} > ${S} THEN 'behind' `
   + "ELSE 'even' END";
+
+// 던지기 전 볼카운트 12가지('0-0' ~ '3-2'). cnt 와 같은 자르기를 씁니다(2026-10-05).
+const BC = 'CASE WHEN pbp.balls IS NULL OR pbp.strikes IS NULL THEN NULL '
+  + `ELSE CONCAT(${B}, '-', ${S}) END`;
 
 const PFX = 'pbp.pfx_x IS NOT NULL AND pbp.pfx_z IS NOT NULL';
 const LOC = 'pbp.px IS NOT NULL AND pbp.pz IS NOT NULL';
@@ -120,22 +126,26 @@ const GROUPED_SQL = `
          ${count(`${CT} AND ${OUT_ZONE}`)} AS o_ct,
          ${count(`${PD} AND ${EDGE}`)} AS edge_n,
          ${count(`${PD} AND ${FIRST}`)} AS fp_n,
-         ${count(`${PD} AND ${FIRST} AND NOT ${res(BALL)}`)} AS fp_str
+         ${count(`${PD} AND ${FIRST} AND NOT ${res(BALL)}`)} AS fp_str,
+         ${BC} AS bc,
+         ${count(inPa(HBP))} AS hbp,
+         ${count(inPa(SF))} AS sf
   FROM play_by_play pbp
   WHERE pbp.pitcher_ID = ? AND pbp.game_date >= ? AND pbp.game_date < ?
   AND ${regularSeasonSql('pbp')}
   AND pbp.pitch_type IS NOT NULL
   AND pbp.pitch_type NOT IN ('', '-', 'null')
-  GROUP BY season, pbp.pitch_type, bat_side, cnt`;
+  GROUP BY season, pbp.pitch_type, bat_side, cnt, bc`;
 
 /** 응답 rows 의 키입니다. 질의 열과 JSON 배열도 이 순서입니다. */
 export const TREND_KEYS = ['season', 'pitch_type', 'bat_side', 'cnt', 'n', 'pa', 'ab', 'h',
   'b1', 'b2', 'b3', 'hr', 'bbe', 'bb', 'so', 'spd_sum', 'spd_n', 'pfx_x_sum', 'pfx_z_sum',
   'pfx_n', 'px_sum', 'pz_sum', 'loc_n',
   'pd_n', 'sw', 'wh', 'ct', 'cs', 'z_n', 'o_n', 'z_sw', 'o_sw', 'z_ct', 'o_ct',
-  'edge_n', 'fp_n', 'fp_str'];
+  'edge_n', 'fp_n', 'fp_str',
+  'bc', 'hbp', 'sf'];
 
-const ORDER = 'season, pitch_type, bat_side, cnt';
+const ORDER = 'season, pitch_type, bat_side, cnt, bc';
 
 /** 보통 질의(묶은 글자를 못 풀 때 물러서는 길)입니다. */
 export const PITCH_TREND_SQL = `${GROUPED_SQL}
@@ -171,13 +181,15 @@ function round(v, d) {
   return Object.is(r, -0) ? 0 : r;
 }
 
-const NUM_FROM = 4; // n 부터 끝까지 숫자입니다(합은 MySQL 이 이미 반올림).
+// 글자 키입니다. 나머지(season, n 부터)는 숫자입니다(합은 MySQL 이 이미 반올림).
+const TEXT_KEYS = new Set(['pitch_type', 'bat_side', 'cnt', 'bc']);
+const IS_TEXT = TREND_KEYS.map((k) => TEXT_KEYS.has(k));
 
 function rowOf(get) {
   const out = {};
   for (let i = 0; i < TREND_KEYS.length; i += 1) {
     const v = get(i);
-    out[TREND_KEYS[i]] = i === 0 || i >= NUM_FROM ? Number(v) : (v === undefined ? null : v);
+    out[TREND_KEYS[i]] = IS_TEXT[i] ? (v === undefined ? null : v) : Number(v);
   }
   return out;
 }

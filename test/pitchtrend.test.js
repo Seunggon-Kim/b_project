@@ -26,8 +26,8 @@ const req = (path) => new Request(`https://x.test${path}`);
 const PLAYER = { player_id: '65933' };
 
 // 같은 행을 보통 질의 객체와 JSON 배열 글자로 적습니다.
-// 선구 개수(끝 14개)는 0 으로 채웁니다.
-const PDZ = { pd_n: 0, sw: 0, wh: 0, ct: 0, cs: 0, z_n: 0, o_n: 0, z_sw: 0, o_sw: 0, z_ct: 0, o_ct: 0, edge_n: 0, fp_n: 0, fp_str: 0 };
+// 선구 개수 14개와 bc·hbp·sf(끝 17개)를 채웁니다.
+const PDZ = { pd_n: 0, sw: 0, wh: 0, ct: 0, cs: 0, z_n: 0, o_n: 0, z_sw: 0, o_sw: 0, z_ct: 0, o_ct: 0, edge_n: 0, fp_n: 0, fp_str: 0, bc: '1-1', hbp: 0, sf: 0 };
 const OBJ = { ...PDZ, season: 2026, pitch_type: '직구', bat_side: 'R', cnt: 'even', n: 2, pa: 1, ab: 1, h: 1, b1: 1, b2: 0, b3: 0, hr: 0, bbe: 1, bb: 0, so: 0, spd_sum: 290.5, spd_n: 2, pfx_x_sum: -1.25, pfx_z_sum: 20, pfx_n: 2, px_sum: 0, pz_sum: 5.5, loc_n: 2 };
 const OBJ2 = { ...OBJ, bat_side: null, cnt: 'full', n: 3 };
 const JSON_TEXT = [OBJ, OBJ2].map((o) => JSON.stringify(TREND_KEYS.map((k) => o[k]))).join(',');
@@ -139,7 +139,7 @@ test('없는 선수는 404, DB 오류는 503·no-store', async () => {
 
 test('JSON 한 칸으로 묶어 정해진 순서로 받습니다', () => {
   assert.match(PITCH_TREND_JSON_SQL, /SET_VAR\(group_concat_max_len = \d+\)/);
-  assert.match(PITCH_TREND_JSON_SQL, /ORDER BY g\.season, g\.pitch_type, g\.bat_side, g\.cnt SEPARATOR ','/);
+  assert.match(PITCH_TREND_JSON_SQL, /ORDER BY g\.season, g\.pitch_type, g\.bat_side, g\.cnt, g\.bc SEPARATOR ','/);
   assert.ok(PITCH_TREND_JSON_SQL.includes(PITCH_TREND_SQL.split('ORDER BY')[0].trim()));
 });
 
@@ -180,7 +180,7 @@ const PD_KEYS = ['pd_n', 'sw', 'wh', 'ct', 'cs', 'z_n', 'o_n', 'z_sw', 'o_sw', '
   'edge_n', 'fp_n', 'fp_str'];
 
 test('선구 개수 14개를 기존 키 뒤에 붙입니다', () => {
-  assert.deepEqual(TREND_KEYS.slice(-PD_KEYS.length), PD_KEYS);
+  assert.deepEqual(TREND_KEYS.slice(23, 23 + PD_KEYS.length), PD_KEYS);
   assert.deepEqual(TREND_KEYS.slice(0, 23), ['season', 'pitch_type', 'bat_side', 'cnt', 'n', 'pa', 'ab', 'h',
     'b1', 'b2', 'b3', 'hr', 'bbe', 'bb', 'so', 'spd_sum', 'spd_n', 'pfx_x_sum', 'pfx_z_sum', 'pfx_n',
     'px_sum', 'pz_sum', 'loc_n']);
@@ -214,4 +214,33 @@ test('JSON 길과 보통 길이 선구 키까지 같은 값을 냅니다', () =>
   const text = JSON.stringify(TREND_KEYS.map((k) => o[k]));
   assert.deepEqual(trendFromJson({ n: 1, j: text }), shapeTrendRows([o]));
   assert.equal(trendFromJson({ n: 1, j: text })[0].fp_str, 1);
+});
+
+// --- 볼카운트 12가지(bc)·wOBA 용 hbp·sf(2026-10-05) ---
+
+test('bc·hbp·sf 를 끝에 붙이고, 묶는 단위에 bc 를 더합니다', () => {
+  assert.deepEqual(TREND_KEYS.slice(-3), ['bc', 'hbp', 'sf']);
+  assert.equal(TREND_KEYS[3], 'cnt');
+  assert.match(PITCH_TREND_SQL, /GROUP BY season, pbp\.pitch_type, bat_side, cnt, bc/);
+  assert.match(PITCH_TREND_SQL, /ORDER BY season, pitch_type, bat_side, cnt, bc/);
+  assert.match(PITCH_TREND_JSON_SQL, /ORDER BY g\.season, g\.pitch_type, g\.bat_side, g\.cnt, g\.bc SEPARATOR/);
+});
+
+test('bc 는 볼 3·스트라이크 2 로 자른 "볼-스트라이크" 글자, 값이 없으면 null', () => {
+  assert.match(PITCH_TREND_SQL, /CASE WHEN pbp\.balls IS NULL OR pbp\.strikes IS NULL THEN NULL ELSE CONCAT\(LEAST\(pbp\.balls, 3\), '-', LEAST\(pbp\.strikes, 2\)\) END AS bc/);
+});
+
+test('hbp 는 몸에 맞는 볼, sf 는 희생플라이·희생플라이 실책(공식 기록 SF 와 맞음)', () => {
+  assert.match(PITCH_TREND_SQL, /pbp\.pa_result IN \('몸에 맞는 볼', '몸에 맞는 공'\) THEN 1 ELSE 0 END\) AS hbp/);
+  assert.match(PITCH_TREND_SQL, /pbp\.pa_result IN \('희생플라이', '희생플라이 실책'\) THEN 1 ELSE 0 END\) AS sf/);
+});
+
+test('bc 는 글자, hbp·sf 는 정수로 나갑니다(JSON 길·보통 길 같음)', () => {
+  const o = { ...OBJ, bc: '3-2', hbp: 1, sf: 0 };
+  const text = JSON.stringify(TREND_KEYS.map((k) => o[k]));
+  const [a] = trendFromJson({ n: 1, j: text });
+  assert.equal(a.bc, '3-2');
+  assert.equal(a.hbp, 1);
+  assert.deepEqual(a, shapeTrendRows([o])[0]);
+  assert.equal(shapeTrendRows([{ ...o, bc: null }])[0].bc, null);
 });
