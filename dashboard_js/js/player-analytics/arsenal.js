@@ -241,7 +241,7 @@
   function zoneOptions() {
     const o = [['', '모든 존']];
     [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14].forEach(function (z) { o.push([String(z), '존 ' + z]); });
-    return o.concat([['iz', '존 안'], ['ooz', '존 밖'], ['heart', '하트'], ['shadow', '쉐도우'], ['chase', '체이스'], ['waste', '웨이스트']]);
+    return o.concat([['iz', '존 안'], ['ooz', '존 밖'], ['heart', 'Heart'], ['shadow', 'Shadow'], ['chase', 'Chase'], ['waste', 'Waste']]);
   }
 
   function pickOk(p, pick) {
