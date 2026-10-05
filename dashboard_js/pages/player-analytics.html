@@ -1141,7 +1141,7 @@
             const metric = document.getElementById('pa-tr-metric');
             const side = document.getElementById('pa-tr-side');
             const count = document.getElementById('pa-tr-count');
-            metric.innerHTML = T.metricOptionsHtml();
+            metric.innerHTML = T.metricOptionsHtml(false);
             metric.value = trMetric;
             metric.onchange = () => { trMetric = metric.value; renderTrend(); };
             side.onchange = () => { trSide = side.value; renderTrend(); };
@@ -1164,6 +1164,11 @@
             const hasHbp = !!(res && res.rows && res.rows.some(r => r.hbp !== undefined && r.hbp !== null));
             trWeightsNow = hasHbp ? await trWeights() : null;
             if (token !== trToken) return;
+            // 지표 목록: wOBA 는 가중치를 받았을 때만. 지금 고른 지표가 빠지면 구종 비율로.
+            const metricSel = document.getElementById('pa-tr-metric');
+            metricSel.innerHTML = window.PlayerAnalytics.trend.metricOptionsHtml(!!trWeightsNow);
+            if (![...metricSel.options].some(o => o.value === trMetric)) trMetric = 'pct';
+            metricSel.value = trMetric;
             trAll = false;
             trData = res && res.rows && res.rows.length ? res : null;
             // 카운트 목록은 응답에 카운트별 값(bc)이 있는지 보고 만듭니다. 지금 고른 값이 없으면 모든 카운트로.
@@ -1194,7 +1199,7 @@
             if (!T.metricOk(trMetric, trCnt)) { trMetric = 'pct'; metricSel.value = 'pct'; }
             const m = T.metric(trMetric);
             const agg = T.aggregate(trData, trSide, trCnt);
-            const sr = T.series(agg, trMetric).filter(s => s.points.length);
+            const sr = T.series(agg, trMetric, trWeightsNow).filter(s => s.points.length);
             const countSel = document.getElementById('pa-tr-count');
             const cond = [trSide === 'R' ? '우타자 상대' : trSide === 'L' ? '좌타자 상대' : '',
                 trCnt ? (/^\d-\d$/.test(trCnt) ? '카운트 ' + trCnt : countSel.selectedOptions[0].textContent) : ''].filter(Boolean).join(' · ');

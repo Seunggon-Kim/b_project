@@ -33,6 +33,15 @@
 
   // 지표 목록입니다. 묶음(group)은 고르기 칸의 optgroup 이고, tip 은 마우스를 올리면 나오는 설명입니다.
   // v(합계, 그 시즌 전체 공 수) → 값(없으면 null), note(합계) → 툴팁의 바탕 수.
+  /** wOBA 입니다(선수 통계 metrics.wobaOf 와 같은 식, BB 는 고의4구 포함). 가중치 w 가 없거나 분모가 0 이면 null. */
+  function wobaValue(s, w) {
+    const den = s.ab + s.bb + s.sf + s.hbp;
+    if (!w || !(den > 0)) return null;
+    const v = (num(w.fg_wBB) * s.bb + num(w.fg_wHBP) * s.hbp + num(w.fg_w1B) * s.b1
+      + num(w.fg_w2B) * s.b2 + num(w.fg_w3B) * s.b3 + num(w.fg_wHR) * s.hr) / den;
+    return Number.isFinite(v) ? v : null;
+  }
+
   /** 선구 지표 하나(비율 %). part(합계) → [분자, 분모]. 분모가 0 이면 점을 두지 않습니다. */
   function pdm(key, label, tip, part, unit) {
     return { key: key, group: '선구 (Plate Discipline)', label: label, tip: tip, pct: true,
@@ -70,6 +79,10 @@
       v: function (s) { return ratio(s.h, s.ab); }, note: function (s) { return comma(s.ab) + '타수'; } },
     { key: 'slg', group: '결과', label: '장타율', tip: '루타 ÷ 타수 입니다(1루타 1, 2루타 2, 3루타 3, 홈런 4).',
       v: function (s) { return ratio(s.b1 + 2 * s.b2 + 3 * s.b3 + 4 * s.hr, s.ab); }, note: function (s) { return comma(s.ab) + '타수'; } },
+    { key: 'woba', group: '결과', label: 'wOBA', needsW: true,
+      tip: '가중 출루율입니다. 시즌 가중치는 선수 통계와 같습니다. 계산식: (wBB·BB + wHBP·HBP + w1B·1B + w2B·2B + w3B·3B + wHR·HR) ÷ (AB + BB + SF + HBP)',
+      v: function (s, total, w) { return wobaValue(s, w); },
+      note: function (s) { return comma(s.ab + s.bb + s.sf + s.hbp) + ' (AB + BB + SF + HBP)'; } },
     { key: 'spd', group: '투구', label: '평균 구속 (km/h)', tip: '이 구종의 평균 구속입니다.',
       v: function (s) { return ratio(s.spd_sum, s.spd_n); }, note: function (s) { return comma(s.spd_n) + '구'; } },
     // 선구(Plate Discipline): FanGraphs·Savant 정의. 존은 투구 분포와 같은 20인치 존(공 반지름 포함)입니다.
@@ -159,7 +172,7 @@
   }
 
   /** 고른 지표의 구종별 선입니다. 많이 던진 구종 먼저. 값이 없는 시즌은 점을 두지 않습니다. */
-  function series(agg, key) {
+  function series(agg, key, weights) {
     const m = metric(key), tot = {};
     agg.seasons.forEach(function (y) {
       const types = agg.bySeason[y].types;
@@ -172,7 +185,7 @@
         agg.seasons.forEach(function (y) {
           const S = agg.bySeason[y], s = S.types[t];
           if (!s || !(s.n > 0)) return;
-          const v = m.v(s, S.total);
+          const v = m.v(s, S.total, weights ? weights[y] : null);
           if (v === null || !Number.isFinite(v)) return;
           points.push({ season: y, v: v, note: m.note(s, S.total) });
         });
@@ -185,7 +198,7 @@
   function fmt(key, v) {
     if (v === null || v === undefined) return '-';
     if (isPct(key)) return v.toFixed(1) + '%';
-    if (key === 'ba' || key === 'slg') { const s = v.toFixed(3); return s.charAt(0) === '0' ? s.slice(1) : s; }
+    if (key === 'ba' || key === 'slg' || key === 'woba') { const s = v.toFixed(3); return s.charAt(0) === '0' ? s.slice(1) : s; }
     if (key === 'rv') return (v > 0 ? '+' : '') + v.toFixed(1);
     if (key === 'n' || key === 'h' || key === 'b1' || key === 'b2' || key === 'b3' || key === 'hr' || key === 'bbe') return comma(Math.round(v));
     return v.toFixed(1);
@@ -193,13 +206,13 @@
   function tickFmt(key, t) {
     const r = Math.round(t * 1000) / 1000;
     if (isPct(key)) return r + '%';
-    if (key === 'ba' || key === 'slg') return fmt(key, r);
+    if (key === 'ba' || key === 'slg' || key === 'woba') return fmt(key, r);
     if (key === 'rv') return (r > 0 ? '+' : '') + r;
     return comma(r);
   }
 
   // 0 부터 그리는 지표(비율·개수)입니다. 나머지(무브먼트·구속·가치)는 값 범위에 맞춥니다.
-  const FROM_ZERO = { pct: 1, n: 1, h: 1, b1: 1, b2: 1, b3: 1, hr: 1, bbe: 1, bb_pct: 1, k_pct: 1, ba: 1, slg: 1 };
+  const FROM_ZERO = { pct: 1, n: 1, h: 1, b1: 1, b2: 1, b3: 1, hr: 1, bbe: 1, bb_pct: 1, k_pct: 1, ba: 1, slg: 1, woba: 1 };
   function niceStep(span) {
     const raw = span / 4, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
     return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
@@ -279,13 +292,6 @@
   function i0(v) { return comma(Math.round(v)); }
   function p1(a, b) { return b > 0 ? (100 * a / b).toFixed(1) : '-'; }
   function r3(a, b) { if (!(b > 0)) return '-'; const t = (a / b).toFixed(3); return t.charAt(0) === '0' ? t.slice(1) : t; }
-  function woba(s, w) {
-    const den = s.ab + s.bb + s.sf + s.hbp;
-    if (!w || !(den > 0)) return '-';
-    const v = (num(w.fg_wBB) * s.bb + num(w.fg_wHBP) * s.hbp + num(w.fg_w1B) * s.b1
-      + num(w.fg_w2B) * s.b2 + num(w.fg_w3B) * s.b3 + num(w.fg_wHR) * s.hr) / den;
-    return Number.isFinite(v) ? r3(v, 1) : '-';
-  }
   const TCOLS = [
     ['#', 'n', '#\n이 구종으로 던진 공 수입니다.', function (s) { return i0(s.n); }],
     ['# RHB', null, '# RHB\n우타자에게 던진 공 수입니다.', function (s) { return i0(s.n_r); }],
@@ -303,7 +309,7 @@
     ['BBE', 'bbe', 'BBE\n타구 수입니다(삼진·볼넷·몸에 맞는 볼 제외).', function (s) { return i0(s.bbe); }],
     ['BA', 'ba', 'BA\n타율입니다.\n계산식: H ÷ AB', function (s) { return r3(s.h, s.ab); }],
     ['SLG', 'slg', 'SLG\n장타율입니다.\n계산식: (1B + 2×2B + 3×3B + 4×HR) ÷ AB', function (s) { return r3(s.b1 + 2 * s.b2 + 3 * s.b3 + 4 * s.hr, s.ab); }],
-    ['wOBA', null, 'wOBA\n가중 출루율입니다. 시즌 가중치는 선수 통계와 같습니다.\n계산식: (wBB·BB + wHBP·HBP + w1B·1B + w2B·2B + w3B·3B + wHR·HR) ÷ (AB + BB + SF + HBP)', function (s, t, w) { return woba(s, w); }],
+    ['wOBA', 'woba', 'wOBA\n가중 출루율입니다. 시즌 가중치는 선수 통계와 같습니다.\n계산식: (wBB·BB + wHBP·HBP + w1B·1B + w2B·2B + w3B·3B + wHR·HR) ÷ (AB + BB + SF + HBP)', function (s, t, w) { const v = wobaValue(s, w); return v === null ? '-' : r3(v, 1); }],
     ['Whiff%', 'whiff', 'Whiff%\n헛스윙 ÷ 스윙 × 100 입니다.', function (s) { return p1(s.wh, s.sw); }],
     ['PutAway%', null, 'PutAway%\n2스트라이크에서 던진 공 가운데 삼진으로 끝난 비율입니다(Savant).\n계산식: 2스트라이크 삼진 ÷ 2스트라이크 공 × 100', function (s) { return p1(s.ts_so, s.ts_n); }],
   ];
@@ -358,9 +364,10 @@
   }
 
   /** 지표 고르기 칸의 option 글자입니다(묶음은 optgroup). */
-  function metricOptionsHtml() {
+  function metricOptionsHtml(hasWoba) {
     let html = '', group = null;
     METRICS.forEach(function (m) {
+      if (m.needsW && !hasWoba) return;  // wOBA: 응답에 hbp 가 있고 시즌 가중치를 받았을 때만
       if (m.group !== group) {
         if (group) html += '</optgroup>';
         group = m.group;
