@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  pitchTrend, PITCH_TREND_SQL, PITCH_TREND_VALUES_SQL, shapeTrendRows, shapeTrendValues,
+  pitchTrend, PITCH_TREND_SQL, PITCH_TREND_JSON_SQL, PITCH_TREND_VALUES_SQL, TREND_KEYS,
+  shapeTrendRows, shapeTrendValues, trendFromJson,
 } from '../src/routes/pitchTrend.js';
 import { regularSeasonSql } from '../src/lib/gametype.js';
 
@@ -23,6 +24,11 @@ function fakeDb(handler) {
 
 const req = (path) => new Request(`https://x.test${path}`);
 const PLAYER = { player_id: '65933' };
+
+// 같은 행을 보통 질의 객체와 JSON 배열 글자로 적습니다.
+const OBJ = { season: 2026, pitch_type: '직구', bat_side: 'R', cnt: 'even', n: 2, pa: 1, ab: 1, h: 1, b1: 1, b2: 0, b3: 0, hr: 0, bbe: 1, bb: 0, so: 0, spd_sum: 290.5, spd_n: 2, pfx_x_sum: -1.25, pfx_z_sum: 20, pfx_n: 2, px_sum: 0, pz_sum: 5.5, loc_n: 2 };
+const OBJ2 = { ...OBJ, bat_side: null, cnt: 'full', n: 3 };
+const JSON_TEXT = [OBJ, OBJ2].map((o) => JSON.stringify(TREND_KEYS.map((k) => o[k]))).join(',');
 
 // --- 질의 ---
 
@@ -64,8 +70,8 @@ test('rows 는 정한 키 순서와 숫자로 나갑니다', () => {
   const [r] = shapeTrendRows([{
     season: 2026, pitch_type: '직구', bat_side: 'L', cnt: 'ahead', n: '120', pa: 30, ab: 27,
     h: 7, b1: 5, b2: 1, b3: 0, hr: 1, bbe: 20, bb: 2, so: 6,
-    spd_sum: 17160.04, spd_n: 120, pfx_x_sum: 980.1234, pfx_z_sum: 1820.4, pfx_n: 118,
-    px_sum: -12.3456, pz_sum: 300.2, loc_n: 118,
+    spd_sum: 17160.04, spd_n: 120, pfx_x_sum: 980.123, pfx_z_sum: 1820.4, pfx_n: 118,
+    px_sum: -12.346, pz_sum: 300.2, loc_n: 118,
   }]);
   assert.deepEqual(Object.keys(r), ['season', 'pitch_type', 'bat_side', 'cnt', 'n', 'pa', 'ab', 'h',
     'b1', 'b2', 'b3', 'hr', 'bbe', 'bb', 'so', 'spd_sum', 'spd_n', 'pfx_x_sum', 'pfx_z_sum', 'pfx_n',
@@ -93,7 +99,8 @@ test('응답: 2016 부터 올해(KST)까지 묶고, rows·values 를 줍니다',
   const db = fakeDb((sql) => {
     if (sql.includes('FROM players')) return [PLAYER];
     if (sql.includes('FROM pitch_run_value')) return [{ season: 2026, pitch_type: '직구', stands: 'R', n: 2, rv: 0.5 }];
-    return [{ season: 2026, pitch_type: '직구', bat_side: 'R', cnt: 'even', n: 2, pa: 1, ab: 1, h: 1, b1: 1, b2: 0, b3: 0, hr: 0, bbe: 1, bb: 0, so: 0, spd_sum: 290, spd_n: 2, pfx_x_sum: 0, pfx_z_sum: 0, pfx_n: 0, px_sum: 0, pz_sum: 0, loc_n: 0 }];
+    if (sql.includes('GROUP_CONCAT')) return [{ n: 1, j: JSON.stringify(TREND_KEYS.map((k) => OBJ[k])) }];
+    throw new Error(`예상 밖 질의: ${sql}`);
   });
   const res = await pitchTrend(req('/players/65933/pitch_trend'), { MYSQL: db }, {}, { id: '65933' });
   assert.equal(res.status, 200);
@@ -101,14 +108,19 @@ test('응답: 2016 부터 올해(KST)까지 묶고, rows·values 를 줍니다',
   assert.equal(body.player_id, '65933');
   assert.equal(body.rows.length, 1);
   assert.deepEqual(body.values, [{ season: 2026, pitch_type: '직구', n_l: 0, rv_l: 0, n_r: 2, rv_r: 0.5 }]);
-  const trend = db.calls.find((c) => c.sql.includes('GROUP BY season'));
+  assert.deepEqual(body.rows, [OBJ]);
+  const trend = db.calls.find((c) => c.sql.includes('GROUP_CONCAT'));
   assert.equal(trend.params[1], 20160000);
   assert.ok(trend.params[2] >= 20270000);
   assert.match(res.headers.get('cache-control'), /s-maxage=86400,/);
 });
 
 test('투수가 아니거나 자료가 없으면 빈 rows·values(200)', async () => {
-  const db = fakeDb((sql) => (sql.includes('FROM players') ? [PLAYER] : []));
+  const db = fakeDb((sql) => {
+    if (sql.includes('FROM players')) return [PLAYER];
+    if (sql.includes('GROUP_CONCAT')) return [{ n: 0, j: null }];
+    return [];
+  });
   const res = await pitchTrend(req('/players/65933/pitch_trend'), { MYSQL: db }, {}, { id: '65933' });
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { player_id: '65933', rows: [], values: [] });
@@ -121,4 +133,41 @@ test('없는 선수는 404, DB 오류는 503·no-store', async () => {
   const res = await pitchTrend(req('/players/65933/pitch_trend'), { MYSQL: boom }, {}, { id: '65933' });
   assert.equal(res.status, 503);
   assert.equal(res.headers.get('cache-control'), 'no-store');
+});
+
+test('JSON 한 칸으로 묶어 정해진 순서로 받습니다', () => {
+  assert.match(PITCH_TREND_JSON_SQL, /SET_VAR\(group_concat_max_len = \d+\)/);
+  assert.match(PITCH_TREND_JSON_SQL, /ORDER BY g\.season, g\.pitch_type, g\.bat_side, g\.cnt SEPARATOR ','/);
+  assert.ok(PITCH_TREND_JSON_SQL.includes(PITCH_TREND_SQL.split('ORDER BY')[0].trim()));
+});
+
+test('JSON 으로 받은 행과 보통 질의 행이 같습니다', () => {
+  assert.deepEqual(trendFromJson({ n: 2, j: JSON_TEXT }), shapeTrendRows([OBJ, OBJ2]));
+  assert.deepEqual(trendFromJson({ n: 2, j: JSON_TEXT })[1].bat_side, null);
+});
+
+test('trendFromJson: 없으면 빈 배열, 잘렸거나 수가 다르면 null', () => {
+  assert.deepEqual(trendFromJson({ n: 0, j: null }), []);
+  assert.equal(trendFromJson({ n: 3, j: JSON_TEXT }), null);
+  assert.equal(trendFromJson({ n: 2, j: JSON_TEXT.slice(0, 40) }), null);
+  assert.equal(trendFromJson(null), null);
+});
+
+test('묶은 글자를 못 풀면 보통 질의로 다시 읽습니다', async () => {
+  const db = fakeDb((sql) => {
+    if (sql.includes('FROM players')) return [PLAYER];
+    if (sql.includes('GROUP_CONCAT')) return [{ n: 2, j: JSON_TEXT.slice(0, 40) }];
+    if (sql.includes('FROM pitch_run_value')) return [];
+    return [OBJ, OBJ2];
+  });
+  const warn = console.warn;
+  const warned = [];
+  console.warn = (...a) => warned.push(a);
+  try {
+    const res = await pitchTrend(req('/players/65933/pitch_trend'), { MYSQL: db }, {}, { id: '65933' });
+    assert.deepEqual((await res.json()).rows, shapeTrendRows([OBJ, OBJ2]));
+  } finally {
+    console.warn = warn;
+  }
+  assert.equal(warned.length, 1);
 });

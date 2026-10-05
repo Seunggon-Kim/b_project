@@ -51,10 +51,11 @@ const CNT = 'CASE WHEN pbp.balls IS NULL OR pbp.strikes IS NULL THEN NULL '
 
 const PFX = 'pbp.pfx_x IS NOT NULL AND pbp.pfx_z IS NOT NULL';
 const LOC = 'pbp.px IS NOT NULL AND pbp.pz IS NOT NULL';
-const sumIf = (cond, col) => `COALESCE(SUM(CASE WHEN ${cond} THEN ${col} END), 0)`;
+// 합은 MySQL 에서 소수 셋째 자리로 맞춥니다(응답을 줄이고 Worker 계산을 없앰).
+const sumIf = (cond, col) => `ROUND(COALESCE(SUM(CASE WHEN ${cond} THEN ${col} END), 0), 3)`;
 
 // 묶는 값은 (투수 ID, 첫 시즌 첫날, 올해 다음 해 첫날)입니다.
-export const PITCH_TREND_SQL = `
+const GROUPED_SQL = `
   SELECT CAST(FLOOR(pbp.game_date / 10000) AS SIGNED) AS season,
          pbp.pitch_type AS pitch_type,
          ${BAT_SIDE} AS bat_side,
@@ -83,8 +84,34 @@ export const PITCH_TREND_SQL = `
   AND ${regularSeasonSql('pbp')}
   AND pbp.pitch_type IS NOT NULL
   AND pbp.pitch_type NOT IN ('', '-', 'null')
-  GROUP BY season, pbp.pitch_type, bat_side, cnt
-  ORDER BY season, pbp.pitch_type, bat_side, cnt
+  GROUP BY season, pbp.pitch_type, bat_side, cnt`;
+
+/** 응답 rows 의 키입니다. 질의 열과 JSON 배열도 이 순서입니다. */
+export const TREND_KEYS = ['season', 'pitch_type', 'bat_side', 'cnt', 'n', 'pa', 'ab', 'h',
+  'b1', 'b2', 'b3', 'hr', 'bbe', 'bb', 'so', 'spd_sum', 'spd_n', 'pfx_x_sum', 'pfx_z_sum',
+  'pfx_n', 'px_sum', 'pz_sum', 'loc_n'];
+
+const ORDER = 'season, pitch_type, bat_side, cnt';
+
+/** 보통 질의(묶은 글자를 못 풀 때 물러서는 길)입니다. */
+export const PITCH_TREND_SQL = `${GROUPED_SQL}
+  ORDER BY ${ORDER}
+`;
+
+// 묶은 결과 한 칸의 최대 길이입니다(공이 가장 많은 투수도 10만 바이트 안팎).
+const TREND_JSON_MAX = 8 * 1024 * 1024;
+
+/**
+ * MySQL 이 묶은 행을 JSON 배열로 이어 글자 한 칸으로 줍니다. 행마다 칸을
+ * 해석하면(약 300행 x 23칸) Worker CPU 를 많이 써서, arsenal 처럼 한 번의
+ * JSON.parse 로 받습니다. GROUP_CONCAT 의 ORDER BY 는 순서가 보장됩니다.
+ */
+export const PITCH_TREND_JSON_SQL = `
+  SELECT /*+ SET_VAR(group_concat_max_len = ${TREND_JSON_MAX}) */
+    COUNT(*) AS n,
+    GROUP_CONCAT(JSON_ARRAY(${TREND_KEYS.map((k) => `g.${k}`).join(', ')})
+                 ORDER BY ${ORDER.split(', ').map((k) => `g.${k}`).join(', ')} SEPARATOR ',') AS j
+  FROM (${GROUPED_SQL}) AS g
 `;
 
 export const PITCH_TREND_VALUES_SQL = `
@@ -94,31 +121,45 @@ export const PITCH_TREND_VALUES_SQL = `
   ORDER BY season, pitch_type, stands
 `;
 
-const INT_KEYS = ['n', 'pa', 'ab', 'h', 'b1', 'b2', 'b3', 'hr', 'bbe', 'bb', 'so',
-  'spd_n', 'pfx_n', 'loc_n'];
-const SUM_KEYS = ['spd_sum', 'pfx_x_sum', 'pfx_z_sum', 'px_sum', 'pz_sum'];
-const KEY_ORDER = ['season', 'pitch_type', 'bat_side', 'cnt', 'n', 'pa', 'ab', 'h',
-  'b1', 'b2', 'b3', 'hr', 'bbe', 'bb', 'so', 'spd_sum', 'spd_n', 'pfx_x_sum', 'pfx_z_sum',
-  'pfx_n', 'px_sum', 'pz_sum', 'loc_n'];
-
 function round(v, d) {
   const k = 10 ** d;
   const r = Math.round(Number(v) * k) / k;
   return Object.is(r, -0) ? 0 : r;
 }
 
-/** DB 행을 응답 행으로 바꿉니다. 합은 소수 셋째 자리, 개수는 정수입니다. */
+const NUM_FROM = 4; // n 부터 끝까지 숫자입니다(합은 MySQL 이 이미 반올림).
+
+function rowOf(get) {
+  const out = {};
+  for (let i = 0; i < TREND_KEYS.length; i += 1) {
+    const v = get(i);
+    out[TREND_KEYS[i]] = i === 0 || i >= NUM_FROM ? Number(v) : (v === undefined ? null : v);
+  }
+  return out;
+}
+
+/** 보통 질의의 행(객체)을 응답 행으로 바꿉니다. */
 export function shapeTrendRows(rows) {
-  return (rows || []).map((r) => {
-    const out = {};
-    for (const k of KEY_ORDER) {
-      if (k === 'season') out[k] = Number(r.season);
-      else if (INT_KEYS.includes(k)) out[k] = Number(r[k]);
-      else if (SUM_KEYS.includes(k)) out[k] = round(r[k], 3);
-      else out[k] = r[k] === undefined ? null : r[k];
-    }
-    return out;
-  });
+  return (rows || []).map((r) => rowOf((i) => r[TREND_KEYS[i]]));
+}
+
+/**
+ * PITCH_TREND_JSON_SQL 의 한 행(n, j)을 응답 행으로 바꿉니다. 행 수가 다르거나
+ * 글자가 JSON 이 아니면(잘렸으면) null 입니다. 부르는 쪽이 보통 질의로 읽습니다.
+ */
+export function trendFromJson(row) {
+  if (!row) return null;
+  const n = Number(row.n);
+  if (row.j === null || row.j === undefined) return n === 0 ? [] : null;
+  if (typeof row.j !== 'string') return null;
+  let arrs;
+  try {
+    arrs = JSON.parse(`[${row.j}]`);
+  } catch {
+    return null;
+  }
+  if (arrs.length !== n) return null;
+  return arrs.map((a) => rowOf((i) => a[i]));
 }
 
 /** 구종 가치 표의 행을 (시즌, 구종)마다 L/R 한 줄로 합칩니다. */
@@ -148,13 +189,17 @@ export async function pitchTrend(request, env, ctx, params) {
     const from = seasonDateRange(PITCH_TREND_FIRST_SEASON).from;
     const to = seasonDateRange(last).to;
     const pid = Number(player.player_id);
-    const [trend, values] = await Promise.all([
-      db.prepare(PITCH_TREND_SQL).bind(pid, from, to).all(),
-      db.prepare(PITCH_TREND_VALUES_SQL).bind(pid).all(),
-    ]);
+    const binds = [pid, from, to];
+    let rows = trendFromJson(await db.prepare(PITCH_TREND_JSON_SQL).bind(...binds).first());
+    if (!rows) {
+      // 응답은 같고 CPU 만 더 듭니다. tail 에서 보이게 남깁니다.
+      console.warn('pitch_trend: GROUP_CONCAT 결과를 못 풀어 보통 질의로 읽습니다', pid);
+      rows = shapeTrendRows((await db.prepare(PITCH_TREND_SQL).bind(...binds).all()).results);
+    }
+    const values = await db.prepare(PITCH_TREND_VALUES_SQL).bind(pid).all();
     const res = json({
       player_id: params.id,
-      rows: shapeTrendRows(trend.results),
+      rows,
       values: shapeTrendValues(values.results),
     });
     // 올 시즌 공이 매일 늘어 하루 캐시입니다(movement_avg 의 올해 규칙).
