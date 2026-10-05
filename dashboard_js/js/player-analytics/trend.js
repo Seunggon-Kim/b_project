@@ -298,6 +298,8 @@
     ['# LHB', null, '# LHB\n좌타자에게 던진 공 수입니다.', function (s) { return i0(s.n_l); }],
     ['%', 'pct', '%\n그 시즌 전체 공 가운데 이 구종의 비율입니다.', function (s, t) { return p1(s.n, t); }],
     ['km/h', 'spd', 'km/h\n평균 구속입니다.', function (s) { return s.spd_n > 0 ? (s.spd_sum / s.spd_n).toFixed(1) : '-'; }],
+    ['수직(cm)', 'pfx_z', '수직(cm)\n중력 영향을 뺀 위아래 움직임 평균입니다(Induced). + 는 솟는 쪽입니다.', function (s) { return s.pfx_n > 0 ? (s.pfx_z_sum / s.pfx_n * IN2CM).toFixed(1) : '-'; }],
+    ['수평(cm)', 'pfx_x', '수평(cm)\n중력 영향을 뺀 좌우 움직임 평균입니다. 포수 시점, + 는 1루 쪽입니다.', function (s) { return s.pfx_n > 0 ? (s.pfx_x_sum / s.pfx_n * IN2CM).toFixed(1) : '-'; }],
     ['PA', null, 'PA\n이 구종으로 끝난 타석 수입니다.', function (s) { return i0(s.pa); }],
     ['AB', null, 'AB\n타수입니다(볼넷·몸에 맞는 볼·희생타 제외).', function (s) { return i0(s.ab); }],
     ['H', 'h', 'H\n안타입니다.', function (s) { return i0(s.h); }],
