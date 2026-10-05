@@ -428,6 +428,57 @@
     return h;
   }
 
+  // ---- Plate Discipline 표(Savant 투수 Plate Discipline, evan) ----
+  // 시즌 한 줄(모든 구종·타자 손·카운트 합)이고 위 고르기와 연동하지 않습니다.
+  // 존 기준 지표라 공 위치 추적이 절반쯤인 2016 은 뺍니다(evan). Meatball% 는 개수가 없어 두지 않습니다.
+  const PD_FIRST = 2017;
+  const PDCOLS = [
+    ['Pitches', 'Pitches\n그 시즌 던진 공 수입니다.', function (s) { return i0(s.n); }],
+    ['Zone%', 'Zone%\n스트라이크 존 안 공 ÷ 위치가 있는 공 × 100 입니다. 존 폭은 공 반지름을 더한 20인치입니다.', function (s) { return p1(s.z_n, s.z_n + s.o_n); }],
+    ['Z-Swing%', 'Z-Swing%\n존 안 공에 스윙 ÷ 존 안 공 × 100 입니다.', function (s) { return p1(s.z_sw, s.z_n); }],
+    ['Z-Contact%', 'Z-Contact%\n존 안 컨택 ÷ 존 안 스윙 × 100 입니다.', function (s) { return p1(s.z_ct, s.z_sw); }],
+    ['Chase%', 'Chase%\n존 밖 공에 스윙 ÷ 존 밖 공 × 100 입니다(O-Swing%).', function (s) { return p1(s.o_sw, s.o_n); }],
+    ['Chase Contact%', 'Chase Contact%\n존 밖 컨택 ÷ 존 밖 스윙 × 100 입니다(O-Contact%).', function (s) { return p1(s.o_ct, s.o_sw); }],
+    ['Edge%', 'Edge%\n존 끝 근처(Shadow) 공 ÷ 위치가 있는 공 × 100 입니다.', function (s) { return p1(s.edge_n, s.z_n + s.o_n); }],
+    ['F-Strike%', 'F-Strike%\n0-0 에서 볼이 아닌 공 ÷ 0-0 공 × 100 입니다.', function (s) { return p1(s.fp_str, s.fp_n); }],
+    ['Swing%', 'Swing%\n스윙 ÷ 공 × 100 입니다.', function (s) { return p1(s.sw, s.pd_n); }],
+    ['Whiff%', 'Whiff%\n헛스윙 ÷ 스윙 × 100 입니다.', function (s) { return p1(s.wh, s.sw); }],
+    ['CStr%', 'CStr%\n루킹 스트라이크 ÷ 공 × 100 입니다.', function (s) { return p1(s.cs, s.pd_n); }],
+    ['CSW%', 'CSW%\n(루킹 스트라이크 + 헛스윙) ÷ 공 × 100 입니다.', function (s) { return p1(s.cs + s.wh, s.pd_n); }],
+  ];
+
+  /** 그 시즌 모든 구종을 더한 합계입니다. */
+  function seasonSums(S) {
+    const t = emptySums();
+    Object.keys(S.types).forEach(function (k) {
+      const s = S.types[k];
+      Object.keys(t).forEach(function (f) { t[f] += s[f] || 0; });
+    });
+    return t;
+  }
+
+  /** Plate Discipline 표입니다. 최근 순 시즌 한 줄씩, showAll 이 아니면 최근 3시즌만. 2016 은 뺍니다. */
+  function pdTableHtml(data, showAll) {
+    const agg = aggregate(data, '', '');
+    const seasons = agg.seasons.filter(function (y) { return y >= PD_FIRST; }).sort(function (a, b) { return b - a; });
+    const shown = showAll ? seasons : seasons.slice(0, TB_SEASONS);
+    let h = '<div class="pa-tb-wrap"><table class="pa-tb pa-pdt"><thead><tr><th data-tip="시즌\n정규시즌입니다(2016 은 공 위치 추적이 절반쯤이라 뺍니다).">시즌</th>';
+    PDCOLS.forEach(function (c) { h += '<th data-tip="' + esc(c[1]) + '">' + esc(c[0]) + '</th>'; });
+    h += '</tr></thead><tbody>';
+    shown.forEach(function (y) {
+      const s = seasonSums(agg.bySeason[y]);
+      h += '<tr class="pa-tb-row"><td>' + y + '</td>';
+      PDCOLS.forEach(function (c) { h += '<td>' + esc(c[2](s)) + '</td>'; });
+      h += '</tr>';
+    });
+    h += '</tbody></table></div>';
+    if (seasons.length > TB_SEASONS) {
+      h += '<button type="button" class="pa-tb-more pa-pdt-more" data-all="' + (showAll ? '1' : '0') + '">'
+        + (showAll ? '최근 3시즌만' : '시즌 더 보기 (' + (seasons.length - TB_SEASONS) + ')') + '</button>';
+    }
+    return h;
+  }
+
   /** 지표 고르기 칸의 option 글자입니다(묶음은 optgroup). */
   function metricOptionsHtml(hasWoba) {
     let html = '', group = null;
@@ -444,7 +495,7 @@
     return html + (group ? '</optgroup>' : '');
   }
 
-  const api = { METRICS, metric, metricOk, aggregate, series, fmt, chartSvg, legendHtml, metricOptionsHtml, countOptionsHtml, tableHtml, rvTableHtml };
+  const api = { METRICS, metric, metricOk, aggregate, series, fmt, chartSvg, legendHtml, metricOptionsHtml, countOptionsHtml, tableHtml, rvTableHtml, pdTableHtml };
   PA.trend = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
