@@ -10,7 +10,9 @@
 
   const IN2CM = 2.54;
   const SUMS = ['n', 'pa', 'ab', 'h', 'b1', 'b2', 'b3', 'hr', 'bbe', 'bb', 'so',
-    'spd_sum', 'spd_n', 'pfx_x_sum', 'pfx_z_sum', 'pfx_n', 'px_sum', 'pz_sum', 'loc_n'];
+    'spd_sum', 'spd_n', 'pfx_x_sum', 'pfx_z_sum', 'pfx_n', 'px_sum', 'pz_sum', 'loc_n',
+    // 선구(Plate Discipline) 개수입니다. 고의 볼·피치클락 위반은 API 가 뺍니다.
+    'pd_n', 'sw', 'wh', 'ct', 'cs', 'z_n', 'o_n', 'z_sw', 'o_sw', 'z_ct', 'o_ct', 'edge_n', 'fp_n', 'fp_str'];
 
   function num(v) {
     if (v === null || v === undefined || v === '') return null;
@@ -29,6 +31,13 @@
 
   // 지표 목록입니다. 묶음(group)은 고르기 칸의 optgroup 이고, tip 은 마우스를 올리면 나오는 설명입니다.
   // v(합계, 그 시즌 전체 공 수) → 값(없으면 null), note(합계) → 툴팁의 바탕 수.
+  /** 선구 지표 하나(비율 %). part(합계) → [분자, 분모]. 분모가 0 이면 점을 두지 않습니다. */
+  function pdm(key, label, tip, part, unit) {
+    return { key: key, group: '선구 (Plate Discipline)', label: label, tip: tip, pct: true,
+      v: function (s) { const p = part(s); return p[1] > 0 ? 100 * p[0] / p[1] : null; },
+      note: function (s) { const p = part(s); return comma(p[0]) + ' / ' + comma(p[1]) + unit; } };
+  }
+
   const METRICS = [
     { key: 'pct', group: '', label: '구종 비율 (%)', tip: '그 시즌(고른 타자 손·카운트 안) 전체 공 가운데 이 구종의 비율입니다.',
       v: function (s, total) { return total > 0 && s.n > 0 ? 100 * s.n / total : null; },
@@ -61,6 +70,20 @@
       v: function (s) { return ratio(s.b1 + 2 * s.b2 + 3 * s.b3 + 4 * s.hr, s.ab); }, note: function (s) { return comma(s.ab) + '타수'; } },
     { key: 'spd', group: '투구', label: '평균 구속 (km/h)', tip: '이 구종의 평균 구속입니다.',
       v: function (s) { return ratio(s.spd_sum, s.spd_n); }, note: function (s) { return comma(s.spd_n) + '구'; } },
+    // 선구(Plate Discipline): FanGraphs·Savant 정의. 존은 투구 분포와 같은 20인치 존(공 반지름 포함)입니다.
+    pdm('swing', '스윙% (Swing%)', '스윙 ÷ 공 × 100 입니다. 번트 시도도 스윙으로 셉니다(Savant).', function (s) { return [s.sw, s.pd_n]; }, '구'),
+    pdm('whiff', '헛스윙/스윙 (Whiff%)', '헛스윙 ÷ 스윙 × 100 입니다(Savant Swing & Miss %).', function (s) { return [s.wh, s.sw]; }, '스윙'),
+    pdm('swstr', '헛스윙% (SwStr%)', '헛스윙 ÷ 공 × 100 입니다(FanGraphs).', function (s) { return [s.wh, s.pd_n]; }, '구'),
+    pdm('contact', '컨택% (Contact%)', '컨택(파울·타격) ÷ 스윙 × 100 입니다.', function (s) { return [s.ct, s.sw]; }, '스윙'),
+    pdm('zone', '존% (Zone%)', '스트라이크 존 안 공 ÷ 위치가 있는 공 × 100 입니다. 존 폭은 공 반지름을 더한 20인치입니다.', function (s) { return [s.z_n, s.z_n + s.o_n]; }, '구'),
+    pdm('edge', '엣지% (Edge%)', '존 끝 근처(Shadow, 존 끝 100% 기준 67~133%) 공 ÷ 위치가 있는 공 × 100 입니다(Savant).', function (s) { return [s.edge_n, s.z_n + s.o_n]; }, '구'),
+    pdm('z_swing', '존 스윙% (Z-Swing%)', '존 안 공에 스윙 ÷ 존 안 공 × 100 입니다.', function (s) { return [s.z_sw, s.z_n]; }, '구'),
+    pdm('o_swing', '체이스% (O-Swing%)', '존 밖 공에 스윙 ÷ 존 밖 공 × 100 입니다(Savant Chase %).', function (s) { return [s.o_sw, s.o_n]; }, '구'),
+    pdm('z_contact', '존 컨택% (Z-Contact%)', '존 안 컨택 ÷ 존 안 스윙 × 100 입니다.', function (s) { return [s.z_ct, s.z_sw]; }, '스윙'),
+    pdm('o_contact', '존 밖 컨택% (O-Contact%)', '존 밖 컨택 ÷ 존 밖 스윙 × 100 입니다.', function (s) { return [s.o_ct, s.o_sw]; }, '스윙'),
+    pdm('f_strike', '초구 스트라이크% (F-Strike%)', '0-0 에서 볼이 아닌 공(루킹·헛스윙·파울·타격) ÷ 0-0 공 × 100 입니다.', function (s) { return [s.fp_str, s.fp_n]; }, '초구'),
+    pdm('cstr', '루킹 스트라이크% (CStr%)', '루킹 스트라이크 ÷ 공 × 100 입니다.', function (s) { return [s.cs, s.pd_n]; }, '구'),
+    pdm('csw', 'CSW%', '(루킹 스트라이크 + 헛스윙) ÷ 공 × 100 입니다.', function (s) { return [s.cs + s.wh, s.pd_n]; }, '구'),
     { key: 'rv', group: '구종 가치', label: '구종 가치 (점)', tip: '이 구종으로 던진 공의 득점 가치 합입니다. 실점을 막으면 + 입니다. 카운트를 고르면 쓸 수 없습니다.',
       v: function (s) { return s.rv_n > 0 ? s.rv : null; }, note: function (s) { return comma(s.rv_n) + '구'; } },
   ];
@@ -133,9 +156,11 @@
       });
   }
 
+  function isPct(key) { return key === 'pct' || key === 'bb_pct' || key === 'k_pct' || !!metric(key).pct; }
+
   function fmt(key, v) {
     if (v === null || v === undefined) return '-';
-    if (key === 'pct' || key === 'bb_pct' || key === 'k_pct') return v.toFixed(1) + '%';
+    if (isPct(key)) return v.toFixed(1) + '%';
     if (key === 'ba' || key === 'slg') { const s = v.toFixed(3); return s.charAt(0) === '0' ? s.slice(1) : s; }
     if (key === 'rv') return (v > 0 ? '+' : '') + v.toFixed(1);
     if (key === 'n' || key === 'h' || key === 'b1' || key === 'b2' || key === 'b3' || key === 'hr' || key === 'bbe') return comma(Math.round(v));
@@ -143,7 +168,7 @@
   }
   function tickFmt(key, t) {
     const r = Math.round(t * 1000) / 1000;
-    if (key === 'pct' || key === 'bb_pct' || key === 'k_pct') return r + '%';
+    if (isPct(key)) return r + '%';
     if (key === 'ba' || key === 'slg') return fmt(key, r);
     if (key === 'rv') return (r > 0 ? '+' : '') + r;
     return comma(r);
@@ -157,9 +182,9 @@
   }
   function ticks(key, vals) {
     let lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
-    if (FROM_ZERO[key]) lo = Math.min(0, lo);
+    if (FROM_ZERO[key] || metric(key).pct) lo = Math.min(0, lo);
     if (key === 'rv') { lo = Math.min(0, lo); hi = Math.max(0, hi); }
-    if (hi === lo) { hi += 1; if (!FROM_ZERO[key]) lo -= 1; }
+    if (hi === lo) { hi += 1; if (!FROM_ZERO[key] && !metric(key).pct) lo -= 1; }
     const step = niceStep(hi - lo), a = Math.floor(lo / step) * step, b = Math.ceil(hi / step) * step, out = [];
     for (let t = a; t <= b + step / 2; t += step) out.push(Math.round(t / step) * step);
     return out;
