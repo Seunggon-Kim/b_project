@@ -502,6 +502,46 @@
     return h + '</tbody></table></div>';
   }
 
+  // ---- Statcast Pitching Run Value 표(Savant swing/take 존별, evan) ----
+  // 시즌마다 PA·Pitches 와 Run Value 를 공격 존(Heart·Shadow·Chase·Waste)별로 나눈 값, All 은 모든 공의 합(Savant 와 같음).
+  // 위치가 없는 공은 네 존 어디에도 들지 않아 네 존 합이 All 과 조금 다를 수 있습니다. 2016 은 위치 추적 55% 라 뺍니다(evan).
+  const ZONES = [
+    ['heart', 'Heart', 'Heart\n존 한가운데(존 끝 100% 기준 67% 안)로 던진 공의 Run Value 합입니다.'],
+    ['shadow', 'Shadow', 'Shadow\n존 끝 근처(67~133%)로 던진 공의 Run Value 합입니다.'],
+    ['chase', 'Chase', 'Chase\n존 밖 조금 먼 곳(133~200%)으로 던진 공의 Run Value 합입니다.'],
+    ['waste', 'Waste', 'Waste\n존에서 아주 먼 곳(200% 밖)으로 던진 공의 Run Value 합입니다.'],
+  ];
+
+  /** Pitching Run Value 표입니다. zones 가 없으면 '' (카드를 숨김). 최근 순 2017~ 모든 시즌. */
+  function prvTableHtml(data) {
+    const zones = (data && data.zones) || [];
+    if (!zones.length) return '';
+    const agg = aggregate(data, '', '');
+    const byZ = {};
+    zones.forEach(function (z) {
+      const y = num(z.season);
+      if (y === null || y < PD_FIRST) return;
+      (byZ[y] = byZ[y] || {})[z.zone] = num(z.rv);
+    });
+    const seasons = Object.keys(byZ).map(Number).filter(function (y) { return agg.bySeason[y]; })
+      .sort(function (a, b) { return b - a; });
+    if (!seasons.length) return '';
+    const cell = function (v) { return v === null || v === undefined ? '<td>-</td>' : '<td class="' + rvCls(v) + '">' + signed(v, 1) + '</td>'; };
+    let h = '<div class="pa-tb-wrap"><table class="pa-tb pa-prvt"><thead><tr>'
+      + '<th data-tip="시즌\n정규시즌입니다(2016 은 공 위치 추적이 절반쯤이라 뺍니다).">시즌</th>'
+      + '<th data-tip="PA\n타석 수입니다.">PA</th><th data-tip="Pitches\n던진 공 수입니다.">Pitches</th>';
+    ZONES.forEach(function (z) { h += '<th data-tip="' + esc(z[2]) + '">' + z[1] + '</th>'; });
+    h += '<th data-tip="All\n모든 공의 Run Value 합입니다(구종별 Run Value 의 합과 같음). 위치가 없는 공은 네 존에 들지 않아 네 존 합과 조금 다를 수 있습니다.">All</th>';
+    h += '</tr></thead><tbody>';
+    seasons.forEach(function (y) {
+      const S = agg.bySeason[y], s = seasonSums(S), z = byZ[y];
+      h += '<tr class="pa-tb-row"><td>' + y + '</td><td>' + i0(s.pa) + '</td><td>' + i0(s.n) + '</td>';
+      ZONES.forEach(function (k) { h += cell(z[k[0]]); });
+      h += cell(s.rv_n > 0 ? s.rv : null) + '</tr>';
+    });
+    return h + '</tbody></table></div>';
+  }
+
   /** 지표 고르기 칸의 option 글자입니다(묶음은 optgroup). */
   function metricOptionsHtml(hasWoba) {
     let html = '', group = null;
@@ -518,7 +558,7 @@
     return html + (group ? '</optgroup>' : '');
   }
 
-  const api = { METRICS, metric, metricOk, aggregate, series, fmt, chartSvg, legendHtml, metricOptionsHtml, countOptionsHtml, tableHtml, rvTableHtml, pdTableHtml };
+  const api = { METRICS, metric, metricOk, aggregate, series, fmt, chartSvg, legendHtml, metricOptionsHtml, countOptionsHtml, tableHtml, rvTableHtml, pdTableHtml, prvTableHtml };
   PA.trend = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -207,8 +207,8 @@
 .pa-tr-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.4rem 1rem; margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary); }
 .pa-tr-key { display: inline-flex; align-items: center; gap: 0.35rem; }
 .pa-tr-key i { width: 0.7rem; height: 0.7rem; border-radius: 999px; display: inline-block; }
-#pa-trend-section .section-header-flex, #pa-rv-section .section-header-flex, #pa-pd-section .section-header-flex { flex-wrap: wrap; gap: 0.6rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color); }  /* Arsenal 과 같은 제목 줄 */
-#pa-trend-section .card-title, #pa-rv-section .card-title, #pa-pd-section .card-title { white-space: nowrap; }
+#pa-trend-section .section-header-flex, #pa-rv-section .section-header-flex, #pa-pd-section .section-header-flex, #pa-prv-section .section-header-flex { flex-wrap: wrap; gap: 0.6rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color); }  /* Arsenal 과 같은 제목 줄 */
+#pa-trend-section .card-title, #pa-rv-section .card-title, #pa-pd-section .card-title, #pa-prv-section .card-title { white-space: nowrap; }
 
 /* 구종별 시즌 표(Savant detailedPitches 참고): 가로로 넘치면 표만 밀림 */
 .pa-tr-table { padding: 0 0.5rem 0.75rem; }
@@ -230,8 +230,10 @@
 .pa-tb th:nth-child(1), .pa-tb th:nth-child(2) { z-index: 2; background: var(--bg-tertiary); }
 /* 구종별 Run Value 표: 가치 칸은 구사율 가치처럼 +빨강·−파랑, 표 안에선 오른쪽 맞춤·표 글자 크기 */
 .pa-tb td.pa-rv { text-align: right; font-size: inherit; border-radius: 0; }
-#pa-rv-section .pa-ars-note, #pa-pd-section .pa-ars-note { margin: 0.75rem 0 0; }
+#pa-rv-section .pa-ars-note, #pa-pd-section .pa-ars-note, #pa-prv-section .pa-ars-note { margin: 0.75rem 0 0; }
 /* Plate Discipline 표: 둘째 칸(Pitches)은 숫자라 고정·왼쪽 맞춤을 풂 */
 .pa-pdt th:nth-child(2), .pa-pdt td:nth-child(2) { position: static; box-shadow: none; text-align: right; }
 .pa-tb tr.pa-tb-total td { border-top: 2px solid var(--border-color); font-weight: 700; background: var(--bg-tertiary); }
 .pa-tb tr.pa-tb-league td { color: var(--text-secondary); background: var(--bg-secondary); font-weight: 600; }
+/* Pitching Run Value 표: 둘째 칸(PA)은 숫자라 고정·왼쪽 맞춤을 풂 */
+.pa-prvt th:nth-child(2), .pa-prvt td:nth-child(2) { position: static; box-shadow: none; text-align: right; }

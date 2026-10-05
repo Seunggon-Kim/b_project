@@ -194,6 +194,15 @@
                     <div id="pa-rv-table" class="pa-tr-table"></div>
                 </div>
 
+                <!-- Statcast Pitching Run Value (Savant 참고): 존별 Run Value, 위 고르기와 연동 안 함, 2016 제외(evan) -->
+                <div id="pa-prv-section" class="detailed-stats-container fade-in hidden">
+                    <div class="section-header-flex">
+                        <h3 class="card-title mb-0">Pitching Run Value</h3>
+                    </div>
+                    <p class="pa-ars-note">공을 던진 곳(공격 존: Heart·Shadow·Chase·Waste)별 Run Value 합입니다. 모든 공 기준이고 실점을 막으면 + 입니다. All 은 모든 공의 합이라, 위치가 없는 공 몫만큼 네 존 합과 조금 다를 수 있습니다. 2016 은 공 위치 추적이 절반쯤이라 뺍니다.</p>
+                    <div id="pa-prv-table" class="pa-tr-table"></div>
+                </div>
+
                 <!-- Plate Discipline (Pitching, Savant 참고): 시즌 한 줄, 위 고르기와 연동 안 함, 2016 제외(evan) -->
                 <div id="pa-pd-section" class="detailed-stats-container fade-in hidden">
                     <div class="section-header-flex">
@@ -1106,6 +1115,7 @@
                     document.getElementById('pa-trend-section').classList.add('hidden');
                     document.getElementById('pa-rv-section').classList.add('hidden');
                     document.getElementById('pa-pd-section').classList.add('hidden');
+                    document.getElementById('pa-prv-section').classList.add('hidden');
                 }
 
                 // Scroll to stats
@@ -1187,6 +1197,7 @@
             section.classList.add('hidden');
             document.getElementById('pa-rv-section').classList.add('hidden');
             document.getElementById('pa-pd-section').classList.add('hidden');
+            document.getElementById('pa-prv-section').classList.add('hidden');
             // 카운트별(bc) 응답 하나로 묶음·카운트별 고르기·PutAway%·wOBA(hbp·sf)를 모두 그립니다.
             const res = await API.getPitchTrendByCount(playerId);
             if (token !== trToken) return;  // 그사이 다른 선수를 골랐습니다.
@@ -1209,6 +1220,7 @@
             countSel.value = trCnt;
             renderTrend();
             renderRvTable();
+            renderPrvTable();
             renderPdTable();
         }
 
@@ -1216,6 +1228,13 @@
         function trSize(el) {
             const w = el.clientWidth || 760;
             return { w: w, h: w < 560 ? Math.round(w * 0.8) : 340 };
+        }
+
+        /** Pitching Run Value 표입니다. 존별 값(zones)이 없으면 숨깁니다. */
+        function renderPrvTable() {
+            const html = trData ? window.PlayerAnalytics.trend.prvTableHtml(trData) : '';
+            document.getElementById('pa-prv-section').classList.toggle('hidden', !html);
+            document.getElementById('pa-prv-table').innerHTML = html;
         }
 
         /** Plate Discipline 표입니다. 위 고르기와 상관없이 시즌 한 줄씩, 2016 제외. 선구 개수가 없으면 숨깁니다. */
