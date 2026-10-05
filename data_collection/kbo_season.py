@@ -49,7 +49,9 @@
 
 모양은 맞는데 그해 정규시즌 경기가 6월 1일이 되도록 없으면, 그것도 일정이
 이상한 것으로 봅니다. 가장 늦은 개막은 2020-05-05 였습니다. 그때
-record_season 은 올해로 물러서고(예전 동작), 크롤러는 실패로 끝냅니다.
+record_season 은 올해로 물러섭니다(예전 동작). 크롤러는 더 일찍, 3월 20일
+이후에 끝난 경기가 있는데 정규시즌 일정이 없으면 실패로 끝냅니다(그 전은
+시범경기로 보고 건너뜁니다. crawler/download.py EXHIBITION_ONLY_BEFORE).
 """
 import datetime
 import json

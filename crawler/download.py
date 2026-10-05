@@ -90,11 +90,18 @@ playoff_start = {
 # 정규시즌 판정은 경기 ID 로 따로 합니다(lib/gametype.js, game_type.py).
 # 표에 있는 해는 표 값 그대로입니다.
 #
-# 네이버 일정이 이상하면(받기 실패, 모양이 다름, 끝난 경기가 있는데 그해
-# 정규시즌 경기가 일정에 없음) 수집을 실패로 끝냅니다. 건너뛰면 초록불인
-# 채로 그해 경기가 통째로 빕니다. 빨간 하루는 daily_pbp_to_d1.py --date 로
-# 다시 받으면 됩니다.
+# 네이버 일정이 이상하면(받기 실패, 모양이 다름, 3월 20일 이후에 끝난 경기가
+# 있는데 그해 정규시즌 경기가 일정에 없음) 수집을 실패로 끝냅니다. 건너뛰면
+# 초록불인 채로 그해 경기가 통째로 빕니다. 빨간 하루는
+# daily_pbp_to_d1.py --date 로 다시 받으면 됩니다.
 NEW_SEASON_PLAYOFF_START = '1231'
+
+# 이 날짜(월, 일) 전에 끝난 경기는, 그해 정규시즌 일정이 아직 없어도 시범경기로
+# 보고 건너뜁니다. 2008~2025 의 가장 이른 개막이 03-22 였습니다. 정규시즌
+# 경기가 열리고 있다면 네이버 일정에 kbo_r 이 있으므로, 이 규칙은 시범경기
+# 기간에만 걸립니다. 네이버가 정규시즌 일정을 늦게 올려도 시범경기 날 daily 가
+# 괜히 빨개지지 않게 합니다(2026-10-05 재검토).
+EXHIBITION_ONLY_BEFORE = (3, 20)
 _OPENING = {}
 
 
@@ -257,9 +264,14 @@ def get_game_ids(start_date, end_date, playoff=False, with_year=False):
                             window = season_window(year)
                             if window is None:
                                 # 끝난 경기가 있는데 그해 정규시즌 경기가 일정에
-                                # 없습니다. 시범경기는 개막일 앞이라 위 날짜로
-                                # 걸러지므로, 여기 오는 것은 일정이 이상한
-                                # 경우입니다. 건너뛰지 않고 멈춥니다.
+                                # 없습니다. 3월 20일 전이면 시범경기 기간이라
+                                # 알리고 건너뜁니다(EXHIBITION_ONLY_BEFORE).
+                                if (gid_date.month, gid_date.day) < EXHIBITION_ONLY_BEFORE:
+                                    print('정규시즌 일정이 아직 없어 시범경기로 보고 '
+                                          '건너뜁니다: %s' % gid_date.isoformat())
+                                    continue
+                                # 그 뒤라면 일정이 이상한 것입니다. 건너뛰지 않고
+                                # 멈춥니다.
                                 raise RuntimeError(
                                     '%d 년 끝난 경기(%s)가 있는데 네이버 일정에 그해 '
                                     '정규시즌(kbo_r) 경기가 없습니다. 일정 응답을 '

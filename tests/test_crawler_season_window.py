@@ -127,14 +127,24 @@ def test_2027_시범경기는_빼고_개막부터_받습니다(monkeypatch):
     assert got == ["20270327OBNC02027", "20270328LTSK02027"]
 
 
-def test_끝난_경기가_있는데_정규시즌_일정이_없으면_멈춥니다(monkeypatch):
-    # 네이버가 200 으로 빈 일정을 주는 경우입니다. 예전에는 건너뛰어 초록불인
-    # 채로 그해 경기가 통째로 비었을 것입니다(검토 I1).
-    for day in ("20270313LGSS02027", "20270601LGSS02027"):
-        months = {"2027-%s" % day[4:6]: [(day, "RESULT")]}
-        d = D(2027, int(day[4:6]), int(day[6:8]))
-        with pytest.raises(RuntimeError, match="kbo_r"):
-            run(monkeypatch, months, d, d, lambda y: None)
+@pytest.mark.parametrize("day", ["20270325LGSS02027", "20270320LGSS02027", "20270601LGSS02027"])
+def test_3월_20일부터는_정규시즌_일정이_없으면_멈춥니다(monkeypatch, day):
+    # 네이버가 200 으로 빈 일정을 주는 경우입니다. 건너뛰면 초록불인 채로
+    # 그해 경기가 통째로 빕니다(검토 I1). 가장 이른 개막은 03-22 였습니다.
+    months = {"2027-%s" % day[4:6]: [(day, "RESULT")]}
+    d = D(2027, int(day[4:6]), int(day[6:8]))
+    with pytest.raises(RuntimeError, match="kbo_r"):
+        run(monkeypatch, months, d, d, lambda y: None)
+
+
+@pytest.mark.parametrize("day", ["20270310LGSS02027", "20270319LGSS02027"])
+def test_3월_20일_전에는_시범경기로_보고_건너뜁니다(monkeypatch, capsys, day):
+    # 정규시즌 일정이 아직 안 올라와도 시범경기 날 daily 가 빨개지지 않습니다.
+    # 받을 경기가 없으니 daily_pbp_to_d1.py 는 "경기가 없습니다" 로 0 종료합니다.
+    months = {"2027-03": [(day, "RESULT")]}
+    d = D(2027, 3, int(day[6:8]))
+    assert run(monkeypatch, months, d, d, lambda y: None) == []
+    assert "시범경기로 보고 건너뜁니다: 2027-03-%s" % day[6:8] in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("err", [OSError("연결 실패"), ValueError("모양이 다릅니다")])
