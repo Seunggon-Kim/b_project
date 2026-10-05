@@ -99,7 +99,7 @@
   }
 
   /**
-   * 카드 그림입니다. mode 'point' 면 점, 아니면 contours({value, coordinates} 목록, 좌표는 viewBox)로 등고선.
+   * 카드 그림입니다. mode 'point' 면 점, 'both' 면 등고선 위에 모든 공, 그 밖은 contours({value, coordinates} 목록, 좌표는 viewBox)로 등고선.
    * 등고선이 없으면(공이 적거나 d3 없음) 점으로 그립니다.
    */
   function cardSvg(g, z, mode, view, contours) {
@@ -121,9 +121,10 @@
       if (px === null || pz === null) return;
       const raw = toXY(px, pz, view);
       const out = !inRange(raw);
-      if (useContour && !out) return;  // 등고선 모드에선 범위 밖 공만 표시
+      if (useContour && !out && mode !== 'both') return;  // 등고선만이면 범위 밖 공만 표시, both 면 모든 공
       const xy = clampXY(raw);
-      s += '<circle class="pa-ars-pt' + (out ? ' pa-ars-pt--edge' : '') + '" cx="' + r1(xy[0]) + '" cy="' + r1(xy[1]) + '" r="3" fill="' + g.color + '"/>';
+      const small = mode === 'both' && !out;  // 등고선 위에 얹는 공은 작게(등고선이 보이게)
+      s += '<circle class="pa-ars-pt' + (out ? ' pa-ars-pt--edge' : '') + (small ? ' pa-ars-pt--over' : '') + '" cx="' + r1(xy[0]) + '" cy="' + r1(xy[1]) + '" r="' + (small ? 1.6 : 3) + '" fill="' + g.color + '"/>';
     });
     return s + '</svg>';
   }
@@ -179,7 +180,96 @@
     });
   }
 
-  const api = { groups, zone, toXY, scale, cardSvg, titleHtml, contours, densityData, MIN_CONTOUR_N };
+  // ---- 공 고르기·존 고르기(Savant 투구 분포 참고, evan) ----
+  // 존 폭은 공 반지름을 더한 20인치(±10인치)입니다(Tango·Savant). 높이는 그 공의 sz_top·sz_bot.
+  const ZONE_HW = 10 / 12;
+
+  function zoneOf(p) {
+    const px = num(p.px), pz = num(p.pz);
+    if (px === null || pz === null) return null;
+    const top = num(p.sz_top), bot = num(p.sz_bot);
+    const t = top !== null && bot !== null && top > bot ? top : 3.5, b = top !== null && bot !== null && top > bot ? bot : 1.5;
+    return { x: px, z: pz, top: t, bot: b };
+  }
+
+  /** Savant 게임데이 존(포수 시점): 1~9 는 존 안 3×3(1 = 왼쪽 위), 11~14 는 존 밖을 가운데 선으로 나눈 네 귀퉁이. */
+  function gameZone(p) {
+    const q = zoneOf(p);
+    if (!q) return null;
+    const h = q.top - q.bot, mid = (q.top + q.bot) / 2;
+    if (Math.abs(q.x) <= ZONE_HW && q.z >= q.bot && q.z <= q.top) {
+      const col = q.x < -ZONE_HW / 3 ? 0 : q.x <= ZONE_HW / 3 ? 1 : 2;
+      const row = q.z > q.top - h / 3 ? 0 : q.z >= q.bot + h / 3 ? 1 : 2;
+      return row * 3 + col + 1;
+    }
+    return (q.z > mid ? 11 : 13) + (q.x < 0 ? 0 : 1);
+  }
+
+  /** Tango·Savant 공격 존: 존 가운데 0%, 존 끝 100%. 하트 <67%, 쉐도우 <133%, 체이스 <200%, 그 밖 웨이스트. */
+  function attackZone(p) {
+    const q = zoneOf(p);
+    if (!q) return null;
+    const r = Math.max(Math.abs(q.x) / ZONE_HW, Math.abs(q.z - (q.top + q.bot) / 2) / ((q.top - q.bot) / 2));
+    return r < 0.67 ? 'heart' : r < 1.33 ? 'shadow' : r < 2 ? 'chase' : 'waste';
+  }
+
+  /** 던지기 전 볼카운트 묶음(투수 기준, FanGraphs). 3-2(full)는 유리·불리·같음 어디에도 넣지 않습니다. */
+  function countGroup(balls, strikes) {
+    const b = num(balls), k = num(strikes);
+    if (b === null || k === null) return null;
+    if (b === 3 && k === 2) return 'full';
+    return k > b ? 'ahead' : b > k ? 'behind' : 'even';
+  }
+
+  const PICKS = [
+    ['', '모든 공', null],
+    ['swing', '헛스윙', null],
+    ['hit', '안타', 'is_hit'],
+    ['rhb', '우타자 상대', 'bat_side'],
+    ['lhb', '좌타자 상대', 'bat_side'],
+    ['ahead', '유리한 카운트', 'balls'],
+    ['behind', '불리한 카운트', 'balls'],
+    ['even', '같은 카운트', 'balls'],
+    ['ts', '2스트라이크', 'strikes'],
+  ];
+  /** 고를 수 있는 공 고르기 항목입니다. 응답에 그 값이 없으면(API 배포 전) 빼 둡니다. */
+  function pickOptions(rows) {
+    const has = function (k) { return (rows || []).some(function (p) { return p[k] !== undefined && p[k] !== null; }); };
+    return PICKS.filter(function (o) { return !o[2] || has(o[2]); }).map(function (o) { return [o[0], o[1]]; });
+  }
+  function zoneOptions() {
+    const o = [['', '모든 존']];
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14].forEach(function (z) { o.push([String(z), '존 ' + z]); });
+    return o.concat([['iz', '존 안'], ['ooz', '존 밖'], ['heart', '하트'], ['shadow', '쉐도우'], ['chase', '체이스'], ['waste', '웨이스트']]);
+  }
+
+  function pickOk(p, pick) {
+    switch (pick) {
+      case 'swing': return p.pitch_result === '헛스윙' || p.pitch_result === '번트헛스윙';
+      case 'hit': return Number(p.is_hit) === 1;
+      case 'rhb': return p.bat_side === 'R';
+      case 'lhb': return p.bat_side === 'L';
+      case 'ahead': case 'behind': case 'even': return countGroup(p.balls, p.strikes) === pick;
+      case 'ts': return num(p.strikes) === 2;
+      default: return true;
+    }
+  }
+  function zoneOk(p, zone) {
+    if (!zone) return true;
+    if (zone === 'heart' || zone === 'shadow' || zone === 'chase' || zone === 'waste') return attackZone(p) === zone;
+    const z = gameZone(p);
+    if (z === null) return false;
+    if (zone === 'iz') return z <= 9;
+    if (zone === 'ooz') return z >= 11;
+    return z === Number(zone);
+  }
+  /** 공 고르기(pick)와 존 고르기(zone)를 함께 적용합니다. 빈 값은 거르지 않음. */
+  function filterPitches(rows, pick, zone) {
+    return (rows || []).filter(function (p) { return pickOk(p, pick) && zoneOk(p, zone); });
+  }
+
+  const api = { groups, zone, toXY, scale, cardSvg, titleHtml, contours, densityData, MIN_CONTOUR_N,
+    gameZone, attackZone, countGroup, pickOptions, zoneOptions, filterPitches };
   PA.arsenal = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

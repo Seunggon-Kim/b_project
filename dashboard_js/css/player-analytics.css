@@ -175,6 +175,7 @@
 /* ---------- 투구 분포(Savant Pitch Distribution 참고) ---------- */
 #pitch-arsenal-section .section-header-flex { flex-wrap: wrap; gap: 0.6rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color); }  /* 아래 카드들과 나누는 선(evan) */
 .pa-ars-controls { flex-wrap: wrap; justify-content: flex-end; }
+.pa-ars-note { margin: -0.5rem 0 0.75rem; padding: 0 0.5rem; font-size: 0.8rem; color: var(--text-secondary); }  /* 고른 공 수 안내 */
 #pitch-arsenal-section .pitch-arsenal-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 1rem; }
 .pa-ars-card { min-width: 0; padding: 0.75rem; text-align: center; }
 .pa-ars-card:hover { transform: none; }
@@ -185,6 +186,7 @@
 .pa-ars-plate { fill: var(--text-muted); fill-opacity: 0.14; stroke: var(--text-muted); stroke-opacity: 0.45; stroke-width: 1; }
 .pa-ars-pt { fill-opacity: 0.5; }
 .pa-ars-pt--edge { stroke: var(--text-secondary); stroke-width: 1; }
+.pa-ars-pt--over { fill-opacity: 0.55; stroke: var(--bg-card); stroke-width: 0.4; }  /* 등고선 + 공: 작은 점 */
 .mode-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .pa-ars-empty { padding: 1rem 0.5rem; margin: 0; }
 @media (max-width: 640px) {
