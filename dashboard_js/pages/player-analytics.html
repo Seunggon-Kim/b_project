@@ -164,6 +164,31 @@
                         <!-- Pitch charts will be loaded here -->
                     </div>
                 </div>
+
+                <!-- 시즌별 구종 추이 (Pitching, Savant Pitch % by Season 참고) -->
+                <div id="pa-trend-section" class="detailed-stats-container fade-in hidden">
+                    <div class="section-header-flex">
+                        <h3 class="card-title mb-0">시즌별 구종 추이</h3>
+                        <div class="flex-group gap-3 pa-ars-controls">
+                            <select id="pa-tr-metric" class="pa-move-season" aria-label="지표 고르기"></select>
+                            <select id="pa-tr-side" class="pa-move-season" aria-label="타자 손 고르기">
+                                <option value="">모든 타자</option>
+                                <option value="R">우타자 상대</option>
+                                <option value="L">좌타자 상대</option>
+                            </select>
+                            <select id="pa-tr-count" class="pa-move-season" aria-label="카운트 고르기"
+                                title="던지기 전 카운트, 투수 기준입니다(FanGraphs). 유리한 카운트 0-1·0-2·1-2, 불리한 카운트 1-0·2-0·3-0·2-1·3-1, 같은 카운트 0-0·1-1·2-2, 풀카운트 3-2.">
+                                <option value="">모든 카운트</option>
+                                <option value="ahead">유리한 카운트</option>
+                                <option value="behind">불리한 카운트</option>
+                                <option value="even">같은 카운트</option>
+                                <option value="full">풀카운트</option>
+                            </select>
+                        </div>
+                    </div>
+                    <p id="pa-tr-desc" class="pa-ars-note"></p>
+                    <div id="pa-tr-chart" class="pa-tr-chart"></div>
+                </div>
             </div>
         </section>
     </main>
@@ -179,6 +204,7 @@
     <script src="https://cdn.jsdelivr.net/npm/d3-array@3/dist/d3-array.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/d3-contour@4/dist/d3-contour.min.js"></script>
     <script src="../js/player-analytics/arsenal.js"></script>
+    <script src="../js/player-analytics/trend.js"></script>
     <script>
 
         // ===== Theme-aware chart helpers =====
@@ -1040,12 +1066,16 @@
 
                     // --- Pitch Arsenal Section (Pitching): 시즌은 따로 고릅니다 ---
                     setupArsenalSection(player, playerId);
+                    // --- 시즌별 구종 추이(Pitching): 모든 시즌 합계를 한 번 받아 화면에서 고릅니다 ---
+                    loadTrend(playerId);
 
                 } else {
                     detailedSection.classList.add('hidden');
                     document.getElementById('advanced-stats-section').classList.add('hidden');
                     arsToken++;
                     document.getElementById('pitch-arsenal-section').classList.add('hidden');
+                    trToken++;
+                    document.getElementById('pa-trend-section').classList.add('hidden');
                 }
 
                 // Scroll to stats
@@ -1071,6 +1101,64 @@
             pick.onchange = () => { arsPick = pick.value; renderPitchArsenalGrid(); };
             zone.onchange = () => { arsZone = zone.value; renderPitchArsenalGrid(); };
             view.onchange = () => { currentPitchViewMode = view.value; renderPitchArsenalGrid(); };
+        }
+
+        // --- 시즌별 구종 추이 ---------------------------------------------
+        // /players/{id}/pitch_trend(시즌 × 구종 × 타자 손 × 카운트 합계)를 한 번 받아 둡니다.
+        // 고르기를 바꾸면 받아 둔 합계로 다시 그립니다. 응답이 비면(API 배포 전·투수 자료 없음) 카드를 숨깁니다.
+        let trToken = 0, trData = null, trMetric = 'pct', trSide = '', trCnt = '';
+
+        function setupTrendFilters() {
+            const T = window.PlayerAnalytics.trend;
+            const metric = document.getElementById('pa-tr-metric');
+            const side = document.getElementById('pa-tr-side');
+            const count = document.getElementById('pa-tr-count');
+            metric.innerHTML = T.metricOptionsHtml();
+            metric.value = trMetric;
+            metric.onchange = () => { trMetric = metric.value; renderTrend(); };
+            side.onchange = () => { trSide = side.value; renderTrend(); };
+            count.onchange = () => { trCnt = count.value; renderTrend(); };
+        }
+
+        async function loadTrend(playerId) {
+            const section = document.getElementById('pa-trend-section');
+            const token = ++trToken;
+            trData = null;
+            section.classList.add('hidden');
+            const res = await API.getPitchTrend(playerId);
+            if (token !== trToken) return;  // 그사이 다른 선수를 골랐습니다.
+            trData = res && res.rows && res.rows.length ? res : null;
+            renderTrend();
+        }
+
+        /** 그래프 viewBox 를 카드 실제 폭에 맞춥니다(글자 크기가 그대로 보이게). 좁으면 조금 더 높게. */
+        function trSize(el) {
+            const w = el.clientWidth || 760;
+            return { w: w, h: w < 560 ? Math.round(w * 0.8) : 340 };
+        }
+
+        function renderTrend() {
+            const T = window.PlayerAnalytics.trend;
+            const section = document.getElementById('pa-trend-section');
+            const chart = document.getElementById('pa-tr-chart');
+            const desc = document.getElementById('pa-tr-desc');
+            if (!trData) { section.classList.add('hidden'); return; }
+            section.classList.remove('hidden');
+            // 구종 가치는 카운트별 값이 없습니다. 카운트를 고르면 그 항목을 막고 구종 비율로 돌립니다.
+            const metricSel = document.getElementById('pa-tr-metric');
+            const rvOpt = metricSel.querySelector('option[value="rv"]');
+            if (rvOpt) rvOpt.disabled = !T.metricOk('rv', trCnt);
+            if (!T.metricOk(trMetric, trCnt)) { trMetric = 'pct'; metricSel.value = 'pct'; }
+            const m = T.metric(trMetric);
+            const agg = T.aggregate(trData, trSide, trCnt);
+            const sr = T.series(agg, trMetric).filter(s => s.points.length);
+            const countSel = document.getElementById('pa-tr-count');
+            const cond = [trSide === 'R' ? '우타자 상대' : trSide === 'L' ? '좌타자 상대' : '',
+                trCnt ? countSel.selectedOptions[0].textContent : ''].filter(Boolean).join(' · ');
+            desc.textContent = m.tip + (cond ? ` 고른 조건: ${cond}.` : '') + ' 점에 마우스를 올리면 값이 나옵니다.';
+            chart.innerHTML = sr.length
+                ? T.chartSvg(sr, agg.seasons, trMetric, trSize(chart)) + T.legendHtml(sr)
+                : '<p class="text-secondary pa-ars-empty">고른 조건에 맞는 값이 없습니다.</p>';
         }
 
         /** 공 고르기 항목은 응답에 그 값이 있을 때만 둡니다(API 배포 전엔 모든 공·헛스윙만). */
@@ -1189,6 +1277,7 @@
         // Initialize on page load
         function init() {
             setupArsenalFilters();
+            setupTrendFilters();
             const urlParams = new URLSearchParams(window.location.search);
             const playerId = urlParams.get('id');
             if (playerId) {

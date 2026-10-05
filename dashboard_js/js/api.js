@@ -165,6 +165,18 @@ class API {
         }
     }
 
+    /** 시즌별 구종 추이 합계(시즌 × 구종 × 타자 손 × 카운트). 없거나 실패하면 빈 rows. */
+    static async getPitchTrend(playerId) {
+        try {
+            const response = await fetch(`${API_BASE_URL}/players/${playerId}/pitch_trend`);
+            if (!response.ok) return { rows: [], values: [] };
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching pitch trend:', error);
+            return { rows: [], values: [] };
+        }
+    }
+
     /**
      * Get available seasons (시즌 통계가 존재하는 시즌 목록)
      */

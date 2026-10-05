@@ -195,3 +195,17 @@
   .pa-ars-title { font-size: 0.9rem; }
 }
 @media (max-width: 360px) { #pitch-arsenal-section .pitch-arsenal-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- 시즌별 구종 추이(Savant Pitch % by Season 참고) ---------- */
+.pa-tr-chart { padding: 0 0.5rem 0.5rem; }
+.pa-tr-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.pa-tr-grid { stroke: var(--border-color); stroke-width: 1; }
+.pa-tr-zero { stroke: var(--text-muted); }
+.pa-tr-tick { fill: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
+.pa-tr-line { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.pa-tr-pt { stroke: var(--bg-card); stroke-width: 1.5; cursor: help; }
+.pa-tr-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.4rem 1rem; margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary); }
+.pa-tr-key { display: inline-flex; align-items: center; gap: 0.35rem; }
+.pa-tr-key i { width: 0.7rem; height: 0.7rem; border-radius: 999px; display: inline-block; }
+#pa-trend-section .section-header-flex { flex-wrap: wrap; gap: 0.6rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color); }  /* Arsenal 과 같은 제목 줄 */
+#pa-trend-section .card-title { white-space: nowrap; }
