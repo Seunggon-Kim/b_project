@@ -21,6 +21,8 @@
     <script src="../js/config.js"></script>
     <script src="../js/theme-toggle.js"></script>
     <script src="../js/nav.js"></script>
+    <script src="../js/stats/data.js"></script>
+    <script src="../js/stats/season.js"></script>
     <style>
         .info-box { background: #eff6ff; border-left: 4px solid #2563eb; padding: 0.75rem 1rem;
                     border-radius: 4px; margin-bottom: 1.5rem; font-size: 0.88rem; color: #1e40af; }
@@ -123,7 +125,7 @@
             <div class="info-box">
                 <strong>파크 팩터</strong> — <code>100 = 리그 평균</code>. 100보다 크면 타자 친화, 작으면 투수 친화 구장입니다.
                 3년 트레일링 윈도우로 산출(개장 초기 구장은 1~2년)하며, 득점·안타 유형별로 제공합니다.
-                <strong>2026</strong>은 진행 중 시즌이라 표본이 누적되며 값이 안정화됩니다.
+                <span id="pf-live-note" hidden><strong id="pf-live-year"></strong>은 진행 중이라 표본이 누적되며 값이 안정화됩니다.</span>
             </div>
             <div id="pf-content"><p class="muted">불러오는 중…</p></div>
             <div class="legend">
@@ -147,15 +149,19 @@
     <script>
         // 주소는 js/config.js 가 정합니다.
         const API = window.KBO_API_BASE;
+        // 표 이어 받기는 js/stats/data.js, 진행 중 판단은 js/stats/season.js 가 합니다.
+        const D = window.TeamStats.data, SEASON = window.TeamStats.season;
 
         function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+        // /db/table 은 한 번에 500행까지라 끝까지 이어 받습니다. 중간에 실패하면 표 전체를 실패로 봅니다.
         async function dbTable(name) {
-            const r = await fetch(`${API}/db/table/${name}?limit=500`);
-            if (!r.ok) throw new Error(`${name} → ${r.status}`);
-            return (await r.json()).rows;
+            const r = await D.getTable(API, name);
+            if (!r.ok) throw new Error(`${name} → ${r.error}`);
+            return r.data;
         }
 
-        let PF_ROWS = [], RE_ROWS = [], RE_MIN = 0, RE_MAX = 1;
+        // LIVE_YEAR: 진행 중인 시즌(없으면 null). init 에서 채웁니다.
+        let PF_ROWS = [], RE_ROWS = [], RE_MIN = 0, RE_MAX = 1, LIVE_YEAR = null;
 
         // ===== 탭 전환 (선택된 시즌 유지) =====
         document.getElementById('fs-tabs').addEventListener('click', (e) => {
@@ -196,7 +202,7 @@
             const head = `
                 <div class="season-head">
                     <h2>${season} 시즌</h2>
-                    ${season >= 2026 ? '<span class="badge-live">진행 중</span>' : ''}
+                    ${season === LIVE_YEAR ? '<span class="badge-live">진행 중</span>' : ''}
                     <span class="season-note">${list.length}개 구장 · 산출 구간 ${esc(win)}${cap ? ' · 갱신 ' + esc(cap.slice(0, 10)) : ''}</span>
                 </div>`;
             const body = list.map(r => `
@@ -231,7 +237,7 @@
             const head = `
                 <div class="season-head">
                     <h2>${season} 시즌</h2>
-                    ${season >= 2026 ? '<span class="badge-live">진행 중</span>' : ''}
+                    ${season === LIVE_YEAR ? '<span class="badge-live">진행 중</span>' : ''}
                     <span class="season-note">베이스-아웃 상황별 잔여 이닝 득점기대값</span>
                 </div>`;
             const bodyRows = BASE_ORDER.map(b => {
@@ -252,12 +258,20 @@
 
         (async function init() {
             try {
-                const [pf, re24] = await Promise.all([dbTable('self_park_factor'), dbTable('re24_matrix_by_season')]);
+                // 진행 중 판단을 못 받으면 올해를 진행 중으로 보고 콘솔에만 남깁니다(설계 6장).
+                const kst = SEASON.kstToday();
+                const [pf, re24, live] = await Promise.all([
+                    dbTable('self_park_factor'), dbTable('re24_matrix_by_season'), SEASON.loadSeasonState(API, kst.y),
+                ]);
+                if (live.failed) console.warn(SEASON.FAIL_TEXT, live.error);
+                LIVE_YEAR = live.live ? live.season : null;
+                document.getElementById('pf-live-year').textContent = LIVE_YEAR ? `${LIVE_YEAR} 시즌` : '';
+                document.getElementById('pf-live-note').hidden = !LIVE_YEAR;
                 PF_ROWS = pf;
                 RE_ROWS = re24.filter(r => r.season !== 0);     // 통합(0) 제외
                 RE_MIN = Math.min(...RE_ROWS.map(r => r.re_value));
                 RE_MAX = Math.max(...RE_ROWS.map(r => r.re_value));
-                // 시즌 목록(내림차순) — 두 데이터 합집합, 2026 최상단(기본 선택)
+                // 시즌 목록(내림차순): 두 데이터 합집합, 가장 최근 시즌이 맨 위(기본 선택)
                 const seasons = [...new Set([...PF_ROWS, ...RE_ROWS].map(r => r.season))].sort((a, b) => b - a);
                 const sel = document.getElementById('season-select');
                 sel.innerHTML = seasons.map((s, i) => `<option value="${s}"${i === 0 ? ' selected' : ''}>${s} 시즌</option>`).join('');
