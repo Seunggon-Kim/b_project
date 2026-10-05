@@ -8,6 +8,10 @@ from bs4 import BeautifulSoup
 from game_parse import game_status
 from gameid import game_id_year, save_stem
 
+# 개막일을 네이버 일정에서 찾는 도우미입니다(data_collection/kbo_season.py).
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / 'data_collection'))
+from kbo_season import opening_day  # noqa: E402
+
 # 경기 fetch 사이 대기(초). 대량 백필 시 Naver rate-limit 완화용.
 # 일별 단일 경기 경로에서는 사실상 영향 없음.
 FETCH_SLEEP_SEC = 0.4
@@ -69,6 +73,44 @@ playoff_start = {
     '2025': '1005',
     '2026': '1231',
 }
+
+# 위 두 표는 2026 까지입니다. 더 늘리지 않습니다(2026-10-05).
+#
+# 예전에는 해마다 사람이 두 표에 값을 넣어야 했습니다. 넣지 않으면
+# `regular_start['2027']` 에서 KeyError 가 나 2027년 1월 2일부터 매일 PBP
+# 수집이 죽습니다. 일정이 나오기 전에는 넣을 수도 없습니다. 2026 값(0322)도
+# 2025 를 베낀 것이라 실제 개막(03-28) 전 시범경기 15경기가 들어갔습니다.
+#
+# 표에 없는 해는 season_window 가 네이버 일정에서 개막일(첫 kbo_r 경기)을
+# 찾습니다. 2008~2025 는 그렇게 찾은 날이 표와 모두 같았습니다. 포스트시즌
+# 시작은 2026 처럼 12-31 로 둡니다. daily 가 포스트시즌 경기까지 받고,
+# 정규시즌 판정은 경기 ID 로 따로 합니다(lib/gametype.js, game_type.py).
+# 표에 있는 해는 예전 값 그대로입니다.
+NEW_SEASON_PLAYOFF_START = '1231'
+_OPENING = {}
+
+
+def season_window(year, lookup=opening_day):
+    """그해 (개막일, 포스트시즌 시작일) 입니다. 둘 다 datetime.date 입니다.
+
+    표에 있는 해는 표 값입니다. 없는 해는 네이버 일정의 개막일을 쓰고,
+    한 번 찾은 값은 이 실행 동안 들고 있습니다. 개막 경기가 일정에 아직
+    없으면 None 입니다. 그해에는 정규시즌 경기가 아직 없다는 뜻입니다
+    (시범경기만 있거나 비시즌). 일정을 못 받으면 예외가 그대로 나가 수집이
+    실패로 끝납니다. 조용히 넘기면 그날 경기가 빠집니다.
+    """
+    key = str(year)
+    if key in regular_start:
+        reg, po = regular_start[key], playoff_start[key]
+        return (datetime.date(year, int(reg[:2]), int(reg[2:])),
+                datetime.date(year, int(po[:2]), int(po[2:])))
+    if year not in _OPENING:
+        _OPENING[year] = lookup(year)
+    first = _OPENING[year]
+    if first is None:
+        return None
+    po = NEW_SEASON_PLAYOFF_START
+    return first, datetime.date(year, int(po[:2]), int(po[2:]))
 
 
 # 타자 박스스코어 표의 컬럼입니다. 순서를 바꾸지 마십시오.
@@ -174,15 +216,6 @@ def get_game_ids(start_date, end_date, playoff=False, with_year=False):
     for d in r:
         month = d.month
         year = d.year
-
-        year_regular_start = regular_start[str(year)]
-        year_playoff_start = playoff_start[str(year)]
-        year_regular_start_date = datetime.date(year,
-                                                int(year_regular_start[:2]),
-                                                int(year_regular_start[2:]))
-        year_playoff_start_date = datetime.date(year,
-                                                int(year_playoff_start[:2]),
-                                                int(year_playoff_start[2:]))
         year_last_date = datetime.date(year, 12, 31)
 
         cal_url = calendar_api + f"{d.strftime('%Y-%m-%d')}"
@@ -212,6 +245,13 @@ def get_game_ids(start_date, end_date, playoff=False, with_year=False):
                     if gStatusCode in ['RESULT', 'ENDED']:
                         gid_date = datetime.date(year, int(gid[4:6]), int(gid[6:8]))
                         if start_date <= gid_date <= end_date:
+                            # 끝난 경기가 있을 때만 그해 개막일을 봅니다. 비시즌
+                            # (1~2월)에는 일정을 묻지 않습니다.
+                            window = season_window(year)
+                            if window is None:
+                                # 그해 정규시즌 일정이 아직 없습니다. 시범경기입니다.
+                                continue
+                            year_regular_start_date, year_playoff_start_date = window
                             if playoff == False:
                                 if year_regular_start_date <= gid_date < year_playoff_start_date:
                                     game_ids.append((gid, year))
