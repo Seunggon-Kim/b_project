@@ -210,7 +210,7 @@ class API {
      * Get batter statistics
      * Added min_pa support
      */
-    static async getBatterStats(season = 2025, limit = 100, min_pa = 0, teamIds = null) {
+    static async getBatterStats(season, limit = 100, min_pa = 0, teamIds = null) {
         try {
             let url = `${API_BASE_URL}/stats/batters?season=${season}&limit=${limit}&min_pa=${min_pa}`;
             if (teamIds) url += `&team_ids=${encodeURIComponent(teamIds)}`;
@@ -229,7 +229,7 @@ class API {
      * Get pitcher statistics
      * Added min_ip support
      */
-    static async getPitcherStats(season = 2025, limit = 100, min_ip = 0, teamIds = null) {
+    static async getPitcherStats(season, limit = 100, min_ip = 0, teamIds = null) {
         try {
             let url = `${API_BASE_URL}/stats/pitchers?season=${season}&limit=${limit}&min_ip=${min_ip}`;
             if (teamIds) url += `&team_ids=${encodeURIComponent(teamIds)}`;
@@ -247,7 +247,7 @@ class API {
     /**
      * Get games list
      */
-    static async getGames(season = 2025, limit = 50) {
+    static async getGames(season, limit = 50) {
         try {
             const response = await fetch(`${API_BASE_URL}/games?season=${season}&limit=${limit}`);
             if (!response.ok) throw new Error('Failed to fetch games');
