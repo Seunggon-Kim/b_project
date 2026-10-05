@@ -104,23 +104,34 @@
   });
   root.addEventListener('scroll', hide, { passive: true });
 
-  /** Chart.js tooltip 옵션입니다. 지금 테마 색과 사이트 글꼴을 읽습니다. */
+  /**
+   * Chart.js tooltip 옵션입니다(4.x, 툴팁 색·글꼴은 scriptable).
+   * 값 대신 함수로 주어서, 툴팁이 뜰 때마다 지금 테마 색과 사이트 글꼴을 읽습니다.
+   * 그래서 다크/라이트를 바꾼 뒤 그래프를 다시 그리지 않아도 툴팁 색이 따라갑니다.
+   */
   function chartjs() {
-    const cs = root.getComputedStyle(doc.documentElement);
-    const v = function (n, d) { return (cs.getPropertyValue(n) || '').trim() || d; };
-    const family = root.getComputedStyle(doc.body).fontFamily;
+    const v = function (n, d) {
+      return function () { return (root.getComputedStyle(doc.documentElement).getPropertyValue(n) || '').trim() || d; };
+    };
+    const font = function (weight) {
+      return function () {
+        const f = { family: root.getComputedStyle(doc.body).fontFamily };
+        if (weight) f.weight = weight;
+        return f;
+      };
+    };
     return {
       backgroundColor: v('--bg-secondary', '#ffffff'),
       titleColor: v('--text-primary', '#0f172a'),
       bodyColor: v('--text-primary', '#0f172a'),
-      footerColor: v('--text-secondary', '#334155'),
+      footerColor: v('--text-muted', '#64748b'),
       borderColor: v('--border-color', 'rgba(15,23,42,0.12)'),
       borderWidth: 1,
       cornerRadius: 8,
       padding: 10,
-      titleFont: { family: family, weight: '700' },
-      bodyFont: { family: family },
-      footerFont: { family: family },
+      titleFont: font('700'),
+      bodyFont: font(),
+      footerFont: font(),
     };
   }
 
