@@ -18,8 +18,10 @@ const staticParser = require(path.join(root, 'lib/parsers/static_text_parser.js'
 const Types = require(path.join(root, 'lib/constants/types.js'));
 
 // 실제 열 형(play_by_play): 글자 둘, DOUBLE 아홉, INT(game_date) 하나.
+// 더한 넷(2026-10-05): bat_side 는 CASE 글자, balls·strikes 는 INT, is_hit 는 CASE 정수.
 const TYPES = {
   pitch_type: Types.VAR_STRING, pitch_result: Types.VAR_STRING, game_date: Types.LONG,
+  bat_side: Types.VAR_STRING, balls: Types.LONG, strikes: Types.LONG, is_hit: Types.LONGLONG,
 };
 const FIELDS = ARSENAL_COLUMNS.map((name) => ({
   name, orgName: '', orgTable: '', columnType: TYPES[name] || Types.DOUBLE,
@@ -29,14 +31,16 @@ const FIELDS = ARSENAL_COLUMNS.map((name) => ({
 
 // 같은 공 두 개를 글자 프로토콜 칸과 MySQL 의 JSON_ARRAY 글자로 적습니다.
 const TEXT_ROWS = [
-  ['직구', '0.433', '1.79', '144', '스트라이크', '-5.485', '11.636', '20190323', '-1.8', '5.965', '3.491', '1.711'],
-  ['투심', '-0.203', '3.571', '144', '볼', '-9.1', '7.25', '20190323', '-1.795', '5.9', '3.4', '1.6'],
+  ['직구', '0.433', '1.79', '144', '스트라이크', '-5.485', '11.636', '20190323', '-1.8', '5.965', '3.491', '1.711', 'R', '0', '0', '0'],
+  ['투심', '-0.203', '3.571', '144', '타격', '-9.1', '7.25', '20190323', '-1.795', '5.9', '3.4', '1.6', null, '2', '1', '1'],
 ];
-const JSON_TEXT = '["직구", 0.433, 1.79, 144.0, "스트라이크", -5.485, 11.636, 20190323, -1.8, 5.965, 3.491, 1.711],'
-  + '["투심", -0.203, 3.571, 144.0, "볼", -9.1, 7.25, 20190323, -1.795, 5.9, 3.4, 1.6]';
+const JSON_TEXT = '["직구", 0.433, 1.79, 144.0, "스트라이크", -5.485, 11.636, 20190323, -1.8, 5.965, 3.491, 1.711, "R", 0, 0, 0],'
+  + '["투심", -0.203, 3.571, 144.0, "타격", -9.1, 7.25, 20190323, -1.795, 5.9, 3.4, 1.6, null, 2, 1, 1]';
 
 function viaMysql2(data) {
   const cell = (s) => {
+    // 글자 프로토콜의 NULL 칸은 0xFB 한 바이트입니다.
+    if (s === null) return Buffer.from([0xfb]);
     const b = Buffer.from(s, 'utf8');
     return Buffer.concat([Buffer.from([b.length]), b]);
   };
@@ -73,7 +77,7 @@ test('arsenalJsonSql 은 길이 한도를 늘리고 pbp_id 순서로 잇습니�
   const sql = arsenalJsonSql();
   assert.match(sql, new RegExp(`SET_VAR\\(group_concat_max_len = ${ARSENAL_JSON_MAX}\\)`));
   assert.match(sql, /COUNT\(\*\) AS n/);
-  assert.match(sql, /GROUP_CONCAT\(JSON_ARRAY\(pbp\.pitch_type, pbp\.px, .*pbp\.sz_bot\) ORDER BY pbp\.pbp_id SEPARATOR ','\) AS j/);
+  assert.match(sql, /GROUP_CONCAT\(JSON_ARRAY\(pbp\.pitch_type, pbp\.px, .*pbp\.sz_bot, CASE pbp\.stands .*, pbp\.balls, pbp\.strikes, CASE WHEN pbp\.pa_result IN .* END\) ORDER BY pbp\.pbp_id SEPARATOR ','\) AS j/);
   assert.match(sql, /pbp\.gameID NOT LIKE '3333%'/);
 });
 
@@ -129,3 +133,37 @@ test('묶은 글자를 못 풀면 pbp_id 순서의 보통 질의로 다시 읽�
   assert.equal(warned.length, 1);
 });
 
+
+test('더한 넷: 타자 손은 양타면 투수 반대, 안타는 팀 기록과 같은 여섯 가지입니다', () => {
+  const sql = arsenalJsonSql();
+  assert.match(sql, /CASE pbp\.stands WHEN '좌' THEN 'L' WHEN '우' THEN 'R' WHEN '양' THEN \(CASE pbp\.throws WHEN '우' THEN 'L' WHEN '좌' THEN 'R' END\) END/);
+  for (const h of ['안타', '내야안타', '번트 안타', '2루타', '3루타', '홈런']) {
+    assert.ok(sql.includes(`'${h}'`), h);
+  }
+  assert.deepEqual(ARSENAL_COLUMNS.slice(-4), ['bat_side', 'balls', 'strikes', 'is_hit']);
+  // 기존 12개 키의 순서는 그대로입니다.
+  assert.deepEqual(ARSENAL_COLUMNS.slice(0, 12), [
+    'pitch_type', 'px', 'pz', 'speed', 'pitch_result',
+    'pfx_x', 'pfx_z', 'game_date', 'x0', 'z0', 'sz_top', 'sz_bot',
+  ]);
+});
+
+test('보통 질의로 물러설 때도 같은 넷을 같은 이름으로 읽습니다', async () => {
+  const db = fakeDb((sql) => {
+    if (sql.includes('FROM players')) return [PLAYER];
+    if (sql.includes('GROUP_CONCAT')) return [{ n: 2, j: null }];
+    return [];
+  });
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    await playerArsenal(new Request('https://x/players/65543/arsenal?season=2019'), { MYSQL: db }, {}, { id: '65543' });
+  } finally {
+    console.warn = warn;
+  }
+  const plainSql = db.seen.find((s) => !s.includes('GROUP_CONCAT') && s.includes('FROM play_by_play'));
+  assert.ok(plainSql, '보통 질의가 있어야 합니다');
+  assert.match(plainSql, /END AS bat_side/);
+  assert.match(plainSql, /pbp\.balls, pbp\.strikes/);
+  assert.match(plainSql, /END AS is_hit/);
+});

@@ -2,6 +2,7 @@ import { json, dbError } from '../lib/respond.js';
 import { regularSeasonSql } from '../lib/gametype.js';
 import { queryInt } from '../lib/router.js';
 import { hasPbpSeason, seasonDateRange } from '../lib/pbpseasons.js';
+import { TR_HIT } from './teamrange.js';
 
 /**
  * 바깥 `p` 행의 가장 최근 시즌 소속을 뽑는 조각입니다.
@@ -244,13 +245,37 @@ export function latestTeam(batterRows, pitcherRows) {
   return best ? best.player_team : null;
 }
 
-/** 구종 카드의 열입니다. 응답 객체의 키 순서도 이 순서입니다. */
+/**
+ * 구종 카드의 열입니다. 응답 객체의 키 순서도 이 순서입니다.
+ *
+ * 끝의 넷은 화면의 "공 고르기"(좌/우타자·카운트·안타)용입니다(2026-10-05).
+ * 화면이 받아 둔 공을 화면에서 거르므로 공마다 실어 보냅니다.
+ *   bat_side  'L'·'R'. 양타는 투수 손 반대(usage 와 같은 규칙), 모르면 null
+ *   balls·strikes  던지기 전 카운트(play_by_play 그대로)
+ *   is_hit    타석 결과가 안타 여섯 가지(teamrange.js TR_HIT)면 1, 아니면 0
+ * 계산은 MySQL 이 합니다. Worker 는 칸을 옮기기만 합니다(CPU 10ms).
+ */
 export const ARSENAL_COLUMNS = [
   'pitch_type', 'px', 'pz', 'speed', 'pitch_result',
   'pfx_x', 'pfx_z', 'game_date', 'x0', 'z0', 'sz_top', 'sz_bot',
+  'bat_side', 'balls', 'strikes', 'is_hit',
 ];
 
-const ARSENAL_SELECT = ARSENAL_COLUMNS.map((c) => `pbp.${c}`).join(', ');
+const HIT_SQL = [...TR_HIT].map((h) => `'${h}'`).join(', ');
+
+// 열 이름이 아니라 식으로 만드는 칸입니다.
+const ARSENAL_EXPR = {
+  bat_side: "CASE pbp.stands WHEN '좌' THEN 'L' WHEN '우' THEN 'R' "
+    + "WHEN '양' THEN (CASE pbp.throws WHEN '우' THEN 'L' WHEN '좌' THEN 'R' END) END",
+  is_hit: `CASE WHEN pbp.pa_result IN (${HIT_SQL}) THEN 1 ELSE 0 END`,
+};
+
+const exprOf = (c) => ARSENAL_EXPR[c] || `pbp.${c}`;
+
+// JSON_ARRAY 안에 넣는 값(이름 없음)과 보통 질의의 SELECT(식에는 이름)입니다.
+const ARSENAL_VALUES = ARSENAL_COLUMNS.map(exprOf).join(', ');
+const ARSENAL_SELECT = ARSENAL_COLUMNS
+  .map((c) => (ARSENAL_EXPR[c] ? `${exprOf(c)} AS ${c}` : exprOf(c))).join(', ');
 
 // 묶는 값은 (투수 ID, 시즌 첫날, 다음 시즌 첫날) 순서입니다.
 const ARSENAL_FROM = `
@@ -284,7 +309,7 @@ export const ARSENAL_JSON_MAX = 32 * 1024 * 1024;
 export function arsenalJsonSql() {
   return `SELECT /*+ SET_VAR(group_concat_max_len = ${ARSENAL_JSON_MAX}) */
       COUNT(*) AS n,
-      GROUP_CONCAT(JSON_ARRAY(${ARSENAL_SELECT}) ORDER BY pbp.pbp_id SEPARATOR ',') AS j
+      GROUP_CONCAT(JSON_ARRAY(${ARSENAL_VALUES}) ORDER BY pbp.pbp_id SEPARATOR ',') AS j
     ${ARSENAL_FROM}`;
 }
 
@@ -330,6 +355,10 @@ export function arsenalFromJson(row) {
       z0: a[9],
       sz_top: a[10],
       sz_bot: a[11],
+      bat_side: a[12],
+      balls: a[13],
+      strikes: a[14],
+      is_hit: a[15],
     };
   }
   return out;
