@@ -70,7 +70,10 @@
 .lin-status { display: inline-flex; align-items: center; gap: 0.35rem; }
 
 /* 설명 창(마우스를 올리면) */
-.lin-tip { position: fixed; z-index: 9999; display: none; max-width: 340px; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.45rem 0.65rem; font-size: 0.8rem; line-height: 1.45; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12); pointer-events: none; white-space: pre-line; }
+.lin-tip { position: fixed; z-index: 9999; display: none; max-width: 340px; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem 0.7rem; font-size: 0.82rem; line-height: 1.45; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12); pointer-events: none; white-space: normal; }
+.lin-tip b { display: block; margin-bottom: 2px; }
+.lin-tip span { display: block; }
+.lin-tip .f { display: block; margin-top: 4px; color: var(--text-muted); }
 
 /* 휴대폰 목록(선 대신 이어지는 곳) */
 .lin-list-col { margin-bottom: 1rem; }

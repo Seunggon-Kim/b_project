@@ -93,7 +93,7 @@
     let h = `<div class="lin-layers" style="width:${lay.width}px">`;
     m.LAYERS.forEach(function (ly) {
       const i = m.COLS.indexOf(ly.col);
-      h += `<div class="lin-layer lin-layer-${ly.id}" style="left:${Math.round(i * lay.colW)}px;width:${lay.boxW}px" tabindex="0" data-tooltip="${esc(ly.label + ': ' + ly.tip)}">${esc(ly.label)}</div>`;
+      h += `<div class="lin-layer lin-layer-${ly.id}" style="left:${Math.round(i * lay.colW)}px;width:${lay.boxW}px" tabindex="0" data-tooltip="${esc(ly.label + '\n' + ly.tip)}">${esc(ly.label)}</div>`;
     });
     h += `</div><div class="lin-heads" style="width:${lay.width}px">`;
     m.COLS.forEach(function (c, i) {
@@ -121,7 +121,7 @@
     let h = '';
     m.COLS.forEach(function (c) {
       const ly = m.LAYERS.find(x => x.col === c && x.label !== m.COL_LABEL[c]);
-      const tag = ly ? ` <span class="lin-layer-tag" tabindex="0" data-tooltip="${esc(ly.label + ': ' + ly.tip)}">${esc(ly.label)}</span>` : '';
+      const tag = ly ? ` <span class="lin-layer-tag" tabindex="0" data-tooltip="${esc(ly.label + '\n' + ly.tip)}">${esc(ly.label)}</span>` : '';
       h += `<section class="lin-list-col"><h4>${esc(m.COL_LABEL[c])}${tag}</h4><ul class="lin-list">`;
       graph.cols[c].forEach(function (n) {
         const out = graph.edges.filter(e => e.from === n.id).map(e => label(e.to));
@@ -362,6 +362,16 @@
     return [a, b].filter(Boolean).join('\n');
   }
 
+  /**
+   * 설명 창 안 HTML 입니다. 두 줄 이상이면 공용 툴팁(js/chart-tip.js·선수 통계 표 툴팁)과 같게
+   * 첫 줄 제목(굵게)·둘째 줄 내용·셋째 줄부터 흐린 글씨, 한 줄이면 그대로 둡니다.
+   */
+  function tipHtml(text) {
+    const lines = String(text == null ? '' : text).split('\n').filter(s => s !== '');
+    if (lines.length < 2) return esc(lines[0] || '');
+    return lines.map((s, i) => i === 0 ? `<b>${esc(s)}</b>` : `<span${i >= 2 ? ' class="f"' : ''}>${esc(s)}</span>`).join('');
+  }
+
   function bindTips(scope) {
     let box = null;
     function hide() { if (box) box.style.display = 'none'; }
@@ -374,7 +384,7 @@
         box.className = 'lin-tip';
         document.body.appendChild(box);
       }
-      box.textContent = text;
+      box.innerHTML = tipHtml(text);
       box.style.display = 'block';
       const r = el.getBoundingClientRect();
       box.style.left = Math.max(8, Math.min(r.left, root.innerWidth - box.offsetWidth - 12)) + 'px';
@@ -516,7 +526,7 @@
     });
   }
 
-  const api = { missingTableNote, esc, pageHref, statusMap, summaryHtml, graphHtml, listHtml, detailHtml, boxTip, joinTips, loadLineage, open, STATE_LABEL, SUM_TIP };
+  const api = { missingTableNote, esc, pageHref, statusMap, summaryHtml, graphHtml, listHtml, detailHtml, boxTip, joinTips, tipHtml, loadLineage, open, STATE_LABEL, SUM_TIP };
   L.view = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
