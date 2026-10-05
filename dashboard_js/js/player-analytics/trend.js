@@ -365,6 +365,69 @@
     return h;
   }
 
+  // ---- 구종별 Run Value 표(Savant Run Values by Pitch Type, evan) ----
+  // 위 고르기(타자 손·카운트)와 연동하지 않고 늘 모든 공 기준입니다. x 계열·Hard-Hit% 는 데이터에 없어 두지 않습니다.
+  // RV/100 = 구종 가치 ÷ 그 가치를 잰 공 수 × 100. 가치는 투수 쪽 부호(실점을 막으면 +)입니다.
+  function signed(v, d) { return (v > 0 ? '+' : '') + v.toFixed(d); }
+  function rvCls(v) { return 'pa-rv' + (v > 0 ? ' pa-rv--pos' : v < 0 ? ' pa-rv--neg' : ''); }
+  const RVCOLS = [
+    ['RV/100', 'RV/100\n공 100개당 구종 가치입니다. 실점을 막으면 + 입니다.\n계산식: Run Value ÷ 공 × 100', function (s) { return s.rv_n > 0 ? 100 * s.rv / s.rv_n : null; }, 2],
+    ['Run Value', 'Run Value\n이 구종으로 던진 공의 득점 가치 합입니다. 볼카운트·주자·아웃별 기대 득점으로 셉니다(폭투·포일·보크 제외).', function (s) { return s.rv_n > 0 ? s.rv : null; }, 1],
+  ];
+  const RVSTAT = [
+    ['Pitches', 'Pitches\n이 구종으로 던진 공 수입니다.', function (s) { return i0(s.n); }],
+    ['%', '%\n그 시즌 전체 공 가운데 이 구종의 비율입니다.', function (s, t) { return p1(s.n, t); }],
+    ['PA', 'PA\n이 구종으로 끝난 타석 수입니다.', function (s) { return i0(s.pa); }],
+    ['BA', 'BA\n타율입니다.\n계산식: H ÷ AB', function (s) { return r3(s.h, s.ab); }],
+    ['SLG', 'SLG\n장타율입니다.\n계산식: (1B + 2×2B + 3×3B + 4×HR) ÷ AB', function (s) { return r3(s.b1 + 2 * s.b2 + 3 * s.b3 + 4 * s.hr, s.ab); }],
+    ['wOBA', 'wOBA\n가중 출루율입니다. 시즌 가중치는 선수 통계와 같습니다.', function (s, t, w) { const v = wobaValue(s, w); return v === null ? '-' : r3(v, 1); }],
+    ['Whiff%', 'Whiff%\n헛스윙 ÷ 스윙 × 100 입니다.', function (s) { return p1(s.wh, s.sw); }],
+    ['K%', 'K%\n삼진 ÷ 이 구종으로 끝난 타석 × 100 입니다.', function (s) { return p1(s.so, s.pa); }],
+    ['PutAway%', 'PutAway%\n2스트라이크 공 가운데 삼진으로 끝난 비율입니다.\n계산식: 2스트라이크 삼진 ÷ 2스트라이크 공 × 100', function (s) { return p1(s.ts_so, s.ts_n); }],
+  ];
+
+  /** 구종별 Run Value 표입니다. 최근 순 시즌, 그 시즌 많이 던진 구종 순. showAll 이 아니면 최근 3시즌만. */
+  function rvTableHtml(data, showAll, weights) {
+    const rows = (data && data.rows) || [];
+    const hasBc = rows.some(function (r) { return r.bc; });
+    const hasHbp = rows.some(function (r) { return r.hbp !== undefined && r.hbp !== null; });
+    const hasW = !!weights && Object.keys(weights).length > 0;
+    const stats = RVSTAT.filter(function (c) {
+      if (c[0] === 'PutAway%') return hasBc;
+      if (c[0] === 'wOBA') return hasHbp && hasW;
+      return true;
+    });
+    const agg = aggregate(data, '', '');
+    const seasons = agg.seasons.slice().sort(function (a, b) { return b - a; });
+    const shown = showAll ? seasons : seasons.slice(0, TB_SEASONS);
+    let h = '<div class="pa-tb-wrap"><table class="pa-tb pa-rvt"><thead><tr>'
+      + '<th data-tip="시즌\n정규시즌입니다.">시즌</th><th data-tip="구종\n화면 구종 이름입니다(직구 → 포심 패스트볼, 투심 → 싱커).">구종</th>';
+    RVCOLS.concat(stats).forEach(function (c) { h += '<th data-tip="' + esc(c[1]) + '">' + esc(c[0]) + '</th>'; });
+    h += '</tr></thead><tbody>';
+    shown.forEach(function (y) {
+      const S = agg.bySeason[y];
+      const types = Object.keys(S.types).filter(function (t) { return S.types[t].n > 0; })
+        .sort(function (a, b) { return S.types[b].n - S.types[a].n || (a < b ? -1 : 1); });
+      types.forEach(function (t, i) {
+        const s = S.types[t], w = weights ? weights[y] : null;
+        h += '<tr class="pa-tb-row' + (i === 0 ? ' pa-tb-first' : '') + '"><td>' + y + '</td>'
+          + '<td class="pa-tb-type" style="--c:' + colorOf(t) + '">' + esc(t) + '</td>';
+        RVCOLS.forEach(function (c) {
+          const v = c[2](s);
+          h += v === null ? '<td>-</td>' : '<td class="' + rvCls(v) + '">' + signed(v, c[3]) + '</td>';
+        });
+        stats.forEach(function (c) { h += '<td>' + esc(c[2](s, S.total, w)) + '</td>'; });
+        h += '</tr>';
+      });
+    });
+    h += '</tbody></table></div>';
+    if (seasons.length > TB_SEASONS) {
+      h += '<button type="button" class="pa-tb-more pa-rvt-more" data-all="' + (showAll ? '1' : '0') + '">'
+        + (showAll ? '최근 3시즌만' : '시즌 더 보기 (' + (seasons.length - TB_SEASONS) + ')') + '</button>';
+    }
+    return h;
+  }
+
   /** 지표 고르기 칸의 option 글자입니다(묶음은 optgroup). */
   function metricOptionsHtml(hasWoba) {
     let html = '', group = null;
@@ -381,7 +444,7 @@
     return html + (group ? '</optgroup>' : '');
   }
 
-  const api = { METRICS, metric, metricOk, aggregate, series, fmt, chartSvg, legendHtml, metricOptionsHtml, countOptionsHtml, tableHtml };
+  const api = { METRICS, metric, metricOk, aggregate, series, fmt, chartSvg, legendHtml, metricOptionsHtml, countOptionsHtml, tableHtml, rvTableHtml };
   PA.trend = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

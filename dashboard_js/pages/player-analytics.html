@@ -184,6 +184,15 @@
                     <!-- 구종별 시즌 표(Savant 참고): 위 고르기(타자 손·카운트)와 연동, 고른 지표 열을 칠함 -->
                     <div id="pa-tr-table" class="pa-tr-table"></div>
                 </div>
+
+                <!-- 구종별 Run Value (Pitching, Savant Run Values by Pitch Type 참고). 위 고르기와 연동하지 않음(evan) -->
+                <div id="pa-rv-section" class="detailed-stats-container fade-in hidden">
+                    <div class="section-header-flex">
+                        <h3 class="card-title mb-0">구종별 Run Value</h3>
+                    </div>
+                    <p class="pa-ars-note">모든 공 기준입니다(위 타자 손·카운트 고르기와 상관없음). Run Value 는 공마다 볼카운트·주자·아웃별 기대 득점이 얼마나 바뀌었는지 더한 값이고, 실점을 막으면 + 입니다. RV/100 은 공 100개당 값입니다.</p>
+                    <div id="pa-rv-table" class="pa-tr-table"></div>
+                </div>
             </div>
         </section>
     </main>
@@ -1086,6 +1095,7 @@
                     document.getElementById('pitch-arsenal-section').classList.add('hidden');
                     trToken++;
                     document.getElementById('pa-trend-section').classList.add('hidden');
+                    document.getElementById('pa-rv-section').classList.add('hidden');
                 }
 
                 // Scroll to stats
@@ -1119,6 +1129,7 @@
         let trToken = 0, trData = null, trMetric = 'pct', trSide = '', trCnt = '';
         let trAll = false;          // 구종별 시즌 표: 모든 시즌을 펼쳤는지
         let trWeightsNow = null;    // 지금 선수 표에 쓰는 wOBA 가중치
+        let rvAll = false;          // 구종별 Run Value 표: 모든 시즌을 펼쳤는지
         let trWeightsP = null;      // wOBA 시즌 가중치(kbo_woba_weights_by_season), 페이지에서 한 번만 받음
 
         /** wOBA 가중치 { 시즌: 행 } 입니다. 실패하면 null(표가 wOBA 열을 숨김). */
@@ -1151,6 +1162,11 @@
                 trAll = !trAll;
                 renderTrend();
             });
+            document.getElementById('pa-rv-table').addEventListener('click', e => {
+                if (!(e.target.closest && e.target.closest('.pa-rvt-more'))) return;
+                rvAll = !rvAll;
+                renderRvTable();
+            });
         }
 
         async function loadTrend(playerId) {
@@ -1158,6 +1174,7 @@
             const token = ++trToken;
             trData = null;
             section.classList.add('hidden');
+            document.getElementById('pa-rv-section').classList.add('hidden');
             // 카운트별(bc) 응답 하나로 묶음·카운트별 고르기·PutAway%·wOBA(hbp·sf)를 모두 그립니다.
             const res = await API.getPitchTrendByCount(playerId);
             if (token !== trToken) return;  // 그사이 다른 선수를 골랐습니다.
@@ -1171,6 +1188,7 @@
             if (![...metricSel.options].some(o => o.value === trMetric)) trMetric = 'pct';
             metricSel.value = trMetric;
             trAll = false;
+            rvAll = false;
             trData = res && res.rows && res.rows.length ? res : null;
             // 카운트 목록은 응답에 카운트별 값(bc)이 있는지 보고 만듭니다. 지금 고른 값이 없으면 모든 카운트로.
             const countSel = document.getElementById('pa-tr-count');
@@ -1178,12 +1196,22 @@
             if (![...countSel.options].some(o => o.value === trCnt)) trCnt = '';
             countSel.value = trCnt;
             renderTrend();
+            renderRvTable();
         }
 
         /** 그래프 viewBox 를 카드 실제 폭에 맞춥니다(글자 크기가 그대로 보이게). 좁으면 조금 더 높게. */
         function trSize(el) {
             const w = el.clientWidth || 760;
             return { w: w, h: w < 560 ? Math.round(w * 0.8) : 340 };
+        }
+
+        /** 구종별 Run Value 표입니다. 위 고르기와 상관없이 모든 공 기준이고, 구종 가치가 없는 선수면 숨깁니다. */
+        function renderRvTable() {
+            const sec = document.getElementById('pa-rv-section');
+            const hasRv = !!(trData && trData.values && trData.values.length);
+            sec.classList.toggle('hidden', !hasRv);
+            document.getElementById('pa-rv-table').innerHTML = hasRv
+                ? window.PlayerAnalytics.trend.rvTableHtml(trData, rvAll, trWeightsNow) : '';
         }
 
         function renderTrend() {
