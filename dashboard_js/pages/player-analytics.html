@@ -1158,7 +1158,8 @@
             const token = ++trToken;
             trData = null;
             section.classList.add('hidden');
-            const res = await API.getPitchTrend(playerId);
+            // 카운트별(bc) 응답 하나로 묶음·카운트별 고르기·PutAway%·wOBA(hbp·sf)를 모두 그립니다.
+            const res = await API.getPitchTrendByCount(playerId);
             if (token !== trToken) return;  // 그사이 다른 선수를 골랐습니다.
             // wOBA 는 응답에 몸에 맞는 볼(hbp)이 있을 때만 씁니다. 그때만 가중치 표를 받습니다.
             const hasHbp = !!(res && res.rows && res.rows.some(r => r.hbp !== undefined && r.hbp !== null));

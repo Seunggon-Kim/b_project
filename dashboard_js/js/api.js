@@ -177,6 +177,18 @@ class API {
         }
     }
 
+    /** 시즌별 구종 추이 합계를 볼카운트(bc '0-0'…'3-2')까지 나눠 받습니다(?by=count). 묶음 cnt·hbp·sf 도 들어 있습니다. */
+    static async getPitchTrendByCount(playerId) {
+        try {
+            const response = await fetch(`${API_BASE_URL}/players/${playerId}/pitch_trend?by=count`);
+            if (!response.ok) return { rows: [], values: [] };
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching pitch trend by count:', error);
+            return { rows: [], values: [] };
+        }
+    }
+
     /**
      * Get available seasons (시즌 통계가 존재하는 시즌 목록)
      */
