@@ -89,6 +89,24 @@
   ];
   function metric(key) { return METRICS.find(function (m) { return m.key === key; }) || METRICS[0]; }
 
+  // 던지기 전 볼카운트 12가지입니다(볼 3 이상은 3, 스트라이크 2 이상은 2, API bc).
+  const COUNTS = ['0-0', '0-1', '0-2', '1-0', '1-1', '1-2', '2-0', '2-1', '2-2', '3-0', '3-1', '3-2'];
+  function isExact(cnt) { return /^[0-3]-[0-2]$/.test(cnt); }
+
+  /**
+   * 카운트 고르기 칸의 option 글자입니다. 응답에 카운트별 값(bc)이 있으면 묶음 3개 + 카운트 12개,
+   * 없으면(API 배포 전) 묶음 4개(풀카운트 포함)입니다. 묶음은 투수 기준(FanGraphs).
+   */
+  function countOptionsHtml(data) {
+    const hasBc = ((data && data.rows) || []).some(function (r) { return r.bc; });
+    let h = '<option value="">모든 카운트</option><optgroup label="묶음">'
+      + '<option value="ahead">유리한 카운트</option><option value="behind">불리한 카운트</option><option value="even">같은 카운트</option>';
+    if (!hasBc) return h + '<option value="full">풀카운트 (3-2)</option></optgroup>';
+    h += '</optgroup><optgroup label="카운트별">';
+    COUNTS.forEach(function (c) { h += '<option value="' + c + '">' + c + '</option>'; });
+    return h + '</optgroup>';
+  }
+
   /** 이 지표를 지금 고른 카운트로 쓸 수 있는지(구종 가치는 카운트별 값이 없음). */
   function metricOk(key, cnt) { return !(key === 'rv' && cnt); }
 
@@ -112,7 +130,7 @@
       const y = num(r.season);
       if (y === null) return;
       if (side && r.bat_side !== side) return;
-      if (cnt && r.cnt !== cnt) return;
+      if (cnt && (isExact(cnt) ? r.bc !== cnt : r.cnt !== cnt)) return;
       const S = seasonOf(y), t = nameOf(r.pitch_type);
       const s = S.types[t] || (S.types[t] = emptySums());
       SUMS.forEach(function (k) { s[k] += num(r[k]) || 0; });
@@ -264,7 +282,7 @@
     return html + (group ? '</optgroup>' : '');
   }
 
-  const api = { METRICS, metric, metricOk, aggregate, series, fmt, chartSvg, legendHtml, metricOptionsHtml };
+  const api = { METRICS, metric, metricOk, aggregate, series, fmt, chartSvg, legendHtml, metricOptionsHtml, countOptionsHtml };
   PA.trend = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

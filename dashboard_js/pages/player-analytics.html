@@ -174,12 +174,8 @@
                                 <option value="R">우타자 상대</option>
                                 <option value="L">좌타자 상대</option>
                             </select>
-                            <select id="pa-tr-count" class="pa-move-season" aria-label="카운트 고르기" data-tip="카운트 고르기&#10;던지기 전 카운트, 투수 기준입니다(FanGraphs). 유리한 카운트 0-1·0-2·1-2, 불리한 카운트 1-0·2-0·3-0·2-1·3-1, 같은 카운트 0-0·1-1·2-2, 풀카운트 3-2.">
+                            <select id="pa-tr-count" class="pa-move-season" aria-label="카운트 고르기" data-tip="카운트 고르기&#10;던지기 전 카운트, 투수 기준입니다(FanGraphs). 유리한 카운트 0-1·0-2·1-2, 불리한 카운트 1-0·2-0·3-0·2-1·3-1, 같은 카운트 0-0·1-1·2-2, 풀카운트 3-2.&#10;카운트별(0-0 … 3-2)도 고를 수 있습니다. 볼 4는 3, 스트라이크 3은 2로 봅니다.">
                                 <option value="">모든 카운트</option>
-                                <option value="ahead">유리한 카운트</option>
-                                <option value="behind">불리한 카운트</option>
-                                <option value="even">같은 카운트</option>
-                                <option value="full">풀카운트</option>
                             </select>
                         </div>
                     </div>
@@ -1140,6 +1136,11 @@
             const res = await API.getPitchTrend(playerId);
             if (token !== trToken) return;  // 그사이 다른 선수를 골랐습니다.
             trData = res && res.rows && res.rows.length ? res : null;
+            // 카운트 목록은 응답에 카운트별 값(bc)이 있는지 보고 만듭니다. 지금 고른 값이 없으면 모든 카운트로.
+            const countSel = document.getElementById('pa-tr-count');
+            countSel.innerHTML = window.PlayerAnalytics.trend.countOptionsHtml(trData);
+            if (![...countSel.options].some(o => o.value === trCnt)) trCnt = '';
+            countSel.value = trCnt;
             renderTrend();
         }
 
@@ -1166,7 +1167,7 @@
             const sr = T.series(agg, trMetric).filter(s => s.points.length);
             const countSel = document.getElementById('pa-tr-count');
             const cond = [trSide === 'R' ? '우타자 상대' : trSide === 'L' ? '좌타자 상대' : '',
-                trCnt ? countSel.selectedOptions[0].textContent : ''].filter(Boolean).join(' · ');
+                trCnt ? (/^\d-\d$/.test(trCnt) ? '카운트 ' + trCnt : countSel.selectedOptions[0].textContent) : ''].filter(Boolean).join(' · ');
             desc.textContent = m.tip + (cond ? ` 고른 조건: ${cond}.` : '') + ' 점에 마우스를 올리면 값이 나옵니다.';
             chart.innerHTML = sr.length
                 ? T.chartSvg(sr, agg.seasons, trMetric, trSize(chart)) + T.legendHtml(sr)
