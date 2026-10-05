@@ -44,6 +44,15 @@
     return (kind === 'pit' ? player.pitcher_seasons : player.batter_seasons) || [];
   }
 
+  /**
+   * 퀵룩 기준 연도입니다. 한국 시각 올해(kstYear)와 /stats/seasons 최신 시즌 중 작은 쪽입니다.
+   * 비시즌(1~3월)에 기록 없는 새해가 나오고 실제 시즌 하나가 빠지던 것을 막습니다(2027 대비).
+   */
+  function baseYear(kstYear, seasonsRes) {
+    const ys = ((seasonsRes && seasonsRes.seasons) || []).map(Number).filter(function (y) { return Number.isFinite(y); });
+    return ys.length ? Math.min(kstYear, Math.max.apply(null, ys)) : kstYear;
+  }
+
   /** 최근 3시즌입니다. 현역은 올해 기준, 은퇴는 마지막 활동 시즌 기준입니다. */
   function pickSeasons(player, thisYear) {
     const ys = [].concat(player.pitcher_seasons || [], player.batter_seasons || [])
@@ -210,7 +219,7 @@
     return /^\d{8}$/.test(s) ? s.slice(0, 4) + '.' + s.slice(4, 6) + '.' + s.slice(6, 8) : null;
   }
 
-  const api = { ROWS, FUT, kindOf, pickSeasons, total, build, buildFutures, summary, tableHtml, ageParts, dobText,
+  const api = { ROWS, FUT, kindOf, baseYear, pickSeasons, total, build, buildFutures, summary, tableHtml, ageParts, dobText,
     TILES, FUT_TILES, seasonTiles, futuresTiles, tilesHtml };
   PA.quicklook = api;
   if (typeof module === 'object' && module.exports) module.exports = api;

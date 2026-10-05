@@ -198,6 +198,7 @@
     <script src="../js/components.js"></script>
     <script src="../js/stats/metrics.js"></script>
     <script src="../js/stats/columns.js"></script>
+    <script src="../js/stats/season.js"></script>
     <script src="../js/player-analytics/quicklook.js"></script>
     <script src="../js/player-analytics/percentile.js"></script>
     <script src="../js/player-analytics/movement.js"></script>
@@ -882,6 +883,19 @@
         }
 
         // Load player info
+        // 퀵룩 기준 연도: 한국 시각 올해와 /stats/seasons 최신 시즌 중 작은 쪽(브라우저 연도 아님, 2027 대비).
+        // 시즌 목록은 페이지에서 한 번만 받습니다. 실패하면 한국 시각 올해를 씁니다.
+        let qlYearP = null;
+        function quickLookYear() {
+            if (!qlYearP) {
+                const kst = window.TeamStats.season.kstToday().y;
+                qlYearP = API.getSeasons()
+                    .then(res => window.PlayerAnalytics.quicklook.baseYear(kst, res))
+                    .catch(() => kst);
+            }
+            return qlYearP;
+        }
+
         async function loadPlayerInfo(playerId) {
             pctToken++;
             const section = document.getElementById('player-info-section');
@@ -932,7 +946,7 @@
                 // 한눈에 보기: 최근 3시즌 + 통산. 계산은 quicklook.js 입니다.
                 const isPitcher = player.position === '투수';
                 const Q = window.PlayerAnalytics.quicklook;
-                statsDiv.innerHTML = Q.tableHtml(Q.build(player, new Date().getFullYear()));
+                statsDiv.innerHTML = Q.tableHtml(Q.build(player, await quickLookYear()));
                 // 프로필 아래 최근 시즌 타일입니다. 두 카드 높이를 맞출 때 남는 자리를 채웁니다.
                 cardDiv.insertAdjacentHTML('beforeend', Q.tilesHtml(Q.seasonTiles(player)));
                 // 무브먼트 카드(1군 투수만). 타자면 끕니다.
