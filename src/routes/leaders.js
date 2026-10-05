@@ -2,12 +2,20 @@ import { json, dbError } from '../lib/respond.js';
 import { ttlCache } from '../lib/cache.js';
 import { KBO_TEAM_CODE } from './standings.js';
 import { jsonRowsOnce } from '../lib/jsonrows.js';
+import { pbpLastSeason } from '../lib/pbpseasons.js';
 
 const cache = ttlCache(600); // 원본 _LEADERS_TTL = 600
 
 // 원본 api/main.py:1529-1546 의 _WOBA_CONST 입니다.
 // 출처는 research/data/statiz_yearly_constants.csv 이고,
 // (woba_scale, ebb, single_w, double_w, triple_w, hr_w) 순서입니다.
+//
+// **어느 라우트도 이 표를 읽지 않습니다.** 원본에서 옮겨 둔 참고 표입니다.
+// 리더보드의 wOBA·wRC+ 는 wrc_plus_comparison 을 읽고, 그 표의 시즌별
+// 가중치(kbo_woba_weights_by_season)는 주간 파이프라인이 play_by_play 로
+// 해마다 새로 만듭니다(park_factors/build_woba_weights.py). 그래서 2027
+// 값을 여기에 손으로 넣을 필요가 없습니다(2026-10-05 검토). 원본과 같은지
+// 시험하므로 값은 그대로 둡니다.
 export const WOBA_CONST = {
   2011: [1.081, 0.407, 0.581, 0.972, 1.168, 1.364],
   2012: [1.134, 0.395, 0.565, 0.947, 1.162, 1.377],
@@ -188,7 +196,7 @@ export async function wrcTopsOnce(db, season, qualPa) {
  * get_leaders 가 호출하지 않는 함수라 옮기지 않았습니다.
  * 실패 시 원본처럼 500 이 아니라 200 + error 필드를 돌려줍니다.
  */
-export async function leaders(request, env) {
+export async function leaders(request, env, ctx, params, today) {
   // FastAPI 의 `season: int = None` 파라미터입니다. 정수로 못 읽는 값은
   // 원본에서 엔드포인트 본문에 들어가기 전에 pydantic v2 검증(422)에
   // 걸립니다. 그 응답 형태(fastapi 0.115 + pydantic 2.12)를 따릅니다.
@@ -214,7 +222,9 @@ export async function leaders(request, env) {
       const row = await env.MYSQL
         .prepare('SELECT MAX(season) AS s FROM kbo_official_batter_stats')
         .first();
-      season = row && row.s ? row.s : 2026;
+      // 공식 기록이 있는 가장 최근 시즌입니다. 표가 비었을 때만 한국 날짜의
+      // 올해로 둡니다(예전에는 2026 으로 박혀 있었습니다). today 는 시험용입니다.
+      season = row && row.s ? row.s : pbpLastSeason(today);
     }
 
     const ckey = String(season);

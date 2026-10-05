@@ -10,6 +10,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { wrcSeasons } from '../src/routes/wrc.js';
 import { playerArsenal, playerUsage, defaultPitchSeason } from '../src/routes/players.js';
+import { leaders } from '../src/routes/leaders.js';
 
 const TODAY = '2026-10-05';
 const OFF = '2027-02-15';
@@ -158,4 +159,32 @@ test('구종 기본 시즌: 공식 기록이 비었으면 한국 날짜의 올�
   assert.equal(await defaultPitchSeason(pitchDb(null), TODAY), 2026);
   assert.equal(await defaultPitchSeason(pitchDb(null), OFF), 2027);
   assert.equal(await defaultPitchSeason(pitchDb(2026), OFF), 2026);
+});
+
+/** leaders 가 고른 시즌을 봅니다. 두 번째 질의에서 일부러 실패시켜 오류 본문의 season 을 읽습니다. */
+async function leadersSeason(maxSeason, today) {
+  const db = {
+    prepare(sql) {
+      return {
+        bind() { return this; },
+        async first() {
+          if (sql.includes('MAX(season) AS s')) return { s: maxSeason };
+          throw new Error('여기서 멈춥니다');
+        },
+        async all() { throw new Error('여기서 멈춥니다'); },
+      };
+    },
+  };
+  const res = await leaders(new Request('https://x/leaders'), { MYSQL: db }, {}, {}, today);
+  assert.equal(res.status, 503);
+  return JSON.parse(await res.text()).season;
+}
+
+test('leaders: season 이 없으면 공식 기록의 최근 시즌이고, 표가 비면 올해입니다', async () => {
+  assert.equal(await leadersSeason(2026, TODAY), 2026);
+  assert.equal(await leadersSeason(2026, OFF), 2026);
+  assert.equal(await leadersSeason(2027, IN), 2027);
+  // 표가 빈 경우만 날짜를 봅니다. 예전에는 2026 으로 박혀 있었습니다.
+  assert.equal(await leadersSeason(null, TODAY), 2026);
+  assert.equal(await leadersSeason(null, IN), 2027);
 });
