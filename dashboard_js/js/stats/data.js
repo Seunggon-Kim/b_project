@@ -4,6 +4,7 @@
  * 응답이 이상하면(HTTP 오류, detail·error 필드, 빈 목록) 가리지 않고
  * errors 에 이유를 담아 돌려줍니다. 화면은 그것을 표 위에 알립니다.
  * 실패한 응답은 sessionStorage 에 넣지 않습니다.
+ * 넣어 둔 값은 6시간이 지나면 다시 받습니다(CACHE_TTL_MS).
  */
 (function (root) {
   'use strict';
@@ -39,17 +40,29 @@
     if (opts && opts.store) return opts.store;
     try { return root.sessionStorage || null; } catch (e) { return null; }
   }
+  function nowOf(opts) {
+    return opts && typeof opts.now === 'number' ? opts.now : Date.now();
+  }
+
+  // 저장 캐시 유효기간입니다. 탭을 오래 열어 두어도 시즌 목록·참조 표가 반나절 넘게 낡지 않게 둡니다.
+  const CACHE_TTL_MS = 6 * 3600000;
+
+  // 저장 모양은 { t: 넣은 시각(ms), v: 값 } 입니다. 유효기간이 지났거나 모양이 다르면 없는 것으로 봅니다.
   function cacheGet(key, opts) {
     try {
       const s = storeOf(opts);
-      const v = s ? s.getItem(key) : null;
-      return v ? JSON.parse(v) : null;
+      const raw = s ? s.getItem(key) : null;
+      if (!raw) return null;
+      const o = JSON.parse(raw);
+      if (!o || typeof o !== 'object' || typeof o.t !== 'number' || !('v' in o)) return null;
+      const age = nowOf(opts) - o.t;
+      return age >= 0 && age < CACHE_TTL_MS ? o.v : null;
     } catch (e) { return null; }
   }
   function cacheSet(key, val, opts) {
     try {
       const s = storeOf(opts);
-      if (s) s.setItem(key, JSON.stringify(val));
+      if (s) s.setItem(key, JSON.stringify({ t: nowOf(opts), v: val }));
     } catch (e) { /* 저장 공간이 없으면 넘어갑니다 */ }
   }
 
@@ -63,18 +76,44 @@
   };
   const REF_LABEL = { weights: 'wOBA 가중치', pf: '파크팩터', stadium: '팀 홈구장', rank: '순위표' };
 
+  // /db/table 은 한 번에 500행까지 줍니다(서버 상한). 표가 커져도 잘리지 않게 끝까지 이어 받습니다.
+  const PAGE_ROWS = 500;
+  // 2만 행에서 멈춥니다. 서버가 offset 을 무시해 같은 쪽을 계속 주더라도 끝없이 돌지 않게 합니다.
+  const MAX_PAGES = 40;
+
+  /**
+   * /db/table/<name> 을 500행씩 끝까지 받습니다. 반환 { ok: true, data: 행 목록 } | { ok: false, error }.
+   * 응답의 total 에 닿거나 덜 찬 쪽이 오면 멈춥니다. 중간 쪽이 실패하면 표 전체를 실패로
+   * 돌려줍니다(반쪽 표를 쓰지 않음). 첫 쪽이 비면 실패입니다(지금까지와 같음).
+   */
+  async function getTable(base, name, opts) {
+    opts = opts || {};
+    const rows = [];
+    for (let i = 0; i < MAX_PAGES; i++) {
+      const offset = i * PAGE_ROWS;
+      const r = await getJson(`${base}/db/table/${name}?limit=${PAGE_ROWS}&offset=${offset}`, i === 0 ? 'rows' : null, opts.fetch);
+      if (!r.ok) return { ok: false, error: i === 0 ? r.error : `${r.error} · ${offset + 1}행부터` };
+      const page = r.data.rows;
+      if (!Array.isArray(page)) return { ok: false, error: `rows 목록이 없습니다 · ${offset + 1}행부터` };
+      for (const row of page) rows.push(row);
+      const total = r.data.total;
+      if (page.length < PAGE_ROWS || (typeof total === 'number' && rows.length >= total)) return { ok: true, data: rows };
+    }
+    return { ok: false, error: `${PAGE_ROWS * MAX_PAGES}행이 넘어 끝까지 받지 못했습니다` };
+  }
+
   async function loadRefs(base, opts) {
     opts = opts || {};
     const out = { errors: [] };
     await Promise.all(Object.keys(REF_TABLES).map(async function (k) {
       const name = REF_TABLES[k];
-      const key = `ts_ref_${name}_v1`;
+      const key = `ts_ref_${name}_v2`;
       const hit = cacheGet(key, opts);
       if (Array.isArray(hit) && hit.length) { out[k] = hit; return; }
-      const r = await getJson(`${base}/db/table/${name}?limit=500`, 'rows', opts.fetch);
+      const r = await getTable(base, name, opts);
       if (r.ok) {
-        out[k] = r.data.rows;
-        cacheSet(key, r.data.rows, opts);
+        out[k] = r.data;
+        cacheSet(key, r.data, opts);
       } else {
         out[k] = [];
         out.errors.push({ what: REF_LABEL[k], error: r.error });
@@ -119,10 +158,23 @@
     return { teams: r.ok ? r.data.teams : [], errors: r.ok ? [] : [{ what: '실시간 순위', error: r.error }] };
   }
 
-  /** 공식 기록이 있는 시즌(내림차순)과 오류 목록입니다. 실패하면 올해~1982 와 오류 한 건을 돌려줍니다. */
+  /**
+   * 시즌 목록을 못 받았을 때 쓰는 목록입니다. 한국 시각 올해부터(4월 전이면 작년부터) 1982 까지입니다.
+   * 4월 전에는 새 시즌 기록이 아직 없어, 빈 시즌이 기본으로 뜨지 않게 합니다.
+   * (js/stats/season.js 를 싣지 않는 페이지도 이 파일을 써서 한국 시각을 여기서 셉니다.)
+   */
+  function fallbackSeasons(now) {
+    const t = new Date((typeof now === 'number' ? now : Date.now()) + 9 * 3600000);
+    const top = t.getUTCMonth() < 3 ? t.getUTCFullYear() - 1 : t.getUTCFullYear();
+    const list = [];
+    for (let y = top; y >= 1982; y--) list.push(y);
+    return list;
+  }
+
+  /** 공식 기록이 있는 시즌(내림차순)과 오류 목록입니다. 실패하면 fallbackSeasons 와 오류 한 건을 돌려줍니다. */
   async function loadSeasons(base, opts) {
     opts = opts || {};
-    const KEY = 'teamstats_seasons_v2';
+    const KEY = 'teamstats_seasons_v3';
     const desc = list => list.map(Number).filter(Number.isFinite).sort((a, b) => b - a);
     const hit = cacheGet(KEY, opts);
     if (Array.isArray(hit) && hit.length) return { seasons: desc(hit), errors: [] };
@@ -131,9 +183,7 @@
       cacheSet(KEY, r.data.seasons, opts);
       return { seasons: desc(r.data.seasons), errors: [] };
     }
-    const list = [];
-    for (let y = new Date().getFullYear(); y >= 1982; y--) list.push(y);
-    return { seasons: list, errors: [{ what: '시즌 목록', error: r.error }] };
+    return { seasons: fallbackSeasons(nowOf(opts)), errors: [{ what: '시즌 목록', error: r.error }] };
   }
 
   /**
@@ -147,7 +197,7 @@
     return { regulation: {}, errors: [{ what: '규정 기준', error: r.ok ? 'regulation 이 없습니다' : r.error }] };
   }
 
-  const api = { badReason, getJson, loadRefs, loadSeason, loadGames, loadRange, loadStandings, loadSeasons, loadRegulation };
+  const api = { CACHE_TTL_MS, badReason, getJson, getTable, loadRefs, loadSeason, loadGames, loadRange, loadStandings, loadSeasons, fallbackSeasons, loadRegulation };
   TS.data = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
