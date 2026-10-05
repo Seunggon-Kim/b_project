@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="../css/style.css">
     <script src="../js/config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="../js/chart-tip.js"></script>
     <style>
         .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
         .kpi-card { background: #fff; border-radius: 8px; padding: 1rem 1.25rem; border: 1px solid #e5e7eb; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
@@ -368,6 +369,7 @@
                 plugins: {
                     legend: { display: false },
                     tooltip: {
+                        ...ChartTip.chartjs(),
                         callbacks: {
                             afterLabel: (ctx) => {
                                 const r = rows[ctx.dataIndex];
@@ -435,6 +437,7 @@
                 responsive: true, maintainAspectRatio: false,
                 plugins: { legend: { position: 'bottom' },
                     tooltip: {
+                        ...ChartTip.chartjs(),
                         callbacks: {
                             title: (ctx) => `wRC+ ${ctx[0].label} ~ ${parseInt(ctx[0].label)+5}`,
                         },
