@@ -179,6 +179,10 @@ jobs:
         continue-on-error: true
         run: python data_collection/official_stats_http.py --kind batter
 
+      # 받을 시즌은 수집 단계가 정해 알려 줍니다(outputs.season). 올해
+      # 정규시즌 경기가 아직 없으면(비시즌·시범경기) 지난 시즌을 다시
+      # 받습니다. 예전처럼 `date +%Y` 로 올해를 박으면 2027년 1~3월에
+      # 기록실에 2027 이 없어 매일 실패합니다(2026-10-05 검토).
       - name: 타자 기록 적재
         id: load_batter
         if: steps.scrape_batter.outcome == 'success'
@@ -186,7 +190,7 @@ jobs:
         run: |
           python data_collection/csv_to_d1.py \
             --table kbo_official_batter_stats \
-            --csv "crawler/save/official_stats/batter_stats_$(TZ=Asia/Seoul date +%Y).csv" \
+            --csv "crawler/save/official_stats/batter_stats_${{ steps.scrape_batter.outputs.season }}.csv" \
             --key player_id,season
 
       - name: 투수 기록 수집
@@ -201,7 +205,7 @@ jobs:
         run: |
           python data_collection/csv_to_d1.py \
             --table kbo_official_pitcher_stats \
-            --csv "crawler/save/official_stats/pitcher_stats_$(TZ=Asia/Seoul date +%Y).csv" \
+            --csv "crawler/save/official_stats/pitcher_stats_${{ steps.scrape_pitcher.outputs.season }}.csv" \
             --key player_id,season
 
       - name: 공식 통계 결과 기록

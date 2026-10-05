@@ -20,6 +20,7 @@
 import argparse
 import csv
 import datetime
+import os
 import re
 import sys
 from pathlib import Path
@@ -27,6 +28,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from kbo_http import Session, fetch_table  # noqa: E402
+from kbo_season import kst_today, record_season  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 SAVE_DIR = ROOT / "crawler" / "save" / "official_stats"
@@ -190,20 +192,48 @@ def holes(kind, data):
     return bad
 
 
+def default_year(today=None, record=record_season):
+    """--year 를 안 주면 받을 시즌입니다(kbo_season.record_season).
+
+    올해 정규시즌 경기가 하나라도 끝났으면 올해, 아니면(비시즌·시범경기)
+    지난해입니다. 예전에는 한국 날짜의 올해였습니다. 그러면 2027년 1월부터
+    개막까지 석 달 동안 기록실에 2027 이 없어(고르면 오류 쪽이 옵니다) 한
+    명도 못 모으고 daily 가 매일 빨갛게 끝납니다(2026-10-05 검토). 비시즌에
+    지난해를 다시 받는 것은 해가 없습니다. 끝난 시즌이라 값이 같습니다.
+    """
+    return record(today)
+
+
+def announce_season(year, env=None):
+    """GitHub Actions 의 다음 단계(적재)가 같은 시즌 CSV 를 읽게 알립니다.
+
+    daily.yml 의 적재 단계가 `steps.<id>.outputs.season` 으로 받습니다.
+    예전에는 적재가 `date +%Y` 로 파일 이름을 따로 맞춰, 수집 시즌과 적재
+    시즌이 어긋날 수 있었습니다. Actions 밖에서는 아무 일도 하지 않습니다.
+    """
+    path = (os.environ if env is None else env).get("GITHUB_OUTPUT")
+    if path:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write("season=%d\n" % year)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--kind", choices=["batter", "pitcher", "both"],
                     default="both")
     ap.add_argument("--year", type=int, default=None,
-                    help="기본값은 KST 기준 올해")
+                    help="기본값은 기록을 받을 시즌입니다(개막 전이면 지난해)")
     ap.add_argument("--delay", type=float, default=None,
                     help="요청 간격(초). 기본값은 kbo_http 의 값")
     ap.add_argument("--check", action="store_true",
                     help="CSV 를 쓰지 않고 결과만 봅니다")
     args = ap.parse_args()
 
-    kst = datetime.timezone(datetime.timedelta(hours=9))
-    year = args.year or datetime.datetime.now(kst).year
+    year = args.year or default_year()
+    this_year = kst_today().year
+    if year != this_year and not args.year:
+        print("%d 정규시즌 경기가 아직 없어 %d 시즌을 받습니다(비시즌)." % (this_year, year))
+    announce_season(year)
     kinds = ["batter", "pitcher"] if args.kind == "both" else [args.kind]
 
     rc = 0
