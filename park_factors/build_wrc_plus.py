@@ -10,7 +10,11 @@ AND new PBP. Formulas reverse-engineered exactly (wOBA verified to 1e-5).
 """
 import sqlite3, statistics
 import os
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "data_collection"))
+from kbo_season import last_season  # noqa: E402
 # DB 경로: 환경변수 KBO_DB 우선, 없으면 저장소 기준 상대경로.
 # EC2 절대경로는 Windows 와 GitHub Actions 러너에서 동작하지 않습니다.
 DB = os.environ.get("KBO_DB") or str(
@@ -18,7 +22,10 @@ DB = os.environ.get("KBO_DB") or str(
 )
 con=sqlite3.connect(DB); con.row_factory=sqlite3.Row; cur=con.cursor()
 # 2008~2014 PBP 를 되채운 뒤로 2008년까지 봅니다(2026-08-29).
-YEARS=list(range(2008,2027)); YSTR=[str(y) for y in YEARS]; WRC_MIN_PA=50
+# 마지막 시즌은 한국 날짜의 올해입니다(data_collection/kbo_season.py).
+# 2026 으로 박아 두면 2027 wRC+ 가 영영 안 생깁니다(2026-10-05 검토).
+# 가중치가 없는 해(아직 경기 전)는 아래에서 건너뛰어 줄이 생기지 않습니다.
+YEARS=list(range(2008, last_season()+1)); YSTR=[str(y) for y in YEARS]; WRC_MIN_PA=50
 
 def stadium_full(short, season):
     if short in ('대전','한밭'): return '대전 한화생명 볼파크' if season>=2025 else '대전 한밭야구장'
@@ -222,7 +229,7 @@ for r in cur.execute("""SELECT a.season, COUNT(*) n_new, ROUND(AVG(a.wRC_half),2
     FROM wrc_plus_comparison a GROUP BY a.season ORDER BY a.season"""):
     print("  ", dict(r))
 print("nulls:", cur.execute("SELECT COUNT(*) FROM wrc_plus_comparison WHERE wRC_half IS NULL").fetchone()[0])
-print("2026 sample (top wRC_half):")
-for r in cur.execute("SELECT batter_ID, ROUND(wOBA,3) woba, PA, home_run_pf, ROUND(wRC_half,1) wrc FROM wrc_plus_comparison WHERE season=2026 ORDER BY wRC_half DESC LIMIT 5"):
+print(f"{latest} sample (top wRC_half):")
+for r in cur.execute("SELECT batter_ID, ROUND(wOBA,3) woba, PA, home_run_pf, ROUND(wRC_half,1) wrc FROM wrc_plus_comparison WHERE season=? ORDER BY wRC_half DESC LIMIT 5", (latest,)):
     print("   ", dict(r))
 con.close()

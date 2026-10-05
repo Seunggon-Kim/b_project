@@ -1,15 +1,19 @@
 # -*- coding: utf-8 -*-
 """
-Compute self KBO park factors (2008-2026) from play_by_play and load into self_park_factor.
+Compute self KBO park factors (2008-this year) from play_by_play and load into self_park_factor.
 - Engine: FanGraphs operational form PF = 1000 * 10H/(9R+H)  (T=10, un-halved), Statiz convention.
 - run_pf: per-game runs (home vs road). Components (1B/2B/3B/HR/SLG): per IN-PLAY PA.
 - 3-year trailing window per season (forward-filled for earliest cohort; park-opening years use 1-2y).
 - Smoothing X frozen (calibrated once vs Statiz 2025; the pipeline does NOT read Statiz at runtime).
-Re-run safe: rebuilds self_park_factor from scratch each run (latest PBP -> updated 2026).
+Re-run safe: rebuilds self_park_factor from scratch each run (latest PBP -> updated current season).
 """
 import sqlite3, datetime
 import os
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "data_collection"))
+from kbo_season import last_season  # noqa: E402
 # DB 경로: 환경변수 KBO_DB 우선, 없으면 저장소 기준 상대경로.
 # EC2 절대경로는 Windows 와 GitHub Actions 러너에서 동작하지 않습니다.
 DB = os.environ.get("KBO_DB") or str(
@@ -18,7 +22,12 @@ DB = os.environ.get("KBO_DB") or str(
 con = sqlite3.connect(DB); con.row_factory = sqlite3.Row; cur = con.cursor()
 
 # 2008~2014 PBP 를 되채운 뒤로 여기까지 볼 수 있습니다(2026-08-29).
-FIRST_SEASON, LAST_SEASON = 2008, 2026
+# 마지막 시즌은 한국 날짜의 올해입니다(data_collection/kbo_season.py).
+# 2026 으로 박아 두면 2027 파크팩터가 영영 안 생기고, 그러면 2027 wRC+ 도
+# 중립(1000)으로 계산됩니다(2026-10-05 검토). 아직 경기가 없는 해는 줄이
+# 생기지 않습니다(compute_year 가 그해 홈 경기가 없는 구장을 건너뜀).
+# 창(window_for)은 앞이 모자랄 때만 뒤로 채우므로 기존 시즌 값은 그대로입니다.
+FIRST_SEASON, LAST_SEASON = 2008, last_season()
 VALID_YEARS = list(range(FIRST_SEASON, LAST_SEASON + 1))
 SECONDARY = {'청주','울산','포항'}
 # smoothing toward neutral 1000: Final = 1000 - (1000-raw)*X.  Calibrated once vs Statiz 2025 (run MAE~19).
@@ -178,5 +187,5 @@ con.commit()
 print(f"[compute_self_park_factors] inserted {len(rows)} rows ({now})")
 for r in cur.execute("SELECT season, COUNT(*) n FROM self_park_factor GROUP BY season ORDER BY season"):
     print(f"  {r['season']}: {r['n']} parks")
-print("  2026:", [(r['stadium'], r['run_pf']) for r in cur.execute("SELECT stadium, run_pf FROM self_park_factor WHERE season=2026 ORDER BY run_pf")])
+print(f"  {LAST_SEASON}:", [(r['stadium'], r['run_pf']) for r in cur.execute("SELECT stadium, run_pf FROM self_park_factor WHERE season=? ORDER BY run_pf", (LAST_SEASON,))])
 con.close()

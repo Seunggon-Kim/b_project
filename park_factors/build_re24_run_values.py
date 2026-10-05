@@ -11,9 +11,9 @@ Method: standard RE24 run expectancy + delta-RE linear weights.
   rv_mean(event) = mean run value over PAs of that event_type.
 
 base_state encoding (matches the existing table): 1B=100, 2B=10, 3B=1 (occupancy bits).
-Seasons: 2015..2026 rebuilt from current PBP. 2026 is partial (in-progress) — included
-as its own row set but EXCLUDED from the season=0 pooled baseline.
-season=0 = pooled run values over all COMPLETE seasons (2015..2025).
+Seasons: 2008..this year (KST) rebuilt from current PBP. This year is partial (in-progress) —
+included as its own row set but EXCLUDED from the season=0 pooled baseline.
+season=0 = pooled run values over all COMPLETE seasons (2008..last year).
 Per real season we store the 12 canonical events; season=0 stores all event types.
 
 Run with --write to back up and overwrite; without it, dry-run prints a summary only.
@@ -22,6 +22,9 @@ import sqlite3, sys, numpy as np, pandas as pd
 import os
 from pathlib import Path
 from collections import defaultdict
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "data_collection"))
+from kbo_season import last_season  # noqa: E402
 
 # DB 경로: 환경변수 KBO_DB 우선, 없으면 저장소 기준 상대경로.
 # EC2 절대경로는 Windows 와 GitHub Actions 러너에서 동작하지 않습니다.
@@ -32,8 +35,25 @@ DB = os.environ.get("KBO_DB") or str(
 # pre-rebuild snapshot is preserved separately as *_bak_20260606.
 BACKUP_SUFFIX='_bak'
 # 2008~2014 PBP 를 되채운 뒤로 2008년까지 봅니다(2026-08-29).
-COMPLETE=list(range(2008,2026))   # 2008..2025 pooled into season=0
-ALLYEARS=list(range(2008,2027))   # 2008..2026 rebuilt
+#
+# 끝은 한국 날짜의 올해입니다(data_collection/kbo_season.py). 예전에는
+# 2026 으로 박혀 있어 2027 RE24·wOBA 가중치(build_woba_weights 가 ALLYEARS
+# 를 씁니다)가 영영 안 생겼습니다(2026-10-05 검토). 아직 경기가 없는 해는
+# 'no data' 로 건너뜁니다. season=0 은 끝난 시즌(올해 앞까지)을 모읍니다.
+# 2027년 1월부터는 2026 이 끝난 시즌으로 들어갑니다. 오늘(2026)은 예전과
+# 같은 2008..2025 입니다.
+def all_years(today=None):
+    """다시 만들 시즌입니다. 2008 부터 올해까지입니다."""
+    return list(range(2008, last_season(today) + 1))
+
+
+def complete_years(today=None):
+    """season=0 에 모을 끝난 시즌입니다. 2008 부터 지난해까지입니다."""
+    return list(range(2008, last_season(today)))
+
+
+COMPLETE=complete_years()   # 2008..지난해, season=0 에 모읍니다
+ALLYEARS=all_years()        # 2008..올해, 다시 만듭니다
 
 MAP={
  '안타':'1B','내야안타':'1B','번트 안타':'1B','2루타':'2B','3루타':'3B','홈런':'HR',
@@ -139,7 +159,7 @@ def main(write):
         print(f"  season={season}:")
         for s,e,m,n in sorted(rows,key=lambda x:x[1]):
             print(f"     {e:10} rv_mean={m:+.4f}  n_obs={n}")
-    show(2025); show(2026); show(0)
+    show(ALLYEARS[-2]); show(ALLYEARS[-1]); show(0)
 
     if not write:
         print("\n[DRY RUN] no DB changes. Re-run with --write to back up + overwrite.")
