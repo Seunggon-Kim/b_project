@@ -233,3 +233,4 @@
 #pa-rv-section .pa-ars-note, #pa-pd-section .pa-ars-note { margin: 0.75rem 0 0; }
 /* Plate Discipline 표: 둘째 칸(Pitches)은 숫자라 고정·왼쪽 맞춤을 풂 */
 .pa-pdt th:nth-child(2), .pa-pdt td:nth-child(2) { position: static; box-shadow: none; text-align: right; }
+.pa-tb tr.pa-tb-total td { border-top: 2px solid var(--border-color); font-weight: 700; background: var(--bg-tertiary); }

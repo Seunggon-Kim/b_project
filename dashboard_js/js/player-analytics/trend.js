@@ -14,7 +14,9 @@
     // 선구(Plate Discipline) 개수입니다. 고의 볼·피치클락 위반은 API 가 뺍니다.
     'pd_n', 'sw', 'wh', 'ct', 'cs', 'z_n', 'o_n', 'z_sw', 'o_sw', 'z_ct', 'o_ct', 'edge_n', 'fp_n', 'fp_str',
     // 구종별 시즌 표(wOBA)용입니다. API 가 아직 안 주면 0 입니다.
-    'hbp', 'sf'];
+    'hbp', 'sf',
+    // Meatball(Gameday Zone 5) 공 수와 그 공에 스윙한 수입니다(Plate Discipline 표).
+    'mb_n', 'mb_sw'];
 
   function num(v) {
     if (v === null || v === undefined || v === '') return null;
@@ -429,22 +431,25 @@
   }
 
   // ---- Plate Discipline 표(Savant 투수 Plate Discipline, evan) ----
-  // 시즌 한 줄(모든 구종·타자 손·카운트 합)이고 위 고르기와 연동하지 않습니다.
-  // 존 기준 지표라 공 위치 추적이 절반쯤인 2016 은 뺍니다(evan). Meatball% 는 개수가 없어 두지 않습니다.
+  // 시즌 한 줄(모든 구종·타자 손·카운트 합)이고 위 고르기와 연동하지 않습니다. Savant 처럼 모든 시즌과 통산 줄.
+  // 존 기준 지표라 공 위치 추적이 절반쯤인 2016 은 뺍니다(evan).
+  // Meatball 은 Gameday Zone 5(존 한가운데, evan)이고, 응답에 mb_n 이 있을 때만 두 열을 둡니다.
   const PD_FIRST = 2017;
   const PDCOLS = [
     ['Pitches', 'Pitches\n그 시즌 던진 공 수입니다.', function (s) { return i0(s.n); }],
-    ['Zone%', 'Zone%\n스트라이크 존 안 공 ÷ 위치가 있는 공 × 100 입니다. 존 폭은 공 반지름을 더한 20인치입니다.', function (s) { return p1(s.z_n, s.z_n + s.o_n); }],
-    ['Z-Swing%', 'Z-Swing%\n존 안 공에 스윙 ÷ 존 안 공 × 100 입니다.', function (s) { return p1(s.z_sw, s.z_n); }],
-    ['Z-Contact%', 'Z-Contact%\n존 안 컨택 ÷ 존 안 스윙 × 100 입니다.', function (s) { return p1(s.z_ct, s.z_sw); }],
-    ['Chase%', 'Chase%\n존 밖 공에 스윙 ÷ 존 밖 공 × 100 입니다(O-Swing%).', function (s) { return p1(s.o_sw, s.o_n); }],
-    ['Chase Contact%', 'Chase Contact%\n존 밖 컨택 ÷ 존 밖 스윙 × 100 입니다(O-Contact%).', function (s) { return p1(s.o_ct, s.o_sw); }],
-    ['Edge%', 'Edge%\n존 끝 근처(Shadow) 공 ÷ 위치가 있는 공 × 100 입니다.', function (s) { return p1(s.edge_n, s.z_n + s.o_n); }],
-    ['F-Strike%', 'F-Strike%\n0-0 에서 볼이 아닌 공 ÷ 0-0 공 × 100 입니다.', function (s) { return p1(s.fp_str, s.fp_n); }],
-    ['Swing%', 'Swing%\n스윙 ÷ 공 × 100 입니다.', function (s) { return p1(s.sw, s.pd_n); }],
-    ['Whiff%', 'Whiff%\n헛스윙 ÷ 스윙 × 100 입니다.', function (s) { return p1(s.wh, s.sw); }],
-    ['CStr%', 'CStr%\n루킹 스트라이크 ÷ 공 × 100 입니다.', function (s) { return p1(s.cs, s.pd_n); }],
-    ['CSW%', 'CSW%\n(루킹 스트라이크 + 헛스윙) ÷ 공 × 100 입니다.', function (s) { return p1(s.cs + s.wh, s.pd_n); }],
+    ['Zone %', 'Zone %\n스트라이크 존 안 공 ÷ 위치가 있는 공 × 100 입니다. 존 폭은 공 반지름을 더한 20인치입니다.', function (s) { return p1(s.z_n, s.z_n + s.o_n); }],
+    ['Zone Swing %', 'Zone Swing %\n존 안 공에 스윙 ÷ 존 안 공 × 100 입니다(Z-Swing%).', function (s) { return p1(s.z_sw, s.z_n); }],
+    ['Zone Contact %', 'Zone Contact %\n존 안 컨택 ÷ 존 안 스윙 × 100 입니다(Z-Contact%).', function (s) { return p1(s.z_ct, s.z_sw); }],
+    ['Chase %', 'Chase %\n존 밖 공에 스윙 ÷ 존 밖 공 × 100 입니다(O-Swing%).', function (s) { return p1(s.o_sw, s.o_n); }],
+    ['Chase Contact %', 'Chase Contact %\n존 밖 컨택 ÷ 존 밖 스윙 × 100 입니다(O-Contact%).', function (s) { return p1(s.o_ct, s.o_sw); }],
+    ['Edge %', 'Edge %\n존 끝 근처(Shadow) 공 ÷ 위치가 있는 공 × 100 입니다.', function (s) { return p1(s.edge_n, s.z_n + s.o_n); }],
+    ['1st Pitch Strike %', '1st Pitch Strike %\n0-0 에서 볼이 아닌 공 ÷ 0-0 공 × 100 입니다(F-Strike%).', function (s) { return p1(s.fp_str, s.fp_n); }],
+    ['Swing %', 'Swing %\n스윙 ÷ 공 × 100 입니다.', function (s) { return p1(s.sw, s.pd_n); }],
+    ['Whiff %', 'Whiff %\n헛스윙 ÷ 스윙 × 100 입니다.', function (s) { return p1(s.wh, s.sw); }],
+    ['Meatball %', 'Meatball %\n존 한가운데(Gameday Zone 5)로 들어온 공 ÷ 위치가 있는 공 × 100 입니다.', function (s) { return p1(s.mb_n, s.z_n + s.o_n); }, 'mb'],
+    ['Meatball Swing %', 'Meatball Swing %\n존 한가운데(Zone 5) 공에 스윙 ÷ 존 한가운데 공 × 100 입니다.', function (s) { return p1(s.mb_sw, s.mb_n); }, 'mb'],
+    ['CStr %', 'CStr %\n루킹 스트라이크 ÷ 공 × 100 입니다.', function (s) { return p1(s.cs, s.pd_n); }],
+    ['CSW %', 'CSW %\n(루킹 스트라이크 + 헛스윙) ÷ 공 × 100 입니다.', function (s) { return p1(s.cs + s.wh, s.pd_n); }],
   ];
 
   /** 그 시즌 모든 구종을 더한 합계입니다. */
@@ -457,26 +462,30 @@
     return t;
   }
 
-  /** Plate Discipline 표입니다. 최근 순 시즌 한 줄씩, showAll 이 아니면 최근 3시즌만. 2016 은 뺍니다. */
-  function pdTableHtml(data, showAll) {
+  /** Plate Discipline 표입니다. 최근 순 모든 시즌(2017~) 한 줄씩과 맨 아래 통산 줄입니다. */
+  function pdTableHtml(data) {
+    const rows = (data && data.rows) || [];
+    const hasMb = rows.some(function (r) { return r.mb_n !== undefined && r.mb_n !== null; });
+    const cols = PDCOLS.filter(function (c) { return c[3] !== 'mb' || hasMb; });
     const agg = aggregate(data, '', '');
     const seasons = agg.seasons.filter(function (y) { return y >= PD_FIRST; }).sort(function (a, b) { return b - a; });
-    const shown = showAll ? seasons : seasons.slice(0, TB_SEASONS);
     let h = '<div class="pa-tb-wrap"><table class="pa-tb pa-pdt"><thead><tr><th data-tip="시즌\n정규시즌입니다(2016 은 공 위치 추적이 절반쯤이라 뺍니다).">시즌</th>';
-    PDCOLS.forEach(function (c) { h += '<th data-tip="' + esc(c[1]) + '">' + esc(c[0]) + '</th>'; });
+    cols.forEach(function (c) { h += '<th data-tip="' + esc(c[1]) + '">' + esc(c[0]) + '</th>'; });
     h += '</tr></thead><tbody>';
-    shown.forEach(function (y) {
+    const total = emptySums();
+    seasons.forEach(function (y) {
       const s = seasonSums(agg.bySeason[y]);
+      Object.keys(total).forEach(function (f) { total[f] += s[f] || 0; });
       h += '<tr class="pa-tb-row"><td>' + y + '</td>';
-      PDCOLS.forEach(function (c) { h += '<td>' + esc(c[2](s)) + '</td>'; });
+      cols.forEach(function (c) { h += '<td>' + esc(c[2](s)) + '</td>'; });
       h += '</tr>';
     });
-    h += '</tbody></table></div>';
-    if (seasons.length > TB_SEASONS) {
-      h += '<button type="button" class="pa-tb-more pa-pdt-more" data-all="' + (showAll ? '1' : '0') + '">'
-        + (showAll ? '최근 3시즌만' : '시즌 더 보기 (' + (seasons.length - TB_SEASONS) + ')') + '</button>';
+    if (seasons.length) {
+      h += '<tr class="pa-tb-total"><td data-tip="통산\n위 시즌(2017~)을 모두 더해 다시 계산한 값입니다.">통산</td>';
+      cols.forEach(function (c) { h += '<td>' + esc(c[2](total)) + '</td>'; });
+      h += '</tr>';
     }
-    return h;
+    return h + '</tbody></table></div>';
   }
 
   /** 지표 고르기 칸의 option 글자입니다(묶음은 optgroup). */

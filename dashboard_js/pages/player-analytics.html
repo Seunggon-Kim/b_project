@@ -199,7 +199,7 @@
                     <div class="section-header-flex">
                         <h3 class="card-title mb-0">Plate Discipline</h3>
                     </div>
-                    <p class="pa-ars-note">모든 공 기준입니다(위 타자 손·카운트 고르기와 상관없음). 존은 투구 분포와 같은 20인치 존이고, 2016 은 공 위치 추적이 절반쯤이라 뺍니다.</p>
+                    <p class="pa-ars-note">모든 공 기준입니다(위 타자 손·카운트 고르기와 상관없음). 존은 투구 분포와 같은 20인치 존이고, Meatball 은 존 한가운데(Gameday Zone 5)입니다. 2016 은 공 위치 추적이 절반쯤이라 뺍니다. 맨 아래 통산은 2017~ 합계입니다.</p>
                     <div id="pa-pd-table" class="pa-tr-table"></div>
                 </div>
             </div>
@@ -1140,7 +1140,6 @@
         let trAll = false;          // 구종별 시즌 표: 모든 시즌을 펼쳤는지
         let trWeightsNow = null;    // 지금 선수 표에 쓰는 wOBA 가중치
         let rvAll = false;          // 구종별 Run Value 표: 모든 시즌을 펼쳤는지
-        let pdAll = false;          // Plate Discipline 표: 모든 시즌을 펼쳤는지
         let trWeightsP = null;      // wOBA 시즌 가중치(kbo_woba_weights_by_season), 페이지에서 한 번만 받음
 
         /** wOBA 가중치 { 시즌: 행 } 입니다. 실패하면 null(표가 wOBA 열을 숨김). */
@@ -1178,11 +1177,7 @@
                 rvAll = !rvAll;
                 renderRvTable();
             });
-            document.getElementById('pa-pd-table').addEventListener('click', e => {
-                if (!(e.target.closest && e.target.closest('.pa-pdt-more'))) return;
-                pdAll = !pdAll;
-                renderPdTable();
-            });
+
         }
 
         async function loadTrend(playerId) {
@@ -1206,7 +1201,6 @@
             metricSel.value = trMetric;
             trAll = false;
             rvAll = false;
-            pdAll = false;
             trData = res && res.rows && res.rows.length ? res : null;
             // 카운트 목록은 응답에 카운트별 값(bc)이 있는지 보고 만듭니다. 지금 고른 값이 없으면 모든 카운트로.
             const countSel = document.getElementById('pa-tr-count');
@@ -1230,7 +1224,7 @@
             const has = !!(trData && trData.rows && trData.rows.some(r => r.season >= 2017 && r.pd_n > 0));
             sec.classList.toggle('hidden', !has);
             document.getElementById('pa-pd-table').innerHTML = has
-                ? window.PlayerAnalytics.trend.pdTableHtml(trData, pdAll) : '';
+                ? window.PlayerAnalytics.trend.pdTableHtml(trData) : '';
         }
 
         /** 구종별 Run Value 표입니다. 위 고르기와 상관없이 모든 공 기준이고, 구종 가치가 없는 선수면 숨깁니다. */
