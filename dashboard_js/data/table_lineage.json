@@ -1111,6 +1111,17 @@
    ]
   },
   {
+   "file": "src/routes/pitchTrend.js",
+   "live": false,
+   "pages": [],
+   "path": "/players/:id/pitch_trend",
+   "reads_all_tables": false,
+   "tables": [
+    "pitch_run_value",
+    "play_by_play"
+   ]
+  },
+  {
    "file": "src/routes/pitchValues.js",
    "live": false,
    "pages": [
@@ -2218,6 +2229,7 @@
     "pages/player-analytics.html"
    ],
    "routes": [
+    "/players/:id/pitch_trend",
     "/players/:id/pitch_values"
    ],
    "written_by": [
@@ -2240,6 +2252,7 @@
    "routes": [
     "/players/:id",
     "/players/:id/arsenal",
+    "/players/:id/pitch_trend",
     "/players/:id/usage",
     "/players/search",
     "/stats/movement_avg",
