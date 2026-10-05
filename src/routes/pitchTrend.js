@@ -89,7 +89,7 @@ const FIRST = 'pbp.balls = 0 AND pbp.strikes = 0';
 const sumIf = (cond, col) => `ROUND(COALESCE(SUM(CASE WHEN ${cond} THEN ${col} END), 0), 3)`;
 
 // 묶는 값은 (투수 ID, 첫 시즌 첫날, 올해 다음 해 첫날)입니다.
-const GROUPED_SQL = `
+const groupedSql = (byCount) => `
   SELECT CAST(FLOOR(pbp.game_date / 10000) AS SIGNED) AS season,
          pbp.pitch_type AS pitch_type,
          ${BAT_SIDE} AS bat_side,
@@ -127,32 +127,37 @@ const GROUPED_SQL = `
          ${count(`${PD} AND ${EDGE}`)} AS edge_n,
          ${count(`${PD} AND ${FIRST}`)} AS fp_n,
          ${count(`${PD} AND ${FIRST} AND NOT ${res(BALL)}`)} AS fp_str,
-         ${BC} AS bc,
          ${count(inPa(HBP))} AS hbp,
-         ${count(inPa(SF))} AS sf
+         ${count(inPa(SF))} AS sf${byCount ? `,
+         ${BC} AS bc` : ''}
   FROM play_by_play pbp
   WHERE pbp.pitcher_ID = ? AND pbp.game_date >= ? AND pbp.game_date < ?
   AND ${regularSeasonSql('pbp')}
   AND pbp.pitch_type IS NOT NULL
   AND pbp.pitch_type NOT IN ('', '-', 'null')
-  GROUP BY season, pbp.pitch_type, bat_side, cnt, bc`;
+  GROUP BY season, pbp.pitch_type, bat_side, cnt${byCount ? ', bc' : ''}`;
 
-/** 응답 rows 의 키입니다. 질의 열과 JSON 배열도 이 순서입니다. */
+/**
+ * 응답 rows 의 키입니다. 질의 열과 JSON 배열도 이 순서입니다.
+ * hbp·sf 는 wOBA 용입니다(2026-10-05). `?by=count` 이면 끝에 bc 가 붙습니다.
+ */
 export const TREND_KEYS = ['season', 'pitch_type', 'bat_side', 'cnt', 'n', 'pa', 'ab', 'h',
   'b1', 'b2', 'b3', 'hr', 'bbe', 'bb', 'so', 'spd_sum', 'spd_n', 'pfx_x_sum', 'pfx_z_sum',
   'pfx_n', 'px_sum', 'pz_sum', 'loc_n',
   'pd_n', 'sw', 'wh', 'ct', 'cs', 'z_n', 'o_n', 'z_sw', 'o_sw', 'z_ct', 'o_ct',
-  'edge_n', 'fp_n', 'fp_str',
-  'bc', 'hbp', 'sf'];
+  'edge_n', 'fp_n', 'fp_str', 'hbp', 'sf'];
 
-const ORDER = 'season, pitch_type, bat_side, cnt, bc';
+/** `?by=count` 의 키입니다. 기본 키 뒤에 bc('0-0' ~ '3-2')가 붙습니다. */
+export const TREND_COUNT_KEYS = [...TREND_KEYS, 'bc'];
+
+const orderOf = (byCount) => `season, pitch_type, bat_side, cnt${byCount ? ', bc' : ''}`;
 
 /** 보통 질의(묶은 글자를 못 풀 때 물러서는 길)입니다. */
-export const PITCH_TREND_SQL = `${GROUPED_SQL}
-  ORDER BY ${ORDER}
+const plainSql = (byCount) => `${groupedSql(byCount)}
+  ORDER BY ${orderOf(byCount)}
 `;
 
-// 묶은 결과 한 칸의 최대 길이입니다(공이 가장 많은 투수도 10만 바이트 안팎).
+// 묶은 결과 한 칸의 최대 길이입니다(by=count 로 공이 가장 많은 투수도 20만 바이트 안팎).
 const TREND_JSON_MAX = 8 * 1024 * 1024;
 
 /**
@@ -160,13 +165,18 @@ const TREND_JSON_MAX = 8 * 1024 * 1024;
  * 해석하면(약 300행 x 23칸) Worker CPU 를 많이 써서, arsenal 처럼 한 번의
  * JSON.parse 로 받습니다. GROUP_CONCAT 의 ORDER BY 는 순서가 보장됩니다.
  */
-export const PITCH_TREND_JSON_SQL = `
+const jsonSql = (byCount) => `
   SELECT /*+ SET_VAR(group_concat_max_len = ${TREND_JSON_MAX}) */
     COUNT(*) AS n,
-    GROUP_CONCAT(JSON_ARRAY(${TREND_KEYS.map((k) => `g.${k}`).join(', ')})
-                 ORDER BY ${ORDER.split(', ').map((k) => `g.${k}`).join(', ')} SEPARATOR ',') AS j
-  FROM (${GROUPED_SQL}) AS g
+    GROUP_CONCAT(JSON_ARRAY(${(byCount ? TREND_COUNT_KEYS : TREND_KEYS).map((k) => `g.${k}`).join(', ')})
+                 ORDER BY ${orderOf(byCount).split(', ').map((k) => `g.${k}`).join(', ')} SEPARATOR ',') AS j
+  FROM (${groupedSql(byCount)}) AS g
 `;
+
+export const PITCH_TREND_SQL = plainSql(false);
+export const PITCH_TREND_JSON_SQL = jsonSql(false);
+export const PITCH_TREND_COUNT_SQL = plainSql(true);
+export const PITCH_TREND_COUNT_JSON_SQL = jsonSql(true);
 
 export const PITCH_TREND_VALUES_SQL = `
   SELECT season, pitch_type, stands, n, rv
@@ -183,27 +193,26 @@ function round(v, d) {
 
 // 글자 키입니다. 나머지(season, n 부터)는 숫자입니다(합은 MySQL 이 이미 반올림).
 const TEXT_KEYS = new Set(['pitch_type', 'bat_side', 'cnt', 'bc']);
-const IS_TEXT = TREND_KEYS.map((k) => TEXT_KEYS.has(k));
 
-function rowOf(get) {
+function rowOf(keys, get) {
   const out = {};
-  for (let i = 0; i < TREND_KEYS.length; i += 1) {
+  for (let i = 0; i < keys.length; i += 1) {
     const v = get(i);
-    out[TREND_KEYS[i]] = IS_TEXT[i] ? (v === undefined ? null : v) : Number(v);
+    out[keys[i]] = TEXT_KEYS.has(keys[i]) ? (v === undefined ? null : v) : Number(v);
   }
   return out;
 }
 
 /** 보통 질의의 행(객체)을 응답 행으로 바꿉니다. */
-export function shapeTrendRows(rows) {
-  return (rows || []).map((r) => rowOf((i) => r[TREND_KEYS[i]]));
+export function shapeTrendRows(rows, keys = TREND_KEYS) {
+  return (rows || []).map((r) => rowOf(keys, (i) => r[keys[i]]));
 }
 
 /**
  * PITCH_TREND_JSON_SQL 의 한 행(n, j)을 응답 행으로 바꿉니다. 행 수가 다르거나
  * 글자가 JSON 이 아니면(잘렸으면) null 입니다. 부르는 쪽이 보통 질의로 읽습니다.
  */
-export function trendFromJson(row) {
+export function trendFromJson(row, keys = TREND_KEYS) {
   if (!row) return null;
   const n = Number(row.n);
   if (row.j === null || row.j === undefined) return n === 0 ? [] : null;
@@ -215,7 +224,7 @@ export function trendFromJson(row) {
     return null;
   }
   if (arrs.length !== n) return null;
-  return arrs.map((a) => rowOf((i) => a[i]));
+  return arrs.map((a) => rowOf(keys, (i) => a[i]));
 }
 
 /** 구종 가치 표의 행을 (시즌, 구종)마다 L/R 한 줄로 합칩니다. */
@@ -237,6 +246,14 @@ export function shapeTrendValues(rows) {
 }
 
 export async function pitchTrend(request, env, ctx, params) {
+  // ?by=count 일 때만 볼카운트 12가지로 나눕니다(행 약 2.6배, CPU 약 2배).
+  // 기본 응답은 가볍게 둡니다(Workers 무료 CPU 10ms, evan 2026-10-05).
+  const by = new URL(request.url).searchParams.get('by');
+  if (by !== null && by !== 'count') {
+    return json({ detail: "by 는 'count' 만 받습니다" }, 400);
+  }
+  const byCount = by === 'count';
+  const keys = byCount ? TREND_COUNT_KEYS : TREND_KEYS;
   try {
     const db = env.MYSQL;
     const player = await robustPlayerLookup(db, params.id);
@@ -246,11 +263,17 @@ export async function pitchTrend(request, env, ctx, params) {
     const to = seasonDateRange(last).to;
     const pid = Number(player.player_id);
     const binds = [pid, from, to];
-    let rows = trendFromJson(await db.prepare(PITCH_TREND_JSON_SQL).bind(...binds).first());
+    let rows = trendFromJson(
+      await db.prepare(byCount ? PITCH_TREND_COUNT_JSON_SQL : PITCH_TREND_JSON_SQL).bind(...binds).first(),
+      keys,
+    );
     if (!rows) {
       // 응답은 같고 CPU 만 더 듭니다. tail 에서 보이게 남깁니다.
       console.warn('pitch_trend: GROUP_CONCAT 결과를 못 풀어 보통 질의로 읽습니다', pid);
-      rows = shapeTrendRows((await db.prepare(PITCH_TREND_SQL).bind(...binds).all()).results);
+      rows = shapeTrendRows(
+        (await db.prepare(byCount ? PITCH_TREND_COUNT_SQL : PITCH_TREND_SQL).bind(...binds).all()).results,
+        keys,
+      );
     }
     const values = await db.prepare(PITCH_TREND_VALUES_SQL).bind(pid).all();
     const res = json({
