@@ -114,8 +114,17 @@ export async function deltasBySeason(db, rows) {
   return out;
 }
 
-/** 원본 829-867. 시즌 목록과 요약입니다. **배열**을 돌려줍니다. */
-export async function wrcSeasons(request, env) {
+/**
+ * 원본 829-867. 시즌 목록과 요약입니다. **배열**을 돌려줍니다.
+ *
+ * 경기 수를 세는 마지막 시즌은 한국 날짜의 올해입니다(lib/pbpseasons.js
+ * pbpLastSeason). 예전에는 2026 으로 박혀 있었습니다. 그러면 2027 경기가
+ * 아래 gp 에서 빠지고, 뒤에서 JOIN 하므로 2027 시즌 줄이 통째로 사라집니다
+ * (2026-10-05 검토). 아직 경기가 없는 해는 줄이 생기지 않을 뿐입니다.
+ * SQL 글자는 해가 바뀌어도 같게 두고 값만 묶습니다(Hyperdrive 가 질의
+ * 글자로 캐시합니다). today 는 시험에서 날짜를 넣을 때만 씁니다.
+ */
+export async function wrcSeasons(request, env, ctx, params, today) {
   const url = new URL(request.url);
   const minPa = queryInt(url, 'min_pa', 300);
   const db = env.MYSQL;
@@ -125,7 +134,7 @@ export async function wrcSeasons(request, env) {
       -- 원본은 play_by_play 를 풀스캔했습니다(229,667행). games 로 같은 값을
       -- 719행에서 얻습니다. effMinPa 의 주석과 같은 근거입니다.
       SELECT season, COUNT(*) AS g
-      FROM games WHERE season BETWEEN 2015 AND 2026 GROUP BY 1
+      FROM games WHERE season BETWEEN 2015 AND ? GROUP BY 1
     ),
     thr AS (
       SELECT season, CASE WHEN ? < CAST(ROUND(3.1e0 * ROUND(2.0e0*g/10.0e0)) AS SIGNED) THEN ? ELSE CAST(ROUND(3.1e0 * ROUND(2.0e0*g/10.0e0)) AS SIGNED) END AS t FROM gp
@@ -142,7 +151,7 @@ export async function wrcSeasons(request, env) {
     WHERE w.PA >= thr.t
     GROUP BY w.season
     ORDER BY w.season
-  `).bind(minPa, minPa).all();
+  `).bind(pbpLastSeason(today), minPa, minPa).all();
 
   // 원본은 행마다 쿼리를 한 번 더 날려 편차 목록을 받아 표준편차를 냅니다.
   //
