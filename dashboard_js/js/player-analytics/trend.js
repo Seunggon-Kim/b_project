@@ -258,7 +258,8 @@
         group = m.group;
         if (group) html += '<optgroup label="' + esc(group) + '">';
       }
-      html += '<option value="' + m.key + '" title="' + esc(m.tip) + '">' + esc(m.label) + '</option>';
+      // 항목 설명(title)은 두지 않습니다. 열린 목록에는 브라우저 기본(검은) 툴팁만 뜨고, 같은 설명이 고르기 아래 줄에 나옵니다.
+      html += '<option value="' + m.key + '">' + esc(m.label) + '</option>';
     });
     return html + (group ? '</optgroup>' : '');
   }

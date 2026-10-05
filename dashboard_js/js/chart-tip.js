@@ -90,10 +90,14 @@
     const to = find(e.relatedTarget);
     if (to !== current) hide();
   });
+  // 키보드로 옮긴 초점(:focus-visible)일 때만 보입니다. 마우스로 고르기 칸을 누를 때는 목록을 가리지 않게 띄우지 않습니다.
   doc.addEventListener('focusin', function (e) {
     const el = find(e.target);
-    if (el) show(el); else hide();
+    let kb = true;
+    try { kb = el ? el.matches(':focus-visible') : false; } catch (err) { kb = true; }
+    if (el && kb) show(el); else hide();
   });
+  doc.addEventListener('mousedown', hide);
   doc.addEventListener('focusout', hide);
   // 터치: 누르면 보이고, 같은 것을 다시 누르거나 다른 곳을 누르면 사라집니다.
   doc.addEventListener('click', function (e) {
