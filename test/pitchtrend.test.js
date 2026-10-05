@@ -28,8 +28,8 @@ const req = (path) => new Request(`https://x.test${path}`);
 const PLAYER = { player_id: '65933' };
 
 // 같은 행을 보통 질의 객체와 JSON 배열 글자로 적습니다.
-// 선구 개수 14개와 hbp·sf(끝 16개)를 채웁니다.
-const PDZ = { pd_n: 0, sw: 0, wh: 0, ct: 0, cs: 0, z_n: 0, o_n: 0, z_sw: 0, o_sw: 0, z_ct: 0, o_ct: 0, edge_n: 0, fp_n: 0, fp_str: 0, hbp: 0, sf: 0 };
+// 선구 개수 14개와 hbp·sf·mb_n·mb_sw(끝 18개)를 채웁니다.
+const PDZ = { pd_n: 0, sw: 0, wh: 0, ct: 0, cs: 0, z_n: 0, o_n: 0, z_sw: 0, o_sw: 0, z_ct: 0, o_ct: 0, edge_n: 0, fp_n: 0, fp_str: 0, hbp: 0, sf: 0, mb_n: 0, mb_sw: 0 };
 const OBJ = { ...PDZ, season: 2026, pitch_type: '직구', bat_side: 'R', cnt: 'even', n: 2, pa: 1, ab: 1, h: 1, b1: 1, b2: 0, b3: 0, hr: 0, bbe: 1, bb: 0, so: 0, spd_sum: 290.5, spd_n: 2, pfx_x_sum: -1.25, pfx_z_sum: 20, pfx_n: 2, px_sum: 0, pz_sum: 5.5, loc_n: 2 };
 const OBJ2 = { ...OBJ, bat_side: null, cnt: 'full', n: 3 };
 const JSON_TEXT = [OBJ, OBJ2].map((o) => JSON.stringify(TREND_KEYS.map((k) => o[k]))).join(',');
@@ -221,14 +221,14 @@ test('JSON 길과 보통 길이 선구 키까지 같은 값을 냅니다', () =>
 // --- 볼카운트 12가지(bc, ?by=count 일 때만)·wOBA 용 hbp·sf(2026-10-05) ---
 
 test('기본은 cnt 로 묶고 끝에 hbp·sf, by=count 는 bc 로도 묶고 끝에 bc', () => {
-  assert.deepEqual(TREND_KEYS.slice(-2), ['hbp', 'sf']);
+  assert.deepEqual(TREND_KEYS.slice(-4, -2), ['hbp', 'sf']);
   assert.deepEqual(TREND_COUNT_KEYS, [...TREND_KEYS, 'bc']);
   assert.doesNotMatch(PITCH_TREND_SQL, /AS bc/);
   assert.match(PITCH_TREND_SQL, /GROUP BY season, pbp\.pitch_type, bat_side, cnt$/m);
   assert.match(PITCH_TREND_COUNT_SQL, /GROUP BY season, pbp\.pitch_type, bat_side, cnt, bc/);
   assert.match(PITCH_TREND_COUNT_SQL, /ORDER BY season, pitch_type, bat_side, cnt, bc/);
   assert.match(PITCH_TREND_COUNT_JSON_SQL, /ORDER BY g\.season, g\.pitch_type, g\.bat_side, g\.cnt, g\.bc SEPARATOR/);
-  assert.match(PITCH_TREND_COUNT_JSON_SQL, /g\.hbp, g\.sf, g\.bc\)/);
+  assert.match(PITCH_TREND_COUNT_JSON_SQL, /g\.hbp, g\.sf, g\.mb_n, g\.mb_sw, g\.bc\)/);
 });
 
 test('bc 는 볼 3·스트라이크 2 로 자른 "볼-스트라이크" 글자, 값이 없으면 null', () => {
@@ -300,5 +300,21 @@ test('기본·by=count 응답 모두 zones 를 싣습니다', async () => {
   for (const q of ['', '?by=count']) {
     const body = await (await pitchTrend(req(`/players/65933/pitch_trend${q}`), { MYSQL: db }, {}, { id: '65933' })).json();
     assert.deepEqual(body.zones, [{ season: 2026, zone: 'heart', n: 2, rv: 0.5 }], q);
+  }
+});
+
+// --- Meatball(Gameday Zone 5) 공 수(2026-10-06) ---
+
+test('mb_n·mb_sw 를 기본 키 끝에 붙입니다(by=count 는 그 뒤에 bc)', () => {
+  assert.deepEqual(TREND_KEYS.slice(-2), ['mb_n', 'mb_sw']);
+  assert.deepEqual(TREND_COUNT_KEYS.slice(-3), ['mb_n', 'mb_sw', 'bc']);
+});
+
+test('Zone 5: |px| <= hw/3, bot + h/3 <= pz <= top - h/3, 선구 집계 공만', () => {
+  for (const sql of [PITCH_TREND_SQL, PITCH_TREND_COUNT_SQL]) {
+    assert.match(sql, /ABS\(pbp\.px\) <= 10e0 \/ 12e0 \/ 3e0/);
+    assert.match(sql, /pbp\.pz >= .* \+ \(.* - .*\) \/ 3e0 AND pbp\.pz <= .* - \(.* - .*\) \/ 3e0/);
+    assert.match(sql, /AS mb_n/);
+    assert.match(sql, /AS mb_sw/);
   }
 });

@@ -85,6 +85,9 @@ const OUT_ZONE = `${LOC} AND NOT (ABS(pbp.px) <= 10e0 / 12e0 AND pbp.pz >= ${BOT
 const EDGE_R = `GREATEST(ABS(pbp.px) / ${HALF_W}, ABS(pbp.pz - (${TOP} + ${BOT}) / 2e0) / ((${TOP} - ${BOT}) / 2e0))`;
 const EDGE = `${LOC} AND ${EDGE_R} >= 0.67e0 AND ${EDGE_R} < 1.33e0`;
 const FIRST = 'pbp.balls = 0 AND pbp.strikes = 0';
+// Meatball(Gameday Zone 5): 존을 가로·세로 셋으로 나눈 한가운데 칸(arsenal gameZone 과 같음).
+const MEATBALL = `${LOC} AND ABS(pbp.px) <= 10e0 / 12e0 / 3e0 `
+  + `AND pbp.pz >= ${BOT} + (${TOP} - ${BOT}) / 3e0 AND pbp.pz <= ${TOP} - (${TOP} - ${BOT}) / 3e0`;
 // 합은 MySQL 에서 소수 셋째 자리로 맞춥니다(응답을 줄이고 Worker 계산을 없앰).
 const sumIf = (cond, col) => `ROUND(COALESCE(SUM(CASE WHEN ${cond} THEN ${col} END), 0), 3)`;
 
@@ -128,7 +131,9 @@ const groupedSql = (byCount) => `
          ${count(`${PD} AND ${FIRST}`)} AS fp_n,
          ${count(`${PD} AND ${FIRST} AND NOT ${res(BALL)}`)} AS fp_str,
          ${count(inPa(HBP))} AS hbp,
-         ${count(inPa(SF))} AS sf${byCount ? `,
+         ${count(inPa(SF))} AS sf,
+         ${count(`${PD} AND ${MEATBALL}`)} AS mb_n,
+         ${count(`${SW} AND ${MEATBALL}`)} AS mb_sw${byCount ? `,
          ${BC} AS bc` : ''}
   FROM play_by_play pbp
   WHERE pbp.pitcher_ID = ? AND pbp.game_date >= ? AND pbp.game_date < ?
@@ -145,7 +150,7 @@ export const TREND_KEYS = ['season', 'pitch_type', 'bat_side', 'cnt', 'n', 'pa',
   'b1', 'b2', 'b3', 'hr', 'bbe', 'bb', 'so', 'spd_sum', 'spd_n', 'pfx_x_sum', 'pfx_z_sum',
   'pfx_n', 'px_sum', 'pz_sum', 'loc_n',
   'pd_n', 'sw', 'wh', 'ct', 'cs', 'z_n', 'o_n', 'z_sw', 'o_sw', 'z_ct', 'o_ct',
-  'edge_n', 'fp_n', 'fp_str', 'hbp', 'sf'];
+  'edge_n', 'fp_n', 'fp_str', 'hbp', 'sf', 'mb_n', 'mb_sw'];
 
 /** `?by=count` 의 키입니다. 기본 키 뒤에 bc('0-0' ~ '3-2')가 붙습니다. */
 export const TREND_COUNT_KEYS = [...TREND_KEYS, 'bc'];
