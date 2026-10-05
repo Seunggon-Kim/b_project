@@ -112,9 +112,9 @@ def parse_position(text):
         throw_bat = throw_bat_match.group(1)
         
         # 투 (우투/좌투/양투)
-        if '우투' in throw_bat:
+        if '우투' in throw_bat or '우언' in throw_bat:
             throw = 'R'
-        elif '좌투' in throw_bat:
+        elif '좌투' in throw_bat or '좌언' in throw_bat:
             throw = 'L'
         elif '양투' in throw_bat:
             throw = 'S'

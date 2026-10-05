@@ -121,10 +121,11 @@ def parse_position(text):
     if throw_bat_match:
         throw_bat = throw_bat_match.group(1)
         
-        # 투 (우투/좌투/양투)
-        if '우투' in throw_bat:
+        # 투 (우투/좌투/양투). KBO 는 사이드암·언더핸드를 '우언'·'좌언'으로
+        # 적습니다(예: 우강훈 '투수(우언우타)'). 빠뜨리면 throw 가 빕니다(2026-10-05).
+        if '우투' in throw_bat or '우언' in throw_bat:
             throw = 'R'
-        elif '좌투' in throw_bat:
+        elif '좌투' in throw_bat or '좌언' in throw_bat:
             throw = 'L'
         elif '양투' in throw_bat:
             throw = 'S'
