@@ -462,8 +462,11 @@
     return t;
   }
 
-  /** Plate Discipline 표입니다. 최근 순 모든 시즌(2017~) 한 줄씩과 맨 아래 통산 줄입니다. */
-  function pdTableHtml(data) {
+  /**
+   * Plate Discipline 표입니다. 최근 순 모든 시즌(2017~) 한 줄씩, 맨 아래 통산 줄, 그다음 KBO 리그 줄(Savant MLB 줄).
+   * league 는 /stats/plate_discipline 응답({ seasons: [시즌별 리그 합계] })입니다. 없으면 KBO 줄을 두지 않습니다.
+   */
+  function pdTableHtml(data, league) {
     const rows = (data && data.rows) || [];
     const hasMb = rows.some(function (r) { return r.mb_n !== undefined && r.mb_n !== null; });
     const cols = PDCOLS.filter(function (c) { return c[3] !== 'mb' || hasMb; });
@@ -483,6 +486,17 @@
     if (seasons.length) {
       h += '<tr class="pa-tb-total"><td data-tip="통산\n위 시즌(2017~)을 모두 더해 다시 계산한 값입니다.">통산</td>';
       cols.forEach(function (c) { h += '<td>' + esc(c[2](total)) + '</td>'; });
+      h += '</tr>';
+    }
+    const ls = (league && league.seasons) || [];
+    if (seasons.length && ls.length) {
+      const L = emptySums();
+      ls.forEach(function (r) {
+        if (!(num(r.season) >= PD_FIRST)) return;
+        Object.keys(L).forEach(function (f) { L[f] += num(r[f]) || 0; });
+      });
+      h += '<tr class="pa-tb-league"><td data-tip="KBO\n2017~ KBO 모든 투수의 공을 같은 기준으로 합친 값입니다(Savant 의 MLB 줄).">KBO</td>';
+      cols.forEach(function (c, i) { h += '<td>' + (i === 0 ? '' : esc(c[2](L))) + '</td>'; });
       h += '</tr>';
     }
     return h + '</tbody></table></div>';
