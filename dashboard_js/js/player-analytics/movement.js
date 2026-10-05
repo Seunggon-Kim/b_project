@@ -189,13 +189,14 @@
       (summary || []).forEach(function (g) {
         const a = ctx.map && Object.prototype.hasOwnProperty.call(ctx.map, g.type) ? ctx.map[g.type] : null;
         if (!a) return;
-        s += '<circle class="pa-mv-lg" cx="' + px(a.x, view) + '" cy="' + py(a.z) + '" r="13" fill="url(#pa-mv-hatch)" stroke="' + g.color + '">'
-          + '<title>' + esc(ctx.label) + ' 평균 ' + esc(g.type) + ' · 수직 ' + fd(a.z) + 'cm · 수평 ' + fx(a.x, view) + 'cm</title></circle>';
+        // 툴팁은 공용 흰 바탕 툴팁(js/chart-tip.js)이 data-tip 을 읽어 보여 줍니다(evan).
+        s += '<circle class="pa-mv-lg" cx="' + px(a.x, view) + '" cy="' + py(a.z) + '" r="13" fill="url(#pa-mv-hatch)" stroke="' + g.color + '"'
+          + ' data-tip="' + esc(ctx.label + ' 평균 · ' + g.type + '\n수직 ' + fd(a.z) + 'cm · 수평 ' + fx(a.x, view) + 'cm') + '"/>';
       });
     }
     (summary || []).forEach(function (g) {
-      s += '<circle class="pa-mv-avg" cx="' + px(g.x, view) + '" cy="' + py(g.z) + '" r="9" fill="' + g.color + '">'
-        + '<title>' + esc(g.type) + ' ' + f1(g.pct) + '% · 수직 ' + fd(g.z) + 'cm · 수평 ' + fx(g.x, view) + 'cm</title></circle>';
+      s += '<circle class="pa-mv-avg" cx="' + px(g.x, view) + '" cy="' + py(g.z) + '" r="9" fill="' + g.color + '"'
+        + ' data-tip="' + esc(g.type + '\n구사율 ' + f1(g.pct) + '% · 수직 ' + fd(g.z) + 'cm · 수평 ' + fx(g.x, view) + 'cm') + '"/>';
     });
     return s + '</g></svg>';
   }
@@ -291,7 +292,7 @@
   /** 구사율 칸 이름: 구종 색 동그라미 안에 약자(evan), 마우스를 올리면 한글 이름. */
   function usageNameHtml(name, pct) {
     const c = colorOf(name);
-    return '<span class="pa-usage-name" title="' + esc(name) + '">'
+    return '<span class="pa-usage-name" data-tip="' + esc(name) + '">'
       + '<span class="pa-usage-code" style="background:' + c + ';color:' + textOn(c) + '">' + esc(pitchCode(name)) + '</span>'
       + ' <b>' + pct + '%</b></span>';
   }
@@ -317,7 +318,8 @@
       + '</div>';
   }
 
-  const RV_HELP = '구종 가치: 그 타자 손을 상대로 던진 공의 득점 가치 합입니다. 볼카운트·주자·아웃별 기대 득점으로 셉니다. 실점을 막으면 +입니다.';
+  // 툴팁 글은 줄바꿈으로 나눕니다: 첫 줄 제목(굵게), 둘째 줄 내용, 셋째 줄부터 흐리게(js/chart-tip.js, 선수 통계 표 툴팁과 같은 모양).
+  const RV_HELP = '구종 가치\n그 타자 손을 상대로 던진 공의 득점 가치 합입니다. 실점을 막으면 + 입니다.\n볼카운트·주자·아웃별 기대 득점으로 셉니다.';
 
   /** 한 손 상대 가치 칸입니다. 공이 0개이거나 값이 없으면 '-'. */
   function rvCell(p, side) {
@@ -328,15 +330,15 @@
     const txt = k > 0 ? '+' + k : String(k);
     const cls = 'pa-rv' + (k > 0 ? ' pa-rv--pos' : k < 0 ? ' pa-rv--neg' : '');
     const exact = v.toFixed(1), sign = Number(exact) > 0 ? '+' : '';
-    const title = (side === 'l' ? '좌타' : '우타') + ' 상대 ' + n.toLocaleString('en-US') + '구, 가치 ' + sign + (Number(exact) === 0 ? '0.0' : exact);
-    return '<span class="' + cls + '" title="' + title + '">' + txt + '</span>';
+    const title = (side === 'l' ? '좌타' : '우타') + ' 상대 구종 가치\n' + sign + (Number(exact) === 0 ? '0.0' : exact) + '점\n' + n.toLocaleString('en-US') + '구 기준';
+    return '<span class="' + cls + '" data-tip="' + title + '">' + txt + '</span>';
   }
 
   /** 구종 구사율 + 구종 가치(7칸)입니다. */
   function rvGridHtml(rows, pvRows) {
     const byType = {};
     pvRows.forEach(function (p) { byType[p.pitch_type] = p; });
-    const h = function () { return '<span class="pa-rv-h" title="' + RV_HELP + '">가치</span>'; };
+    const h = function () { return '<span class="pa-rv-h" tabindex="0" data-tip="' + RV_HELP + '">가치</span>'; };
     return '<div class="pa-usage-grid pa-usage-grid--rv' + (rows.length >= 7 ? ' pa-usage-grid--dense' : '') + '">'
       + '<div class="pa-usage-head"><span>좌타 상대</span><span></span>' + h() + '<span>구종 (전체)</span>' + h() + '<span></span><span>우타 상대</span></div>'
       + rows.map(function (u) {

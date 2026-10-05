@@ -193,7 +193,7 @@
   const ML = 52, MR = 16, MT = 14, MB = 34;
 
   /**
-   * 선 그래프 SVG 글자입니다. 점에는 <title>(시즌 · 구종 · 값 (바탕 수))을 둡니다.
+   * 선 그래프 SVG 글자입니다. 점에는 data-tip(시즌 · 구종 · 값 (바탕 수))을 둡니다(공용 흰 바탕 툴팁 js/chart-tip.js).
    * size({w, h})는 viewBox 크기입니다. 화면이 실제 폭을 넘기면 글자가 늘거나 줄지 않습니다(기본 760×300).
    */
   function chartSvg(sr, seasons, key, size) {
@@ -236,8 +236,8 @@
     });
     sr.forEach(function (s) {
       s.points.forEach(function (p) {
-        out += '<circle class="pa-tr-pt" cx="' + f(X(p.season)) + '" cy="' + f(Y(p.v)) + '" r="4" fill="' + s.color + '">'
-          + '<title>' + p.season + ' · ' + esc(s.type) + ' · ' + esc(fmt(key, p.v)) + (p.note ? ' (' + esc(p.note) + ')' : '') + '</title></circle>';
+        out += '<circle class="pa-tr-pt" cx="' + f(X(p.season)) + '" cy="' + f(Y(p.v)) + '" r="4" fill="' + s.color + '"'
+          + ' data-tip="' + esc(s.type + ' · ' + p.season + '\n' + metric(key).label + ': ' + fmt(key, p.v) + (p.note ? '\n' + p.note : '')) + '"/>';
       });
     });
     return out + '</svg>';
