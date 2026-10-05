@@ -166,6 +166,14 @@
   },
   {
    "from": "table:games",
+   "to": "page:pages/factor-stats.html"
+  },
+  {
+   "from": "table:games",
+   "to": "page:pages/player-stats.html"
+  },
+  {
+   "from": "table:games",
    "to": "page:pages/team-stats.html"
   },
   {
@@ -427,6 +435,10 @@
   {
    "from": "table:team_stadium_by_season",
    "to": "table:wrc_plus_comparison"
+  },
+  {
+   "from": "table:teams",
+   "to": "page:pages/factor-stats.html"
   },
   {
    "from": "table:teams",
@@ -781,7 +793,8 @@
    "explorer": false,
    "path": "pages/factor-stats.html",
    "routes": [
-    "/db/table/:name"
+    "/db/table/:name",
+    "/games"
    ],
    "title": "요인 통계 - Bstats"
   },
@@ -793,11 +806,13 @@
     "/futures/search",
     "/players/:id",
     "/players/:id/arsenal",
+    "/players/:id/pitch_trend",
     "/players/:id/pitch_values",
     "/players/:id/usage",
     "/players/search",
     "/stats/movement_avg",
-    "/stats/pitchers"
+    "/stats/pitchers",
+    "/stats/seasons"
    ],
    "title": "선수 분석 - Bstats"
   },
@@ -806,6 +821,7 @@
    "path": "pages/player-stats.html",
    "routes": [
     "/db/table/:name",
+    "/games",
     "/standings",
     "/stats/batters",
     "/stats/pitchers",
@@ -1032,6 +1048,8 @@
    "file": "src/routes/games.js",
    "live": false,
    "pages": [
+    "pages/factor-stats.html",
+    "pages/player-stats.html",
     "pages/team-stats.html"
    ],
    "path": "/games",
@@ -1113,7 +1131,9 @@
   {
    "file": "src/routes/pitchTrend.js",
    "live": false,
-   "pages": [],
+   "pages": [
+    "pages/player-analytics.html"
+   ],
    "path": "/players/:id/pitch_trend",
    "reads_all_tables": false,
    "tables": [
@@ -1293,6 +1313,7 @@
    "file": "src/routes/stats.js",
    "live": false,
    "pages": [
+    "pages/player-analytics.html",
     "pages/player-stats.html",
     "pages/team-stats.html"
    ],
@@ -1995,6 +2016,8 @@
    "name": "games",
    "pages": [
     "pages/article.html",
+    "pages/factor-stats.html",
+    "pages/player-stats.html",
     "pages/team-stats.html"
    ],
    "routes": [
@@ -2479,6 +2502,7 @@
    "manual_note": "현재 10팀 목록입니다. database/schema.sql 의 INSERT OR IGNORE 시드로 채웠고, 정기 작업은 없습니다.",
    "name": "teams",
    "pages": [
+    "pages/factor-stats.html",
     "pages/player-stats.html",
     "pages/team-stats.html"
    ],
