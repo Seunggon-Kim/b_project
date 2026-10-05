@@ -186,16 +186,19 @@
   const CAVEAT = '출처: KBO 공식 선수 기록입니다. 비율 지표는 성분에서 다시 계산합니다. 리그 평균 행은 고른 조건과 상관없이 그 시즌 리그 전체 선수의 합으로 셉니다.';
   const TRADE_CAVEAT = ' 시즌 중 트레이드된 선수는 공식 기록이 한 줄이라 마지막 팀으로 보이고, 구장 보정도 마지막 팀 홈구장 기준입니다.';
   const QUAL_CAVEAT = ' 규정 이상은 타석이 소속팀 경기 수 × 3.1(반올림) 이상, 이닝이 소속팀 경기 수 이상인 선수입니다.';
-  const LIVE_QUAL_CAVEAT = ' 올해 소속팀 경기 수는 KBO 실시간 순위입니다.';
+  const LIVE_QUAL_CAVEAT = ' 진행 중인 시즌의 소속팀 경기 수는 KBO 실시간 순위입니다.';
   const LIVE_SEASON_CAVEAT = ' 진행 중인 시즌은 최신 일일 갱신 기준이라 KBO 실시간과 1~2경기 차이가 날 수 있습니다.';
   const OLD_CAVEAT = ' 2007년 이전은 파크팩터가 없어 OPS+·ERA-·FIP-를 구장 보정 없이 계산했고, wOBA·wRC+는 2008년부터 있습니다.';
   const SIT_CAVEAT = ' 상황 묶음(득점권·대타·결승타·멀티히트·XR·GPA·P/PA)은 KBO 공식 기록 값 그대로라 리그 평균은 비워 둡니다. 대타로 나온 적이 없는 선수도 대타 타율이 .000으로 보입니다.';
 
-  /** 표 아래 출처·주의 문구입니다. latest 는 가장 최근 시즌, live 는 실시간 순위로 규정을 셌는지입니다. */
-  function caveatText(st, latest, live) {
+  /**
+   * 표 아래 출처·주의 문구입니다. liveSeason 은 진행 중인 시즌(없으면 null, js/stats/season.js 판단),
+   * live 는 실시간 순위로 규정을 셌는지입니다.
+   */
+  function caveatText(st, liveSeason, live) {
     return CAVEAT + TRADE_CAVEAT
       + (st.min === 'q' ? QUAL_CAVEAT + (live ? LIVE_QUAL_CAVEAT : '') : '')
-      + (st.season === latest ? LIVE_SEASON_CAVEAT : '')
+      + (liveSeason && st.season === liveSeason ? LIVE_SEASON_CAVEAT : '')
       + (st.season < PBP_MIN ? OLD_CAVEAT : '')
       + (st.group === 'sit' ? SIT_CAVEAT : '');
   }
@@ -211,13 +214,20 @@
     st: null, seasons: [], refs: { errors: [] },
     season: {}, standings: null, reg: null,
     custom: { bat: null, pit: null }, panelOpen: false,
-    seasonErrors: [], seq: 0, last: null, latest: new Date().getFullYear(),
+    seasonErrors: [], seq: 0, last: null,
+    // 한국 시각 올해 시즌의 진행 중 판단(js/stats/season.js loadSeasonState 결과)입니다. init 에서 채웁니다.
+    liveState: null,
   };
 
   let tipHide = function () {};
 
   function $(id) { return document.getElementById(id); }
   function keysNow() { return visibleKeys(S.st.tab, S.st.group, S.st.season, S.custom[S.st.tab]); }
+
+  /** 진행 중인 시즌(없으면 null)입니다. 한국 시각 올해 시즌만 진행 중일 수 있습니다. */
+  function liveYear() {
+    return S.liveState && S.liveState.live ? S.liveState.season : null;
+  }
 
   function writeUrl(replace) {
     const st = S.st;
@@ -246,12 +256,12 @@
   }
 
   /**
-   * 규정에 쓸 순위표 { rank, live } 입니다. 올해는 실시간 순위, 아니면 저장된
+   * 규정에 쓸 순위표 { rank, live } 입니다. 진행 중인 시즌은 실시간 순위, 아니면 저장된
    * 순위표입니다. 실시간 순위를 못 받으면 alerts 에 알리고 저장된 순위표로 갑니다.
    */
   function rankNow(alerts) {
     const M = TS.metrics, y = S.st.season;
-    if (y === S.latest && S.standings) {
+    if (y === liveYear() && S.standings) {
       if (!S.standings.errors.length && S.standings.teams.length) {
         return { rank: M.rankFromStandings(S.standings.teams), live: true };
       }
@@ -269,7 +279,7 @@
     const stale = x => !x || x.errors.length > 0;
     const jobs = [];
     if (stale(S.season[y])) jobs.push(D.loadSeason(base, y).then(r => { S.season[y] = r; }));
-    if (st.min === 'q' && y === S.latest && stale(S.standings)) jobs.push(D.loadStandings(base).then(r => { S.standings = r; }));
+    if (st.min === 'q' && y === liveYear() && stale(S.standings)) jobs.push(D.loadStandings(base).then(r => { S.standings = r; }));
     await Promise.all(jobs);
     // 순위표에 경기 수가 없는 팀이 있을 때만 시즌 공통 규정을 받습니다.
     if (st.min === 'q' && stale(S.reg)) {
@@ -335,6 +345,8 @@
     const alerts = [];
     errAlerts(alerts, S.seasonErrors);
     errAlerts(alerts, S.refs.errors);
+    // 진행 중 판단을 못 받았으면 올해 시즌을 진행 중으로 보고 있음을 알립니다(올해 시즌을 볼 때만).
+    if (S.liveState && S.liveState.failed && y === S.liveState.season) alerts.push({ kind: 'warn', text: TS.season.FAIL_TEXT });
     const sd = S.season[y];
     // 지금 탭에 필요한 기록의 실패만 알립니다.
     const otherTab = st.tab === 'bat' ? '투수 기록' : '타자 기록';
@@ -381,7 +393,7 @@
         + T.renderTable({ cols: cols, rows: shown, league: league, sort: sort, idCols: ID_COLS, page: { size: st.size, index: st.page } });
     }
     $('ts-pager').innerHTML = shown.length ? pagerHtml(pg, shown.length, st.size) : '';
-    $('caveat-note').textContent = caveatText(st, S.latest, live);
+    $('caveat-note').textContent = caveatText(st, liveYear(), live);
     renderAlerts(alerts);
     if (!$('col-panel').classList.contains('hidden')) renderColPanel();
   }
@@ -580,11 +592,14 @@
       S.st = parseState(location.search);
       $('ts-table').innerHTML = createLoadingSpinner();
       const base = root.KBO_API_BASE;
-      const got = await Promise.all([TS.data.loadSeasons(base), TS.data.loadRefs(base)]);
+      // 한국 시각 올해 시즌만 진행 중일 수 있어, 그 해 판단을 시즌 목록과 함께 받습니다.
+      const kst = TS.season.kstToday();
+      const got = await Promise.all([TS.data.loadSeasons(base), TS.data.loadRefs(base), TS.season.loadSeasonState(base, kst.y)]);
       S.seasons = got[0].seasons;
       S.seasonErrors = got[0].errors;
       S.refs = got[1];
-      S.latest = S.seasons[0];
+      S.liveState = got[2];
+      if (S.liveState.failed) console.warn(TS.season.FAIL_TEXT, S.liveState.error);
       normalize();
       if (S.st.group === 'custom') S.panelOpen = true;
       fillSeasons();
