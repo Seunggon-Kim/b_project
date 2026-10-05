@@ -145,7 +145,7 @@
                     <p>이 대시보드의 wRC+는 Statiz 같은 외부 수치를 그대로 가져다 쓰지 않고, KBO play-by-play(타석 단위) 원천 데이터에서 처음부터 다시 계산합니다. 가중치와 파크팩터, 계산식을 직접 통제하고 검증할 수 있어야, 이 수치를 어디까지 믿어도 되는지까지 말할 수 있기 때문입니다.</p>
 
                     <h2>산출 과정: 네 단계</h2>
-                    <p><strong>1단계. 사건별 득점 가치(RE24 기반 선형 가중치).</strong> 먼저 play-by-play에서 베이스와 아웃 24가지 상태별 평균 기대 득점(RE24)을 구합니다. 그다음 각 타석의 기대 득점 변화(타석 종료 후 같은 반이닝 다음 타석의 시작 상태 기대 득점, 이닝이 끝나면 0)에 그 타석에서 실제로 난 득점을 더해, 단타·2루타·3루타·홈런·볼넷·사구 등 사건마다 평균적으로 몇 점의 가치를 갖는지(선형 가중치)를 추정합니다. 2015~2025시즌(부분 시즌인 2026은 제외)을 통합해 표본을 키워 가중치를 안정화했습니다. 이 RE24 산출물은 같은 방법론으로 별도 검증되는 결과물이며, 아래 wOBA 계산은 동일한 RE24식 선형 가중치 사상에서 미리 산출해 둔 시즌별 가중치 표(고의4구를 제외한 uBB 기준 등)를 읽어 적용합니다.</p>
+                    <p><strong>1단계. 사건별 득점 가치(RE24 기반 선형 가중치).</strong> 먼저 play-by-play에서 베이스와 아웃 24가지 상태별 평균 기대 득점(RE24)을 구합니다. 그다음 각 타석의 기대 득점 변화(타석 종료 후 같은 반이닝 다음 타석의 시작 상태 기대 득점, 이닝이 끝나면 0)에 그 타석에서 실제로 난 득점을 더해, 단타·2루타·3루타·홈런·볼넷·사구 등 사건마다 평균적으로 몇 점의 가치를 갖는지(선형 가중치)를 추정합니다. 2015~2025시즌(산출 당시 진행 중이던 2026은 제외)을 통합해 표본을 키워 가중치를 안정화했습니다. 이 RE24 산출물은 같은 방법론으로 별도 검증되는 결과물이며, 아래 wOBA 계산은 동일한 RE24식 선형 가중치 사상에서 미리 산출해 둔 시즌별 가중치 표(고의4구를 제외한 uBB 기준 등)를 읽어 적용합니다.</p>
                     <p><strong>2단계. wOBA.</strong> 이 가중치로 타자별 wOBA를 계산합니다.</p>
                     <div class="formula">wOBA = (wBB·BB + wHBP·HBP + w1B·1B + w2B·2B + w3B·3B + wHR·HR) / (AB + BB + SF + HBP)</div>
                     <p>볼넷 카운트(BB)에는 고의4구를 합산하고(Statiz 컨벤션), 가중치 wBB 자체는 고의4구를 제외한 일반 볼넷(uBB)의 득점 가치를 씁니다. 단타(1B)는 안타에서 2루타·3루타·홈런을 뺀 값으로 잡습니다. 분모(AB+BB+SF+HBP)는 출루율(OBP)의 분모와 같은 구조입니다.</p>
@@ -292,6 +292,14 @@
         return `<a class="player-link" href="player-analytics?id=${encodeURIComponent(id)}">${text}</a>`;
     }
 
+    // 기본 시즌: 300타석 이상 타자(n_batters)가 20명 이상인 가장 최근 시즌, 없으면 가장 최근 시즌입니다.
+    // 새 시즌 초반에는 규정 타자가 몇 명뿐이라 첫 화면에 두지 않습니다.
+    function defaultWrcSeason(rows) {
+        const list = (rows || []).slice().sort((a, b) => b.season - a.season);
+        const ok = list.find(s => (s.n_batters || 0) >= 20);
+        return ok ? ok.season : (list.length ? list[0].season : null);
+    }
+
     async function init() {
         const seasons = await fetchJSON('/wrc/seasons');
         const sel = document.getElementById('season-select');
@@ -301,6 +309,8 @@
             o.textContent = `${s.season} (n=${s.n_batters})`;
             sel.appendChild(o);
         });
+        const def = defaultWrcSeason(seasons);
+        if (def !== null) sel.value = String(def);
         sel.addEventListener('change', () => render(parseInt(sel.value, 10)));
         render(parseInt(sel.value, 10));
     }

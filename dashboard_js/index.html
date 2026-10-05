@@ -78,7 +78,7 @@
                 </div>
             </div>
             <div id="games-grid" class="games-grid"></div>
-            <p class="schedule-note" id="schedule-note">데이터 출처: Naver 스포츠 (KBO 정규시즌) · 30초 캐시</p>
+            <p class="schedule-note" id="schedule-note">데이터 출처: Naver 스포츠 (KBO 시범경기·정규시즌·포스트시즌) · 30초 캐시</p>
         </section>
 
         <!-- 팀 순위 + 개인 순위 (2단) -->
@@ -348,18 +348,20 @@
             </div>`;
         }
 
-        // 일정 모드(1군/퓨처스)별 엔드포인트·출처문구·빈메시지·렌더러
+        // 일정 모드(1군/퓨처스)별 엔드포인트·출처문구·빈메시지(그날 empty, 앞으로 7일 idle)·렌더러
         const SCHED_META = {
             main: {
                 ep: 'schedule',
-                note: '데이터 출처: Naver 스포츠 (KBO 정규시즌) · 30초 캐시',
+                note: '데이터 출처: Naver 스포츠 (KBO 시범경기·정규시즌·포스트시즌) · 30초 캐시',
                 empty: '이 날짜에 KBO 경기가 없습니다.',
+                idle: '앞으로 7일 안에 KBO 경기가 없습니다(비시즌일 수 있습니다).',
                 render: renderGame,
             },
             futures: {
                 ep: 'schedule/futures',
                 note: '데이터 출처: KBO 공식 (퓨처스리그 실시간) · 30초 캐시',
                 empty: '이 날짜에 퓨처스 경기가 없습니다.',
+                idle: '앞으로 7일 안에 퓨처스 경기가 없습니다(비시즌일 수 있습니다).',
                 render: renderFuturesGame,
             },
         };
@@ -370,10 +372,12 @@
             return await res.json();
         }
 
-        // autoSkipDays: 초기 로드/오늘 버튼 시 경기 있는 날까지 앞으로 최대 N일 자동 전진
+        // autoSkipDays: 초기 로드/오늘 버튼 시 경기 있는 날까지 앞으로 최대 N일 자동 전진.
+        // 그 안에 경기가 하나도 없으면(비시즌 등) 날짜를 처음 날(오늘)에 두고 meta.idle 을 보입니다.
         async function loadSchedule(autoSkipDays = 0) {
             const grid = document.getElementById('games-grid');
             grid.innerHTML = '<div class="schedule-msg">불러오는 중…</div>';
+            const start = new Date(curDate);
             let d = new Date(curDate);
             let data = null;
             try {
@@ -388,11 +392,12 @@
                 grid.innerHTML = '<div class="schedule-msg error">일정을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.</div>';
                 return;
             }
-            curDate = d;
-            document.getElementById('date-label').textContent = fmtLabel(curDate);
             const meta = SCHED_META[scheduleMode];
-            if (!data || !data.games || data.games.length === 0) {
-                grid.innerHTML = `<div class="schedule-msg">${meta.empty}</div>`;
+            const none = !data || !data.games || data.games.length === 0;
+            curDate = none && autoSkipDays > 0 ? start : d;
+            document.getElementById('date-label').textContent = fmtLabel(curDate);
+            if (none) {
+                grid.innerHTML = `<div class="schedule-msg">${autoSkipDays > 0 ? meta.idle : meta.empty}</div>`;
                 return;
             }
             grid.innerHTML = data.games.map(meta.render).join('');
