@@ -1,7 +1,7 @@
 import { json, dbError } from '../lib/respond.js';
 import { regularSeasonSql } from '../lib/gametype.js';
 import { queryInt } from '../lib/router.js';
-import { hasPbpSeason, seasonDateRange } from '../lib/pbpseasons.js';
+import { hasPbpSeason, pbpLastSeason, seasonDateRange } from '../lib/pbpseasons.js';
 import { TR_HIT } from './teamrange.js';
 
 /**
@@ -51,6 +51,25 @@ export async function currentSeason(db) {
     + ' UNION ALL SELECT MAX(season) FROM kbo_official_pitcher_stats) AS cs',
   ).first();
   return row && row.s != null ? Number(row.s) : null;
+}
+
+/**
+ * 구종(arsenal)·구사율(usage)에서 season 을 안 줬을 때 볼 시즌입니다.
+ *
+ * 공식 기록이 있는 가장 최근 시즌(currentSeason)입니다. 예전에는 2026 으로
+ * 박혀 있어 2027 개막 뒤에도 2026 을 보였습니다(2026-10-05 검토). 그렇다고
+ * 한국 날짜의 올해로 두면 비시즌(2027년 1~3월)에 아직 공이 없는 2027 을
+ * 골라 빈 화면이 됩니다. 기록이 있는 시즌을 따르면 개막 뒤 첫 적재에서
+ * 저절로 2027 로 넘어갑니다. 공식 기록과 play_by_play 는 같은 daily
+ * 작업에서 몇 분 차이로 들어옵니다.
+ *
+ * 질의는 season 이 없을 때만 한 번 더 나갑니다(인덱스로 바로 끝나는
+ * MAX 입니다). 선수 화면은 보통 season 을 줍니다. 표가 비어 있으면 한국
+ * 날짜의 올해로 둡니다. today 는 시험에서 날짜를 넣을 때만 씁니다.
+ */
+export async function defaultPitchSeason(db, today) {
+  const cur = await currentSeason(db);
+  return cur ?? pbpLastSeason(today);
 }
 
 /**
@@ -382,7 +401,7 @@ async function arsenalRowsMysql(db, binds) {
  * play_by_play 를 투수 하나로 걸러 읽습니다. idx_pbp_pitcher 를 타므로
  * 전체 스캔이 아닙니다. 실측에서 한 투수당 2,209행이었습니다.
  */
-export async function playerArsenal(request, env, ctx, params) {
+export async function playerArsenal(request, env, ctx, params, today) {
   const playerId = params.id;
   try {
     const db = env.MYSQL;
@@ -391,10 +410,12 @@ export async function playerArsenal(request, env, ctx, params) {
       // 원본은 404 가 아니라 200 + error 를 돌려줍니다.
       return json({ error: 'Player not found' });
     }
-    const season = queryInt(new URL(request.url), 'season', 2026);
+    // season 이 없으면 기록이 있는 가장 최근 시즌입니다(defaultPitchSeason).
+    const season = queryInt(new URL(request.url), 'season', null)
+      ?? await defaultPitchSeason(db, today);
 
     // play_by_play 가 없는 시즌이면 빈 결과입니다(lib/pbpseasons.js).
-    const range = hasPbpSeason(season) ? seasonDateRange(season) : null;
+    const range = hasPbpSeason(season, today) ? seasonDateRange(season) : null;
     if (!range) {
       return json({ player_id: playerId, arsenal: [], count: 0 });
     }
@@ -501,16 +522,18 @@ function round1(x) {
 }
 
 /** 원본 api/main.py:250-335 입니다. 투수의 구종 구사율입니다. */
-export async function playerUsage(request, env, ctx, params) {
+export async function playerUsage(request, env, ctx, params, today) {
   const playerId = params.id;
   try {
     const db = env.MYSQL;
     const player = await robustPlayerLookup(db, playerId);
     if (!player) return json({ error: 'Player not found' });
 
-    const season = queryInt(new URL(request.url), 'season', 2026);
+    // season 이 없으면 기록이 있는 가장 최근 시즌입니다(defaultPitchSeason).
+    const season = queryInt(new URL(request.url), 'season', null)
+      ?? await defaultPitchSeason(db, today);
 
-    const range = hasPbpSeason(season) ? seasonDateRange(season) : null;
+    const range = hasPbpSeason(season, today) ? seasonDateRange(season) : null;
     if (!range) {
       return json({ player_id: playerId, usage: [] });
     }

@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 
 import { wrcSeasons } from '../src/routes/wrc.js';
+import { playerArsenal, playerUsage, defaultPitchSeason } from '../src/routes/players.js';
 
 const TODAY = '2026-10-05';
 const OFF = '2027-02-15';
@@ -71,4 +72,90 @@ test('wrc/seasons: 2027 개막 뒤에는 2027 줄이 나옵니다', async () => 
   const y27 = body.find((r) => r.season === 2027);
   assert.equal(y27.n_batters, 4);
   assert.equal(y27.min_pa, 10);
+});
+
+/**
+ * 구종·구사율 라우트용 가짜 DB 입니다. 공식 기록의 마지막 시즌을 maxSeason 으로
+ * 답하고, play_by_play 질의에 넘어온 값(선수, from, to)을 모아 둡니다.
+ */
+function pitchDb(maxSeason) {
+  const seen = [];
+  const pbpBinds = [];
+  return {
+    seen,
+    pbpBinds,
+    prepare(sql) {
+      let params = [];
+      return {
+        bind(...p) { params = p; return this; },
+        async first() {
+          seen.push(sql);
+          if (sql.includes('FROM players')) return { player_id: '65933', player_name: '투수' };
+          if (sql.includes('MAX(s) AS s')) return { s: maxSeason };
+          if (sql.includes('FROM play_by_play')) {
+            pbpBinds.push(params);
+            return { n: 0, j: null };
+          }
+          throw new Error(`예상 밖 질의: ${sql}`);
+        },
+        async all() {
+          seen.push(sql);
+          if (sql.includes('FROM play_by_play')) {
+            pbpBinds.push(params);
+            return { results: [] };
+          }
+          throw new Error(`예상 밖 질의: ${sql}`);
+        },
+      };
+    },
+  };
+}
+
+const ARSENAL = (q = '') => new Request(`https://x/players/65933/arsenal${q}`);
+const USAGE = (q = '') => new Request(`https://x/players/65933/usage${q}`);
+const P = { id: '65933' };
+
+for (const [name, route, req] of [['arsenal', playerArsenal, ARSENAL], ['usage', playerUsage, USAGE]]) {
+  test(`${name}: season 이 없으면 기록이 있는 최근 시즌입니다(날짜별)`, async () => {
+    const cases = [
+      // [오늘, 공식 기록의 마지막 시즌, 기대 시즌]
+      [TODAY, 2026, 2026],
+      [OFF, 2026, 2026], // 비시즌: 2027 은 아직 비어 있어 2026 을 봅니다.
+      [IN, 2027, 2027], // 개막 뒤 첫 적재부터 2027 입니다.
+    ];
+    for (const [today, max, want] of cases) {
+      const db = pitchDb(max);
+      const res = await route(req(), { MYSQL: db }, {}, P, today);
+      assert.equal(res.status, 200, today);
+      assert.deepEqual(db.pbpBinds, [['65933', want * 10000, (want + 1) * 10000]], today);
+    }
+  });
+
+  test(`${name}: 오늘은 season 없이 불러도 ?season=2026 과 같은 응답입니다`, async () => {
+    const a = await (await route(req(), { MYSQL: pitchDb(2026) }, {}, P, TODAY)).text();
+    const b = await (await route(req('?season=2026'), { MYSQL: pitchDb(2026) }, {}, P, TODAY)).text();
+    assert.equal(a, b);
+  });
+
+  test(`${name}: season 을 주면 마지막 시즌을 묻지 않습니다`, async () => {
+    const db = pitchDb(2026);
+    await route(req('?season=2025'), { MYSQL: db }, {}, P, TODAY);
+    assert.ok(!db.seen.some((s) => s.includes('MAX(s) AS s')));
+    assert.deepEqual(db.pbpBinds, [['65933', 20250000, 20260000]]);
+  });
+
+  test(`${name}: 2027 은 오늘은 없는 시즌이고 개막 뒤에는 있는 시즌입니다`, async () => {
+    const before = pitchDb(2026);
+    await route(req('?season=2027'), { MYSQL: before }, {}, P, TODAY);
+    assert.deepEqual(before.pbpBinds, []);
+    const after = pitchDb(2027);
+    await route(req('?season=2027'), { MYSQL: after }, {}, P, IN);
+    assert.deepEqual(after.pbpBinds, [['65933', 20270000, 20280000]]);
+  });
+}
+
+test('구종 기본 시즌: 공식 기록이 비었으면 한국 날짜의 올해입니다', async () => {
+  assert.equal(await defaultPitchSeason(pitchDb(null), TODAY), 2026);
+  assert.equal(await defaultPitchSeason(pitchDb(null), OFF), 2027);
+  assert.equal(await defaultPitchSeason(pitchDb(2026), OFF), 2026);
 });
