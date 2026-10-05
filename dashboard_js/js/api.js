@@ -189,6 +189,18 @@ class API {
         }
     }
 
+    /** KBO 리그 Plate Discipline 시즌 합계(2016~, 매일 미리 계산). 없거나 실패하면 빈 seasons. */
+    static async getPlateDisciplineLeague() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/stats/plate_discipline`);
+            if (!response.ok) return { seasons: [] };
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching league plate discipline:', error);
+            return { seasons: [] };
+        }
+    }
+
     /**
      * Get available seasons (시즌 통계가 존재하는 시즌 목록)
      */

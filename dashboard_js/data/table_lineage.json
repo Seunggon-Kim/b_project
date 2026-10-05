@@ -313,6 +313,10 @@
    "to": "page:pages/player-analytics.html"
   },
   {
+   "from": "table:plate_discipline_league",
+   "to": "page:pages/player-analytics.html"
+  },
+  {
    "from": "table:play_by_play",
    "to": "page:index.html"
   },
@@ -837,6 +841,7 @@
     "/players/search",
     "/stats/movement_avg",
     "/stats/pitchers",
+    "/stats/plate_discipline",
     "/stats/seasons"
    ],
    "title": "선수 분석 - Bstats"
@@ -1330,7 +1335,9 @@
   {
    "file": "src/routes/plateDiscipline.js",
    "live": false,
-   "pages": [],
+   "pages": [
+    "pages/player-analytics.html"
+   ],
    "path": "/stats/plate_discipline",
    "reads_all_tables": false,
    "tables": [
@@ -2333,7 +2340,9 @@
    "kind": "derived",
    "manual_note": null,
    "name": "plate_discipline_league",
-   "pages": [],
+   "pages": [
+    "pages/player-analytics.html"
+   ],
    "routes": [
     "/stats/plate_discipline"
    ],

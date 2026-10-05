@@ -208,7 +208,7 @@
                     <div class="section-header-flex">
                         <h3 class="card-title mb-0">Plate Discipline</h3>
                     </div>
-                    <p class="pa-ars-note">모든 공 기준입니다(위 타자 손·카운트 고르기와 상관없음). 존은 투구 분포와 같은 20인치 존이고, Meatball 은 존 한가운데(Gameday Zone 5)입니다. 2016 은 공 위치 추적이 절반쯤이라 뺍니다. 맨 아래 통산은 2017~ 합계입니다.</p>
+                    <p class="pa-ars-note">모든 공 기준입니다(위 타자 손·카운트 고르기와 상관없음). 존은 투구 분포와 같은 20인치 존이고, Meatball 은 존 한가운데(Gameday Zone 5)입니다. 2016 은 공 위치 추적이 절반쯤이라 뺍니다. 맨 아래 통산은 2017~ 합계이고, KBO 는 같은 기간 KBO 모든 투수의 합계입니다.</p>
                     <div id="pa-pd-table" class="pa-tr-table"></div>
                 </div>
             </div>
@@ -1150,6 +1150,8 @@
         let trAll = false;          // 구종별 시즌 표: 모든 시즌을 펼쳤는지
         let trWeightsNow = null;    // 지금 선수 표에 쓰는 wOBA 가중치
         let rvAll = false;          // 구종별 Run Value 표: 모든 시즌을 펼쳤는지
+        let pdLeagueP = null;       // KBO 리그 Plate Discipline 합계, 페이지에서 한 번만 받음
+        let pdLeague = null;
         let trWeightsP = null;      // wOBA 시즌 가중치(kbo_woba_weights_by_season), 페이지에서 한 번만 받음
 
         /** wOBA 가중치 { 시즌: 행 } 입니다. 실패하면 null(표가 wOBA 열을 숨김). */
@@ -1243,7 +1245,14 @@
             const has = !!(trData && trData.rows && trData.rows.some(r => r.season >= 2017 && r.pd_n > 0));
             sec.classList.toggle('hidden', !has);
             document.getElementById('pa-pd-table').innerHTML = has
-                ? window.PlayerAnalytics.trend.pdTableHtml(trData) : '';
+                ? window.PlayerAnalytics.trend.pdTableHtml(trData, pdLeague) : '';
+            // KBO 리그 줄: 처음 한 번 받고, 받으면 표를 다시 그립니다(못 받으면 그 줄만 없음).
+            if (has && !pdLeagueP) {
+                pdLeagueP = API.getPlateDisciplineLeague().then(res => {
+                    pdLeague = res && res.seasons && res.seasons.length ? res : null;
+                    if (pdLeague) renderPdTable();
+                });
+            }
         }
 
         /** 구종별 Run Value 표입니다. 위 고르기와 상관없이 모든 공 기준이고, 구종 가치가 없는 선수면 숨깁니다. */
