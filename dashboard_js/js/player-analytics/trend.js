@@ -12,7 +12,9 @@
   const SUMS = ['n', 'pa', 'ab', 'h', 'b1', 'b2', 'b3', 'hr', 'bbe', 'bb', 'so',
     'spd_sum', 'spd_n', 'pfx_x_sum', 'pfx_z_sum', 'pfx_n', 'px_sum', 'pz_sum', 'loc_n',
     // 선구(Plate Discipline) 개수입니다. 고의 볼·피치클락 위반은 API 가 뺍니다.
-    'pd_n', 'sw', 'wh', 'ct', 'cs', 'z_n', 'o_n', 'z_sw', 'o_sw', 'z_ct', 'o_ct', 'edge_n', 'fp_n', 'fp_str'];
+    'pd_n', 'sw', 'wh', 'ct', 'cs', 'z_n', 'o_n', 'z_sw', 'o_sw', 'z_ct', 'o_ct', 'edge_n', 'fp_n', 'fp_str',
+    // 구종별 시즌 표(wOBA)용입니다. API 가 아직 안 주면 0 입니다.
+    'hbp', 'sf'];
 
   function num(v) {
     if (v === null || v === undefined || v === '') return null;
@@ -111,7 +113,7 @@
   function metricOk(key, cnt) { return !(key === 'rv' && cnt); }
 
   function emptySums() {
-    const s = { rv: 0, rv_n: 0 };
+    const s = { rv: 0, rv_n: 0, n_r: 0, n_l: 0, ts_n: 0, ts_so: 0 };
     SUMS.forEach(function (k) { s[k] = 0; });
     return s;
   }
@@ -134,7 +136,11 @@
       const S = seasonOf(y), t = nameOf(r.pitch_type);
       const s = S.types[t] || (S.types[t] = emptySums());
       SUMS.forEach(function (k) { s[k] += num(r[k]) || 0; });
-      S.total += num(r.n) || 0;
+      const rn = num(r.n) || 0;
+      S.total += rn;
+      if (r.bat_side === 'R') s.n_r += rn; else if (r.bat_side === 'L') s.n_l += rn;
+      // 2스트라이크(bc 끝이 -2) 공과 그 삼진: PutAway% 입니다(삼진은 늘 2스트라이크에서 나옴).
+      if (r.bc && /-2$/.test(r.bc)) { s.ts_n += rn; s.ts_so += num(r.so) || 0; }
     });
     if (!cnt) {
       ((data && data.values) || []).forEach(function (r) {
@@ -267,6 +273,90 @@
     }).join('') + '</div>';
   }
 
+  // ---- 구종별 시즌 표(Savant detailedPitches 참고, evan) ----
+  // 타구 속도 기반(xBA·xSLG·xwOBA·EV·LA)·회전수·익스텐션은 데이터에 없어 두지 않습니다(evan).
+  // [머리글, 강조할 지표 key, 설명, 값(합계, 그 시즌 전체 공, 가중치) → 글자]
+  function i0(v) { return comma(Math.round(v)); }
+  function p1(a, b) { return b > 0 ? (100 * a / b).toFixed(1) : '-'; }
+  function r3(a, b) { if (!(b > 0)) return '-'; const t = (a / b).toFixed(3); return t.charAt(0) === '0' ? t.slice(1) : t; }
+  function woba(s, w) {
+    const den = s.ab + s.bb + s.sf + s.hbp;
+    if (!w || !(den > 0)) return '-';
+    const v = (num(w.fg_wBB) * s.bb + num(w.fg_wHBP) * s.hbp + num(w.fg_w1B) * s.b1
+      + num(w.fg_w2B) * s.b2 + num(w.fg_w3B) * s.b3 + num(w.fg_wHR) * s.hr) / den;
+    return Number.isFinite(v) ? r3(v, 1) : '-';
+  }
+  const TCOLS = [
+    ['#', 'n', '#\n이 구종으로 던진 공 수입니다.', function (s) { return i0(s.n); }],
+    ['# RHB', null, '# RHB\n우타자에게 던진 공 수입니다.', function (s) { return i0(s.n_r); }],
+    ['# LHB', null, '# LHB\n좌타자에게 던진 공 수입니다.', function (s) { return i0(s.n_l); }],
+    ['%', 'pct', '%\n그 시즌 전체 공 가운데 이 구종의 비율입니다.', function (s, t) { return p1(s.n, t); }],
+    ['km/h', 'spd', 'km/h\n평균 구속입니다.', function (s) { return s.spd_n > 0 ? (s.spd_sum / s.spd_n).toFixed(1) : '-'; }],
+    ['PA', null, 'PA\n이 구종으로 끝난 타석 수입니다.', function (s) { return i0(s.pa); }],
+    ['AB', null, 'AB\n타수입니다(볼넷·몸에 맞는 볼·희생타 제외).', function (s) { return i0(s.ab); }],
+    ['H', 'h', 'H\n안타입니다.', function (s) { return i0(s.h); }],
+    ['1B', 'b1', '1B\n1루타입니다(내야안타·번트 안타 포함).', function (s) { return i0(s.b1); }],
+    ['2B', 'b2', '2B\n2루타입니다.', function (s) { return i0(s.b2); }],
+    ['3B', 'b3', '3B\n3루타입니다.', function (s) { return i0(s.b3); }],
+    ['HR', 'hr', 'HR\n홈런입니다.', function (s) { return i0(s.hr); }],
+    ['SO', 'k_pct', 'SO\n삼진입니다(낫아웃 출루 포함).', function (s) { return i0(s.so); }],
+    ['BBE', 'bbe', 'BBE\n타구 수입니다(삼진·볼넷·몸에 맞는 볼 제외).', function (s) { return i0(s.bbe); }],
+    ['BA', 'ba', 'BA\n타율입니다.\n계산식: H ÷ AB', function (s) { return r3(s.h, s.ab); }],
+    ['SLG', 'slg', 'SLG\n장타율입니다.\n계산식: (1B + 2×2B + 3×3B + 4×HR) ÷ AB', function (s) { return r3(s.b1 + 2 * s.b2 + 3 * s.b3 + 4 * s.hr, s.ab); }],
+    ['wOBA', null, 'wOBA\n가중 출루율입니다. 시즌 가중치는 선수 통계와 같습니다.\n계산식: (wBB·BB + wHBP·HBP + w1B·1B + w2B·2B + w3B·3B + wHR·HR) ÷ (AB + BB + SF + HBP)', function (s, t, w) { return woba(s, w); }],
+    ['Whiff%', 'whiff', 'Whiff%\n헛스윙 ÷ 스윙 × 100 입니다.', function (s) { return p1(s.wh, s.sw); }],
+    ['PutAway%', null, 'PutAway%\n2스트라이크에서 던진 공 가운데 삼진으로 끝난 비율입니다(Savant).\n계산식: 2스트라이크 삼진 ÷ 2스트라이크 공 × 100', function (s) { return p1(s.ts_so, s.ts_n); }],
+  ];
+  const TB_SEASONS = 3;
+
+  /**
+   * 구종별 시즌 표입니다. 위 고르기(타자 손 side·카운트 cnt)와 연동하고, 고른 지표(metricKey) 열을 칠합니다.
+   * 시즌은 최근 순, 구종은 그 시즌에 많이 던진 순입니다. showAll 이 아니면 최근 3시즌만.
+   * weights 는 { 시즌: kbo_woba_weights_by_season 행 } 입니다. 응답에 hbp 가 없거나 가중치가 없으면 wOBA 열을,
+   * bc(카운트별)가 없으면 PutAway% 열을 숨깁니다(데이터에 없는 값은 두지 않음).
+   */
+  function tableHtml(data, side, cnt, metricKey, showAll, weights) {
+    const rows = (data && data.rows) || [];
+    const hasBc = rows.some(function (r) { return r.bc; });
+    const hasHbp = rows.some(function (r) { return r.hbp !== undefined && r.hbp !== null; });
+    const hasW = !!weights && Object.keys(weights).length > 0;
+    const cols = TCOLS.filter(function (c) {
+      if (c[0] === 'PutAway%') return hasBc;
+      if (c[0] === 'wOBA') return hasHbp && hasW;
+      return true;
+    });
+    const agg = aggregate(data, side, cnt);
+    const seasons = agg.seasons.slice().sort(function (a, b) { return b - a; });
+    const shown = showAll ? seasons : seasons.slice(0, TB_SEASONS);
+    const th = function (label, tip, key) {
+      return '<th' + (key && key === metricKey ? ' class="pa-tb-on"' : '') + ' data-tip="' + esc(tip) + '">' + esc(label) + '</th>';
+    };
+    let h = '<div class="pa-tb-wrap"><table class="pa-tb"><thead><tr>'
+      + '<th data-tip="시즌\n정규시즌입니다.">시즌</th><th data-tip="구종\n화면 구종 이름입니다(직구 → 포심 패스트볼, 투심 → 싱커).">구종</th>';
+    cols.forEach(function (c) { h += th(c[0], c[2], c[1]); });
+    h += '</tr></thead><tbody>';
+    shown.forEach(function (y) {
+      const S = agg.bySeason[y];
+      const types = Object.keys(S.types).filter(function (t) { return S.types[t].n > 0; })
+        .sort(function (a, b) { return S.types[b].n - S.types[a].n || (a < b ? -1 : 1); });
+      types.forEach(function (t, i) {
+        const s = S.types[t], w = weights ? weights[y] : null;
+        h += '<tr class="pa-tb-row' + (i === 0 ? ' pa-tb-first' : '') + '"><td>' + y + '</td>'
+          + '<td class="pa-tb-type" style="--c:' + colorOf(t) + '">' + esc(t) + '</td>';
+        cols.forEach(function (c) {
+          h += '<td' + (c[1] && c[1] === metricKey ? ' class="pa-tb-on"' : '') + '>' + esc(c[3](s, S.total, w)) + '</td>';
+        });
+        h += '</tr>';
+      });
+    });
+    h += '</tbody></table></div>';
+    if (seasons.length > TB_SEASONS) {
+      h += '<button type="button" class="pa-tb-more" data-all="' + (showAll ? '1' : '0') + '">'
+        + (showAll ? '최근 3시즌만' : '시즌 더 보기 (' + (seasons.length - TB_SEASONS) + ')') + '</button>';
+    }
+    return h;
+  }
+
   /** 지표 고르기 칸의 option 글자입니다(묶음은 optgroup). */
   function metricOptionsHtml() {
     let html = '', group = null;
@@ -282,7 +372,7 @@
     return html + (group ? '</optgroup>' : '');
   }
 
-  const api = { METRICS, metric, metricOk, aggregate, series, fmt, chartSvg, legendHtml, metricOptionsHtml, countOptionsHtml };
+  const api = { METRICS, metric, metricOk, aggregate, series, fmt, chartSvg, legendHtml, metricOptionsHtml, countOptionsHtml, tableHtml };
   PA.trend = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

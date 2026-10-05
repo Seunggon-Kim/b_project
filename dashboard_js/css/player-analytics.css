@@ -209,3 +209,22 @@
 .pa-tr-key i { width: 0.7rem; height: 0.7rem; border-radius: 999px; display: inline-block; }
 #pa-trend-section .section-header-flex { flex-wrap: wrap; gap: 0.6rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color); }  /* Arsenal 과 같은 제목 줄 */
 #pa-trend-section .card-title { white-space: nowrap; }
+
+/* 구종별 시즌 표(Savant detailedPitches 참고): 가로로 넘치면 표만 밀림 */
+.pa-tr-table { padding: 0 0.5rem 0.75rem; }
+.pa-tb-wrap { overflow-x: auto; border: 1px solid var(--border-color); border-radius: 8px; margin-top: 0.75rem; }
+.pa-tb { width: 100%; border-collapse: collapse; font-size: 0.8rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pa-tb th, .pa-tb td { padding: 0.35rem 0.55rem; text-align: right; border-bottom: 1px solid var(--border-color); }
+.pa-tb th { position: sticky; top: 0; background: var(--bg-tertiary); color: var(--text-secondary); font-weight: 600; cursor: help; }
+.pa-tb th:nth-child(-n+2), .pa-tb td:nth-child(-n+2) { text-align: left; }
+.pa-tb tr.pa-tb-first td { border-top: 2px solid var(--border-color); }
+.pa-tb tbody tr:last-child td { border-bottom: 0; }
+.pa-tb-type::before { content: ''; display: inline-block; width: 0.6rem; height: 0.6rem; margin-right: 0.35rem; border-radius: 999px; background: var(--c); vertical-align: middle; }
+.pa-tb .pa-tb-on { background: rgba(37, 99, 235, 0.08); font-weight: 700; color: var(--text-primary); }
+.pa-tb th.pa-tb-on { background: rgba(37, 99, 235, 0.16); }
+.pa-tb-more { margin-top: 0.5rem; padding: 0.3rem 0.7rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-card); color: var(--text-secondary); font: inherit; font-size: 0.8rem; cursor: pointer; }
+.pa-tb-more:hover { color: var(--text-primary); }
+/* 가로로 밀어도 시즌·구종은 왼쪽에 고정(Savant 처럼) */
+.pa-tb th:nth-child(1), .pa-tb td:nth-child(1) { position: sticky; left: 0; z-index: 1; box-sizing: border-box; width: 3.6rem; min-width: 3.6rem; background: var(--bg-secondary); }
+.pa-tb th:nth-child(2), .pa-tb td:nth-child(2) { position: sticky; left: 3.6rem; z-index: 1; background: var(--bg-secondary); box-shadow: 1px 0 0 var(--border-color); }
+.pa-tb th:nth-child(1), .pa-tb th:nth-child(2) { z-index: 2; background: var(--bg-tertiary); }

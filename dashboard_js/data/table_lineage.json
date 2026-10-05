@@ -170,6 +170,10 @@
   },
   {
    "from": "table:games",
+   "to": "page:pages/player-analytics.html"
+  },
+  {
+   "from": "table:games",
    "to": "page:pages/player-stats.html"
   },
   {
@@ -802,6 +806,7 @@
    "explorer": false,
    "path": "pages/player-analytics.html",
    "routes": [
+    "/db/table/:name",
     "/futures/player/:id",
     "/futures/search",
     "/players/:id",
@@ -877,6 +882,7 @@
    "pages": [
     "pages/database-explorer.html",
     "pages/factor-stats.html",
+    "pages/player-analytics.html",
     "pages/player-stats.html",
     "pages/team-stats.html"
    ],
@@ -2017,6 +2023,7 @@
    "pages": [
     "pages/article.html",
     "pages/factor-stats.html",
+    "pages/player-analytics.html",
     "pages/player-stats.html",
     "pages/team-stats.html"
    ],
