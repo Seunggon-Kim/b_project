@@ -557,3 +557,11 @@ CREATE TABLE `pitch_run_value` (
   `rv` DOUBLE NOT NULL,
   PRIMARY KEY (`season`, `pitcher_ID`, `pitch_type`, `stands`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CREATE TABLE `pitch_run_value_zone` (
+  `season` SMALLINT NOT NULL,
+  `pitcher_ID` INT NOT NULL,
+  `zone` VARCHAR(8) NOT NULL,
+  `n` INT NOT NULL,
+  `rv` DOUBLE NOT NULL,
+  PRIMARY KEY (`season`, `pitcher_ID`, `zone`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

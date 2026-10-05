@@ -185,6 +185,24 @@ export const PITCH_TREND_VALUES_SQL = `
   ORDER BY season, pitch_type, stands
 `;
 
+// 공격 존별 투수 가치입니다(2026-10-06). pitch_run_value.py 가 매일 같은 공
+// 가치로 계산해 둡니다. 위치 없는 공은 어느 존에도 없어 네 존 합이 values(All)와
+// 조금 다를 수 있습니다.
+export const PITCH_TREND_ZONES_SQL = `
+  SELECT season, zone, n, rv
+  FROM pitch_run_value_zone
+  WHERE pitcher_ID = ?
+`;
+
+const ZONE_ORDER = { heart: 0, shadow: 1, chase: 2, waste: 3 };
+
+/** 존 행을 시즌, heart·shadow·chase·waste 순으로, rv 는 소수 첫째 자리로 냅니다. */
+export function shapeTrendZones(rows) {
+  return (rows || [])
+    .map((r) => ({ season: Number(r.season), zone: r.zone, n: Number(r.n), rv: round(r.rv, 1) }))
+    .sort((a, b) => (a.season - b.season) || ((ZONE_ORDER[a.zone] ?? 9) - (ZONE_ORDER[b.zone] ?? 9)));
+}
+
 function round(v, d) {
   const k = 10 ** d;
   const r = Math.round(Number(v) * k) / k;
@@ -276,10 +294,12 @@ export async function pitchTrend(request, env, ctx, params) {
       );
     }
     const values = await db.prepare(PITCH_TREND_VALUES_SQL).bind(pid).all();
+    const zones = await db.prepare(PITCH_TREND_ZONES_SQL).bind(pid).all();
     const res = json({
       player_id: params.id,
       rows,
       values: shapeTrendValues(values.results),
+      zones: shapeTrendZones(zones.results),
     });
     // 올 시즌 공이 매일 늘어 하루 캐시입니다(movement_avg 의 올해 규칙).
     res.headers.set('cache-control', movementCacheControl(last));

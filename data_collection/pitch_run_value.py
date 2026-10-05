@@ -26,7 +26,8 @@ NON_REGULAR = ("3333", "4444", "5555", "7777", "9999")
 KST = datetime.timezone(datetime.timedelta(hours=9))
 COLS = ("gameID", "pbp_id", "inning", "inning_topbot", "outs", "balls", "strikes",
         "on_1b", "on_2b", "on_3b", "pitch_result", "runs_scored",
-        "pitcher_ID", "pitch_type", "stands", "throws")
+        "pitcher_ID", "pitch_type", "stands", "throws",
+        "px", "pz", "sz_top", "sz_bot")
 
 
 def seasons_from_args(args, today):
@@ -49,7 +50,8 @@ def fetch_sql():
             "on_1b_id IS NOT NULL AS on_1b, "
             "on_2b_id IS NOT NULL AS on_2b, "
             "on_3b_id IS NOT NULL AS on_3b, "
-            "pitch_result, runs_scored, pitcher_ID, pitch_type, stands, throws "
+            "pitch_result, runs_scored, pitcher_ID, pitch_type, stands, throws, "
+            "px, pz, sz_top, sz_bot "
             "FROM play_by_play WHERE game_date >= %s AND game_date < %s AND " + reg +
             " ORDER BY gameID, pbp_id")
 
@@ -62,16 +64,26 @@ def value_rows(season, vals):
     return [(season, k[0], k[1], k[2], v[0], v[1]) for k, v in sorted(vals.items(), key=lambda kv: (kv[0][0], kv[0][1], kv[0][2]))]
 
 
-def write_season(con, season, re_list, value_list):
+def zone_rows(season, zvals):
+    order = {z: i for i, z in enumerate(pv.ZONES)}
+    return [(season, k[0], k[1], v[0], v[1])
+            for k, v in sorted(zvals.items(), key=lambda kv: (kv[0][0], order[kv[0][1]]))]
+
+
+def write_season(con, season, re_list, value_list, zone_list=()):
     cur = con.cursor()
     try:
         con.begin()
         cur.execute("DELETE FROM run_expectancy WHERE season = %s", (season,))
         cur.execute("DELETE FROM pitch_run_value WHERE season = %s", (season,))
+        cur.execute("DELETE FROM pitch_run_value_zone WHERE season = %s", (season,))
         cur.executemany("INSERT INTO run_expectancy (season, bases, outs, balls, strikes, re, n) "
                         "VALUES (%s, %s, %s, %s, %s, %s, %s)", re_list)
         cur.executemany("INSERT INTO pitch_run_value (season, pitcher_ID, pitch_type, stands, n, rv) "
                         "VALUES (%s, %s, %s, %s, %s, %s)", value_list)
+        # 공격 존(heart·shadow·chase·waste)별 투수 가치입니다(2026-10-06).
+        cur.executemany("INSERT INTO pitch_run_value_zone (season, pitcher_ID, zone, n, rv) "
+                        "VALUES (%s, %s, %s, %s, %s)", zone_list)
         con.commit()
     except Exception:
         con.rollback()
@@ -85,7 +97,8 @@ def compute(con, season):
     halves = pv.split_halves(rows)
     re, n = pv.expectancy_table(halves)
     vals = pv.pitch_values(halves, re)
-    return rows, re, n, vals
+    zvals = pv.zone_values(halves, re)
+    return rows, re, n, vals, zvals
 
 
 def main(argv=None):
@@ -103,15 +116,17 @@ def main(argv=None):
     try:
         for season in seasons:
             t = time.time()
-            rows, re, n, vals = compute(con, season)
+            rows, re, n, vals, zvals = compute(con, season)
             if not rows:
                 print("%d: 정규시즌 PBP 가 없어 건너뜁니다" % season)
                 continue
             total = sum(v[1] for v in vals.values())
-            print("%d: PBP %d행, 상태 %d칸(최소 %d공), 가치 %d줄, 리그 합 %+.1f점, %.1f초"
-                  % (season, len(rows), len(re), min(n.values()), len(vals), total, time.time() - t))
+            print("%d: PBP %d행, 상태 %d칸(최소 %d공), 가치 %d줄, 존 %d줄, 리그 합 %+.1f점, %.1f초"
+                  % (season, len(rows), len(re), min(n.values()), len(vals), len(zvals), total,
+                     time.time() - t))
             if not args.dry_run:
-                write_season(con, season, re_rows(season, re, n), value_rows(season, vals))
+                write_season(con, season, re_rows(season, re, n), value_rows(season, vals),
+                             zone_rows(season, zvals))
                 print("%d: 썼습니다" % season)
     finally:
         con.close()

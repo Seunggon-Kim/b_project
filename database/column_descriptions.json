@@ -33,7 +33,8 @@
         "kbo_run_values_by_season",
         "re24_matrix_by_season",
         "run_expectancy",
-        "pitch_run_value"
+        "pitch_run_value",
+        "pitch_run_value_zone"
       ]
     },
     {
@@ -710,6 +711,18 @@
         "stands": "타자 타석(L 좌타, R 우타, 스위치 타자는 투수 반대쪽)",
         "n": "공 수",
         "rv": "구종 가치 합(점, +면 실점을 막음)"
+      }
+    },
+    "pitch_run_value_zone": {
+      "category": "세이버메트릭스 분석",
+      "table_desc": "투수가 던진 공을 위치에 따라 Heart(한가운데)·Shadow(존 가장자리)·Chase(존 바로 밖)·Waste(크게 벗어남) 넷으로 나눠, 공마다 실점을 얼마나 막았는지(구종 가치와 같은 값)를 더한 표로, 2016년부터 정규시즌만 셉니다.",
+      "update_freq": "매일 03:33 (daily, 올 시즌)",
+      "columns": {
+        "season": "시즌 연도",
+        "pitcher_ID": "투수 고유 ID",
+        "zone": "공격 존(heart·shadow·chase·waste), 공 위치가 없으면 넣지 않음",
+        "n": "공 수",
+        "rv": "가치 합(점, +면 실점을 막음)"
       }
     }
   }

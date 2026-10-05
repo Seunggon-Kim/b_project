@@ -30,6 +30,10 @@
   },
   {
    "from": "job:daily",
+   "to": "table:pitch_run_value_zone"
+  },
+  {
+   "from": "job:daily",
    "to": "table:play_by_play"
   },
   {
@@ -301,6 +305,10 @@
    "to": "page:pages/player-analytics.html"
   },
   {
+   "from": "table:pitch_run_value_zone",
+   "to": "page:pages/player-analytics.html"
+  },
+  {
    "from": "table:play_by_play",
    "to": "page:index.html"
   },
@@ -327,6 +335,10 @@
   {
    "from": "table:play_by_play",
    "to": "table:pitch_run_value"
+  },
+  {
+   "from": "table:play_by_play",
+   "to": "table:pitch_run_value_zone"
   },
   {
    "from": "table:play_by_play",
@@ -902,6 +914,7 @@
     "kbo_woba_weights_by_season",
     "korean_series_champion",
     "pitch_run_value",
+    "pitch_run_value_zone",
     "play_by_play",
     "players",
     "re24_matrix_by_season",
@@ -941,6 +954,7 @@
     "kbo_woba_weights_by_season",
     "korean_series_champion",
     "pitch_run_value",
+    "pitch_run_value_zone",
     "play_by_play",
     "players",
     "re24_matrix_by_season",
@@ -980,6 +994,7 @@
     "kbo_woba_weights_by_season",
     "korean_series_champion",
     "pitch_run_value",
+    "pitch_run_value_zone",
     "play_by_play",
     "players",
     "re24_matrix_by_season",
@@ -1144,6 +1159,7 @@
    "reads_all_tables": false,
    "tables": [
     "pitch_run_value",
+    "pitch_run_value_zone",
     "play_by_play"
    ]
   },
@@ -1634,7 +1650,7 @@
    "writes": []
   },
   {
-   "desc": "올 시즌 정규시즌 PBP 로 기대 득점 표(주자·아웃·볼카운트 288가지)를 만들고, 공 하나마다 기대 득점이 얼마나 바뀌었는지로 투수·구종·타자 손별 구종 가치를 계산해 MySQL 에 넣습니다. 2016~2025는 2026-10-04에 한 번 채운 값입니다.",
+   "desc": "올 시즌 정규시즌 PBP 로 기대 득점 표(주자·아웃·볼카운트 288가지)를 만들고, 공 하나마다 기대 득점이 얼마나 바뀌었는지로 투수·구종·타자 손별 구종 가치와 공격 존(Heart·Shadow·Chase·Waste)별 가치를 계산해 MySQL 에 넣습니다. 2016~2025는 2026-10-04에 한 번 채운 값입니다.",
    "jobs": [
     "daily"
    ],
@@ -1649,6 +1665,7 @@
    },
    "writes": [
     "pitch_run_value",
+    "pitch_run_value_zone",
     "run_expectancy"
    ]
   },
@@ -2261,6 +2278,25 @@
    "routes": [
     "/players/:id/pitch_trend",
     "/players/:id/pitch_values"
+   ],
+   "written_by": [
+    "data_collection/pitch_run_value.py"
+   ]
+  },
+  {
+   "category": "세이버메트릭스 분석",
+   "derived_from": [
+    "play_by_play"
+   ],
+   "desc": "투수가 던진 공을 위치에 따라 Heart(한가운데)·Shadow(존 가장자리)·Chase(존 바로 밖)·Waste(크게 벗어남) 넷으로 나눠, 공마다 실점을 얼마나 막았는지(구종 가치와 같은 값)를 더한 표로, 2016년부터 정규시즌만 셉니다.",
+   "kind": "derived",
+   "manual_note": null,
+   "name": "pitch_run_value_zone",
+   "pages": [
+    "pages/player-analytics.html"
+   ],
+   "routes": [
+    "/players/:id/pitch_trend"
    ],
    "written_by": [
     "data_collection/pitch_run_value.py"

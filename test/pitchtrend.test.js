@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   pitchTrend, PITCH_TREND_SQL, PITCH_TREND_JSON_SQL, PITCH_TREND_VALUES_SQL, TREND_KEYS,
   PITCH_TREND_COUNT_SQL, PITCH_TREND_COUNT_JSON_SQL, TREND_COUNT_KEYS,
+  PITCH_TREND_ZONES_SQL, shapeTrendZones,
   shapeTrendRows, shapeTrendValues, trendFromJson,
 } from '../src/routes/pitchTrend.js';
 import { regularSeasonSql } from '../src/lib/gametype.js';
@@ -126,7 +127,7 @@ test('투수가 아니거나 자료가 없으면 빈 rows·values(200)', async (
   });
   const res = await pitchTrend(req('/players/65933/pitch_trend'), { MYSQL: db }, {}, { id: '65933' });
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { player_id: '65933', rows: [], values: [] });
+  assert.deepEqual(await res.json(), { player_id: '65933', rows: [], values: [], zones: [] });
 });
 
 test('없는 선수는 404, DB 오류는 503·no-store', async () => {
@@ -266,4 +267,38 @@ test('?by=count 는 bc 질의를 쓰고, 다른 by 값은 400 입니다', async 
   const plain = await (await pitchTrend(req('/players/65933/pitch_trend'), { MYSQL: db }, {}, { id: '65933' })).json();
   assert.ok(!('bc' in plain.rows[0]));
   assert.equal((await pitchTrend(req('/players/65933/pitch_trend?by=x'), { MYSQL: db }, {}, { id: '65933' })).status, 400);
+});
+
+// --- 공격 존별 가치(zones, 2026-10-06) ---
+
+test('zones 는 존 표에서 그 투수의 모든 시즌을 읽습니다', () => {
+  assert.match(PITCH_TREND_ZONES_SQL, /FROM pitch_run_value_zone/);
+  assert.match(PITCH_TREND_ZONES_SQL, /WHERE pitcher_ID = \?/);
+});
+
+test('zones 는 시즌, heart·shadow·chase·waste 순이고 rv 는 소수 첫째 자리', () => {
+  assert.deepEqual(shapeTrendZones([
+    { season: 2026, zone: 'waste', n: '3', rv: -1.26 },
+    { season: 2025, zone: 'chase', n: 2, rv: 0.04 },
+    { season: 2026, zone: 'heart', n: 5, rv: 2.55 },
+    { season: 2026, zone: 'shadow', n: 4, rv: -0.04 },
+  ]), [
+    { season: 2025, zone: 'chase', n: 2, rv: 0 },
+    { season: 2026, zone: 'heart', n: 5, rv: 2.6 },
+    { season: 2026, zone: 'shadow', n: 4, rv: 0 },
+    { season: 2026, zone: 'waste', n: 3, rv: -1.3 },
+  ]);
+});
+
+test('기본·by=count 응답 모두 zones 를 싣습니다', async () => {
+  const db = fakeDb((sql) => {
+    if (sql.includes('FROM players')) return [PLAYER];
+    if (sql.includes('FROM pitch_run_value_zone')) return [{ season: 2026, zone: 'heart', n: 2, rv: 0.5 }];
+    if (sql.includes('GROUP_CONCAT')) return [{ n: 0, j: null }];
+    return [];
+  });
+  for (const q of ['', '?by=count']) {
+    const body = await (await pitchTrend(req(`/players/65933/pitch_trend${q}`), { MYSQL: db }, {}, { id: '65933' })).json();
+    assert.deepEqual(body.zones, [{ season: 2026, zone: 'heart', n: 2, rv: 0.5 }], q);
+  }
 });

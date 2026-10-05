@@ -97,3 +97,45 @@ def test_투수_ID_가_빈_공은_가치_표에_넣지_않습니다():
     re = {(0, 0, 0, 0): 0.5}
     vals = pv.pitch_values([[row(1, pitcher=None)]], re)
     assert vals == {}
+
+
+# --- 공격 존(Heart·Shadow·Chase·Waste)별 가치(2026-10-06) ---
+
+def at(r, px, pz, top=3.5, bot=1.5):
+    r = dict(r)
+    r.update(px=px, pz=pz, sz_top=top, sz_bot=bot)
+    return r
+
+
+@pytest.mark.parametrize("px, pz, top, bot, zone", [
+    (0.0, 2.5, 3.5, 1.5, "heart"),          # 한가운데 r=0
+    (0.5, 2.5, 3.5, 1.5, "heart"),          # |px|/(10/12)=0.6 < 0.67
+    (0.6, 2.5, 3.5, 1.5, "shadow"),         # 0.72
+    (1.2, 2.5, 3.5, 1.5, "chase"),          # 1.44
+    (1.8, 2.5, 3.5, 1.5, "waste"),          # 2.16
+    (0.0, 3.9, 3.5, 1.5, "chase"),          # 높이 (3.9-2.5)/1=1.4
+    (0.0, 2.5, None, None, "heart"),        # sz 없으면 3.5·1.5
+    (0.0, 4.6, 1.0, 3.0, "waste"),          # top<=bot 이면 3.5·1.5 → (4.6-2.5)/1=2.1
+])
+def test_존은_r_로_가릅니다(px, pz, top, bot, zone):
+    assert pv.zone_of(at(row(1), px, pz, top, bot)) == zone
+
+
+def test_위치가_없으면_존이_없습니다():
+    assert pv.zone_of(at(row(1), None, 2.5)) is None
+    assert pv.zone_of(row(1)) is None
+
+
+def test_존별_가치는_투수_가치와_같은_공_같은_값입니다():
+    re = {(0, 0, 0, 0): 0.5, (0, 0, 1, 0): 0.6}
+    h = [at(row(1, ptype="직구"), 0.0, 2.5),                                  # heart, −0.1
+         at(row(2, balls=1, result="타격", ptype="커브", runs=1), 1.9, 2.5),  # waste, −0.4
+         row(3, inning=2, ptype="직구")]                                       # 위치 없음 → 존 없음
+    vals = pv.pitch_values([h[:2], h[2:]], dict(re))
+    zones = pv.zone_values([h[:2], h[2:]], dict(re))
+    assert zones[(1, "heart")] == [1, pytest.approx(-0.1)]
+    assert zones[(1, "waste")] == [1, pytest.approx(-0.4)]
+    assert (1, "shadow") not in zones
+    # 존 합은 위치 없는 공만큼 All 과 다릅니다.
+    all_n = sum(v[0] for v in vals.values())
+    assert sum(v[0] for v in zones.values()) == all_n - 1

@@ -78,10 +78,13 @@ class FakeCon:
 
 def test_시즌을_지우고_넣고_커밋합니다():
     con = FakeCon()
-    prv.write_season(con, 2024, [(2024, 0, 0, 0, 0, 0.6, 10)], [(2024, 1, "직구", "R", 3, 0.2)])
+    prv.write_season(con, 2024, [(2024, 0, 0, 0, 0, 0.6, 10)], [(2024, 1, "직구", "R", 3, 0.2)],
+                     [(2024, 1, "heart", 3, 0.2)])
     kinds = [(c[0], c[1].split()[0], c[1].split()[2] if c[0] == "execute" else c[1].split()[2]) for c in con.cur.calls]
     assert kinds == [("execute", "DELETE", "run_expectancy"), ("execute", "DELETE", "pitch_run_value"),
-                     ("executemany", "INSERT", "run_expectancy"), ("executemany", "INSERT", "pitch_run_value")]
+                     ("execute", "DELETE", "pitch_run_value_zone"),
+                     ("executemany", "INSERT", "run_expectancy"), ("executemany", "INSERT", "pitch_run_value"),
+                     ("executemany", "INSERT", "pitch_run_value_zone")]
     assert con.committed and not con.rolled
 
 
@@ -94,3 +97,15 @@ def test_실패하면_되돌립니다():
     with pytest.raises(RuntimeError):
         prv.write_season(con, 2024, [(2024, 0, 0, 0, 0, 0.6, 10)], [])
     assert con.rolled and not con.committed
+
+
+def test_존_행은_투수_다음_heart_shadow_chase_waste_순서입니다():
+    z = {(2, "waste"): [1, -0.5], (1, "chase"): [2, 0.25], (1, "heart"): [3, 1.0]}
+    assert prv.zone_rows(2024, z) == [(2024, 1, "heart", 3, 1.0), (2024, 1, "chase", 2, 0.25),
+                                      (2024, 2, "waste", 1, -0.5)]
+
+
+def test_읽기_질의에_공_위치가_들어갑니다():
+    sql = prv.fetch_sql()
+    assert "px, pz, sz_top, sz_bot" in sql
+    assert prv.COLS[-4:] == ("px", "pz", "sz_top", "sz_bot")
