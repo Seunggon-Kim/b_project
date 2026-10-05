@@ -51,6 +51,34 @@ const CNT = 'CASE WHEN pbp.balls IS NULL OR pbp.strikes IS NULL THEN NULL '
 
 const PFX = 'pbp.pfx_x IS NOT NULL AND pbp.pfx_z IS NOT NULL';
 const LOC = 'pbp.px IS NOT NULL AND pbp.pz IS NOT NULL';
+
+// 선구(Plate Discipline) 개수입니다(2026-10-05). 화면이 비율을 계산합니다.
+// 공 결과 분류(운영 2016~ 정규시즌 7가지 모두 덮음). 그 밖의 결과(고의 볼,
+// 피치클락 위반, 빈 값)는 어느 개수에도 넣지 않습니다. 번트 시도도 스윙입니다(Savant).
+const SWING = ['타격', '파울', '헛스윙', '번트파울', '번트헛스윙'];
+const WHIFF = ['헛스윙', '번트헛스윙'];
+const CONTACT = ['타격', '파울', '번트파울'];
+const LOOK = ['스트라이크'];
+const BALL = ['볼'];
+const res = (xs) => `pbp.pitch_result IN (${list(xs)})`;
+const PD = res([...SWING, ...LOOK, ...BALL]);
+const SW = res(SWING);
+const CT = res(CONTACT);
+
+// 존은 투구 분포 화면(arsenal gameZone·attackZone)과 같은 규칙입니다. 폭은
+// 홈플레이트 17인치 + 공 반지름 = 20인치(10/12 ft). 높이는 그 공의 sz_top·sz_bot
+// (둘 다 있고 top > bot), 아니면 3.5·1.5 ft. 실수 나눗셈은 e0 로 DOUBLE 로 둡니다
+// (MySQL div_precision_increment=4 로 DECIMAL 이 잘리지 않게).
+const SZ_OK = 'pbp.sz_top IS NOT NULL AND pbp.sz_bot IS NOT NULL AND pbp.sz_top > pbp.sz_bot';
+const TOP = `(CASE WHEN ${SZ_OK} THEN pbp.sz_top ELSE 3.5e0 END)`;
+const BOT = `(CASE WHEN ${SZ_OK} THEN pbp.sz_bot ELSE 1.5e0 END)`;
+const HALF_W = '(10e0 / 12e0)';
+const IN_ZONE = `${LOC} AND ABS(pbp.px) <= 10e0 / 12e0 AND pbp.pz >= ${BOT} AND pbp.pz <= ${TOP}`;
+const OUT_ZONE = `${LOC} AND NOT (ABS(pbp.px) <= 10e0 / 12e0 AND pbp.pz >= ${BOT} AND pbp.pz <= ${TOP})`;
+// 엣지(Savant Edge%, Tango Shadow): 존 가장자리에서 안쪽·바깥쪽 1/3 띠.
+const EDGE_R = `GREATEST(ABS(pbp.px) / ${HALF_W}, ABS(pbp.pz - (${TOP} + ${BOT}) / 2e0) / ((${TOP} - ${BOT}) / 2e0))`;
+const EDGE = `${LOC} AND ${EDGE_R} >= 0.67e0 AND ${EDGE_R} < 1.33e0`;
+const FIRST = 'pbp.balls = 0 AND pbp.strikes = 0';
 // 합은 MySQL 에서 소수 셋째 자리로 맞춥니다(응답을 줄이고 Worker 계산을 없앰).
 const sumIf = (cond, col) => `ROUND(COALESCE(SUM(CASE WHEN ${cond} THEN ${col} END), 0), 3)`;
 
@@ -78,7 +106,21 @@ const GROUPED_SQL = `
          ${count(PFX)} AS pfx_n,
          ${sumIf(LOC, 'pbp.px')} AS px_sum,
          ${sumIf(LOC, 'pbp.pz')} AS pz_sum,
-         ${count(LOC)} AS loc_n
+         ${count(LOC)} AS loc_n,
+         ${count(PD)} AS pd_n,
+         ${count(SW)} AS sw,
+         ${count(res(WHIFF))} AS wh,
+         ${count(CT)} AS ct,
+         ${count(res(LOOK))} AS cs,
+         ${count(`${PD} AND ${IN_ZONE}`)} AS z_n,
+         ${count(`${PD} AND ${OUT_ZONE}`)} AS o_n,
+         ${count(`${SW} AND ${IN_ZONE}`)} AS z_sw,
+         ${count(`${SW} AND ${OUT_ZONE}`)} AS o_sw,
+         ${count(`${CT} AND ${IN_ZONE}`)} AS z_ct,
+         ${count(`${CT} AND ${OUT_ZONE}`)} AS o_ct,
+         ${count(`${PD} AND ${EDGE}`)} AS edge_n,
+         ${count(`${PD} AND ${FIRST}`)} AS fp_n,
+         ${count(`${PD} AND ${FIRST} AND NOT ${res(BALL)}`)} AS fp_str
   FROM play_by_play pbp
   WHERE pbp.pitcher_ID = ? AND pbp.game_date >= ? AND pbp.game_date < ?
   AND ${regularSeasonSql('pbp')}
@@ -89,7 +131,9 @@ const GROUPED_SQL = `
 /** 응답 rows 의 키입니다. 질의 열과 JSON 배열도 이 순서입니다. */
 export const TREND_KEYS = ['season', 'pitch_type', 'bat_side', 'cnt', 'n', 'pa', 'ab', 'h',
   'b1', 'b2', 'b3', 'hr', 'bbe', 'bb', 'so', 'spd_sum', 'spd_n', 'pfx_x_sum', 'pfx_z_sum',
-  'pfx_n', 'px_sum', 'pz_sum', 'loc_n'];
+  'pfx_n', 'px_sum', 'pz_sum', 'loc_n',
+  'pd_n', 'sw', 'wh', 'ct', 'cs', 'z_n', 'o_n', 'z_sw', 'o_sw', 'z_ct', 'o_ct',
+  'edge_n', 'fp_n', 'fp_str'];
 
 const ORDER = 'season, pitch_type, bat_side, cnt';
 

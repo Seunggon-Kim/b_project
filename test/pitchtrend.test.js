@@ -26,7 +26,9 @@ const req = (path) => new Request(`https://x.test${path}`);
 const PLAYER = { player_id: '65933' };
 
 // 같은 행을 보통 질의 객체와 JSON 배열 글자로 적습니다.
-const OBJ = { season: 2026, pitch_type: '직구', bat_side: 'R', cnt: 'even', n: 2, pa: 1, ab: 1, h: 1, b1: 1, b2: 0, b3: 0, hr: 0, bbe: 1, bb: 0, so: 0, spd_sum: 290.5, spd_n: 2, pfx_x_sum: -1.25, pfx_z_sum: 20, pfx_n: 2, px_sum: 0, pz_sum: 5.5, loc_n: 2 };
+// 선구 개수(끝 14개)는 0 으로 채웁니다.
+const PDZ = { pd_n: 0, sw: 0, wh: 0, ct: 0, cs: 0, z_n: 0, o_n: 0, z_sw: 0, o_sw: 0, z_ct: 0, o_ct: 0, edge_n: 0, fp_n: 0, fp_str: 0 };
+const OBJ = { ...PDZ, season: 2026, pitch_type: '직구', bat_side: 'R', cnt: 'even', n: 2, pa: 1, ab: 1, h: 1, b1: 1, b2: 0, b3: 0, hr: 0, bbe: 1, bb: 0, so: 0, spd_sum: 290.5, spd_n: 2, pfx_x_sum: -1.25, pfx_z_sum: 20, pfx_n: 2, px_sum: 0, pz_sum: 5.5, loc_n: 2 };
 const OBJ2 = { ...OBJ, bat_side: null, cnt: 'full', n: 3 };
 const JSON_TEXT = [OBJ, OBJ2].map((o) => JSON.stringify(TREND_KEYS.map((k) => o[k]))).join(',');
 
@@ -71,11 +73,11 @@ test('rows 는 정한 키 순서와 숫자로 나갑니다', () => {
     season: 2026, pitch_type: '직구', bat_side: 'L', cnt: 'ahead', n: '120', pa: 30, ab: 27,
     h: 7, b1: 5, b2: 1, b3: 0, hr: 1, bbe: 20, bb: 2, so: 6,
     spd_sum: 17160.04, spd_n: 120, pfx_x_sum: 980.123, pfx_z_sum: 1820.4, pfx_n: 118,
-    px_sum: -12.346, pz_sum: 300.2, loc_n: 118,
+    px_sum: -12.346, pz_sum: 300.2, loc_n: 118, ...PDZ,
   }]);
   assert.deepEqual(Object.keys(r), ['season', 'pitch_type', 'bat_side', 'cnt', 'n', 'pa', 'ab', 'h',
     'b1', 'b2', 'b3', 'hr', 'bbe', 'bb', 'so', 'spd_sum', 'spd_n', 'pfx_x_sum', 'pfx_z_sum', 'pfx_n',
-    'px_sum', 'pz_sum', 'loc_n']);
+    'px_sum', 'pz_sum', 'loc_n', ...Object.keys(PDZ)]);
   assert.equal(r.n, 120);
   assert.equal(r.pfx_x_sum, 980.123);
   assert.equal(r.px_sum, -12.346);
@@ -170,4 +172,46 @@ test('묶은 글자를 못 풀면 보통 질의로 다시 읽습니다', async (
     console.warn = warn;
   }
   assert.equal(warned.length, 1);
+});
+
+// --- 선구(Plate Discipline) 개수(2026-10-05) ---
+
+const PD_KEYS = ['pd_n', 'sw', 'wh', 'ct', 'cs', 'z_n', 'o_n', 'z_sw', 'o_sw', 'z_ct', 'o_ct',
+  'edge_n', 'fp_n', 'fp_str'];
+
+test('선구 개수 14개를 기존 키 뒤에 붙입니다', () => {
+  assert.deepEqual(TREND_KEYS.slice(-PD_KEYS.length), PD_KEYS);
+  assert.deepEqual(TREND_KEYS.slice(0, 23), ['season', 'pitch_type', 'bat_side', 'cnt', 'n', 'pa', 'ab', 'h',
+    'b1', 'b2', 'b3', 'hr', 'bbe', 'bb', 'so', 'spd_sum', 'spd_n', 'pfx_x_sum', 'pfx_z_sum', 'pfx_n',
+    'px_sum', 'pz_sum', 'loc_n']);
+  for (const k of PD_KEYS) assert.match(PITCH_TREND_SQL, new RegExp(`AS ${k},?\n`), k);
+});
+
+test('선구 분류: 스윙·헛스윙·컨택·루킹·볼, 그 밖의 결과는 빼고 셉니다', () => {
+  const sql = PITCH_TREND_SQL;
+  for (const v of ['타격', '파울', '헛스윙', '번트파울', '번트헛스윙', '스트라이크', '볼']) {
+    assert.ok(sql.includes(`'${v}'`), v);
+  }
+  // 고의 볼·피치클락 위반은 어느 묶음에도 없습니다.
+  assert.ok(!sql.includes("'고의 볼'"));
+});
+
+test('존: 폭 10/12 ft, 높이는 공의 sz(없거나 뒤집히면 3.5·1.5), 엣지는 0.67 <= r < 1.33', () => {
+  const sql = PITCH_TREND_SQL;
+  assert.match(sql, /ABS\(pbp\.px\) <= 10e0 \/ 12e0/);
+  assert.match(sql, /pbp\.sz_top > pbp\.sz_bot THEN pbp\.sz_top ELSE 3\.5e0 END/);
+  assert.match(sql, /pbp\.sz_top > pbp\.sz_bot THEN pbp\.sz_bot ELSE 1\.5e0 END/);
+  assert.match(sql, /GREATEST\(ABS\(pbp\.px\) \/ \(10e0 \/ 12e0\)/);
+  assert.match(sql, />= 0\.67e0 AND .* < 1\.33e0/);
+});
+
+test('초구는 던지기 전 0-0, 초구 스트라이크는 그중 볼이 아닌 공입니다', () => {
+  assert.match(PITCH_TREND_SQL, /pbp\.balls = 0 AND pbp\.strikes = 0/);
+});
+
+test('JSON 길과 보통 길이 선구 키까지 같은 값을 냅니다', () => {
+  const o = { ...OBJ, pd_n: 2, sw: 1, wh: 0, ct: 1, cs: 1, z_n: 1, o_n: 1, z_sw: 1, o_sw: 0, z_ct: 1, o_ct: 0, edge_n: 1, fp_n: 1, fp_str: 1 };
+  const text = JSON.stringify(TREND_KEYS.map((k) => o[k]));
+  assert.deepEqual(trendFromJson({ n: 1, j: text }), shapeTrendRows([o]));
+  assert.equal(trendFromJson({ n: 1, j: text })[0].fp_str, 1);
 });
