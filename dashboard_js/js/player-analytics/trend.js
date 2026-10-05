@@ -202,6 +202,10 @@
     sr.forEach(function (s) { s.points.forEach(function (p) { vals.push(p.v); }); });
     let out = '<svg class="pa-tr-svg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="시즌별 ' + esc(metric(key).label) + '">';
     if (!vals.length || !seasons.length) return out + '</svg>';
+    // 가로축은 첫 시즌부터 마지막 시즌까지 모든 해입니다. 기록 없는 해는 점이 없고 선도 끊깁니다(Savant, evan).
+    const lo = Math.min.apply(null, seasons), hi = Math.max.apply(null, seasons);
+    seasons = [];
+    for (let y = lo; y <= hi; y++) seasons.push(y);
     const tk = ticks(key, vals), y0 = tk[0], y1 = tk[tk.length - 1];
     const pw = W - ML - MR, ph = H - MT - MB;
     const X = function (y) {
