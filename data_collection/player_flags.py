@@ -54,6 +54,15 @@ ASIA_QUOTA_BY_SEASON = {
     },
 }
 
+# 분류에 쓰는 시즌입니다. 위 표에서 가장 최근 시즌입니다.
+#
+# 예전에는 부르는 곳마다 2026 을 따로 박았습니다(player_info_scraper·
+# player_registry_sync). 아시아쿼터 보유자는 KBO 공시라 데이터로 계산할 수
+# 없습니다. 새 시즌 공시가 나오면 위 표에 그 시즌만 더하면 됩니다. 부르는
+# 곳은 손대지 않아도 그 시즌을 씁니다. 표에 2027 이 없는 동안은 2026
+# 보유자를 그대로 씁니다(지금과 같습니다).
+LATEST_QUOTA_SEASON = max(ASIA_QUOTA_BY_SEASON)
+
 
 def lead_token(career):
     """career 선두 토큰 반환 (공백/하이픈 기준). 예) '도미니카-LG' -> '도미니카'."""
@@ -68,7 +77,7 @@ def detect_nationality(career):
     return tok if tok in FOREIGN_COUNTRIES else None
 
 
-def classify_player(player_id, career, season=2026):
+def classify_player(player_id, career, season=None):
     """(nationality, is_foreign, player_type) 반환.
 
     nationality: '대한민국' | 국가명 | None(외국인이나 국적 미상 → 검토 대상)
@@ -76,6 +85,8 @@ def classify_player(player_id, career, season=2026):
     player_type: '국내' | '외국인' | '아시아쿼터'
     """
     pid = str(player_id)
+    if season is None:
+        season = LATEST_QUOTA_SEASON
     quota = ASIA_QUOTA_BY_SEASON.get(season, {})
     nat = detect_nationality(career)
 
@@ -115,7 +126,7 @@ def classify_player(player_id, career, season=2026):
 _KR_SCHOOL = re.compile(r"초|중|고|대")
 
 
-def is_review_suspect(player_id, career, season=2026):
+def is_review_suspect(player_id, career, season=None):
     """국내로 분류됐으나 career 에 한국 학교 흔적이 없어 외국인 가능성이 있는 경우 True."""
     _, is_foreign, _ = classify_player(player_id, career, season)
     if is_foreign:

@@ -54,7 +54,7 @@ from player_info_scraper import (
 import player_flags as pf
 
 # 분류 시즌 (아시아쿼터 보유자 시드 기준 — backfill_player_flags 와 동일)
-CLASSIFY_SEASON = 2026
+CLASSIFY_SEASON = pf.LATEST_QUOTA_SEASON
 
 PROJECT_ROOT = Path(__file__).parent.parent
 # DB 경로: 환경변수 KBO_DB 우선, 없으면 저장소 기준 상대경로.

@@ -21,7 +21,8 @@ import sqlite3
 
 # 분류 플래그(국적/외국인/아시아쿼터) 도출 — 단일 진실 소스 모듈 재사용
 import player_flags as pf
-CLASSIFY_SEASON = 2026
+# 아시아쿼터 표의 가장 최근 시즌입니다(player_flags.LATEST_QUOTA_SEASON).
+CLASSIFY_SEASON = pf.LATEST_QUOTA_SEASON
 
 # 로깅 설정
 PROJECT_ROOT = Path(__file__).parent.parent
