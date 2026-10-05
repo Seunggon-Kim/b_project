@@ -31,3 +31,26 @@ CREATE TABLE IF NOT EXISTS `pitch_run_value_zone` (
   `rv` DOUBLE NOT NULL,
   PRIMARY KEY (`season`, `pitcher_ID`, `zone`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- 리그 선구(Plate Discipline) 시즌 합계(2026-10-06). pitch_trend 와 같은 분류.
+CREATE TABLE IF NOT EXISTS `plate_discipline_league` (
+  `season` SMALLINT NOT NULL,
+  `n` INT NOT NULL,
+  `pd_n` INT NOT NULL,
+  `sw` INT NOT NULL,
+  `wh` INT NOT NULL,
+  `ct` INT NOT NULL,
+  `cs` INT NOT NULL,
+  `z_n` INT NOT NULL,
+  `o_n` INT NOT NULL,
+  `z_sw` INT NOT NULL,
+  `o_sw` INT NOT NULL,
+  `z_ct` INT NOT NULL,
+  `o_ct` INT NOT NULL,
+  `edge_n` INT NOT NULL,
+  `fp_n` INT NOT NULL,
+  `fp_str` INT NOT NULL,
+  `mb_n` INT NOT NULL,
+  `mb_sw` INT NOT NULL,
+  PRIMARY KEY (`season`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

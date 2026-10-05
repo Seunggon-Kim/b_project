@@ -70,13 +70,18 @@ def zone_rows(season, zvals):
             for k, v in sorted(zvals.items(), key=lambda kv: (kv[0][0], order[kv[0][1]]))]
 
 
-def write_season(con, season, re_list, value_list, zone_list=()):
+def discipline_row(season, d):
+    return (season,) + tuple(d[k] for k in pv.DISCIPLINE_KEYS)
+
+
+def write_season(con, season, re_list, value_list, zone_list=(), discipline=None):
     cur = con.cursor()
     try:
         con.begin()
         cur.execute("DELETE FROM run_expectancy WHERE season = %s", (season,))
         cur.execute("DELETE FROM pitch_run_value WHERE season = %s", (season,))
         cur.execute("DELETE FROM pitch_run_value_zone WHERE season = %s", (season,))
+        cur.execute("DELETE FROM plate_discipline_league WHERE season = %s", (season,))
         cur.executemany("INSERT INTO run_expectancy (season, bases, outs, balls, strikes, re, n) "
                         "VALUES (%s, %s, %s, %s, %s, %s, %s)", re_list)
         cur.executemany("INSERT INTO pitch_run_value (season, pitcher_ID, pitch_type, stands, n, rv) "
@@ -84,6 +89,11 @@ def write_season(con, season, re_list, value_list, zone_list=()):
         # 공격 존(heart·shadow·chase·waste)별 투수 가치입니다(2026-10-06).
         cur.executemany("INSERT INTO pitch_run_value_zone (season, pitcher_ID, zone, n, rv) "
                         "VALUES (%s, %s, %s, %s, %s)", zone_list)
+        # 리그 선구 시즌 합계 한 줄입니다(/stats/plate_discipline).
+        if discipline is not None:
+            cols = ", ".join(("season",) + pv.DISCIPLINE_KEYS)
+            marks = ", ".join(["%s"] * (1 + len(pv.DISCIPLINE_KEYS)))
+            cur.execute("INSERT INTO plate_discipline_league (%s) VALUES (%s)" % (cols, marks), discipline)
         con.commit()
     except Exception:
         con.rollback()
@@ -98,7 +108,8 @@ def compute(con, season):
     re, n = pv.expectancy_table(halves)
     vals = pv.pitch_values(halves, re)
     zvals = pv.zone_values(halves, re)
-    return rows, re, n, vals, zvals
+    disc = pv.discipline_counts(rows)
+    return rows, re, n, vals, zvals, disc
 
 
 def main(argv=None):
@@ -116,7 +127,7 @@ def main(argv=None):
     try:
         for season in seasons:
             t = time.time()
-            rows, re, n, vals, zvals = compute(con, season)
+            rows, re, n, vals, zvals, disc = compute(con, season)
             if not rows:
                 print("%d: 정규시즌 PBP 가 없어 건너뜁니다" % season)
                 continue
@@ -126,7 +137,7 @@ def main(argv=None):
                      time.time() - t))
             if not args.dry_run:
                 write_season(con, season, re_rows(season, re, n), value_rows(season, vals),
-                             zone_rows(season, zvals))
+                             zone_rows(season, zvals), discipline_row(season, disc))
                 print("%d: 썼습니다" % season)
     finally:
         con.close()

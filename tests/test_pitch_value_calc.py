@@ -139,3 +139,21 @@ def test_존별_가치는_투수_가치와_같은_공_같은_값입니다():
     # 존 합은 위치 없는 공만큼 All 과 다릅니다.
     all_n = sum(v[0] for v in vals.values())
     assert sum(v[0] for v in zones.values()) == all_n - 1
+
+
+# --- 리그 선구 합계(/stats/plate_discipline, 2026-10-06) ---
+
+def test_리그_선구_합계는_pitch_trend_와_같은_분류입니다():
+    rows = [
+        at(row(1, result="헛스윙", balls=0, strikes=0), 0.0, 2.5),   # 스윙·헛스윙, 존 안, 미트볼, 초구 스트라이크
+        at(row(2, result="볼", balls=0, strikes=0), 1.8, 2.5),       # 볼, 존 밖, 초구 볼
+        at(row(3, result="스트라이크", balls=1, strikes=0), 0.7, 2.5),  # 루킹, 존 안, 엣지
+        at(row(4, result="타격", balls=1), 1.0, 2.5),                 # 스윙·컨택, 존 밖, 엣지
+        row(5, result="고의 볼"),                                    # 선구 집계에서 뺌(n 에는 듦)
+        row(6, result="파울", ptype=None),                           # 구종 없음 → 아예 안 셈
+        row(7, result=None),                                         # 결과 빈 공: SQL 과 같게 n 에만 듦
+    ]
+    d = pv.discipline_counts(rows)
+    assert d == {"n": 6, "pd_n": 4, "sw": 2, "wh": 1, "ct": 1, "cs": 1,
+                 "z_n": 2, "o_n": 2, "z_sw": 1, "o_sw": 1, "z_ct": 0, "o_ct": 1,
+                 "edge_n": 2, "fp_n": 2, "fp_str": 1, "mb_n": 1, "mb_sw": 1}

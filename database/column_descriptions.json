@@ -34,7 +34,8 @@
         "re24_matrix_by_season",
         "run_expectancy",
         "pitch_run_value",
-        "pitch_run_value_zone"
+        "pitch_run_value_zone",
+        "plate_discipline_league"
       ]
     },
     {
@@ -723,6 +724,31 @@
         "zone": "공격 존(heart·shadow·chase·waste), 공 위치가 없으면 넣지 않음",
         "n": "공 수",
         "rv": "가치 합(점, +면 실점을 막음)"
+      }
+    },
+    "plate_discipline_league": {
+      "category": "세이버메트릭스 분석",
+      "table_desc": "KBO 리그 전체의 시즌별 선구(Plate Discipline) 개수(스윙·헛스윙·컨택·존 안팎·엣지·초구·한가운데)를 모은 표로, 화면이 비율(스윙%·체이스% 등)을 계산합니다. 2016년부터 정규시즌만 셉니다.",
+      "update_freq": "매일 03:33 (daily, 올 시즌)",
+      "columns": {
+        "season": "시즌 연도",
+        "n": "공 수(구종 있는 정규시즌 공)",
+        "pd_n": "선구 집계 공 수(볼·스트라이크·스윙 결과인 공)",
+        "sw": "스윙 수",
+        "wh": "헛스윙 수",
+        "ct": "컨택(타격·파울) 수",
+        "cs": "루킹 스트라이크 수",
+        "z_n": "스트라이크 존 안 공 수",
+        "o_n": "존 밖 공 수",
+        "z_sw": "존 안 스윙 수",
+        "o_sw": "존 밖 스윙(체이스) 수",
+        "z_ct": "존 안 컨택 수",
+        "o_ct": "존 밖 컨택 수",
+        "edge_n": "존 가장자리(엣지) 공 수",
+        "fp_n": "초구(0-0) 수",
+        "fp_str": "초구 스트라이크 수",
+        "mb_n": "한가운데(Meatball) 공 수",
+        "mb_sw": "한가운데 공 스윙 수"
       }
     }
   }

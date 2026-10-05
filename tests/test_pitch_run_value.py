@@ -79,12 +79,14 @@ class FakeCon:
 def test_시즌을_지우고_넣고_커밋합니다():
     con = FakeCon()
     prv.write_season(con, 2024, [(2024, 0, 0, 0, 0, 0.6, 10)], [(2024, 1, "직구", "R", 3, 0.2)],
-                     [(2024, 1, "heart", 3, 0.2)])
+                     [(2024, 1, "heart", 3, 0.2)], (2024,) + (1,) * 17)
     kinds = [(c[0], c[1].split()[0], c[1].split()[2] if c[0] == "execute" else c[1].split()[2]) for c in con.cur.calls]
     assert kinds == [("execute", "DELETE", "run_expectancy"), ("execute", "DELETE", "pitch_run_value"),
                      ("execute", "DELETE", "pitch_run_value_zone"),
+                     ("execute", "DELETE", "plate_discipline_league"),
                      ("executemany", "INSERT", "run_expectancy"), ("executemany", "INSERT", "pitch_run_value"),
-                     ("executemany", "INSERT", "pitch_run_value_zone")]
+                     ("executemany", "INSERT", "pitch_run_value_zone"),
+                     ("execute", "INSERT", "plate_discipline_league")]
     assert con.committed and not con.rolled
 
 
@@ -109,3 +111,8 @@ def test_읽기_질의에_공_위치가_들어갑니다():
     sql = prv.fetch_sql()
     assert "px, pz, sz_top, sz_bot" in sql
     assert prv.COLS[-4:] == ("px", "pz", "sz_top", "sz_bot")
+
+
+def test_리그_선구_행은_시즌_다음_정한_키_순서입니다():
+    d = {k: i for i, k in enumerate(prv.pv.DISCIPLINE_KEYS)}
+    assert prv.discipline_row(2025, d) == (2025,) + tuple(range(17))

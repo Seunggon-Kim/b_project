@@ -34,6 +34,10 @@
   },
   {
    "from": "job:daily",
+   "to": "table:plate_discipline_league"
+  },
+  {
+   "from": "job:daily",
    "to": "table:play_by_play"
   },
   {
@@ -339,6 +343,10 @@
   {
    "from": "table:play_by_play",
    "to": "table:pitch_run_value_zone"
+  },
+  {
+   "from": "table:play_by_play",
+   "to": "table:plate_discipline_league"
   },
   {
    "from": "table:play_by_play",
@@ -915,6 +923,7 @@
     "korean_series_champion",
     "pitch_run_value",
     "pitch_run_value_zone",
+    "plate_discipline_league",
     "play_by_play",
     "players",
     "re24_matrix_by_season",
@@ -955,6 +964,7 @@
     "korean_series_champion",
     "pitch_run_value",
     "pitch_run_value_zone",
+    "plate_discipline_league",
     "play_by_play",
     "players",
     "re24_matrix_by_season",
@@ -995,6 +1005,7 @@
     "korean_series_champion",
     "pitch_run_value",
     "pitch_run_value_zone",
+    "plate_discipline_league",
     "play_by_play",
     "players",
     "re24_matrix_by_season",
@@ -1314,6 +1325,16 @@
     "kbo_official_pitcher_stats",
     "players",
     "wrc_plus_comparison"
+   ]
+  },
+  {
+   "file": "src/routes/plateDiscipline.js",
+   "live": false,
+   "pages": [],
+   "path": "/stats/plate_discipline",
+   "reads_all_tables": false,
+   "tables": [
+    "plate_discipline_league"
    ]
   },
   {
@@ -1650,7 +1671,7 @@
    "writes": []
   },
   {
-   "desc": "올 시즌 정규시즌 PBP 로 기대 득점 표(주자·아웃·볼카운트 288가지)를 만들고, 공 하나마다 기대 득점이 얼마나 바뀌었는지로 투수·구종·타자 손별 구종 가치와 공격 존(Heart·Shadow·Chase·Waste)별 가치를 계산해 MySQL 에 넣습니다. 2016~2025는 2026-10-04에 한 번 채운 값입니다.",
+   "desc": "올 시즌 정규시즌 PBP 로 기대 득점 표(주자·아웃·볼카운트 288가지)를 만들고, 공 하나마다 기대 득점이 얼마나 바뀌었는지로 투수·구종·타자 손별 구종 가치와 공격 존(Heart·Shadow·Chase·Waste)별 가치, 리그 선구(Plate Discipline) 시즌 합계를 계산해 MySQL 에 넣습니다. 2016~2025는 2026-10-04에 한 번 채운 값입니다.",
    "jobs": [
     "daily"
    ],
@@ -1666,6 +1687,7 @@
    "writes": [
     "pitch_run_value",
     "pitch_run_value_zone",
+    "plate_discipline_league",
     "run_expectancy"
    ]
   },
@@ -2297,6 +2319,23 @@
    ],
    "routes": [
     "/players/:id/pitch_trend"
+   ],
+   "written_by": [
+    "data_collection/pitch_run_value.py"
+   ]
+  },
+  {
+   "category": "세이버메트릭스 분석",
+   "derived_from": [
+    "play_by_play"
+   ],
+   "desc": "KBO 리그 전체의 시즌별 선구(Plate Discipline) 개수(스윙·헛스윙·컨택·존 안팎·엣지·초구·한가운데)를 모은 표로, 화면이 비율(스윙%·체이스% 등)을 계산합니다. 2016년부터 정규시즌만 셉니다.",
+   "kind": "derived",
+   "manual_note": null,
+   "name": "plate_discipline_league",
+   "pages": [],
+   "routes": [
+    "/stats/plate_discipline"
    ],
    "written_by": [
     "data_collection/pitch_run_value.py"

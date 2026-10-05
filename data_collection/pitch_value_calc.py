@@ -133,3 +133,59 @@ def zone_values(halves, re):
         acc[0] += 1
         acc[1] -= delta
     return out
+
+
+# 리그 선구(Plate Discipline) 합계입니다(2026-10-06, /stats/plate_discipline).
+# src/routes/pitchTrend.js 의 같은 이름 키와 똑같이 셉니다. 정규시즌은 읽는 질의가
+# 이미 거릅니다. n 은 구종 있는 공 전부(결과 무관), 나머지는 선구 집계 공만입니다.
+SWING = {"타격", "파울", "헛스윙", "번트파울", "번트헛스윙"}
+WHIFF = {"헛스윙", "번트헛스윙"}
+CONTACT = {"타격", "파울", "번트파울"}
+LOOK = {"스트라이크"}
+BALL = {"볼"}
+DISCIPLINE = SWING | LOOK | BALL
+DISCIPLINE_KEYS = ("n", "pd_n", "sw", "wh", "ct", "cs", "z_n", "o_n", "z_sw", "o_sw",
+                   "z_ct", "o_ct", "edge_n", "fp_n", "fp_str", "mb_n", "mb_sw")
+
+
+def _box(r):
+    top, bot = r.get("sz_top"), r.get("sz_bot")
+    if top is None or bot is None or not top > bot:
+        return 3.5, 1.5
+    return top, bot
+
+
+def discipline_counts(rows):
+    d = dict.fromkeys(DISCIPLINE_KEYS, 0)
+    for r in rows:
+        if not has_type(r):
+            continue
+        d["n"] += 1
+        res = r.get("pitch_result")
+        if res not in DISCIPLINE:
+            continue
+        sw, ct = res in SWING, res in CONTACT
+        d["pd_n"] += 1
+        d["sw"] += sw
+        d["wh"] += res in WHIFF
+        d["ct"] += ct
+        d["cs"] += res in LOOK
+        if r.get("balls") == 0 and r.get("strikes") == 0:
+            d["fp_n"] += 1
+            d["fp_str"] += res not in BALL
+        px, pz = r.get("px"), r.get("pz")
+        if px is None or pz is None:
+            continue
+        top, bot = _box(r)
+        inside = abs(px) <= HALF_W and bot <= pz <= top
+        side = "z" if inside else "o"
+        d[side + "_n"] += 1
+        d[side + "_sw"] += sw
+        d[side + "_ct"] += ct
+        rr = max(abs(px) / HALF_W, abs(pz - (top + bot) / 2) / ((top - bot) / 2))
+        d["edge_n"] += 0.67 <= rr < 1.33
+        h = top - bot
+        if abs(px) <= HALF_W / 3 and bot + h / 3 <= pz <= top - h / 3:
+            d["mb_n"] += 1
+            d["mb_sw"] += sw
+    return d
