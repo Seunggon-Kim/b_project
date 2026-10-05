@@ -63,9 +63,12 @@ export async function currentSeason(db) {
  * 저절로 2027 로 넘어갑니다. 공식 기록과 play_by_play 는 같은 daily
  * 작업에서 몇 분 차이로 들어옵니다.
  *
- * 질의는 season 이 없을 때만 한 번 더 나갑니다(인덱스로 바로 끝나는
- * MAX 입니다). 선수 화면은 보통 season 을 줍니다. 표가 비어 있으면 한국
- * 날짜의 올해로 둡니다. today 는 시험에서 날짜를 넣을 때만 씁니다.
+ * 질의는 season 이 없을 때만 한 번 더 나갑니다. 두 표의 기본 키가
+ * (player_id, season) 이고 season 만의 색인은 없어 MAX 가 두 표를 끝까지
+ * 훑습니다(합쳐 수만 행). DB 에서는 가볍고 Worker CPU 는 거의 들지
+ * 않습니다(스테이징 실측, season 있을 때와 중앙값 1~2ms 차이). 선수 화면은
+ * 보통 season 을 줍니다. 표가 비어 있으면 한국 날짜의 올해로 둡니다.
+ * today 는 시험에서 날짜를 넣을 때만 씁니다.
  */
 export async function defaultPitchSeason(db, today) {
   const cur = await currentSeason(db);
