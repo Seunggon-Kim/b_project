@@ -628,9 +628,9 @@
    "workflow": "monthly.yml"
   },
   {
-   "cron_utc": "7 7 * * *",
+   "cron_utc": "7 7 * * *, 7 10 * * *",
    "id": "roster",
-   "schedule_kst": "매일 16:07",
+   "schedule_kst": "매일 16:07·19:07",
    "stale_hours": 36,
    "steps": [
     {

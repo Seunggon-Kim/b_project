@@ -381,3 +381,16 @@ def test_page_texts_api_js_is_always_a_library(tmp_path):
     x = site / "pages" / "x.html"
     texts = lx.page_texts([x], always={(site / "js" / "api.js").resolve()})
     assert lx.source_routes(texts[x], ["/games", "/players/:id/arsenal"], {}) == {"/games"}
+
+
+def test_예약_시각이_여럿이면_모두_읽습니다():
+    # roster 는 GitHub 가 예약 실행을 빼먹는 날이 있어 하루 두 번 돕니다(2026-10-05).
+    text = ("on:\n  schedule:\n    - cron: '7 7 * * *'\n    - cron: '7 10 * * *'\n"
+            "  # - cron: '0 0 * * *'  (주석은 빼고 봅니다)\n")
+    w = lx.parse_workflow(text)
+    assert w["crons"] == ["7 7 * * *", "7 10 * * *"]
+    assert w["cron_utc"] == "7 7 * * *"
+    assert lx.schedule_kst(w["crons"]) == "매일 16:07·19:07"
+    assert lx.schedule_kst(["33 18 * * *"]) == "매일 03:33"
+    assert lx.schedule_kst(["47 20 * * 1", "7 7 * * *"]) == "매주 화 05:47 · 매일 16:07"
+    assert lx.schedule_kst([]) is None

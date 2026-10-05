@@ -53,6 +53,16 @@ def cron_to_kst(cron):
     return cron
 
 
+def schedule_kst(crons):
+    """예약 시각 여럿을 한 줄로 씁니다. 모두 매일이면 "매일 16:07·19:07" 처럼 묶습니다."""
+    texts = [cron_to_kst(c) for c in crons]
+    if not texts:
+        return None
+    if len(texts) > 1 and all(x.startswith("매일 ") for x in texts):
+        return "매일 " + "·".join(x[len("매일 "):] for x in texts)
+    return " · ".join(texts)
+
+
 def parse_workflow(text):
     """워크플로 YAML 글자에서 실행 시각과 (단계 이름, 스크립트) 목록을 뽑습니다.
 
@@ -63,7 +73,10 @@ def parse_workflow(text):
     그 항목의 `name:` 으로 채웁니다. 이름 없는 단계가 앞 단계의 이름을
     물려받지 않습니다. 같은 (단계, 스크립트)는 한 번만 넣습니다.
     """
-    m = CRON.search(text)
+    # 예약 시각은 주석이 아닌 줄의 `cron:` 을 모두 읽습니다(roster 는 하루 두 번).
+    crons = [m.group(2) for line in text.splitlines()
+             if not line.lstrip().startswith("#")
+             for m in [CRON.search(line)] if m]
     steps, seen, name, key_indent = [], set(), None, None
     for line in text.splitlines():
         if line.lstrip().startswith("#"):
@@ -88,7 +101,7 @@ def parse_workflow(text):
             if (name, script) not in seen:
                 seen.add((name, script))
                 steps.append({"name": name, "script": script})
-    return {"cron_utc": m.group(2) if m else None, "steps": steps}
+    return {"cron_utc": crons[0] if crons else None, "crons": crons, "steps": steps}
 
 
 def job_keys(text):

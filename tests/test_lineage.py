@@ -313,3 +313,8 @@ def test_예약_작업이_부르는_스크립트마다_설명이_있습니다():
         if s["desc"]:
             assert re.search(r"니다\)?\.$", s["desc"].rstrip()), s["path"]
             assert "D1_WRITE" not in s["desc"], s["path"]
+
+
+def test_roster_는_하루_두_번_돕니다():
+    roster = next(j for j in bl.build(ROOT)["jobs"] if j["id"] == "roster")
+    assert roster["schedule_kst"] == "매일 16:07·19:07"

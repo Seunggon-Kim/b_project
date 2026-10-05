@@ -56,8 +56,8 @@ def build(root=ROOT):
             steps.append({"name": s["name"], "script": s["script"], "status_key": keys.get(w)})
             script_jobs.setdefault(s["script"], set()).add(w)
         jobs.append({
-            "id": w, "workflow": w + ".yml", "cron_utc": wf["cron_utc"],
-            "schedule_kst": lx.cron_to_kst(wf["cron_utc"]) if wf["cron_utc"] else None,
+            "id": w, "workflow": w + ".yml", "cron_utc": ", ".join(wf["crons"]) or None,
+            "schedule_kst": lx.schedule_kst(wf["crons"]),
             "stale_hours": STALE_HOURS[w], "steps": steps,
         })
 
