@@ -91,6 +91,20 @@
     return ['bstats', 'team', what, st.tab === 'rec' ? '' : st.group, when].filter(Boolean).join('_') + '.csv';
   }
 
+  /**
+   * 기간 입력의 기본값 { start, end } 입니다(두 주, 순수 함수).
+   * 끝: 진행 중인 시즌이면 오늘(한국 시각), 아니면 그 시즌 마지막 정규시즌 경기 날짜,
+   *     그 날짜를 아직 모르거나 못 받았으면 9월 30일입니다.
+   * 시작: 끝 − 13일. 첫 경기 날짜를 알면 그보다 앞서지 않습니다.
+   * state 는 season.js loadSeasonState 결과(없으면 null), today 는 kstToday() 결과입니다.
+   */
+  function rangeDefault(y, state, today) {
+    const end = state && state.live ? today.iso : (state && state.lastRegularDate) || `${y}-09-30`;
+    let start = new Date(Date.parse(end + 'T00:00:00Z') - 13 * 86400000).toISOString().slice(0, 10);
+    if (state && state.firstDate && start < state.firstDate) start = state.firstDate;
+    return { start: start, end: end };
+  }
+
   // ===== 화면(브라우저에서만) =====
 
   const SEASON_CAVEAT = '출처: KBO 공식 선수 기록을 팀별로 합산해 계산합니다. 비율 지표는 성분에서 다시 계산합니다. 시즌 중 트레이드된 선수는 그 시즌 기록 전체가 한 팀으로 잡혀 팀 합산이 조금 어긋날 수 있습니다.';
@@ -100,13 +114,16 @@
   const REC_CAVEAT = '승패는 공식 순위표입니다. 득점·실점과 홈·원정·1점차·월별·상대 전적은 정규시즌 경기 결과에서 셉니다(2008년부터). 2007년 이전 득점·실점은 공식 선수 기록 합계입니다.';
   const REC_RANGE_CAVEAT = '선택한 기간의 정규시즌 경기 결과로 승패·득실을 셉니다.';
   const LEAGUE2_CAVEAT = ' 1999·2000년은 드림·매직 양대 리그라 승차는 리그 안에서 잰 값입니다.';
-  const LIVE_CAVEAT = ' 올해 승패와 경기 수는 KBO 실시간 순위입니다.';
+  const LIVE_CAVEAT = ' 진행 중인 시즌의 승패와 경기 수는 KBO 실시간 순위입니다.';
 
   const S = {
     st: null, seasons: [], refs: { errors: [] },
     season: {}, games: {}, range: {}, standings: null,
     custom: { bat: null, pit: null }, panelOpen: false,
-    seasonErrors: [], seq: 0, last: null, pbpMax: new Date().getFullYear(),
+    // pbpMax: 기록이 있는 가장 최근 시즌(시즌 목록 맨 앞). '기록 있음' 판단에만 씁니다.
+    // kst: 한국 시각 오늘. state: 시즌 → season.js loadSeasonState 결과(진행 중 판단·기간 기본값).
+    seasonErrors: [], seq: 0, last: null, pbpMax: 0,
+    kst: null, state: {}, stateLoading: {},
   };
 
   let tipHide = function () {};
@@ -114,10 +131,6 @@
   function $(id) { return document.getElementById(id); }
   function mode() { return S.st.start && S.st.end ? 'range' : 'season'; }
   function ymd(d) { return Number(String(d).replace(/-/g, '')); }
-  function fmtDate(dt) {
-    const z = n => String(n).padStart(2, '0');
-    return `${dt.getFullYear()}-${z(dt.getMonth() + 1)}-${z(dt.getDate())}`;
-  }
   function fmtYmd(n) {
     const s = String(n === null || n === undefined ? '' : n);
     return s.length === 8 ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : s;
@@ -127,6 +140,12 @@
   }
   function keysNow() {
     return visibleKeys(S.st.tab, S.st.group, mode(), S.st.season, S.custom[S.st.tab]);
+  }
+
+  /** 진행 중인 시즌인지입니다(js/stats/season.js 판단). 한국 시각 올해 시즌 판단은 init 에서 받아 둡니다. */
+  function liveSeason(y) {
+    const s = S.state[y];
+    return !!(s && s.live);
   }
 
   function writeUrl(replace) {
@@ -167,12 +186,27 @@
     a.min = b.min = `${y}-01-01`;
     a.max = b.max = `${y}-12-31`;
     if (mode() === 'range') { a.value = S.st.start; b.value = S.st.end; return; }
-    // 기본 두 주입니다. 올해면 오늘까지, 지난 시즌이면 9월 말까지입니다.
-    const now = new Date();
-    const end = y === now.getFullYear() ? now : new Date(y, 8, 30);
-    a.value = fmtDate(new Date(end.getTime() - 13 * 86400000));
-    b.value = fmtDate(end);
+    // 기본 두 주입니다(rangeDefault). 그 시즌 경기 일정을 아직 모르면 9월 30일 기준으로 두었다가 받으면 다시 맞춥니다.
+    const def = rangeDefault(y, S.state[y] || null, S.kst);
+    a.value = def.start;
+    b.value = def.end;
     note.textContent = '';
+    if (!S.state[y]) loadStateFor(y, def);
+  }
+
+  /**
+   * 그 시즌의 경기 일정 요약(season.js)을 받아 기간 기본값을 다시 맞춥니다. 받는 동안
+   * 다른 시즌·기간으로 옮겼거나 날짜를 고쳤으면 덮어쓰지 않습니다. 실패하면 콘솔에만
+   * 남기고 9월 30일 기준을 그대로 둡니다.
+   */
+  function loadStateFor(y, shown) {
+    if (S.stateLoading[y]) return;
+    S.stateLoading[y] = TS.season.loadSeasonState(root.KBO_API_BASE, y).then(function (r) {
+      S.state[y] = r;
+      if (r.failed) console.warn(`${y} 시즌 경기 일정을 받지 못해 기간 기본값을 9월 30일 기준으로 둡니다`, r.error);
+      if (S.st.season === y && mode() !== 'range'
+        && $('range-start').value === shown.start && $('range-end').value === shown.end) syncRange();
+    });
   }
 
   /** 지금 화면에 필요한 데이터를 받습니다. 받은 것은 기억하고, 실패한 것은 다시 받습니다. */
@@ -191,17 +225,17 @@
     if (need.games && stale(S.games[y])) jobs.push(D.loadGames(base, y).then(r => { S.games[y] = r; }));
     const rk = st.start + '|' + st.end;
     if (need.range && stale(S.range[rk])) jobs.push(D.loadRange(base, st.start, st.end).then(r => { S.range[rk] = r; }));
-    // 올해(가장 최근 시즌)는 승패·경기 수를 실시간 순위로 받습니다.
-    if (need.season && y === S.pbpMax && stale(S.standings)) jobs.push(D.loadStandings(base).then(r => { S.standings = r; }));
+    // 진행 중인 시즌은 승패·경기 수를 실시간 순위로 받습니다(끝난 시즌에 다음 해 순위가 붙지 않게).
+    if (need.season && liveSeason(y) && stale(S.standings)) jobs.push(D.loadStandings(base).then(r => { S.standings = r; }));
     await Promise.all(jobs);
   }
 
   /**
-   * 올해면 실시간 순위, 아니면 null(저장된 순위표를 씀)입니다.
+   * 진행 중인 시즌이면 실시간 순위, 아니면 null(저장된 순위표를 씀)입니다.
    * 실시간 순위를 못 받으면 알림을 남기고 저장된 순위표로 돌아갑니다.
    */
   function liveRank(alerts) {
-    if (S.st.season !== S.pbpMax || !S.standings) return null;
+    if (!liveSeason(S.st.season) || !S.standings) return null;
     if (S.standings.errors.length || !S.standings.teams.length) {
       errAlerts(alerts, S.standings.errors);
       alerts.push({ kind: 'warn', text: '실시간 순위를 받지 못해 저장된 순위표를 씁니다. 저장된 순위표는 시즌 중 갱신이 늦을 수 있습니다.' });
@@ -295,6 +329,9 @@
     const alerts = [];
     errAlerts(alerts, S.seasonErrors);
     errAlerts(alerts, S.refs.errors);
+    // 진행 중 판단을 못 받았으면 올해 시즌을 진행 중으로 보고 있음을 알립니다(올해 시즌을 볼 때만).
+    const ks = S.kst ? S.state[S.kst.y] : null;
+    if (ks && ks.failed && y === S.kst.y) alerts.push({ kind: 'warn', text: TS.season.FAIL_TEXT });
     syncTabs();
     $('ts-title').textContent = titleText();
 
@@ -330,7 +367,7 @@
         }
         // 끝난 시즌에서 경기 결과가 공식 순위표와 다르면 알립니다. 진행 중
         // 시즌은 실시간 순위와 하루 차이가 정상이라 알리지 않습니다.
-        if (splits && y < S.pbpMax) {
+        if (splits && !liveSeason(y)) {
           let mm = M.recordMismatches(v.rank, splits);
           if (st.team) mm = mm.filter(x => x.team === st.team);
           if (mm.length) {
@@ -366,7 +403,7 @@
       const tbl = st.tab === 'bat' ? v.bat : v.pit;
       rows = tbl.rows;
       league = rows.length ? tbl.league : null;
-      caveat = SEASON_CAVEAT + (y === S.pbpMax ? LIVE_SEASON_CAVEAT : '') + (y < PBP_MIN ? OLD_CAVEAT : '') + (live ? LIVE_CAVEAT : '');
+      caveat = SEASON_CAVEAT + (liveSeason(y) ? LIVE_SEASON_CAVEAT : '') + (y < PBP_MIN ? OLD_CAVEAT : '') + (live ? LIVE_CAVEAT : '');
     }
 
     fillTeams(rows.map(r => r.team));
@@ -571,10 +608,14 @@
       S.st = parseState(location.search);
       $('ts-table').innerHTML = createLoadingSpinner();
       const base = root.KBO_API_BASE;
-      const got = await Promise.all([TS.data.loadSeasons(base), TS.data.loadRefs(base)]);
+      S.kst = TS.season.kstToday();
+      // 한국 시각 올해 시즌만 진행 중일 수 있어, 그 해 판단을 시즌 목록과 함께 받습니다.
+      const got = await Promise.all([TS.data.loadSeasons(base), TS.data.loadRefs(base), TS.season.loadSeasonState(base, S.kst.y)]);
       S.seasons = got[0].seasons;
       S.seasonErrors = got[0].errors;
       S.refs = got[1];
+      S.state[S.kst.y] = got[2];
+      if (got[2].failed) console.warn(TS.season.FAIL_TEXT, got[2].error);
       S.pbpMax = S.seasons[0];
       normalize();
       if (S.st.group === 'custom') S.panelOpen = true;
@@ -588,7 +629,7 @@
     }
   }
 
-  const api = { parseState, toSearch, visibleKeys, defaultSort, pickSort, csvName, dataReady };
+  const api = { parseState, toSearch, visibleKeys, defaultSort, pickSort, csvName, dataReady, rangeDefault };
   TS.page = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (typeof document !== 'undefined' && document.getElementById('ts-table')) {
