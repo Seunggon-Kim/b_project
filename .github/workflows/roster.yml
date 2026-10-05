@@ -114,11 +114,15 @@ jobs:
       # 퓨처스 올 시즌 기록입니다. 2군 경기는 매일 있으므로 그날 것만
       # 다시 받습니다(12팀 x 타자·투수, 약 40초). 지난 시즌은 바뀌지
       # 않아 손으로 한 번 받아 둔 것으로 충분합니다.
+      #
+      # 올 시즌은 `--current` 가 정합니다(올해 1군 정규시즌 경기가 아직
+      # 없으면 지난 시즌). 예전에는 `--season 2026` 을 박아 두어 2027 이
+      # 와도 2026 만 받았습니다(2026-10-05 검토).
       - name: 퓨처스 올 시즌 기록 갱신
         id: futures
         if: ${{ !cancelled() }}
         continue-on-error: true
-        run: python data_collection/futures_records.py --season 2026
+        run: python data_collection/futures_records.py --current
 
       # futures_season_stats 의 실행 기록입니다. 계보 탭의 상태 점이 봅니다.
       - name: 퓨처스 기록 결과 기록

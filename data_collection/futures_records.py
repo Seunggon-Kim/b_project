@@ -39,6 +39,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "data_collection"))
 
 from kbo_http import Session  # noqa: E402
+from kbo_season import record_season  # noqa: E402
 from mysql_sink import mirror  # noqa: E402
 
 BASE = "https://www.koreabaseball.com/Futures/Player/"
@@ -129,12 +130,30 @@ def mysql_write_futures_stats(sink, rows, columns):
     return sink.upsert("futures_season_stats", columns, KEY, rows)
 
 
+def current_pick(listed, year):
+    """--current 로 받을 시즌입니다.
+
+    year 는 kbo_season.record_season 입니다(올해 1군 정규시즌 경기가 끝났으면
+    올해, 아니면 지난해). 기록실 목록에 그해가 아직 없으면 목록에서 그 앞의
+    가장 최근 시즌입니다.
+
+    예전에는 roster.yml 이 `--season 2026` 을 박아 두어 2027 이 와도 2026 만
+    다시 받았습니다(2026-10-05 검토). 퓨처스는 1군보다 며칠 먼저 시작할 수
+    있어, 1군 개막 전 며칠은 지난 시즌을 받습니다. 끝난 시즌이라 값이
+    같습니다.
+    """
+    earlier = [y for y in listed if y <= year]
+    return year if year in listed else (max(earlier) if earlier else year)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--from", dest="year_from", type=int, default=None)
     ap.add_argument("--to", dest="year_to", type=int, default=None)
     ap.add_argument("--season", type=int, default=None,
                     help="한 시즌만 합니다")
+    ap.add_argument("--current", action="store_true",
+                    help="올 시즌만 합니다(올해 1군 정규시즌 경기가 아직 없으면 지난 시즌)")
     ap.add_argument("--kind", choices=["batter", "pitcher", "both"],
                     default="both")
     ap.add_argument("--delay", type=float, default=0.3)
@@ -151,6 +170,8 @@ def main():
 
     if args.season:
         seasons = [args.season]
+    elif args.current:
+        seasons = [current_pick(seasons, record_season())]
     else:
         lo = args.year_from or min(seasons)
         hi = args.year_to or max(seasons)

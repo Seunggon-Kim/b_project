@@ -18,7 +18,9 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "data_collection"))
 
+import futures_records  # noqa: E402
 import kbo_season  # noqa: E402
+import team_ranks  # noqa: E402
 
 
 def load_official():
@@ -74,3 +76,81 @@ def test_daily_적재는_수집이_알린_시즌의_CSV_를_읽습니다():
     for kind, step in (("batter", "scrape_batter"), ("pitcher", "scrape_pitcher")):
         assert ("%s_stats_${{ steps.%s.outputs.season }}.csv" % (kind, step)) in wf
         assert re.search(r"id: %s\s" % step, wf)
+
+
+# ------------------------------------------------------------ 팀 순위
+
+def test_팀_순위_current_는_기록_시즌을_씁니다():
+    src = (ROOT / "data_collection" / "team_ranks.py").read_text(encoding="utf-8")
+    main = src.split("def main", 1)[1]
+    assert "record_season()" in main
+    assert "current_season()" not in main
+
+
+@pytest.mark.parametrize("today,schedule,want", CASES)
+def test_팀_순위가_고르는_시즌(today, schedule, want):
+    # 기록실 목록에 2027 이 비시즌에 이미 올라와 있어도 2026 을 다시 받습니다.
+    listed = [2025, 2026, 2027] if today.startswith("2027") else [2025, 2026]
+    assert team_ranks.pick_current(listed, record(schedule)(today)) == [want]
+
+
+def rank_rows(season, names):
+    fid = {"KIA": "HT", "LG": "LG", "SSG": "SK"}
+    return [{"franchise_id": fid.get(n), "season": season, "team_name": n,
+             "league": "단일"} for n in names]
+
+
+def test_팀_순위는_team_seasons_에_없는_줄만_넣습니다(fake_sink):
+    rows = rank_rows(2027, ["KIA", "LG", "SSG", "새이름"])
+    team_ranks.mysql_write_ranks(fake_sink, rows, fill_team_seasons=True)
+    kinds = [c[0] for c in fake_sink.calls]
+    assert kinds == ["upsert", "refresh_count", "insert_missing", "refresh_count"]
+    _, table, cols, keys, got = fake_sink.calls[2]
+    assert (table, cols, keys) == ("team_seasons", ["franchise_id", "season", "team_name"],
+                                   ["franchise_id", "season"])
+    # 프랜차이즈를 모르는 이름(구단명 변경)은 넣지 않습니다.
+    assert got == [{"franchise_id": "HT", "season": 2027, "team_name": "KIA"},
+                   {"franchise_id": "LG", "season": 2027, "team_name": "LG"},
+                   {"franchise_id": "SK", "season": 2027, "team_name": "SSG"}]
+
+
+def test_팀_순위_되채우기는_team_seasons_를_건드리지_않습니다(fake_sink):
+    team_ranks.mysql_write_ranks(fake_sink, rank_rows(1999, ["LG"]))
+    assert [c[0] for c in fake_sink.calls] == ["upsert", "refresh_count"]
+
+
+def test_팀_순위_current_만_team_seasons_를_채웁니다():
+    src = (ROOT / "data_collection" / "team_ranks.py").read_text(encoding="utf-8")
+    assert "fill_team_seasons=args.current" in src
+
+
+# ------------------------------------------------------------ 퓨처스 기록
+
+@pytest.mark.parametrize("listed,year,want", [
+    ([2024, 2025, 2026], 2026, 2026),        # 오늘
+    ([2024, 2025, 2026], 2027, 2026),        # 2027 이 목록에 아직 없음
+    ([2025, 2026, 2027], 2026, 2026),        # 목록엔 있지만 1군 개막 전
+    ([2025, 2026, 2027], 2027, 2027),        # 개막 뒤
+])
+def test_퓨처스_current_가_고르는_시즌(listed, year, want):
+    assert futures_records.current_pick(listed, year) == want
+
+
+@pytest.mark.parametrize("today,schedule,want", CASES)
+def test_퓨처스_current_날짜별(today, schedule, want):
+    listed = [2025, 2026, 2027] if today == "2027-04-15" else [2025, 2026]
+    assert futures_records.current_pick(listed, record(schedule)(today)) == want
+
+
+def test_roster_퓨처스는_시즌을_박지_않습니다():
+    wf = (ROOT / ".github" / "workflows" / "roster.yml").read_text(encoding="utf-8")
+    assert "futures_records.py --current" in wf
+    assert not re.search(r"futures_records\.py --season \d{4}", wf)
+
+
+def test_워크플로에_시즌을_박지_않습니다():
+    # 예전에는 roster.yml 이 `--season 2026` 을, daily.yml 이 `date +%Y` 를 썼습니다.
+    for name in ("daily.yml", "roster.yml", "weekly.yml", "monthly.yml"):
+        wf = (ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
+        runs = "\n".join(line for line in wf.splitlines() if not line.strip().startswith("#"))
+        assert not re.search(r"--(season|year|from|to) 20\d\d", runs), name

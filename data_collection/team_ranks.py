@@ -41,6 +41,24 @@ KBO 기록실이 45시즌을 그대로 줍니다.
 (2026-10-03 발견). 그래서 daily 가 `--current` 로 올 시즌만 다시 받습니다.
 KBO 기록실 한 페이지라 가볍습니다. 그해 순위가 아직 없으면(비시즌)
 건너뜁니다.
+
+## 올 시즌은 날짜가 아니라 경기로 정합니다
+
+`--current` 의 올 시즌은 kbo_season.record_season 입니다. 올해 정규시즌
+경기가 하나라도 끝났으면 올해, 아니면 지난해입니다. 한국 날짜의 올해로
+두면 2027년 1월~개막 사이에 기록실이 2027 을 빈 표로 내놓는 순간 "받은
+것이 없습니다" 로 매일 실패합니다. 지난해를 다시 받는 것은 해가 없습니다
+(끝난 시즌이라 값이 같습니다).
+
+## 새 시즌의 team_seasons 를 채웁니다
+
+팀 기록실(`/teams/:id`)은 그 시즌 팀 이름을 `team_seasons` 로 프랜차이즈에
+잇습니다. 그 표는 1982~2026 을 한 번 만들고(migration/build_franchises.py)
+정기 작업이 없었습니다. 그대로면 2027 의 팀 타율·ERA·구장이 팀 기록실에서
+조용히 빠집니다. `--current` 로 받은 순위의 (프랜차이즈, 시즌, 팀 이름)
+가운데 **없는 줄만** 넣습니다. 이미 있는 줄은 건드리지 않습니다. 이름이
+처음 보는 것(구단명 변경)이면 프랜차이즈를 몰라 넣지 않습니다. 그때는
+사람이 build_franchises 로 계보를 고칩니다.
 """
 import argparse
 import datetime
@@ -54,6 +72,7 @@ sys.path.insert(0, str(ROOT / "data_collection"))
 
 from d1_load import query  # noqa: E402
 from kbo_http import Session  # noqa: E402
+from kbo_season import record_season  # noqa: E402
 from mysql_sink import mirror  # noqa: E402
 
 URL = "https://www.koreabaseball.com/Record/TeamRank/TeamRank.aspx"
@@ -160,10 +179,40 @@ COLUMNS = ["franchise_id", "season", "team_name", "league", "rank",
            "games", "wins", "losses", "draws", "pct", "gb"]
 
 
-def mysql_write_ranks(sink, rows):
-    """(season, team_name, league) 가 같으면 나머지 열을 덮어씁니다."""
+TEAM_SEASON_COLUMNS = ["franchise_id", "season", "team_name"]
+TEAM_SEASON_KEYS = ["franchise_id", "season"]
+
+
+def team_season_rows(rows):
+    """순위 행에서 team_seasons 에 넣을 (프랜차이즈, 시즌, 팀 이름)입니다.
+
+    프랜차이즈를 모르는 행은 뺍니다. 같은 줄은 한 번만 둡니다.
+    """
+    out, seen = [], set()
+    for r in rows:
+        fid = r.get("franchise_id")
+        if not fid:
+            continue
+        key = (fid, int(r["season"]))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"franchise_id": fid, "season": key[1], "team_name": r["team_name"]})
+    return out
+
+
+def mysql_write_ranks(sink, rows, fill_team_seasons=False):
+    """(season, team_name, league) 가 같으면 나머지 열을 덮어씁니다.
+
+    fill_team_seasons 면 team_seasons 에 없는 줄만 넣습니다(맨 위 설명).
+    """
     n = sink.upsert("team_season_rank", COLUMNS, KEYS, rows)
     sink.refresh_count("team_season_rank")
+    if fill_team_seasons:
+        ts = team_season_rows(rows)
+        if ts:
+            sink.insert_missing("team_seasons", TEAM_SEASON_COLUMNS, TEAM_SEASON_KEYS, ts)
+            sink.refresh_count("team_seasons")
     return n
 
 
@@ -198,7 +247,8 @@ def main():
     ap.add_argument("--to", dest="year_to", type=int, default=None)
     ap.add_argument("--season", type=int, default=None)
     ap.add_argument("--current", action="store_true",
-                    help="올 시즌(한국 날짜)만. 그해 순위가 아직 없으면 건너뜁니다")
+                    help="올 시즌만(올해 정규시즌 경기가 아직 없으면 지난 시즌). "
+                         "그해 순위가 아직 없으면 건너뜁니다")
     ap.add_argument("--delay", type=float, default=0.3)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
@@ -211,7 +261,7 @@ def main():
         return 1
 
     if args.current:
-        year = current_season()
+        year = record_season()
         seasons = pick_current(seasons, year)
         if not seasons:
             print("%d 순위가 아직 없습니다(비시즌). 건너뜁니다." % year)
@@ -254,7 +304,8 @@ def main():
         print("[미리보기] 넣지 않았습니다.")
         return 0
 
-    mirror("team_ranks", lambda sink: mysql_write_ranks(sink, rows))
+    mirror("team_ranks", lambda sink: mysql_write_ranks(
+        sink, rows, fill_team_seasons=args.current))
     return 0
 
 
