@@ -76,14 +76,15 @@
         "kbo_record"
       ],
       "writes": [
-        "team_season_rank"
+        "team_season_rank",
+        "team_seasons"
       ],
       "reads": [],
       "status_keys": {
         "daily": "team_ranks"
       },
-      "note": "team_seasons 는 옛 시즌 표기명을 프랜차이즈에 잇는 조회용입니다.",
-      "desc": "KBO 기록실 팀 순위에서 올 시즌 순위·경기 수·승패무·승률·게임차를 받아 MySQL team_season_rank 에 덮어씁니다. 비시즌(그해 순위가 아직 없을 때)은 건너뜁니다. 1982~2025는 2026-08-29에 한 번 받은 값 그대로입니다."
+      "note": "team_seasons 는 옛 시즌 표기명을 프랜차이즈에 잇는 조회용이고, 올 시즌 줄이 없으면 그것만 채웁니다.",
+      "desc": "KBO 기록실 팀 순위에서 올 시즌 순위·경기 수·승패무·승률·게임차를 받아 MySQL team_season_rank 에 덮어씁니다. 올 시즌은 올해 정규시즌 경기가 끝났으면 올해, 아니면 지난해입니다. 그해 순위가 아직 없으면 건너뜁니다. 받은 순위로 team_seasons 에 올 시즌 줄이 없으면 그것만 넣습니다(새 시즌의 팀 기록실이 비지 않게). 1982~2025는 2026-08-29에 한 번 받은 값 그대로입니다."
     },
     "data_collection/official_stats_http.py": {
       "sources": [
@@ -330,7 +331,7 @@
   },
   "manual_tables": {
     "franchises": "구단 계보표입니다. migration/build_franchises.py 가 KBO 기록실 팀 드롭다운을 읽어 로컬 DB 에 한 번 만들었고, 정기 작업은 없습니다.",
-    "team_seasons": "시즌별 팀 표기명입니다. franchises 와 같이 migration/build_franchises.py 로 한 번 만들었고, 정기 작업은 없습니다.",
+    "team_seasons": "시즌별 팀 표기명입니다. 1982~2026 은 franchises 와 같이 migration/build_franchises.py 로 한 번 만들었습니다. 2027 부터는 daily 팀 순위(team_ranks.py --current)가 그 시즌 줄이 없을 때만 채웁니다.",
     "teams": "현재 10팀 목록입니다. database/schema.sql 의 INSERT OR IGNORE 시드로 채웠고, 정기 작업은 없습니다.",
     "futures_teams": "퓨처스 팀 목록입니다. data_collection/futures_schedule.py 의 시드값(INSERT OR REPLACE)으로 한 번 채웠고, 정기 작업은 없습니다.",
     "stadium_dim": "구장 정보입니다. migration/restore_derived.py 가 한 번 복원해 채웠고, 정기 작업은 없습니다.",
