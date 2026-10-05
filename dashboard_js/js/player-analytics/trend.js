@@ -8,7 +8,7 @@
   'use strict';
   const PA = root.PlayerAnalytics = root.PlayerAnalytics || {};
 
-  const IN2CM = 2.54, FT2CM = 30.48;
+  const IN2CM = 2.54;
   const SUMS = ['n', 'pa', 'ab', 'h', 'b1', 'b2', 'b3', 'hr', 'bbe', 'bb', 'so',
     'spd_sum', 'spd_n', 'pfx_x_sum', 'pfx_z_sum', 'pfx_n', 'px_sum', 'pz_sum', 'loc_n'];
 
@@ -61,10 +61,6 @@
       v: function (s) { return ratio(s.b1 + 2 * s.b2 + 3 * s.b3 + 4 * s.hr, s.ab); }, note: function (s) { return comma(s.ab) + '타수'; } },
     { key: 'spd', group: '투구', label: '평균 구속 (km/h)', tip: '이 구종의 평균 구속입니다.',
       v: function (s) { return ratio(s.spd_sum, s.spd_n); }, note: function (s) { return comma(s.spd_n) + '구'; } },
-    { key: 'pz', group: '투구', label: '평균 공 높이 (cm)', tip: '홈플레이트를 지날 때 공 높이 평균입니다(땅에서).',
-      v: function (s) { const r = ratio(s.pz_sum, s.loc_n); return r === null ? null : r * FT2CM; }, note: function (s) { return comma(s.loc_n) + '구'; } },
-    { key: 'px', group: '투구', label: '평균 공 좌우 위치 (cm)', tip: '홈플레이트를 지날 때 좌우 위치 평균입니다. 포수 시점, 가운데 0, + 는 1루 쪽입니다.',
-      v: function (s) { const r = ratio(s.px_sum, s.loc_n); return r === null ? null : r * FT2CM; }, note: function (s) { return comma(s.loc_n) + '구'; } },
     { key: 'rv', group: '구종 가치', label: '구종 가치 (점)', tip: '이 구종으로 던진 공의 득점 가치 합입니다. 실점을 막으면 + 입니다. 카운트를 고르면 쓸 수 없습니다.',
       v: function (s) { return s.rv_n > 0 ? s.rv : null; }, note: function (s) { return comma(s.rv_n) + '구'; } },
   ];
@@ -153,7 +149,7 @@
     return comma(r);
   }
 
-  // 0 부터 그리는 지표(비율·개수)입니다. 나머지(무브먼트·위치·구속·가치)는 값 범위에 맞춥니다.
+  // 0 부터 그리는 지표(비율·개수)입니다. 나머지(무브먼트·구속·가치)는 값 범위에 맞춥니다.
   const FROM_ZERO = { pct: 1, n: 1, h: 1, b1: 1, b2: 1, b3: 1, hr: 1, bbe: 1, bb_pct: 1, k_pct: 1, ba: 1, slg: 1 };
   function niceStep(span) {
     const raw = span / 4, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
