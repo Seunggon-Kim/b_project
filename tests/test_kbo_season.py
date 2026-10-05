@@ -116,6 +116,12 @@ def test_끝난_경기만_볼_때는_경기_전_개막일을_세지_않습니다
     ("2027-03-27", played_2027("2027-03-26"), 2026),       # 개막일 새벽(경기 전)
     ("2027-03-28", played_2027("2027-03-27"), 2027),       # 개막 다음 날
     ("2027-04-15", played_2027("2027-04-14"), 2027),       # 시즌 중
+    ("2027-05-31", {}, 2026),                              # 아직 비시즌으로 봅니다
+    # 6월 1일이 되도록 정규시즌 경기가 없으면 일정이 이상한 것입니다(검토 I1).
+    # 지난해로 물러서지 않고 올해로 둡니다. 가장 늦은 개막은 2020-05-05 였습니다.
+    ("2027-06-01", {}, 2027),
+    ("2027-06-15", {}, 2027),
+    ("2026-11-20", {}, 2026),                              # 오늘 구간(포스트시즌 뒤)
 ])
 def test_기록을_받을_시즌(today, schedule, want):
     assert ks.record_season(today, fetch=fake(schedule)) == want
@@ -135,15 +141,92 @@ def test_일정을_못_받으면_예전처럼_올해입니다(capsys):
     assert "올해(2027)" in capsys.readouterr().out
 
 
+def test_6월이_되도록_일정이_비면_경고를_찍습니다(capsys):
+    assert ks.record_season("2027-06-15", fetch=fake({})) == 2027
+    assert "일정이 이상할 수 있어" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("odd", [
+    {"gameDate": "2027-04-14", "statusCode": "RESULT"},          # roundCode 없음
+    {"roundCode": "kbo_r", "statusCode": "RESULT"},               # gameDate 없음
+    {"gameDate": "2027-04-14", "roundCode": "kbo_r"},             # statusCode 없음
+    "20270414LGSS02027",                                          # dict 가 아님
+])
+def test_경기_모양이_다르면_예외입니다(odd, capsys):
+    s = {(2027, 4): [odd]}
+    with pytest.raises(ValueError):
+        ks.opening_day(2027, fetch=fake(s))
+    # 기록 시즌은 지난해로 숨지 않고 예전처럼 올해로 둡니다(경고와 함께).
+    assert ks.record_season("2027-04-15", fetch=fake(s)) == 2027
+    assert "못 읽어" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("body", [
+    {"success": False, "result": {"games": []}},
+    {"success": True, "result": {}},
+    {"success": True, "result": {"games": None}},
+    {"success": True},
+    [],
+    {"success": True, "result": {"games": [game("2027-04-14", "kbo_r")], "gameTotalCount": 2}},
+])
+def test_응답_모양이_다르면_예외입니다(body):
+    with pytest.raises(ValueError):
+        ks.games_of(body)
+
+
+def test_정상_응답은_경기_목록입니다():
+    assert ks.games_of({"code": 200, "success": True,
+                        "result": {"games": [], "gameTotalCount": 0}}) == []
+    one = [game("2027-04-14", "kbo_r")]
+    assert ks.games_of({"success": True, "result": {"games": one, "gameTotalCount": 1}}) == one
+
+
+class Resp(io.BytesIO):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def test_받기가_한_번_실패하면_한_번_더_묻습니다(monkeypatch):
+    calls, slept = [], []
+
+    def urlopen(req, timeout=None):
+        calls.append(req.full_url)
+        if len(calls) == 1:
+            raise ks.urllib.error.URLError("잠깐 끊김")
+        return Resp(json.dumps({"success": True, "result": {"games": []}}).encode())
+    monkeypatch.setattr(ks.urllib.request, "urlopen", urlopen)
+    assert ks.fetch_month(2027, 4, sleep=slept.append) == []
+    assert len(calls) == 2 and slept == [ks.RETRY_SLEEP_SEC]
+
+
+def test_두_번_다_실패하면_예외가_나갑니다(monkeypatch):
+    slept = []
+
+    def urlopen(req, timeout=None):
+        raise TimeoutError("시간 초과")
+    monkeypatch.setattr(ks.urllib.request, "urlopen", urlopen)
+    with pytest.raises(TimeoutError):
+        ks.fetch_month(2027, 4, sleep=slept.append)
+    assert slept == [ks.RETRY_SLEEP_SEC]
+
+
+def test_모양이_다른_응답은_다시_묻지_않고_예외입니다(monkeypatch):
+    calls = []
+
+    def urlopen(req, timeout=None):
+        calls.append(1)
+        return Resp(json.dumps({"success": True, "result": {}}).encode())
+    monkeypatch.setattr(ks.urllib.request, "urlopen", urlopen)
+    with pytest.raises(ValueError):
+        ks.fetch_month(2027, 4, sleep=lambda s: None)
+    assert calls == [1]
+
+
 def test_한_달_치_일정을_묻습니다(monkeypatch):
     seen = []
-
-    class Resp(io.BytesIO):
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
 
     def urlopen(req, timeout=None):
         seen.append(req.full_url)
