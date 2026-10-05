@@ -265,8 +265,10 @@
                 ]);
                 if (live.failed) console.warn(SEASON.FAIL_TEXT, live.error);
                 LIVE_YEAR = live.live ? live.season : null;
-                document.getElementById('pf-live-year').textContent = LIVE_YEAR ? `${LIVE_YEAR} 시즌` : '';
-                document.getElementById('pf-live-note').hidden = !LIVE_YEAR;
+                // 그해 파크팩터 행이 아직 없으면(개막 직후, 비시즌 판단 실패) 문장을 숨깁니다.
+                const showNote = LIVE_YEAR !== null && pf.some(r => r.season === LIVE_YEAR);
+                document.getElementById('pf-live-year').textContent = showNote ? `${LIVE_YEAR} 시즌` : '';
+                document.getElementById('pf-live-note').hidden = !showNote;
                 PF_ROWS = pf;
                 RE_ROWS = re24.filter(r => r.season !== 0);     // 통합(0) 제외
                 RE_MIN = Math.min(...RE_ROWS.map(r => r.re_value));
