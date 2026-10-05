@@ -215,8 +215,9 @@
 
   /** 던지기 전 볼카운트 묶음(투수 기준, FanGraphs). 3-2(full)는 유리·불리·같음 어디에도 넣지 않습니다. */
   function countGroup(balls, strikes) {
-    const b = num(balls), k = num(strikes);
+    let b = num(balls), k = num(strikes);
     if (b === null || k === null) return null;
+    b = Math.min(b, 3); k = Math.min(k, 2);  // 원천에 드물게 볼 4가 있습니다(API 세션 안내). 3-2 끝으로 봅니다.
     if (b === 3 && k === 2) return 'full';
     return k > b ? 'ahead' : b > k ? 'behind' : 'even';
   }
@@ -250,7 +251,7 @@
       case 'rhb': return p.bat_side === 'R';
       case 'lhb': return p.bat_side === 'L';
       case 'ahead': case 'behind': case 'even': return countGroup(p.balls, p.strikes) === pick;
-      case 'ts': return num(p.strikes) === 2;
+      case 'ts': return num(p.strikes) !== null && num(p.strikes) >= 2;
       default: return true;
     }
   }
