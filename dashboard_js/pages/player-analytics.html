@@ -97,6 +97,15 @@
                     <div class="pa-card-body" id="player-card"></div>
                 </div>
 
+                <!-- Savant 식 Percentile Rankings 카드입니다. 1군 타자만 켭니다(setupBatPctCard). -->
+                <div class="pa-card pa-card--pct hidden" id="pa-pct-card">
+                    <div class="pa-card-tabs">
+                        <span class="pa-card-tab">Percentile Rankings</span>
+                        <select id="pa-pct-season" class="pa-move-season" aria-label="Percentile Rankings 시즌"></select>
+                    </div>
+                    <div class="pa-card-body" id="pa-pct-body"></div>
+                </div>
+
                 <!-- Savant 식 무브먼트 카드입니다. 1군 투수만 켭니다(setupMovementCard). -->
                 <div class="pa-card pa-card--move hidden" id="pa-move-card">
                     <div class="pa-card-tabs">
@@ -249,6 +258,7 @@
     <script src="../js/stats/season.js"></script>
     <script src="../js/player-analytics/quicklook.js"></script>
     <script src="../js/player-analytics/percentile.js"></script>
+    <script src="../js/player-analytics/batpct.js"></script>
     <script src="../js/player-analytics/movement.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/d3-array@3/dist/d3-array.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/d3-contour@4/dist/d3-contour.min.js"></script>
@@ -779,6 +789,53 @@
             if (usageBox) usageBox.innerHTML = M.usageHtml(usage, season, pv);
         }
 
+        // --- 타자 Percentile Rankings(Savant 참고) --------------------------
+        // 그 시즌 모든 타자 기록(/stats/batters)을 시즌마다 한 번 받아 지표별 안정 표본 이상끼리 백분위를 냅니다.
+        let bpToken = 0;
+        const bpSeasonCache = new Map();
+        function getLeagueBatters(season) {
+            if (!bpSeasonCache.has(season)) {
+                bpSeasonCache.set(season, API.getBatterStats(season, 2000, 0)
+                    .then(res => (res && res.batters) || null)
+                    .catch(() => null));
+            }
+            return bpSeasonCache.get(season);
+        }
+
+        function hideBatPctCard() {
+            bpToken++;  // 아직 오는 중인 응답을 버립니다.
+            const card = document.getElementById('pa-pct-card');
+            if (card && !card.classList.contains('hidden')) {
+                card.classList.add('hidden');
+                document.querySelector('.player-details-grid').classList.remove('pa-3col');
+            }
+        }
+
+        function setupBatPctCard(player, playerId) {
+            const seasons = [...new Set((player.batter_seasons || [])
+                .filter(s => Number(s.plate_appearance) > 0).map(s => Number(s.season)).filter(Number.isFinite))]
+                .sort((a, b) => b - a);
+            if (!seasons.length) { hideBatPctCard(); return; }
+            const select = document.getElementById('pa-pct-season');
+            select.innerHTML = seasons.map(y => `<option value="${y}">${y}</option>`).join('');
+            select.value = String(seasons[0]);
+            select.onchange = () => loadBatPct(playerId, Number(select.value));
+            document.getElementById('pa-pct-card').classList.remove('hidden');
+            document.querySelector('.player-details-grid').classList.add('pa-3col');
+            loadBatPct(playerId, seasons[0]);
+        }
+
+        async function loadBatPct(playerId, season) {
+            const body = document.getElementById('pa-pct-body');
+            const token = ++bpToken;
+            body.innerHTML = createLoadingSpinner();
+            const rows = await getLeagueBatters(season);
+            if (token !== bpToken) return;  // 그사이 다른 선수·시즌을 골랐습니다.
+            const B = window.PlayerAnalytics.batpct;
+            body.innerHTML = rows ? B.cardHtml(B.rank(rows, null, playerId), season)
+                : '<p class="pa-pct-empty">리그 기록을 불러오지 못했습니다.</p>';
+        }
+
         /**
          * 퓨처스(2군) 화면입니다.
          *
@@ -797,6 +854,7 @@
             statsDiv.innerHTML = createLoadingSpinner();
             hidePbpSections();
             hideMovementCard();
+            hideBatPctCard();
 
             const f = await API.getFuturesPlayer(playerId);
             if (!f) {
@@ -955,6 +1013,7 @@
 
             section.classList.remove('hidden');
             hideMovementCard();
+            hideBatPctCard();
             headerBar.innerHTML = '';
             cardDiv.innerHTML = createLoadingSpinner();
             statsDiv.innerHTML = createLoadingSpinner();
@@ -1001,6 +1060,8 @@
                 cardDiv.insertAdjacentHTML('beforeend', Q.tilesHtml(Q.seasonTiles(player)));
                 // 무브먼트 카드(1군 투수만). 타자면 끕니다.
                 setupMovementCard(player, playerId);
+                // Percentile Rankings 카드(1군 타자만). 투수면 끕니다.
+                if (isPitcher) hideBatPctCard(); else setupBatPctCard(player, playerId);
 
                 // Detailed Stats Section (Pitching)
                 const detailedSection = document.getElementById('detailed-stats-section');
