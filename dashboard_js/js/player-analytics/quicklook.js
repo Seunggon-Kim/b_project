@@ -22,10 +22,13 @@
       ['G', 'g', 'int'], ['GS', 'gs', 'int'], ['IP', 'outs', 'ip'],
       ['K%', 'kpct', 'pct'], ['BB%', 'bbpct', 'pct'], ['K-BB%', 'kbbpct', 'pct'], ['K/9', 'k9', 'f2'], ['BB/9', 'bb9', 'f2'], ['HR/9', 'hr9', 'f2'], ['BABIP', 'babip', 'avg3'], ['ERA', 'era', 'f2'], ['WHIP', 'whip', 'f2'],
     ],
+    // 타자는 FanGraphs 처럼 BB%·K% 다음 ISO·BABIP, 끝에 wOBA·wRC+ 입니다(evan 26-10-12).
+    // wOBA·wRC+ 는 build 의 ext(시즌 가중치·시즌 wRC+)가 있을 때만 값이 나옵니다.
     bat: [
       ['G', 'g', 'int'], ['PA', 'pa', 'int'], ['HR', 'hr', 'int'], ['R', 'r', 'int'], ['RBI', 'rbi', 'int'],
-      ['BB%', 'bbpct', 'pct'], ['K%', 'kpct', 'pct'],
+      ['BB%', 'bbpct', 'pct'], ['K%', 'kpct', 'pct'], ['ISO', 'iso', 'avg3'], ['BABIP', 'babip', 'avg3'],
       ['AVG', 'avg', 'avg3'], ['OBP', 'obp', 'avg3'], ['SLG', 'slg', 'avg3'], ['OPS', 'ops', 'avg3'],
+      ['wOBA', 'woba', 'avg3'], ['wRC+', 'wrc', 'idx'],
     ],
   };
 
@@ -94,15 +97,51 @@
     return fmt(v, kind);
   }
 
-  /** 1군 한눈에 보기 입니다. 칸은 최근 3시즌 + 통산입니다. */
-  function build(player, thisYear) {
+  /**
+   * 타자 wOBA·wRC+ 를 합계에 붙입니다. ext = { weights: { 시즌: 가중치 행 }, wrc: { 시즌: wRC+ } } 또는 null.
+   * 시즌 wOBA 는 그해 가중치로(선수 통계와 같은 식), 통산 wOBA 는 시즌마다 분자·분모를 더해 나눕니다
+   * (한 시즌이라도 가중치가 없으면 null). wRC+ 는 시즌마다 리그·구장 보정이 달라 통산은 비웁니다(evan).
+   */
+  function addWoba(t, season, rs, ext) {
+    if (!t) return;
+    const M = TS().metrics;
+    const W = ext && ext.weights;
+    if (season !== null) {
+      t.woba = W && W[season] ? M.wobaOf(t, W[season]) : null;
+      const r = ext && ext.wrc ? ext.wrc[season] : null;
+      t.wrc = r === null || r === undefined ? null : M.num(r);
+      return;
+    }
+    t.wrc = null;
+    t.woba = null;
+    if (!W) return;
+    const ys = [];
+    rs.forEach(function (s) { const y = Number(s.season); if (Number.isFinite(y) && ys.indexOf(y) === -1) ys.push(y); });
+    let num = 0, den = 0;
+    for (let i = 0; i < ys.length; i++) {
+      const st = total(rs.filter(function (s) { return Number(s.season) === ys[i]; }), 'bat');
+      const d = st.ab + st.bb + st.sf + st.hbp;
+      if (!(d > 0)) continue;
+      if (!W[ys[i]]) return;
+      num += M.wobaOf(st, W[ys[i]]) * d;
+      den += d;
+    }
+    t.woba = den > 0 ? num / den : null;
+  }
+
+  /** 1군 한눈에 보기 입니다. 칸은 최근 3시즌 + 통산입니다. ext 는 타자 wOBA·wRC+ 용(addWoba). */
+  function build(player, thisYear, ext) {
     const kind = kindOf(player);
     const all = seasonRows(player, kind);
     const cols = pickSeasons(player, thisYear).map(function (y) {
       const rs = all.filter(function (s) { return Number(s.season) === y; });
-      return { head: String(y), team: rs.length ? teamsOf(rs) : '-', t: total(rs, kind) };
+      const t = total(rs, kind);
+      if (kind === 'bat') addWoba(t, y, rs, ext);
+      return { head: String(y), team: rs.length ? teamsOf(rs) : '-', t: t };
     });
-    cols.push({ head: '통산', team: '-', t: total(all, kind) });
+    const career = total(all, kind);
+    if (kind === 'bat') addWoba(career, null, all, ext);
+    cols.push({ head: '통산', team: '-', t: career });
     // 리그(1군·퓨처스) 줄은 두지 않습니다. 위의 1군·퓨처스 전환이 이미 알려 줍니다(evan 결정).
     const rows = [['팀'].concat(cols.map(function (c) { return c.team; }))];
     ROWS[kind].forEach(function (d) {

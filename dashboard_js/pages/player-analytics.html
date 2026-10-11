@@ -256,6 +256,7 @@
     <script src="../js/stats/metrics.js"></script>
     <script src="../js/stats/columns.js"></script>
     <script src="../js/stats/season.js"></script>
+    <script src="../js/stats/data.js"></script>
     <script src="../js/player-analytics/quicklook.js"></script>
     <script src="../js/player-analytics/percentile.js"></script>
     <script src="../js/player-analytics/batpct.js"></script>
@@ -802,6 +803,32 @@
             return bpSeasonCache.get(season);
         }
 
+        // 타자 wOBA·wRC+ 는 선수 통계 페이지와 같은 계산입니다(공식 기록 + 가중치·파크 팩터·홈구장 참조 표,
+        // TeamStats.data.loadRefs → metrics.playerBatting). API 의 woba·wrc_plus 는 문자중계 기준이라 조금 다릅니다.
+        let batRefsP = null;
+        function batRefs() {
+            if (!batRefsP) {
+                batRefsP = window.TeamStats.data.loadRefs(API_BASE_URL)
+                    .then(refs => window.TeamStats.metrics.indexRefs(refs))
+                    .catch(() => null);
+            }
+            return batRefsP;
+        }
+        const batCalcCache = new Map();
+        /** 그 시즌 타자들의 { player_id: { woba, wrcp } } 입니다(선수 통계와 같은 값). 못 받으면 null. */
+        function leagueBatCalc(season) {
+            if (!batCalcCache.has(season)) {
+                batCalcCache.set(season, Promise.all([getLeagueBatters(season), batRefs()]).then(([rows, ix]) => {
+                    if (!rows || !ix) return null;
+                    const m = {};
+                    window.TeamStats.metrics.playerBatting(rows, season, ix).rows
+                        .forEach(r => { m[String(r.id)] = { woba: r.woba, wrcp: r.wrcp }; });
+                    return m;
+                }).catch(() => null));
+            }
+            return batCalcCache.get(season);
+        }
+
         // Batting Run Value·Chase%·Whiff% 는 /stats/batter_values 입니다. { player_id: 행 } 으로 둡니다(없으면 null, 그 세 줄만 빠짐).
         const bvSeasonCache = new Map();
         function getLeagueBatterValues(season) {
@@ -865,10 +892,15 @@
             const body = document.getElementById('pa-pct-body');
             const token = ++bpToken;
             body.innerHTML = createLoadingSpinner();
-            const [rows, pace, extra] = await Promise.all([getLeagueBatters(season), batPace(season), getLeagueBatterValues(season)]);
+            const [raw, pace, extra, calc] = await Promise.all([getLeagueBatters(season), batPace(season), getLeagueBatterValues(season), leagueBatCalc(season)]);
             if (token !== bpToken) return;  // 그사이 다른 선수·시즌을 골랐습니다.
             const B = window.PlayerAnalytics.batpct;
             const scale = pace ? B.paceScale(pace.teamGames, pace.fullGames) : 1;
+            // wOBA·wRC+ 는 선수 통계와 같은 계산값으로 바꿉니다(못 받으면 그 두 줄은 빠짐).
+            const rows = raw ? raw.map(r => {
+                const c = calc && calc[String(r.player_id)];
+                return Object.assign({}, r, { woba: c ? c.woba : null, wrc_plus: c ? c.wrcp : null });
+            }) : null;
             body.innerHTML = rows ? B.cardHtml(B.rank(rows, extra, playerId, scale, season), season, pace)
                 : '<p class="pa-bp-empty">리그 기록을 불러오지 못했습니다.</p>';
         }
@@ -1092,7 +1124,23 @@
                 // 한눈에 보기: 최근 3시즌 + 통산. 계산은 quicklook.js 입니다.
                 const isPitcher = player.position === '투수';
                 const Q = window.PlayerAnalytics.quicklook;
-                statsDiv.innerHTML = Q.tableHtml(Q.build(player, await quickLookYear()));
+                const qlYear = await quickLookYear();
+                statsDiv.innerHTML = Q.tableHtml(Q.build(player, qlYear));
+                // 타자 wOBA·wRC+ 는 선수 통계와 같은 계산(참조 표 + 그 시즌 리그 타자)을 받은 뒤 다시 그립니다.
+                // 못 받으면 그 두 줄만 '-' 입니다.
+                if (!isPitcher) {
+                    const qlId = playerId;
+                    const qlSeasons = Q.build(player, qlYear).head.slice(1, -1).map(Number);
+                    Promise.all([batRefs()].concat(qlSeasons.map(y => leagueBatCalc(y)))).then(([ix, ...calcs]) => {
+                        if (!currentPlayer || String(currentPlayer.player_id) !== String(qlId) || playerMode !== 'first') return;
+                        const wrc = {};
+                        qlSeasons.forEach((y, i) => {
+                            const c = calcs[i] && calcs[i][String(qlId)];
+                            if (c && c.wrcp !== null && c.wrcp !== undefined) wrc[y] = c.wrcp;
+                        });
+                        statsDiv.innerHTML = Q.tableHtml(Q.build(player, qlYear, { weights: ix ? ix.weights : null, wrc: wrc }));
+                    });
+                }
                 // 1군은 프로필 아래 시즌 타일(AVG·OPS·HR·RBI)을 두지 않습니다(evan 26-10-11, 옆 Percentile 카드와 겹침).
                 // 투수는 그 자리에 구종 구사율이 붙습니다(setupMovementCard).
                 // 무브먼트 카드(1군 투수만). 타자면 끕니다.

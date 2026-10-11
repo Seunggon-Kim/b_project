@@ -294,6 +294,10 @@
   },
   {
    "from": "table:kbo_woba_weights_by_season",
+   "to": "page:pages/player-analytics.html"
+  },
+  {
+   "from": "table:kbo_woba_weights_by_season",
    "to": "page:pages/player-stats.html"
   },
   {
@@ -410,6 +414,10 @@
   },
   {
    "from": "table:self_park_factor",
+   "to": "page:pages/player-analytics.html"
+  },
+  {
+   "from": "table:self_park_factor",
    "to": "page:pages/player-stats.html"
   },
   {
@@ -442,6 +450,10 @@
   },
   {
    "from": "table:team_season_rank",
+   "to": "page:pages/player-analytics.html"
+  },
+  {
+   "from": "table:team_season_rank",
    "to": "page:pages/player-stats.html"
   },
   {
@@ -455,6 +467,10 @@
   {
    "from": "table:team_seasons",
    "to": "page:pages/team-record.html"
+  },
+  {
+   "from": "table:team_stadium_by_season",
+   "to": "page:pages/player-analytics.html"
   },
   {
    "from": "table:team_stadium_by_season",
@@ -2296,6 +2312,7 @@
    "manual_note": null,
    "name": "kbo_woba_weights_by_season",
    "pages": [
+    "pages/player-analytics.html",
     "pages/player-stats.html",
     "pages/team-stats.html"
    ],
@@ -2525,6 +2542,7 @@
    "name": "self_park_factor",
    "pages": [
     "pages/factor-stats.html",
+    "pages/player-analytics.html",
     "pages/player-stats.html",
     "pages/team-stats.html"
    ],
@@ -2599,6 +2617,7 @@
    "manual_note": null,
    "name": "team_season_rank",
    "pages": [
+    "pages/player-analytics.html",
     "pages/player-stats.html",
     "pages/team-record.html",
     "pages/team-stats.html"
@@ -2636,6 +2655,7 @@
    "manual_note": "시즌별 홈구장입니다. 2026-06-05 백업 덤프에서 한 번 복원했습니다. park_factors/build_wrc_plus.py 가 올 시즌 행을 로컬에서 채우지만 MySQL 에는 올리지 않습니다.",
    "name": "team_stadium_by_season",
    "pages": [
+    "pages/player-analytics.html",
     "pages/player-stats.html",
     "pages/team-record.html",
     "pages/team-stats.html"
