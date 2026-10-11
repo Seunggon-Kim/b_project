@@ -6,6 +6,8 @@ import {
   PITCH_TREND_COUNT_SQL, PITCH_TREND_COUNT_JSON_SQL, TREND_COUNT_KEYS,
   PITCH_TREND_ZONES_SQL, shapeTrendZones,
   shapeTrendRows, shapeTrendValues, trendFromJson,
+  PITCH_TREND_MONTH_SQL, PITCH_TREND_MONTH_JSON_SQL, TREND_MONTH_KEYS,
+  PITCH_TREND_GAME_SQL, PITCH_TREND_GAME_JSON_SQL, TREND_GAME_KEYS, trendArrayText,
 } from '../src/routes/pitchTrend.js';
 import { regularSeasonSql } from '../src/lib/gametype.js';
 
@@ -317,4 +319,98 @@ test('Zone 5: |px| <= hw/3, bot + h/3 <= pz <= top - h/3, 선구 집계 공만',
     assert.match(sql, /AS mb_n/);
     assert.match(sql, /AS mb_sw/);
   }
+});
+
+// --- 월·경기 단위(?by=month·game, 2026-10-11) ---
+
+test('month 키는 by=count 키의 season 뒤에 month, game 키는 game_date·game_id', () => {
+  assert.deepEqual(TREND_MONTH_KEYS, ['season', 'month', ...TREND_COUNT_KEYS.slice(1)]);
+  assert.deepEqual(TREND_GAME_KEYS, ['season', 'game_date', 'game_id', ...TREND_COUNT_KEYS.slice(1)]);
+});
+
+test('month 는 경기 날짜의 월, game 은 경기 ID 로도 묶고 볼카운트까지 나눕니다', () => {
+  assert.match(PITCH_TREND_MONTH_SQL, /CAST\(MOD\(FLOOR\(pbp\.game_date \/ 100\), 100\) AS SIGNED\) AS month/);
+  assert.match(PITCH_TREND_MONTH_SQL, /GROUP BY season, month, pbp\.pitch_type, bat_side, cnt, bc/);
+  assert.match(PITCH_TREND_MONTH_SQL, /ORDER BY season, month, pitch_type, bat_side, cnt, bc/);
+  assert.match(PITCH_TREND_GAME_SQL, /CAST\(pbp\.game_date AS SIGNED\) AS game_date/);
+  assert.match(PITCH_TREND_GAME_SQL, /pbp\.gameID AS game_id/);
+  assert.match(PITCH_TREND_GAME_SQL, /GROUP BY season, game_date, game_id, pbp\.pitch_type, bat_side, cnt, bc/);
+  // 공 기준과 나머지 식은 by=count 와 같습니다.
+  const body = (sql) => sql.slice(sql.indexOf('pbp.pitch_type AS pitch_type'), sql.indexOf('GROUP BY'));
+  assert.equal(body(PITCH_TREND_MONTH_SQL), body(PITCH_TREND_COUNT_SQL));
+  assert.equal(body(PITCH_TREND_GAME_SQL), body(PITCH_TREND_COUNT_SQL));
+});
+
+test('월·경기 JSON 질의는 시즌마다 한 행, MySQL 이 ", " 를 줄입니다', () => {
+  for (const sql of [PITCH_TREND_MONTH_JSON_SQL, PITCH_TREND_GAME_JSON_SQL]) {
+    assert.match(sql, /GROUP BY g\.season\s+ORDER BY g\.season/);
+    assert.match(sql, /REPLACE\(GROUP_CONCAT\(JSON_ARRAY\(/);
+    assert.match(sql, /SEPARATOR ','\), ', ', ','\) AS j/);
+  }
+  assert.match(PITCH_TREND_GAME_JSON_SQL, /ORDER BY g\.season, g\.game_date, g\.game_id, g\.pitch_type, g\.bat_side, g\.cnt, g\.bc/);
+});
+
+test('trendArrayText: 행 수가 맞으면 글자 그대로, 없으면 빈 글자, 잘렸거나 다르면 null', () => {
+  const j = '[2026,4,"직구","R","even",1],[2026,5,"커브","L","ahead",2]';
+  assert.equal(trendArrayText({ n: 2, j }), j);
+  assert.equal(trendArrayText({ n: 0, j: null }), '');
+  assert.equal(trendArrayText({ n: 3, j }), null);
+  assert.equal(trendArrayText({ n: 2, j: j.slice(0, -3) }), null);
+  assert.equal(trendArrayText({ n: 1, j: null }), null);
+  assert.equal(trendArrayText(null), null);
+});
+
+const monthArr = (season, month) => TREND_MONTH_KEYS.map((k) => ({ ...OBJ, season, month, bc: '0-0' })[k]);
+
+test('?by=month: cols 와 rows(값 배열)를 시즌 순으로 잇고 values·zones 는 없습니다', async () => {
+  const db = fakeDb((sql) => {
+    if (sql.includes('FROM players')) return [PLAYER];
+    if (sql.includes('GROUP_CONCAT')) {
+      return [
+        { season: 2025, n: 1, j: JSON.stringify(monthArr(2025, 9)) },
+        { season: 2026, n: 2, j: `${JSON.stringify(monthArr(2026, 4))},${JSON.stringify(monthArr(2026, 5))}` },
+      ];
+    }
+    throw new Error(`예상 밖 질의: ${sql}`);
+  });
+  const res = await pitchTrend(req('/players/65933/pitch_trend?by=month'), { MYSQL: db }, {}, { id: '65933' });
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('access-control-allow-origin'), '*');
+  assert.match(res.headers.get('cache-control'), /s-maxage=86400,/);
+  const body = await res.json();
+  assert.deepEqual(Object.keys(body), ['player_id', 'cols', 'rows']);
+  assert.deepEqual(body.cols, TREND_MONTH_KEYS);
+  assert.deepEqual(body.rows, [monthArr(2025, 9), monthArr(2026, 4), monthArr(2026, 5)]);
+  assert.ok(!db.calls.some((c) => c.sql.includes('pitch_run_value')));
+});
+
+test('?by=game: 자료가 없으면 빈 rows', async () => {
+  const db = fakeDb((sql) => (sql.includes('FROM players') ? [PLAYER] : []));
+  const body = await (await pitchTrend(req('/players/65933/pitch_trend?by=game'), { MYSQL: db }, {}, { id: '65933' })).json();
+  assert.deepEqual(body, { player_id: '65933', cols: TREND_GAME_KEYS, rows: [] });
+});
+
+test('?by=game: 한 시즌이라도 못 풀면 보통 질의로 같은 모양을 냅니다', async () => {
+  const obj = { ...OBJ, game_date: 20260405, game_id: '20260405HTNC02026', bc: '1-0' };
+  const db = fakeDb((sql) => {
+    if (sql.includes('FROM players')) return [PLAYER];
+    if (sql.includes('GROUP_CONCAT')) return [{ season: 2026, n: 2, j: '[2026,' }];
+    return [obj];
+  });
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    const body = await (await pitchTrend(req('/players/65933/pitch_trend?by=game'), { MYSQL: db }, {}, { id: '65933' })).json();
+    assert.deepEqual(body.rows, [TREND_GAME_KEYS.map((k) => obj[k])]);
+    assert.equal(body.rows[0][2], '20260405HTNC02026');
+  } finally {
+    console.warn = warn;
+  }
+});
+
+test('by 는 count·month·game 만 받습니다', async () => {
+  const db = fakeDb((sql) => (sql.includes('FROM players') ? [PLAYER] : []));
+  const res = await pitchTrend(req('/players/65933/pitch_trend?by=week'), { MYSQL: db }, {}, { id: '65933' });
+  assert.equal(res.status, 400);
+  assert.match((await res.json()).detail, /'count'·'month'·'game'/);
 });
