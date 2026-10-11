@@ -825,15 +825,37 @@
             loadBatPct(playerId, seasons[0]);
         }
 
+        // 진행 중인 시즌이면 { teamGames: 팀 평균 치른 경기, fullGames: 정규 경기 수 }, 아니면 null 입니다.
+        // 진행 중 판단은 season.js(정규시즌이 끝났는지), 경기 수는 순위표·규정 표입니다(evan: Savant 처럼 진도 기준).
+        const bpPaceCache = new Map();
+        function batPace(season) {
+            if (!bpPaceCache.has(season)) {
+                const TS = window.TeamStats.season;
+                const p = season !== TS.kstToday().y ? Promise.resolve(null)
+                    : Promise.all([TS.loadSeasonState(API_BASE_URL, season), API.getRegulation(), API.getStandings()])
+                        .then(([st, reg, standings]) => {
+                            if (!st || !st.live) return null;
+                            const full = Number(reg && reg.regulation && reg.regulation[season] && reg.regulation[season].team_games);
+                            const games = ((standings && standings.teams) || []).map(t => Number(t.games)).filter(g => g > 0);
+                            if (!(full > 0) || !games.length) return null;
+                            return { teamGames: games.reduce((a, b) => a + b, 0) / games.length, fullGames: full };
+                        })
+                        .catch(() => null);
+                bpPaceCache.set(season, p);
+            }
+            return bpPaceCache.get(season);
+        }
+
         async function loadBatPct(playerId, season) {
             const body = document.getElementById('pa-pct-body');
             const token = ++bpToken;
             body.innerHTML = createLoadingSpinner();
-            const rows = await getLeagueBatters(season);
+            const [rows, pace] = await Promise.all([getLeagueBatters(season), batPace(season)]);
             if (token !== bpToken) return;  // 그사이 다른 선수·시즌을 골랐습니다.
             const B = window.PlayerAnalytics.batpct;
-            body.innerHTML = rows ? B.cardHtml(B.rank(rows, null, playerId), season)
-                : '<p class="pa-pct-empty">리그 기록을 불러오지 못했습니다.</p>';
+            const scale = pace ? B.paceScale(pace.teamGames, pace.fullGames) : 1;
+            body.innerHTML = rows ? B.cardHtml(B.rank(rows, null, playerId, scale), season, pace)
+                : '<p class="pa-bp-empty">리그 기록을 불러오지 못했습니다.</p>';
         }
 
         /**

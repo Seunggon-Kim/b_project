@@ -67,10 +67,22 @@
   }
 
   /**
-   * 한 타자의 지표별 결과입니다. rows = 그 시즌 /stats/batters 행 모두, extra = { player_id: batter_values 행 } 또는 null.
-   * [{ key, label, group, value, qualified, pct, pos, n, min, unit, have, better }]. 기준이 없거나 값이 없는 지표는 뺍니다.
+   * 진행 중인 시즌의 진도입니다(evan: Savant 처럼 시즌 중엔 진도에 맞춰 기준을 낮춤).
+   * 팀 평균 치른 경기 ÷ 정규 경기 수, 0~1. 값이 없으면 1(낮추지 않음).
    */
-  function rank(rows, extra, playerId) {
+  function paceScale(teamGames, fullGames) {
+    const g = num(teamGames), f = num(fullGames);
+    if (!(g > 0) || !(f > 0)) return 1;
+    return Math.min(1, g / f);
+  }
+
+  /**
+   * 한 타자의 지표별 결과입니다. rows = 그 시즌 /stats/batters 행 모두, extra = { player_id: batter_values 행 } 또는 null.
+   * scale(0~1, 없으면 1)은 진행 중 시즌 진도이고, 기준 = 올림(안정 표본 × scale) 입니다.
+   * [{ key, label, group, value, qualified, pct, pos, n, min, fullMin, unit, have, better }]. 기준이 없거나 값이 없는 지표는 뺍니다.
+   */
+  function rank(rows, extra, playerId, scale) {
+    const sc = scale > 0 && scale < 1 ? scale : 1;
     const all = (rows || []).map(function (r) {
       return { id: String(r.player_id), v: values(r, extra ? extra[String(r.player_id)] : null) };
     });
@@ -78,14 +90,15 @@
     if (!me) return [];
     const P = PA.percentile;
     return METRICS.filter(function (m) { return m.min !== null && me.v[m.key] !== null; }).map(function (m) {
-      const pool = all.filter(function (a) { return a.v.n[m.unit] >= m.min && a.v[m.key] !== null; })
+      const min = Math.max(1, Math.ceil(m.min * sc));
+      const pool = all.filter(function (a) { return a.v.n[m.unit] >= min && a.v[m.key] !== null; })
         .map(function (a) { return a.v[m.key]; }).sort(function (a, b) { return a - b; });
-      const value = me.v[m.key], have = me.v.n[m.unit], qualified = have >= m.min;
+      const value = me.v[m.key], have = me.v.n[m.unit], qualified = have >= min;
       const better = pool.filter(function (x) { return m.better === 'low' ? x < value : x > value; }).length;
       return {
         key: m.key, label: m.label, group: m.group, value: value, qualified: qualified,
         pct: qualified ? P.percentile(value, pool, m.better) : null,
-        pos: qualified ? better + 1 : null, n: pool.length, min: m.min, unit: m.unit, have: have, better: m.better,
+        pos: qualified ? better + 1 : null, n: pool.length, min: min, fullMin: m.min, unit: m.unit, have: have, better: m.better,
       };
     });
   }
@@ -102,36 +115,48 @@
 
   function rowHtml(r, season) {
     const m = metricOf(r.key), u = UNITS[r.unit], val = m.fmt(r.value);
+    const lowered = r.fullMin && r.min < r.fullMin;
     if (!r.qualified) {
-      const tip = m.label + '\n' + val + ' · 지금 ' + r.have + u + '\n' + r.min + u + ' 이상인 타자끼리 비교합니다(KBO 안정 표본). ' + m.tip;
-      return '<div class="pa-pct-row pa-pct-nq" tabindex="0" data-tip="' + esc(tip) + '">'
-        + '<span class="pa-pct-name">' + esc(m.label) + '</span>'
-        + '<span class="pa-pct-bar"><span class="pa-pct-nqtext">표본 부족</span></span>'
-        + '<span class="pa-pct-val">' + esc(val) + '</span></div>';
+      const tip = m.label + '\n' + val + ' · 지금 ' + r.have + u + '\n' + r.min + u + ' 이상인 타자끼리 비교합니다(KBO 안정 표본'
+        + (lowered ? ' ' + r.fullMin + u + ', 진행 중인 시즌이라 진도에 맞춰 낮춤' : '') + '). ' + m.tip;
+      return '<div class="pa-bp-row pa-bp-nq" tabindex="0" data-tip="' + esc(tip) + '">'
+        + '<span class="pa-bp-name">' + esc(m.label) + '</span>'
+        + '<span class="pa-bp-bar"><span class="pa-bp-nqtext">표본 부족</span></span>'
+        + '<span class="pa-bp-val">' + esc(val) + '</span></div>';
     }
     const shown = Math.max(1, Math.round(r.pct)), c = color(r.pct);
     const tip = m.label + '\n' + val + ' · ' + season + '년 ' + r.min + u + ' 이상 ' + r.n + '명 중 ' + r.pos + '위 ('
-      + PA.percentile.label(r.pct) + ')\n' + m.tip;
-    return '<div class="pa-pct-row" tabindex="0" data-tip="' + esc(tip) + '">'
-      + '<span class="pa-pct-name">' + esc(m.label) + '</span>'
-      + '<span class="pa-pct-bar"><span class="pa-pct-fill" style="width:' + shown + '%;background:' + c + '"></span>'
-      + '<span class="pa-pct-dot" style="left:' + shown + '%;background:' + c + '">' + shown + '</span></span>'
-      + '<span class="pa-pct-val">' + esc(val) + '</span></div>';
+      + PA.percentile.label(r.pct) + ')'
+      + (lowered ? '\n진행 중인 시즌이라 ' + r.fullMin + u + ' 기준을 진도에 맞춰 ' + r.min + u + '으로 낮췄습니다.' : '')
+      + '\n' + m.tip;
+    return '<div class="pa-bp-row" tabindex="0" data-tip="' + esc(tip) + '">'
+      + '<span class="pa-bp-name">' + esc(m.label) + '</span>'
+      + '<span class="pa-bp-bar"><span class="pa-bp-fill" style="width:' + shown + '%;background:' + c + '"></span>'
+      + '<span class="pa-bp-dot" style="left:' + shown + '%;background:' + c + '">' + shown + '</span></span>'
+      + '<span class="pa-bp-val">' + esc(val) + '</span></div>';
   }
 
-  /** 카드 본문입니다. 묶음(Value·Batting·Plate Discipline) 순, 값이 있는 지표만. */
-  function cardHtml(results, season) {
-    if (!results || !results.length) return '<p class="pa-pct-empty">이 시즌 기록이 없습니다.</p>';
-    let h = '<div class="pa-pct"><div class="pa-pct-scale" aria-hidden="true"><span>나쁨</span><span>평균</span><span>좋음</span></div>';
+  /**
+   * 카드 본문입니다. 묶음(Value·Batting·Plate Discipline) 순, 값이 있는 지표만.
+   * pace = { teamGames, fullGames } 이면(진행 중 시즌에 기준을 낮췄을 때) 위에 안내 한 줄을 둡니다.
+   */
+  function cardHtml(results, season, pace) {
+    if (!results || !results.length) return '<p class="pa-bp-empty">이 시즌 기록이 없습니다.</p>';
+    let h = '<div class="pa-bp">';
+    if (pace && paceScale(pace.teamGames, pace.fullGames) < 1) {
+      h += '<p class="pa-bp-note">진행 중인 시즌이라 기준을 진도(팀 평균 ' + Math.round(pace.teamGames) + '/' + pace.fullGames
+        + '경기)에 맞춰 낮췄습니다. 시즌이 끝나면 KBO 안정 표본 기준으로 돌아갑니다.</p>';
+    }
+    h += '<div class="pa-bp-scale" aria-hidden="true"><span>나쁨</span><span>평균</span><span>좋음</span></div>';
     GROUPS.forEach(function (g) {
       const rs = results.filter(function (r) { return r.group === g; });
       if (!rs.length) return;
-      h += '<div class="pa-pct-group">' + esc(g) + '</div>' + rs.map(function (r) { return rowHtml(r, season); }).join('');
+      h += '<div class="pa-bp-group">' + esc(g) + '</div>' + rs.map(function (r) { return rowHtml(r, season); }).join('');
     });
     return h + '</div>';
   }
 
-  const api = { METRICS, UNITS, values, rank, color, cardHtml };
+  const api = { METRICS, UNITS, values, paceScale, rank, color, cardHtml };
   PA.batpct = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -62,27 +62,28 @@
 
 /* ---------- 타자 Percentile Rankings(Savant 참고) ---------- */
 /* 1군 타자는 무브먼트 자리에 이 카드가 와서 3칸입니다. 1025~1280px 은 아래 줄 전폭입니다. */
-@media (min-width: 1025px) and (max-width: 1280px) { .player-details-grid.pa-3col > .pa-card--pct { grid-column: 1 / -1; } .pa-card--pct .pa-pct { max-width: 560px; margin: 0 auto; } }
+@media (min-width: 1025px) and (max-width: 1280px) { .player-details-grid.pa-3col > .pa-card--pct { grid-column: 1 / -1; } .pa-card--pct .pa-bp { max-width: 560px; margin: 0 auto; } }
 .pa-card--pct .pa-card-tabs { align-items: center; justify-content: space-between; padding-right: 0.5rem; }
-.pa-pct { display: flex; flex-direction: column; gap: 0.15rem; font-variant-numeric: tabular-nums; }
-.pa-pct-scale { display: grid; grid-template-columns: 6.5rem 1fr 3.5rem; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.02em; margin: 0.15rem 0 0.1rem; }
-.pa-pct-scale span { grid-row: 1; padding: 0 0.75rem; }
-.pa-pct-scale span:nth-child(1) { grid-column: 2; justify-self: start; color: rgb(54, 97, 173); }
-.pa-pct-scale span:nth-child(2) { grid-column: 2; grid-row: 1; justify-self: center; color: var(--text-muted); }
-.pa-pct-scale span:nth-child(3) { grid-column: 2; grid-row: 1; justify-self: end; color: rgb(216, 33, 41); }
-.pa-pct-group { margin-top: 0.55rem; padding-bottom: 0.2rem; border-bottom: 2px solid var(--border-color); font-size: 0.82rem; font-weight: 700; color: var(--text-primary); }
-.pa-pct-row { display: grid; grid-template-columns: 6.5rem 1fr 3.5rem; align-items: center; gap: 0 0.5rem; min-height: 1.9rem; border-radius: 4px; cursor: help; }
-.pa-pct-row:focus-visible { outline: 2px solid var(--text-muted); outline-offset: 1px; }
-.pa-pct-name { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pa-pct-bar { position: relative; height: 0.5rem; margin: 0 0.75rem; border-radius: 999px; background: var(--bg-secondary); box-shadow: inset 0 0 0 1px var(--border-color); }
-.pa-pct-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; }
-.pa-pct-dot { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 1.6rem; height: 1.6rem; border-radius: 50%; border: 2px solid var(--bg-card); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; color: #fff; }
-.pa-pct-val { font-size: 0.8rem; color: var(--text-primary); text-align: right; white-space: nowrap; }
+.pa-bp { display: flex; flex-direction: column; gap: 0.15rem; font-variant-numeric: tabular-nums; }
+.pa-bp-scale { display: grid; grid-template-columns: 6.5rem 1fr 3.5rem; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.02em; margin: 0.15rem 0 0.1rem; }
+.pa-bp-scale span { grid-row: 1; padding: 0 0.75rem; }
+.pa-bp-scale span:nth-child(1) { grid-column: 2; justify-self: start; color: rgb(54, 97, 173); }
+.pa-bp-scale span:nth-child(2) { grid-column: 2; grid-row: 1; justify-self: center; color: var(--text-muted); }
+.pa-bp-scale span:nth-child(3) { grid-column: 2; grid-row: 1; justify-self: end; color: rgb(216, 33, 41); }
+.pa-bp-group { margin-top: 0.55rem; padding-bottom: 0.2rem; border-bottom: 2px solid var(--border-color); font-size: 0.82rem; font-weight: 700; color: var(--text-primary); }
+.pa-bp-row { display: grid; grid-template-columns: 6.5rem 1fr 3.5rem; align-items: center; gap: 0 0.5rem; min-height: 1.9rem; border-radius: 4px; cursor: help; }
+.pa-bp-row:focus-visible { outline: 2px solid var(--text-muted); outline-offset: 1px; }
+.pa-bp-name { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pa-bp-bar { position: relative; height: 0.5rem; margin: 0 0.75rem; border-radius: 999px; background: var(--bg-secondary); box-shadow: inset 0 0 0 1px var(--border-color); }
+.pa-bp-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; }
+.pa-bp-dot { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 1.6rem; height: 1.6rem; border-radius: 50%; border: 2px solid var(--bg-card); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; color: #fff; }
+.pa-bp-val { font-size: 0.8rem; color: var(--text-primary); text-align: right; white-space: nowrap; }
 /* 표본 부족: Savant NOT QUALIFIED 처럼 빗금 막대 + 글자 */
-.pa-pct-nq .pa-pct-bar { height: 1.1rem; background: repeating-linear-gradient(135deg, var(--bg-secondary) 0 4px, var(--border-color) 4px 6px); display: flex; align-items: center; justify-content: center; }
-.pa-pct-nqtext { font-size: 0.66rem; font-weight: 700; color: var(--text-secondary); background: var(--bg-card); padding: 0 0.35rem; border-radius: 3px; }
-.pa-pct-nq .pa-pct-val { color: var(--text-muted); }
-.pa-pct-empty { padding: 1rem 0; font-size: 0.85rem; color: var(--text-secondary); text-align: center; }
+.pa-bp-nq .pa-bp-bar { height: 1.1rem; background: repeating-linear-gradient(135deg, var(--bg-secondary) 0 4px, var(--border-color) 4px 6px); display: flex; align-items: center; justify-content: center; }
+.pa-bp-nqtext { font-size: 0.66rem; font-weight: 700; color: var(--text-secondary); background: var(--bg-card); padding: 0 0.35rem; border-radius: 3px; }
+.pa-bp-nq .pa-bp-val { color: var(--text-muted); }
+.pa-bp-note { margin: 0.1rem 0 0.35rem; font-size: 0.72rem; line-height: 1.45; color: var(--text-secondary); }
+.pa-bp-empty { padding: 1rem 0; font-size: 0.85rem; color: var(--text-secondary); text-align: center; }
 
 /* ---------- 한눈에 보기 표 ---------- */
 .pa-ql-wrap { overflow-x: auto; }
