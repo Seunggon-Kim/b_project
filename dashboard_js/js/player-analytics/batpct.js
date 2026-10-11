@@ -153,12 +153,13 @@
       h += '<p class="pa-bp-note">진행 중인 시즌이라 기준을 진도(팀 평균 ' + Math.round(pace.teamGames) + '/' + pace.fullGames
         + '경기)에 맞춰 낮췄습니다. 시즌이 끝나면 KBO 안정 표본 기준으로 돌아갑니다.</p>';
     }
-    h += '<div class="pa-bp-scale" aria-hidden="true"><span>나쁨</span><span>평균</span><span>좋음</span></div>';
     GROUPS.forEach(function (g) {
       const rs = results.filter(function (r) { return r.group === g; });
       if (!rs.length) return;
       h += '<div class="pa-bp-group">' + esc(g) + '</div>' + rs.map(function (r) { return rowHtml(r, season); }).join('');
     });
+    // 나쁨·평균·좋음 눈금은 표 아래에 둡니다(evan).
+    h += '<div class="pa-bp-scale" aria-hidden="true"><span>나쁨</span><span>평균</span><span>좋음</span></div>';
     return h + '</div>';
   }
 
