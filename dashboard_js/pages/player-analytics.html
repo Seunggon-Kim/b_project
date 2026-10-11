@@ -1448,7 +1448,7 @@
                 const svg = chart.querySelector('.pa-pdist-svg');
                 if (!svg) return;
                 svg.classList.toggle('pa-pdist-solo', key !== null);
-                svg.querySelectorAll('.pa-pdist-line').forEach(p => p.classList.toggle('on', p.dataset.k === key));
+                svg.querySelectorAll('.pa-pdist-line, .pa-pdist-area').forEach(p => p.classList.toggle('on', p.dataset.k === key));
             };
             const keyOf = (e) => { const k = e.target.closest && e.target.closest('.pa-pdist-key'); return k ? k.dataset.k : null; };
             chart.addEventListener('mouseover', e => { const k = keyOf(e); if (k !== null) solo(k); });

@@ -6,13 +6,13 @@
  * - 구속을 1 단위(여기선 km/h)로 묶습니다.
  * - 비율은 그 시즌 모든 공 대비입니다. 그래서 구종 선의 합이 그 구종 구사율이고, All 의 합이 100% 입니다.
  * - 구종 선은 값 있는 칸만 잇고 앞뒤에 0 한 칸을 붙입니다. All 은 빈 칸을 0 으로 채웁니다.
- * - 선은 B-spline(d3 curveBasis)이고, All Pitches 는 빨간 점선입니다.
+ * - 선은 B-spline(d3 curveBasis)입니다. All Pitches 는 Savant 의 빨강 대신 글자색 점선입니다(포심 빨강과 헷갈려서, evan).
+ * - 구종 선 아래는 그 구종 색을 옅게 채웁니다(All 은 채우지 않음).
  */
 (function (root) {
   'use strict';
   const PA = root.PlayerAnalytics = root.PlayerAnalytics || {};
 
-  const ALL_COLOR = '#f00';          // Savant All Pitches 색
   const ML = 52, MR = 14, MT = 28, MB = 46;
 
   function num(v) {
@@ -128,10 +128,14 @@
     const path = function (points) {
       return basisPath(points.map(function (q) { return [X(q.kmh), Y(q.freq * 100)]; }));
     };
+    // 앞뒤 0 칸 덕분에 곡선이 바닥에서 시작해 바닥에서 끝나므로 닫으면 선 아래 면이 됩니다.
+    data.types.forEach(function (t, i) {
+      out += '<path class="pa-pdist-area" data-k="' + i + '" d="' + path(t.points) + 'Z" fill="' + t.color + '"/>';
+    });
     data.types.forEach(function (t, i) {
       out += '<path class="pa-pdist-line" data-k="' + i + '" d="' + path(t.points) + '" stroke="' + t.color + '"/>';
     });
-    out += '<path class="pa-pdist-line pa-pdist-all" data-k="all" d="' + path(data.all.points) + '" stroke="' + ALL_COLOR + '"/>';
+    out += '<path class="pa-pdist-line pa-pdist-all" data-k="all" d="' + path(data.all.points) + '"/>';
     // 구속 칸 툴팁: 첫 줄 구속, 둘째 줄 모든 공, 셋째 줄부터 그 구속을 던진 구종(많은 순)
     data.all.points.forEach(function (q) {
       if (!q.n) return;
