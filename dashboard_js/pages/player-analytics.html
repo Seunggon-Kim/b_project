@@ -802,6 +802,21 @@
             return bpSeasonCache.get(season);
         }
 
+        // Batting Run Value·Chase%·Whiff% 는 /stats/batter_values 입니다. { player_id: 행 } 으로 둡니다(없으면 null, 그 세 줄만 빠짐).
+        const bvSeasonCache = new Map();
+        function getLeagueBatterValues(season) {
+            if (!bvSeasonCache.has(season)) {
+                bvSeasonCache.set(season, API.getBatterValues(season)
+                    .then(res => {
+                        const m = {};
+                        ((res && res.rows) || []).forEach(r => { m[String(r.player_id)] = r; });
+                        return Object.keys(m).length ? m : null;
+                    })
+                    .catch(() => null));
+            }
+            return bvSeasonCache.get(season);
+        }
+
         function hideBatPctCard() {
             bpToken++;  // 아직 오는 중인 응답을 버립니다.
             const card = document.getElementById('pa-pct-card');
@@ -850,11 +865,11 @@
             const body = document.getElementById('pa-pct-body');
             const token = ++bpToken;
             body.innerHTML = createLoadingSpinner();
-            const [rows, pace] = await Promise.all([getLeagueBatters(season), batPace(season)]);
+            const [rows, pace, extra] = await Promise.all([getLeagueBatters(season), batPace(season), getLeagueBatterValues(season)]);
             if (token !== bpToken) return;  // 그사이 다른 선수·시즌을 골랐습니다.
             const B = window.PlayerAnalytics.batpct;
             const scale = pace ? B.paceScale(pace.teamGames, pace.fullGames) : 1;
-            body.innerHTML = rows ? B.cardHtml(B.rank(rows, null, playerId, scale), season, pace)
+            body.innerHTML = rows ? B.cardHtml(B.rank(rows, extra, playerId, scale, season), season, pace)
                 : '<p class="pa-bp-empty">리그 기록을 불러오지 못했습니다.</p>';
         }
 

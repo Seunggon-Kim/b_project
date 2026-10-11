@@ -157,6 +157,10 @@
    "to": "job:daily"
   },
   {
+   "from": "table:batter_run_value",
+   "to": "page:pages/player-analytics.html"
+  },
+  {
    "from": "table:franchises",
    "to": "page:pages/team-record.html"
   },
@@ -475,6 +479,10 @@
   {
    "from": "table:teams",
    "to": "page:pages/factor-stats.html"
+  },
+  {
+   "from": "table:teams",
+   "to": "page:pages/player-analytics.html"
   },
   {
    "from": "table:teams",
@@ -841,15 +849,20 @@
     "/db/table/:name",
     "/futures/player/:id",
     "/futures/search",
+    "/games",
     "/players/:id",
     "/players/:id/arsenal",
     "/players/:id/pitch_trend",
     "/players/:id/pitch_values",
     "/players/:id/usage",
     "/players/search",
+    "/standings",
+    "/stats/batter_values",
+    "/stats/batters",
     "/stats/movement_avg",
     "/stats/pitchers",
     "/stats/plate_discipline",
+    "/stats/regulation",
     "/stats/seasons"
    ],
    "title": "선수 분석 - Bstats"
@@ -1097,6 +1110,7 @@
    "live": false,
    "pages": [
     "pages/factor-stats.html",
+    "pages/player-analytics.html",
     "pages/player-stats.html",
     "pages/team-stats.html"
    ],
@@ -1291,6 +1305,7 @@
    "live": true,
    "pages": [
     "index.html",
+    "pages/player-analytics.html",
     "pages/player-stats.html",
     "pages/team-stats.html"
    ],
@@ -1301,7 +1316,9 @@
   {
    "file": "src/routes/batterValues.js",
    "live": false,
-   "pages": [],
+   "pages": [
+    "pages/player-analytics.html"
+   ],
    "path": "/stats/batter_values",
    "reads_all_tables": false,
    "tables": [
@@ -1312,6 +1329,7 @@
    "file": "src/routes/stats.js",
    "live": false,
    "pages": [
+    "pages/player-analytics.html",
     "pages/player-stats.html",
     "pages/team-stats.html"
    ],
@@ -1369,6 +1387,7 @@
    "file": "src/routes/stats.js",
    "live": false,
    "pages": [
+    "pages/player-analytics.html",
     "pages/player-stats.html"
    ],
    "path": "/stats/regulation",
@@ -2025,7 +2044,9 @@
    "kind": "derived",
    "manual_note": null,
    "name": "batter_run_value",
-   "pages": [],
+   "pages": [
+    "pages/player-analytics.html"
+   ],
    "routes": [
     "/stats/batter_values"
    ],
@@ -2633,6 +2654,7 @@
    "name": "teams",
    "pages": [
     "pages/factor-stats.html",
+    "pages/player-analytics.html",
     "pages/player-stats.html",
     "pages/team-stats.html"
    ],

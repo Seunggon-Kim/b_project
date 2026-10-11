@@ -201,6 +201,18 @@ class API {
         }
     }
 
+    /** 그 시즌 모든 타자의 Batting Run Value·선구 개수입니다(타자 Percentile Rankings). 2016 전·실패면 빈 rows. */
+    static async getBatterValues(season) {
+        try {
+            const response = await fetch(`${API_BASE_URL}/stats/batter_values?season=${encodeURIComponent(season)}`);
+            if (!response.ok) return { rows: [] };
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching batter values:', error);
+            return { rows: [] };
+        }
+    }
+
     /** 월·경기 단위 구종 추이입니다(by = 'month' | 'game'). 응답은 cols(키 목록) + rows(값 배열) 모양입니다. */
     static async getPitchTrendPeriod(playerId, by) {
         try {

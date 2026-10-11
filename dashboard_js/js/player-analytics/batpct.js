@@ -29,7 +29,8 @@
 
   // [key, 묶음, 이름, 분모, 기준, 좋은 쪽, 글자, 설명]. 기준이 null 이면 아직 정하지 않아 숨깁니다.
   // wRC+·Batting Run Value 는 wOBA 와 같은 420타석입니다(셋 다 타석당 득점 기여, 화면 세션 결정).
-  // Chase%·Whiff% 기준은 API 세션이 같은 방법으로 우리 데이터에서 재면 넣습니다.
+  // Chase%·Whiff% 기준은 API 세션이 같은 방법(2017~2025, 겹치지 않는 두 무작위 묶음, R²≥0.5)으로
+  // 우리 데이터에서 잰 값입니다(26-10-11, .superpowers/api-batter-percentile-response.md).
   const METRICS = [
     ['brv', 'Value', 'Batting Run Value', 'pa', 420, 'high', function (v) { return (v > 0 ? '+' : '') + v.toFixed(1); },
       '공마다 볼카운트·주자·아웃별 기대 득점이 얼마나 바뀌었는지 더한 값입니다. 득점을 만들면 + 입니다(투수 구종 가치와 같은 계산, 부호 반대).'],
@@ -40,10 +41,12 @@
     ['iso', 'Batting', 'ISO', 'ab', 240, 'high', r3, '순장타율입니다. 계산식: SLG − AVG'],
     ['bb', 'Plate Discipline', 'BB%', 'pa', 400, 'high', pct1, '볼넷 ÷ 타석 × 100 입니다(고의4구 포함).'],
     ['k', 'Plate Discipline', 'K%', 'pa', 200, 'low', pct1, '삼진 ÷ 타석 × 100 입니다. 낮을수록 좋습니다.'],
-    ['chase', 'Plate Discipline', 'Chase%', 'o_n', null, 'low', pct1, '존 밖 공에 스윙 ÷ 존 밖 공 × 100 입니다(O-Swing%). 낮을수록 좋습니다.'],
-    ['whiff', 'Plate Discipline', 'Whiff%', 'sw', null, 'low', pct1, '헛스윙 ÷ 스윙 × 100 입니다. 낮을수록 좋습니다.'],
+    ['chase', 'Plate Discipline', 'Chase%', 'o_n', 240, 'low', pct1, '존 밖 공에 스윙 ÷ 존 밖 공 × 100 입니다(O-Swing%). 존은 공 반지름을 더한 20인치입니다. 낮을수록 좋습니다.'],
+    ['whiff', 'Plate Discipline', 'Whiff%', 'sw', 120, 'low', pct1, '헛스윙 ÷ 스윙 × 100 입니다. 낮을수록 좋습니다.'],
   ].map(function (a) { return { key: a[0], group: a[1], label: a[2], unit: a[3], min: a[4], better: a[5], fmt: a[6], tip: a[7] }; });
   const GROUPS = ['Value', 'Batting', 'Plate Discipline'];
+  // 2016 은 공 위치 추적이 절반쯤이라 존이 필요한 Chase% 를 막습니다(투수 Plate Discipline 과 같음).
+  const CHASE_FIRST = 2017;
 
   /** 행 하나(/stats/batters)와 확장 값(/stats/batter_values, 없으면 null)의 지표 값과 분모입니다. */
   function values(row, extra) {
@@ -78,18 +81,21 @@
 
   /**
    * 한 타자의 지표별 결과입니다. rows = 그 시즌 /stats/batters 행 모두, extra = { player_id: batter_values 행 } 또는 null.
-   * scale(0~1, 없으면 1)은 진행 중 시즌 진도이고, 기준 = 올림(안정 표본 × scale) 입니다.
+   * scale(0~1, 없으면 1)은 진행 중 시즌 진도이고, 기준 = 올림(안정 표본 × scale) 입니다. season 이 2017 전이면 Chase% 를 뺍니다.
    * [{ key, label, group, value, qualified, pct, pos, n, min, fullMin, unit, have, better }]. 기준이 없거나 값이 없는 지표는 뺍니다.
    */
-  function rank(rows, extra, playerId, scale) {
+  function rank(rows, extra, playerId, scale, season) {
     const sc = scale > 0 && scale < 1 ? scale : 1;
+    const noChase = num(season) !== null && num(season) < CHASE_FIRST;
     const all = (rows || []).map(function (r) {
       return { id: String(r.player_id), v: values(r, extra ? extra[String(r.player_id)] : null) };
     });
     const me = all.find(function (a) { return a.id === String(playerId); });
     if (!me) return [];
     const P = PA.percentile;
-    return METRICS.filter(function (m) { return m.min !== null && me.v[m.key] !== null; }).map(function (m) {
+    return METRICS.filter(function (m) {
+      return m.min !== null && me.v[m.key] !== null && !(noChase && m.key === 'chase');
+    }).map(function (m) {
       const min = Math.max(1, Math.ceil(m.min * sc));
       const pool = all.filter(function (a) { return a.v.n[m.unit] >= min && a.v[m.key] !== null; })
         .map(function (a) { return a.v[m.key]; }).sort(function (a, b) { return a - b; });
