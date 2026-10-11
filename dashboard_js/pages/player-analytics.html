@@ -176,8 +176,8 @@
                             </select>
                             <select id="pa-tr-unit" class="pa-move-season" aria-label="단위 고르기" data-tip="단위&#10;시즌·월·경기 가운데 무엇으로 묶을지 고릅니다.">
                                 <option value="season">시즌</option>
-                                <option value="month" disabled>월</option>
-                                <option value="game" disabled>경기</option>
+                                <option value="month">월</option>
+                                <option value="game">경기</option>
                             </select>
                             <select id="pa-tr-side" class="pa-move-season" aria-label="타자 손 고르기">
                                 <option value="">모든 타자</option>
@@ -1179,6 +1179,18 @@
         // 고르기를 바꾸면 받아 둔 합계로 다시 그립니다. 응답이 비면(API 배포 전·투수 자료 없음) 카드를 숨깁니다.
         let trToken = 0, trData = null, trMetric = 'pct', trSide = '', trCnt = '';
         let trBy = 'pitches', trType = '', trSeason = '';   // Pitches·구종·연도 고르기(Savant Pitch Tracking, evan)
+        // 단위(시즌·월·경기). 월·경기는 처음 고를 때 ?by=month·?by=game 을 받아 선수마다 한 번만 둡니다.
+        let trUnit = 'season', trPid = null, trPer = {};
+
+        function loadTrendPeriod(unit) {
+            const token = trToken, pid = trPid;
+            trPer[unit] = { loading: true };
+            API.getPitchTrendPeriod(pid, unit).then(res => {
+                if (token !== trToken) return;  // 그사이 다른 선수를 골랐습니다.
+                trPer[unit] = { data: window.PlayerAnalytics.trend.fromCols(res) };
+                if (trUnit === unit) renderTrend();
+            });
+        }
         let trAll = false;          // 구종별 시즌 표: 모든 시즌을 펼쳤는지
         let trWeightsNow = null;    // 지금 선수 표에 쓰는 wOBA 가중치
         let rvAll = false;          // 구종별 Run Value 표: 모든 시즌을 펼쳤는지
@@ -1215,6 +1227,8 @@
             const type = document.getElementById('pa-tr-type');
             const season = document.getElementById('pa-tr-season');
             by.onchange = () => { trBy = by.value; renderTrend(); };
+            const unit = document.getElementById('pa-tr-unit');
+            unit.onchange = () => { trUnit = unit.value; trAll = false; renderTrend(); };
             type.onchange = () => { trType = type.value; renderTrend(); };
             season.onchange = () => { trSeason = season.value; renderTrend(); };
             document.getElementById('pa-tr-table').addEventListener('click', e => {
@@ -1239,6 +1253,8 @@
             document.getElementById('pa-pd-section').classList.add('hidden');
             document.getElementById('pa-prv-section').classList.add('hidden');
             // 카운트별(bc) 응답 하나로 묶음·카운트별 고르기·PutAway%·wOBA(hbp·sf)를 모두 그립니다.
+            trPid = playerId;
+            trPer = {};
             const res = await API.getPitchTrendByCount(playerId);
             if (token !== trToken) return;  // 그사이 다른 선수를 골랐습니다.
             // wOBA 는 응답에 몸에 맞는 볼(hbp)이 있을 때만 씁니다. 그때만 가중치 표를 받습니다.
@@ -1318,32 +1334,44 @@
             const desc = document.getElementById('pa-tr-desc');
             if (!trData) { section.classList.add('hidden'); return; }
             section.classList.remove('hidden');
-            // 구종 가치는 카운트별 값이 없습니다. 카운트를 고르면 그 항목을 막고 구종 비율로 돌립니다.
+            // 구종 가치는 시즌 합계만 있고 카운트별 값이 없습니다. 카운트·월·경기를 고르면 그 항목을 막고 구종 비율로 돌립니다.
             const metricSel = document.getElementById('pa-tr-metric');
             const rvOpt = metricSel.querySelector('option[value="rv"]');
-            if (rvOpt) rvOpt.disabled = !T.metricOk('rv', trCnt);
-            if (!T.metricOk(trMetric, trCnt)) { trMetric = 'pct'; metricSel.value = 'pct'; }
+            if (rvOpt) rvOpt.disabled = !T.metricOk('rv', trCnt, trUnit);
+            if (!T.metricOk(trMetric, trCnt, trUnit)) { trMetric = 'pct'; metricSel.value = 'pct'; }
+            // 월·경기는 따로 받습니다. 아직이면 받는 동안 돌림표를 둡니다.
+            let data = trData;
+            if (trUnit !== 'season') {
+                const p = trPer[trUnit];
+                if (!p || p.loading) {
+                    if (!p) loadTrendPeriod(trUnit);
+                    chart.innerHTML = createLoadingSpinner();
+                    document.getElementById('pa-tr-table').innerHTML = '';
+                    return;
+                }
+                data = p.data;
+            }
             const m = T.metric(trMetric);
             // 구종 고르기는 구종별일 때만 씁니다(묶음과 섞으면 공 수·평균 기준이 애매해짐).
             const typeSel = document.getElementById('pa-tr-type');
             typeSel.disabled = trBy !== 'pitches';
             typeSel.dataset.tip = typeSel.disabled ? '구종 고르기\n구종별을 골랐을 때만 쓸 수 있습니다.'
                 : '구종 고르기\n고른 구종만 그립니다. 비율은 그대로 그 시즌 모든 공 대비입니다(Savant).';
-            const opt = { by: trBy, type: trBy === 'pitches' ? trType : '', season: trSeason };
+            const opt = { by: trBy, type: trBy === 'pitches' ? trType : '', season: trSeason, unit: trUnit };
             document.getElementById('pa-tr-groups').classList.toggle('hidden', trBy !== 'group');
             document.getElementById('pa-tr-groups').innerHTML = trBy === 'group' ? T.groupNoteHtml() : '';
-            const agg = T.aggregate(trData, trSide, trCnt, opt);
+            const agg = T.aggregate(data, trSide, trCnt, opt);
             const sr = T.series(agg, trMetric, trWeightsNow).filter(s => s.points.length);
             const countSel = document.getElementById('pa-tr-count');
-            const cond = [opt.type, opt.season ? opt.season + '시즌' : '',
+            const cond = [trUnit === 'month' ? '월별' : trUnit === 'game' ? '경기별' : '', opt.type, opt.season ? opt.season + '시즌' : '',
                 trSide === 'R' ? '우타자 상대' : trSide === 'L' ? '좌타자 상대' : '',
                 trCnt ? (/^\d-\d$/.test(trCnt) ? '카운트 ' + trCnt : countSel.selectedOptions[0].textContent) : ''].filter(Boolean).join(' · ');
             desc.textContent = m.tip + (cond ? ` 고른 조건: ${cond}.` : '') + ' 점에 마우스를 올리면 값이 나옵니다.';
             chart.innerHTML = sr.length
-                ? T.chartSvg(sr, agg.seasons, trMetric, trSize(chart)) + T.legendHtml(sr)
+                ? T.chartSvg(sr, agg.seasons, trMetric, trSize(chart), agg) + T.legendHtml(sr)
                 : '<p class="text-secondary pa-ars-empty">고른 조건에 맞는 값이 없습니다.</p>';
             document.getElementById('pa-tr-table').innerHTML = sr.length
-                ? T.tableHtml(trData, trSide, trCnt, trMetric, trAll, trWeightsNow, opt) : '';
+                ? T.tableHtml(data, trSide, trCnt, trMetric, trAll, trWeightsNow, opt) : '';
         }
 
         /** 공 고르기 항목은 응답에 그 값이 있을 때만 둡니다(API 배포 전엔 모든 공·헛스윙만). */

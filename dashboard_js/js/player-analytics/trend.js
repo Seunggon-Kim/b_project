@@ -79,7 +79,7 @@
   }
 
   const METRICS = [
-    { key: 'pct', group: '', label: '구종 비율 (%)', tip: '그 시즌(고른 타자 손·카운트 안) 전체 공 가운데 이 구종의 비율입니다.',
+    { key: 'pct', group: '', label: '구종 비율 (%)', tip: '그 시즌(월·경기 단위면 그 달·그 경기, 고른 타자 손·카운트 안) 전체 공 가운데 이 구종의 비율입니다.',
       v: function (s, total) { return total > 0 && s.n > 0 ? 100 * s.n / total : null; },
       note: function (s, total) { return comma(s.n) + '구 / 그 시즌 ' + comma(total) + '구'; } },
     { key: 'n', group: '', label: '투구 수', tip: '이 구종으로 던진 공 수입니다.',
@@ -151,8 +151,8 @@
     return h + '</optgroup>';
   }
 
-  /** 이 지표를 지금 고른 카운트로 쓸 수 있는지(구종 가치는 카운트별 값이 없음). */
-  function metricOk(key, cnt) { return !(key === 'rv' && cnt); }
+  /** 이 지표를 지금 고른 카운트·단위로 쓸 수 있는지(구종 가치는 시즌 합계만 있고 카운트별 값이 없음). */
+  function metricOk(key, cnt, unit) { return !(key === 'rv' && (cnt || (unit && unit !== 'season'))); }
 
   function emptySums() {
     const s = { rv: 0, rv_n: 0, n_r: 0, n_l: 0, ts_n: 0, ts_so: 0 };
@@ -167,15 +167,27 @@
    *   by: 'pitches'(구종별) | 'group'(구종 묶음) | 'all'(모든 공)
    *   type: 화면 구종 이름 하나만 남김. 비율의 바탕(그 시즌 전체 공)은 그대로입니다(Savant).
    *   season: 그 해만
+   *   unit: 'season'(기본) | 'month' | 'game'. 월·경기는 ?by=month·?by=game 응답(fromCols 로 바꾼 것)을 넘깁니다.
+   * 돌려주는 seasons 는 단위 키(시즌 2026, 월 202604, 경기 '20260412:경기ID')의 순서이고,
+   * info(키) 는 { season, label } 입니다. 월·경기 응답엔 구종 가치(values)가 없습니다.
    */
   function aggregate(data, side, cnt, opt) {
     opt = opt || {};
     const by = opt.by || 'pitches', onlyType = opt.type || '', onlySeason = num(opt.season);
+    const unit = opt.unit === 'month' || opt.unit === 'game' ? opt.unit : 'season';
     const keyOf = function (t) { return by === 'all' ? ALL_KEY : by === 'group' ? groupOf(t) : t; };
-    const bySeason = {};
-    const seasonOf = function (y) {
-      if (!bySeason[y]) bySeason[y] = { total: 0, types: {} };
-      return bySeason[y];
+    const bySeason = {}, meta = {};
+    const periodOf = function (r, y) {
+      if (unit === 'month') { const m = num(r.month); return m === null ? null : y * 100 + m; }
+      if (unit === 'game') { const d = num(r.game_date); return d === null || !r.game_id ? null : d + ':' + r.game_id; }
+      return y;
+    };
+    const seasonOf = function (k, y, r) {
+      if (!bySeason[k]) {
+        bySeason[k] = { total: 0, types: {} };
+        meta[k] = { season: y, date: unit === 'game' ? num(r.game_date) : null, month: unit === 'month' ? num(r.month) : null };
+      }
+      return bySeason[k];
     };
     ((data && data.rows) || []).forEach(function (r) {
       const y = num(r.season);
@@ -183,7 +195,9 @@
       if (onlySeason !== null && y !== onlySeason) return;
       if (side && r.bat_side !== side) return;
       if (cnt && (isExact(cnt) ? r.bc !== cnt : r.cnt !== cnt)) return;
-      const S = seasonOf(y), name = nameOf(r.pitch_type);
+      const k = periodOf(r, y);
+      if (k === null) return;
+      const S = seasonOf(k, y, r), name = nameOf(r.pitch_type);
       const rn = num(r.n) || 0;
       S.total += rn;
       if (onlyType && name !== onlyType) return;
@@ -194,7 +208,7 @@
       // 2스트라이크(bc 끝이 -2) 공과 그 삼진: PutAway% 입니다(삼진은 늘 2스트라이크에서 나옴).
       if (r.bc && /-2$/.test(r.bc)) { s.ts_n += rn; s.ts_so += num(r.so) || 0; }
     });
-    if (!cnt) {
+    if (!cnt && unit === 'season') {
       ((data && data.values) || []).forEach(function (r) {
         const y = num(r.season);
         if (y === null || !bySeason[y]) return;
@@ -208,11 +222,40 @@
       });
     }
     // 구종을 골랐으면 그 구종을 안 던진 시즌은 뺍니다(표 줄·더 보기 개수).
-    const seasons = Object.keys(bySeason).map(Number).filter(function (y) {
+    const seasons = Object.keys(bySeason).map(function (k) { return unit === 'game' ? k : Number(k); }).filter(function (y) {
       const S = bySeason[y];
       return S.total > 0 && Object.keys(S.types).some(function (t) { return S.types[t].n > 0; });
-    }).sort(function (a, b) { return a - b; });
-    return { seasons: seasons, bySeason: bySeason };
+    }).sort(function (a, b) { return a < b ? -1 : a > b ? 1 : 0; });
+    // 이름: 시즌 2026, 월 '2026년 4월', 경기 '2026-04-12'(같은 날 두 경기면 (1)·(2), 경기 ID 순).
+    const perDate = {};
+    if (unit === 'game') seasons.forEach(function (k) { const d = meta[k].date; (perDate[d] = perDate[d] || []).push(k); });
+    const info = function (k) {
+      const m = meta[k];
+      if (!m) return { season: num(k), label: String(k) };
+      let label = String(m.season);
+      if (unit === 'month') label = m.season + '년 ' + m.month + '월';
+      if (unit === 'game') {
+        const d = String(m.date), same = perDate[m.date] || [k];
+        label = d.slice(0, 4) + '-' + d.slice(4, 6) + '-' + d.slice(6, 8) + (same.length > 1 ? ' (' + (same.indexOf(k) + 1) + ')' : '');
+      }
+      return { season: m.season, label: label, month: unit === 'game' ? Math.floor(m.date / 100) % 100 : m.month };
+    };
+    return { seasons: seasons, bySeason: bySeason, unit: unit, info: info };
+  }
+
+  /** ?by=month·?by=game 응답(cols 키 목록 + rows 값 배열)을 행 객체로 바꿉니다. 이미 객체 행이면 그대로. */
+  function fromCols(res) {
+    if (!res) return { rows: [], values: [] };
+    if (!Array.isArray(res.cols)) return res;
+    const cols = res.cols;
+    return {
+      rows: (res.rows || []).map(function (a) {
+        const o = {};
+        for (let i = 0; i < cols.length; i++) o[cols[i]] = a[i];
+        return o;
+      }),
+      values: res.values || [],
+    };
   }
 
   /** 고른 지표의 구종별 선입니다. 많이 던진 구종 먼저. 값이 없는 시즌은 점을 두지 않습니다. */
@@ -229,7 +272,7 @@
         agg.seasons.forEach(function (y) {
           const S = agg.bySeason[y], s = S.types[t];
           if (!s || !(s.n > 0)) return;
-          const v = m.v(s, S.total, weights ? weights[y] : null);
+          const v = m.v(s, S.total, weights ? weights[agg.info ? agg.info(y).season : y] : null);
           if (v === null || !Number.isFinite(v)) return;
           points.push({ season: y, v: v, note: m.note(s, S.total) });
         });
@@ -301,7 +344,8 @@
    * 선 그래프 SVG 글자입니다. 점에는 data-tip(시즌 · 구종 · 값 (바탕 수))을 둡니다(공용 흰 바탕 툴팁 js/chart-tip.js).
    * size({w, h})는 viewBox 크기입니다. 화면이 실제 폭을 넘기면 글자가 늘거나 줄지 않습니다(기본 760×300).
    */
-  function chartSvg(sr, seasons, key, size) {
+  function chartSvg(sr, seasons, key, size, per) {
+    if (per && per.unit && per.unit !== 'season') return periodChartSvg(sr, seasons, key, size, per);
     const W = Math.max(320, Math.round((size && size.w) || 760)), H = Math.round((size && size.h) || 300);
     const vals = [];
     sr.forEach(function (s) { s.points.forEach(function (p) { vals.push(p.v); }); });
@@ -343,6 +387,84 @@
       s.points.forEach(function (p) {
         out += '<circle class="pa-tr-pt" cx="' + f(X(p.season)) + '" cy="' + f(Y(p.v)) + '" r="4" style="fill:' + s.color + '"'
           + ' data-tip="' + esc(s.type + ' · ' + p.season + '\n' + metric(key).label + ': ' + fmt(key, p.v) + (p.note ? '\n' + p.note : '')) + '"/>';
+      });
+    });
+    return out + '</svg>';
+  }
+
+  /**
+   * 월·경기 단위 선 그래프입니다(Savant: 시즌이 바뀌면 선을 끊음). 가로축은 기록 있는 월·경기를 같은 간격으로 놓고,
+   * 시즌 사이에 한 칸을 띄워 세로 점선을 둡니다. 여러 시즌이면 해, 한 시즌이면 달 글자를 답니다.
+   * 이웃한 월·경기끼리만 잇습니다(그 구종을 안 던진 월·경기가 있으면 끊음).
+   */
+  function periodChartSvg(sr, keys, key, size, per) {
+    const W = Math.max(320, Math.round((size && size.w) || 760)), H = Math.round((size && size.h) || 300);
+    const vals = [];
+    sr.forEach(function (s) { s.points.forEach(function (p) { vals.push(p.v); }); });
+    let out = '<svg class="pa-tr-svg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + (per.unit === 'month' ? '월별 ' : '경기별 ') + esc(metric(key).label) + '">';
+    if (!vals.length || !keys.length) return out + '</svg>';
+    const slot = {}, idx = {}, seps = [], bands = [];
+    let n = 0, prevSeason = null;
+    keys.forEach(function (k, i) {
+      const y = per.info(k).season;
+      if (prevSeason !== null && y !== prevSeason) { seps.push(n); n++; }
+      if (y !== prevSeason) bands.push({ season: y, from: n, to: n });
+      bands[bands.length - 1].to = n;
+      slot[k] = n; idx[k] = i; n++;
+      prevSeason = y;
+    });
+    const last = n - 1;
+    const tk = ticks(key, vals), y0 = tk[0], y1 = tk[tk.length - 1];
+    const pw = W - ML - MR, ph = H - MT - MB;
+    const f = function (v) { return Math.round(v * 10) / 10; };
+    const XS = function (sl) { return last <= 0 ? ML + pw / 2 : ML + pw * sl / last; };
+    const Y = function (v) { return MT + ph * (1 - (v - y0) / (y1 - y0)); };
+    tk.forEach(function (t) {
+      out += '<line class="pa-tr-grid' + (t === 0 ? ' pa-tr-zero' : '') + '" x1="' + ML + '" x2="' + (W - MR) + '" y1="' + f(Y(t)) + '" y2="' + f(Y(t)) + '"/>'
+        + '<text class="pa-tr-tick" x="' + (ML - 8) + '" y="' + f(Y(t) + 4) + '" text-anchor="end">' + esc(tickFmt(key, t)) + '</text>';
+    });
+    seps.forEach(function (sl) {
+      out += '<line class="pa-tr-grid pa-tr-sep" x1="' + f(XS(sl)) + '" x2="' + f(XS(sl)) + '" y1="' + MT + '" y2="' + f(Y(y0)) + '"/>';
+    });
+    if (bands.length > 1) {
+      // 여러 시즌: 시즌 가운데에 해. 좁으면 ’16 으로 줄이고, 그래도 겹치면 건너뜁니다.
+      const short = pw / bands.length < 44;
+      let lastX = -Infinity;
+      bands.forEach(function (b) {
+        const x = (XS(b.from) + XS(b.to)) / 2;
+        if (x - lastX < (short ? 26 : 38)) return;
+        lastX = x;
+        out += '<text class="pa-tr-tick" x="' + f(x) + '" y="' + (H - 10) + '" text-anchor="middle">' + (short ? '’' + String(b.season).slice(2) : b.season) + '</text>';
+      });
+    } else {
+      // 한 시즌: 달이 바뀌는 첫 월·경기에 'N월'.
+      let prevM = null, lastX = -Infinity;
+      keys.forEach(function (k) {
+        const m = per.info(k).month;
+        if (m === prevM) return;
+        prevM = m;
+        const x = XS(slot[k]);
+        if (x - lastX < 30) return;
+        lastX = x;
+        out += '<text class="pa-tr-tick" x="' + f(x) + '" y="' + (H - 10) + '" text-anchor="middle">' + m + '월</text>';
+      });
+    }
+    sr.forEach(function (s) {
+      let d = '', prev = null;
+      s.points.forEach(function (p) {
+        const i = idx[p.season];
+        const xy = f(XS(slot[p.season])) + ' ' + f(Y(p.v));
+        const sameSeason = prev !== null && per.info(keys[prev]).season === per.info(p.season).season;
+        if (prev !== null && i === prev + 1 && sameSeason) { d += 'L' + xy; } else { d += 'M' + xy; }
+        prev = i;
+      });
+      if (/L/.test(d)) out += '<path class="pa-tr-line" d="' + d + '" style="stroke:' + s.color + '"/>';
+    });
+    const r = n > 60 ? 2.5 : n > 30 ? 3 : 4;
+    sr.forEach(function (s) {
+      s.points.forEach(function (p) {
+        out += '<circle class="pa-tr-pt" cx="' + f(XS(slot[p.season])) + '" cy="' + f(Y(p.v)) + '" r="' + r + '" style="fill:' + s.color + '"'
+          + ' data-tip="' + esc(s.type + ' · ' + per.info(p.season).label + '\n' + metric(key).label + ': ' + fmt(key, p.v) + (p.note ? '\n' + p.note : '')) + '"/>';
       });
     });
     return out + '</svg>';
@@ -402,13 +524,17 @@
       return true;
     });
     const agg = aggregate(data, side, cnt, opt);
-    const seasons = agg.seasons.slice().sort(function (a, b) { return b - a; });
+    // 단위(시즌·월·경기)마다 첫 칸 머리글과 더 보기 글자가 다릅니다(Savant: Season · Month / Year · Date).
+    // [머리글, 머리글 설명, '최근 N…만' 단위, '… 더 보기' 이름]
+    const U = { season: ['시즌', '시즌\n정규시즌입니다.', '시즌', '시즌'], month: ['월', '월\n정규시즌 경기 날짜의 달입니다.', '개월', '월'],
+      game: ['날짜', '날짜\n정규시즌 경기 날짜입니다. 같은 날 두 경기면 (1)·(2) 를 붙입니다.', '경기', '경기'] }[agg.unit];
+    const seasons = agg.seasons.slice().reverse();
     const shown = showAll ? seasons : seasons.slice(0, TB_SEASONS);
     const th = function (label, tip, key) {
       return '<th' + (key && key === metricKey ? ' class="pa-tb-on"' : '') + ' data-tip="' + esc(tip) + '">' + esc(label) + '</th>';
     };
     let h = '<div class="pa-tb-wrap"><table class="pa-tb"><thead><tr>'
-      + '<th data-tip="시즌\n정규시즌입니다.">시즌</th><th data-tip="구종\n화면 구종 이름입니다(직구 → 포심 패스트볼, 투심 → 싱커).">구종</th>';
+      + '<th data-tip="' + esc(U[1]) + '">' + U[0] + '</th><th data-tip="구종\n화면 구종 이름입니다(직구 → 포심 패스트볼, 투심 → 싱커).">구종</th>';
     cols.forEach(function (c) { h += th(c[0], c[2], c[1]); });
     h += '</tr></thead><tbody>';
     shown.forEach(function (y) {
@@ -416,8 +542,8 @@
       const types = Object.keys(S.types).filter(function (t) { return S.types[t].n > 0; })
         .sort(function (a, b) { return S.types[b].n - S.types[a].n || (a < b ? -1 : 1); });
       types.forEach(function (t, i) {
-        const s = S.types[t], w = weights ? weights[y] : null;
-        h += '<tr class="pa-tb-row' + (i === 0 ? ' pa-tb-first' : '') + '"><td>' + y + '</td>'
+        const inf = agg.info(y), s = S.types[t], w = weights ? weights[inf.season] : null;
+        h += '<tr class="pa-tb-row' + (i === 0 ? ' pa-tb-first' : '') + '"><td>' + esc(inf.label) + '</td>'
           + '<td class="pa-tb-type" style="--c:' + keyColor(t) + '">' + esc(t) + '</td>';
         cols.forEach(function (c) {
           h += '<td' + (c[1] && c[1] === metricKey ? ' class="pa-tb-on"' : '') + '>' + esc(c[3](s, S.total, w)) + '</td>';
@@ -428,7 +554,7 @@
     h += '</tbody></table></div>';
     if (seasons.length > TB_SEASONS) {
       h += '<button type="button" class="pa-tb-more" data-all="' + (showAll ? '1' : '0') + '">'
-        + (showAll ? '최근 3시즌만' : '시즌 더 보기 (' + (seasons.length - TB_SEASONS) + ')') + '</button>';
+        + (showAll ? '최근 ' + TB_SEASONS + U[2] + '만' : U[3] + ' 더 보기 (' + (seasons.length - TB_SEASONS) + ')') + '</button>';
     }
     return h;
   }
@@ -625,7 +751,7 @@
   }
 
   const api = { METRICS, metric, metricOk, aggregate, series, fmt, chartSvg, legendHtml, metricOptionsHtml, countOptionsHtml, tableHtml, rvTableHtml, pdTableHtml, prvTableHtml,
-    groupOf, groupNoteHtml, typeOptionsHtml, seasonOptionsHtml };
+    groupOf, groupNoteHtml, typeOptionsHtml, seasonOptionsHtml, fromCols };
   PA.trend = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

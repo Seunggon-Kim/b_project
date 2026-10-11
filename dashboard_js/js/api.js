@@ -201,6 +201,18 @@ class API {
         }
     }
 
+    /** 월·경기 단위 구종 추이입니다(by = 'month' | 'game'). 응답은 cols(키 목록) + rows(값 배열) 모양입니다. */
+    static async getPitchTrendPeriod(playerId, by) {
+        try {
+            const response = await fetch(`${API_BASE_URL}/players/${playerId}/pitch_trend?by=${encodeURIComponent(by)}`);
+            if (!response.ok) return { cols: [], rows: [] };
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching pitch trend by period:', error);
+            return { cols: [], rows: [] };
+        }
+    }
+
     /**
      * Get available seasons (시즌 통계가 존재하는 시즌 목록)
      */
