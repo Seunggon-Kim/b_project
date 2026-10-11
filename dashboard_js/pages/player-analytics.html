@@ -1093,8 +1093,8 @@
                 const isPitcher = player.position === '투수';
                 const Q = window.PlayerAnalytics.quicklook;
                 statsDiv.innerHTML = Q.tableHtml(Q.build(player, await quickLookYear()));
-                // 프로필 아래 최근 시즌 타일입니다. 두 카드 높이를 맞출 때 남는 자리를 채웁니다.
-                cardDiv.insertAdjacentHTML('beforeend', Q.tilesHtml(Q.seasonTiles(player)));
+                // 1군은 프로필 아래 시즌 타일(AVG·OPS·HR·RBI)을 두지 않습니다(evan 26-10-11, 옆 Percentile 카드와 겹침).
+                // 투수는 그 자리에 구종 구사율이 붙습니다(setupMovementCard).
                 // 무브먼트 카드(1군 투수만). 타자면 끕니다.
                 setupMovementCard(player, playerId);
                 // Percentile Rankings 카드(1군 타자만). 투수면 끕니다.
