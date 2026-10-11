@@ -54,3 +54,21 @@ CREATE TABLE IF NOT EXISTS `plate_discipline_league` (
   `mb_sw` INT NOT NULL,
   PRIMARY KEY (`season`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- 타자별 시즌 가치·선구 합계(2026-10-11, /stats/batter_values). pitch_run_value 와 같은 공·값의
+-- 타자 쪽 부호(득점을 만들면 +). 선구 개수는 plate_discipline_league 와 같은 분류.
+CREATE TABLE IF NOT EXISTS `batter_run_value` (
+  `season` SMALLINT NOT NULL,
+  `batter_ID` INT NOT NULL,
+  `pa_n` INT NOT NULL,
+  `n` INT NOT NULL,
+  `rv` DOUBLE NOT NULL,
+  `pd_n` INT NOT NULL,
+  `sw` INT NOT NULL,
+  `wh` INT NOT NULL,
+  `z_n` INT NOT NULL,
+  `o_n` INT NOT NULL,
+  `z_sw` INT NOT NULL,
+  `o_sw` INT NOT NULL,
+  PRIMARY KEY (`season`, `batter_ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

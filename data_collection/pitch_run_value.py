@@ -26,7 +26,7 @@ NON_REGULAR = ("3333", "4444", "5555", "7777", "9999")
 KST = datetime.timezone(datetime.timedelta(hours=9))
 COLS = ("gameID", "pbp_id", "inning", "inning_topbot", "outs", "balls", "strikes",
         "on_1b", "on_2b", "on_3b", "pitch_result", "runs_scored",
-        "pitcher_ID", "pitch_type", "stands", "throws",
+        "pitcher_ID", "pitch_type", "stands", "throws", "batter_ID", "pa_result",
         "px", "pz", "sz_top", "sz_bot")
 
 
@@ -50,7 +50,7 @@ def fetch_sql():
             "on_1b_id IS NOT NULL AS on_1b, "
             "on_2b_id IS NOT NULL AS on_2b, "
             "on_3b_id IS NOT NULL AS on_3b, "
-            "pitch_result, runs_scored, pitcher_ID, pitch_type, stands, throws, "
+            "pitch_result, runs_scored, pitcher_ID, pitch_type, stands, throws, batter_ID, pa_result, "
             "px, pz, sz_top, sz_bot "
             "FROM play_by_play WHERE game_date >= %s AND game_date < %s AND " + reg +
             " ORDER BY gameID, pbp_id")
@@ -74,7 +74,11 @@ def discipline_row(season, d):
     return (season,) + tuple(d[k] for k in pv.DISCIPLINE_KEYS)
 
 
-def write_season(con, season, re_list, value_list, zone_list=(), discipline=None):
+def batter_rows(season, bvals):
+    return [(season, b) + tuple(v[k] for k in pv.BATTER_KEYS) for b, v in sorted(bvals.items())]
+
+
+def write_season(con, season, re_list, value_list, zone_list=(), discipline=None, batter_list=()):
     cur = con.cursor()
     try:
         con.begin()
@@ -82,6 +86,7 @@ def write_season(con, season, re_list, value_list, zone_list=(), discipline=None
         cur.execute("DELETE FROM pitch_run_value WHERE season = %s", (season,))
         cur.execute("DELETE FROM pitch_run_value_zone WHERE season = %s", (season,))
         cur.execute("DELETE FROM plate_discipline_league WHERE season = %s", (season,))
+        cur.execute("DELETE FROM batter_run_value WHERE season = %s", (season,))
         cur.executemany("INSERT INTO run_expectancy (season, bases, outs, balls, strikes, re, n) "
                         "VALUES (%s, %s, %s, %s, %s, %s, %s)", re_list)
         cur.executemany("INSERT INTO pitch_run_value (season, pitcher_ID, pitch_type, stands, n, rv) "
@@ -94,6 +99,10 @@ def write_season(con, season, re_list, value_list, zone_list=(), discipline=None
             cols = ", ".join(("season",) + pv.DISCIPLINE_KEYS)
             marks = ", ".join(["%s"] * (1 + len(pv.DISCIPLINE_KEYS)))
             cur.execute("INSERT INTO plate_discipline_league (%s) VALUES (%s)" % (cols, marks), discipline)
+        # 타자별 시즌 가치·선구 합계입니다(2026-10-11, /stats/batter_values).
+        cols = ", ".join(("season", "batter_ID") + pv.BATTER_KEYS)
+        marks = ", ".join(["%s"] * (2 + len(pv.BATTER_KEYS)))
+        cur.executemany("INSERT INTO batter_run_value (%s) VALUES (%s)" % (cols, marks), batter_list)
         con.commit()
     except Exception:
         con.rollback()
@@ -109,7 +118,8 @@ def compute(con, season):
     vals = pv.pitch_values(halves, re)
     zvals = pv.zone_values(halves, re)
     disc = pv.discipline_counts(rows)
-    return rows, re, n, vals, zvals, disc
+    bvals = pv.batter_values(rows, halves, re)
+    return rows, re, n, vals, zvals, disc, bvals
 
 
 def main(argv=None):
@@ -127,17 +137,20 @@ def main(argv=None):
     try:
         for season in seasons:
             t = time.time()
-            rows, re, n, vals, zvals, disc = compute(con, season)
+            rows, re, n, vals, zvals, disc, bvals = compute(con, season)
             if not rows:
                 print("%d: 정규시즌 PBP 가 없어 건너뜁니다" % season)
                 continue
             total = sum(v[1] for v in vals.values())
-            print("%d: PBP %d행, 상태 %d칸(최소 %d공), 가치 %d줄, 존 %d줄, 리그 합 %+.1f점, %.1f초"
+            btotal = sum(v["rv"] for v in bvals.values())
+            print("%d: PBP %d행, 상태 %d칸(최소 %d공), 가치 %d줄, 존 %d줄, 리그 합 %+.1f점, "
+                  "타자 %d명 합 %+.1f점, %.1f초"
                   % (season, len(rows), len(re), min(n.values()), len(vals), len(zvals), total,
-                     time.time() - t))
+                     len(bvals), btotal, time.time() - t))
             if not args.dry_run:
                 write_season(con, season, re_rows(season, re, n), value_rows(season, vals),
-                             zone_rows(season, zvals), discipline_row(season, disc))
+                             zone_rows(season, zvals), discipline_row(season, disc),
+                             batter_rows(season, bvals))
                 print("%d: 썼습니다" % season)
     finally:
         con.close()

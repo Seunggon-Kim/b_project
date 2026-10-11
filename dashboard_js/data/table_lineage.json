@@ -2,6 +2,10 @@
  "edges": [
   {
    "from": "job:daily",
+   "to": "table:batter_run_value"
+  },
+  {
+   "from": "job:daily",
    "to": "table:futures_games"
   },
   {
@@ -331,6 +335,10 @@
   {
    "from": "table:play_by_play",
    "to": "page:pages/team-stats.html"
+  },
+  {
+   "from": "table:play_by_play",
+   "to": "table:batter_run_value"
   },
   {
    "from": "table:play_by_play",
@@ -914,6 +922,7 @@
    "path": "/db/table/:name",
    "reads_all_tables": true,
    "tables": [
+    "batter_run_value",
     "franchises",
     "futures_games",
     "futures_season_stats",
@@ -955,6 +964,7 @@
    "path": "/db/table/:name/csv",
    "reads_all_tables": true,
    "tables": [
+    "batter_run_value",
     "franchises",
     "futures_games",
     "futures_season_stats",
@@ -996,6 +1006,7 @@
    "path": "/db/tables",
    "reads_all_tables": true,
    "tables": [
+    "batter_run_value",
     "franchises",
     "futures_games",
     "futures_season_stats",
@@ -1286,6 +1297,16 @@
    "path": "/standings",
    "reads_all_tables": false,
    "tables": []
+  },
+  {
+   "file": "src/routes/batterValues.js",
+   "live": false,
+   "pages": [],
+   "path": "/stats/batter_values",
+   "reads_all_tables": false,
+   "tables": [
+    "batter_run_value"
+   ]
   },
   {
    "file": "src/routes/stats.js",
@@ -1678,7 +1699,7 @@
    "writes": []
   },
   {
-   "desc": "올 시즌 정규시즌 PBP 로 기대 득점 표(주자·아웃·볼카운트 288가지)를 만들고, 공 하나마다 기대 득점이 얼마나 바뀌었는지로 투수·구종·타자 손별 구종 가치와 공격 존(Heart·Shadow·Chase·Waste)별 가치, 리그 선구(Plate Discipline) 시즌 합계를 계산해 MySQL 에 넣습니다. 2016~2025는 2026-10-04에 한 번 채운 값입니다.",
+   "desc": "올 시즌 정규시즌 PBP 로 기대 득점 표(주자·아웃·볼카운트 288가지)를 만들고, 공 하나마다 기대 득점이 얼마나 바뀌었는지로 투수·구종·타자 손별 구종 가치와 공격 존(Heart·Shadow·Chase·Waste)별 가치, 리그 선구(Plate Discipline) 시즌 합계, 타자별 시즌 가치(Batting Run Value)·선구 개수를 계산해 MySQL 에 넣습니다. 2016~2025는 처음 만들 때(구종 가치 2026-10-04, 타자 표 2026-10-11) 한 번 채운 값입니다.",
    "jobs": [
     "daily"
    ],
@@ -1692,6 +1713,7 @@
     "daily": "pitch_values"
    },
    "writes": [
+    "batter_run_value",
     "pitch_run_value",
     "pitch_run_value_zone",
     "plate_discipline_league",
@@ -1994,6 +2016,23 @@
   }
  ],
  "tables": [
+  {
+   "category": "세이버메트릭스 분석",
+   "derived_from": [
+    "play_by_play"
+   ],
+   "desc": "타자별로 그 시즌 받은 공의 가치(공 하나마다 기대 득점 변화 + 그 공의 득점, 구종 가치와 같은 값의 반대 부호)와 선구(Plate Discipline) 개수를 더한 표입니다. 2016년부터 정규시즌만 셉니다. 타자를 알 수 없는 공(2017·2019·2022 일부)은 빠집니다.",
+   "kind": "derived",
+   "manual_note": null,
+   "name": "batter_run_value",
+   "pages": [],
+   "routes": [
+    "/stats/batter_values"
+   ],
+   "written_by": [
+    "data_collection/pitch_run_value.py"
+   ]
+  },
   {
    "category": "선수·팀·구장 마스터",
    "derived_from": [],

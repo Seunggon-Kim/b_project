@@ -79,14 +79,17 @@ class FakeCon:
 def test_시즌을_지우고_넣고_커밋합니다():
     con = FakeCon()
     prv.write_season(con, 2024, [(2024, 0, 0, 0, 0, 0.6, 10)], [(2024, 1, "직구", "R", 3, 0.2)],
-                     [(2024, 1, "heart", 3, 0.2)], (2024,) + (1,) * 17)
+                     [(2024, 1, "heart", 3, 0.2)], (2024,) + (1,) * 17,
+                     [(2024, 7, 4, 10, 0.5, 9, 4, 1, 5, 4, 3, 1)])
     kinds = [(c[0], c[1].split()[0], c[1].split()[2] if c[0] == "execute" else c[1].split()[2]) for c in con.cur.calls]
     assert kinds == [("execute", "DELETE", "run_expectancy"), ("execute", "DELETE", "pitch_run_value"),
                      ("execute", "DELETE", "pitch_run_value_zone"),
                      ("execute", "DELETE", "plate_discipline_league"),
+                     ("execute", "DELETE", "batter_run_value"),
                      ("executemany", "INSERT", "run_expectancy"), ("executemany", "INSERT", "pitch_run_value"),
                      ("executemany", "INSERT", "pitch_run_value_zone"),
-                     ("execute", "INSERT", "plate_discipline_league")]
+                     ("execute", "INSERT", "plate_discipline_league"),
+                     ("executemany", "INSERT", "batter_run_value")]
     assert con.committed and not con.rolled
 
 
@@ -116,3 +119,18 @@ def test_읽기_질의에_공_위치가_들어갑니다():
 def test_리그_선구_행은_시즌_다음_정한_키_순서입니다():
     d = {k: i for i, k in enumerate(prv.pv.DISCIPLINE_KEYS)}
     assert prv.discipline_row(2025, d) == (2025,) + tuple(range(17))
+
+
+def test_읽기_질의에_타자_ID_와_타석_결과가_들어갑니다():
+    sql = prv.fetch_sql()
+    assert "batter_ID, pa_result" in sql
+    assert prv.COLS.index("batter_ID") + 1 == prv.COLS.index("pa_result")
+    # 질의 열 순서와 COLS 가 같습니다.
+    sel = sql[len("SELECT "):sql.index(" FROM ")]
+    names = [c.strip().split(" AS ")[-1] for c in sel.split(",")]
+    assert tuple(names) == prv.COLS
+
+
+def test_타자_행은_시즌_타자_ID_다음_정한_키_순서입니다():
+    v = {k: i for i, k in enumerate(prv.pv.BATTER_KEYS)}
+    assert prv.batter_rows(2025, {9: v, 3: v}) == [(2025, 3) + tuple(range(10)), (2025, 9) + tuple(range(10))]

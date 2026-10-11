@@ -158,34 +158,76 @@ def _box(r):
 def discipline_counts(rows):
     d = dict.fromkeys(DISCIPLINE_KEYS, 0)
     for r in rows:
-        if not has_type(r):
-            continue
-        d["n"] += 1
-        res = r.get("pitch_result")
-        if res not in DISCIPLINE:
-            continue
-        sw, ct = res in SWING, res in CONTACT
-        d["pd_n"] += 1
-        d["sw"] += sw
-        d["wh"] += res in WHIFF
-        d["ct"] += ct
-        d["cs"] += res in LOOK
-        if r.get("balls") == 0 and r.get("strikes") == 0:
-            d["fp_n"] += 1
-            d["fp_str"] += res not in BALL
-        px, pz = r.get("px"), r.get("pz")
-        if px is None or pz is None:
-            continue
-        top, bot = _box(r)
-        inside = abs(px) <= HALF_W and bot <= pz <= top
-        side = "z" if inside else "o"
-        d[side + "_n"] += 1
-        d[side + "_sw"] += sw
-        d[side + "_ct"] += ct
-        rr = max(abs(px) / HALF_W, abs(pz - (top + bot) / 2) / ((top - bot) / 2))
-        d["edge_n"] += 0.67 <= rr < 1.33
-        h = top - bot
-        if abs(px) <= HALF_W / 3 and bot + h / 3 <= pz <= top - h / 3:
-            d["mb_n"] += 1
-            d["mb_sw"] += sw
+        if has_type(r):
+            add_discipline(d, r)
     return d
+
+
+def add_discipline(d, r):
+    """구종 있는 공 하나를 선구 개수 d(DISCIPLINE_KEYS)에 더합니다."""
+    d["n"] += 1
+    res = r.get("pitch_result")
+    if res not in DISCIPLINE:
+        return
+    sw, ct = res in SWING, res in CONTACT
+    d["pd_n"] += 1
+    d["sw"] += sw
+    d["wh"] += res in WHIFF
+    d["ct"] += ct
+    d["cs"] += res in LOOK
+    if r.get("balls") == 0 and r.get("strikes") == 0:
+        d["fp_n"] += 1
+        d["fp_str"] += res not in BALL
+    px, pz = r.get("px"), r.get("pz")
+    if px is None or pz is None:
+        return
+    top, bot = _box(r)
+    inside = abs(px) <= HALF_W and bot <= pz <= top
+    side = "z" if inside else "o"
+    d[side + "_n"] += 1
+    d[side + "_sw"] += sw
+    d[side + "_ct"] += ct
+    rr = max(abs(px) / HALF_W, abs(pz - (top + bot) / 2) / ((top - bot) / 2))
+    d["edge_n"] += 0.67 <= rr < 1.33
+    h = top - bot
+    if abs(px) <= HALF_W / 3 and bot + h / 3 <= pz <= top - h / 3:
+        d["mb_n"] += 1
+        d["mb_sw"] += sw
+
+
+# 타자별 시즌 합계입니다(2026-10-11, /stats/batter_values, 타자 Percentile Rankings).
+BATTER_KEYS = ("pa_n", "n", "rv", "pd_n", "sw", "wh", "z_n", "o_n", "z_sw", "o_sw")
+
+
+def batter_values(rows, halves, re):
+    """타자 ID 마다 BATTER_KEYS 합계입니다.
+
+    rv·n 은 pitch_values 와 같은 공·같은 값을 타자 쪽 부호(득점을 만들면 +)로
+    더합니다. 타자 ID 가 빈 공은 누구 몫인지 몰라 빼므로, 그런 공이 있는 시즌은
+    모든 타자 합이 −(모든 투수 합)과 그 공들 값만큼 다릅니다. 선구 개수는
+    discipline_counts 와 같은 분류(구종 있는 공), pa_n 은 타석 결과가 있는 행 수입니다.
+    """
+    out = {}
+
+    def acc(b):
+        if b not in out:
+            out[b] = {"pa_n": 0, "n": 0, "rv": 0.0, "disc": dict.fromkeys(DISCIPLINE_KEYS, 0)}
+        return out[b]
+
+    for r, delta in pitch_deltas(halves, re):
+        b = r.get("batter_ID")
+        if b is None:
+            continue
+        a = acc(b)
+        a["n"] += 1
+        a["rv"] += delta
+    for r in rows:
+        b = r.get("batter_ID")
+        if b is None:
+            continue
+        if r.get("pa_result") not in (None, ""):
+            acc(b)["pa_n"] += 1
+        if has_type(r):
+            add_discipline(acc(b)["disc"], r)
+    return {b: {k: (a[k] if k in ("pa_n", "n", "rv") else a["disc"][k]) for k in BATTER_KEYS}
+            for b, a in out.items()}

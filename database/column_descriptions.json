@@ -35,7 +35,8 @@
         "run_expectancy",
         "pitch_run_value",
         "pitch_run_value_zone",
-        "plate_discipline_league"
+        "plate_discipline_league",
+        "batter_run_value"
       ]
     },
     {
@@ -749,6 +750,25 @@
         "fp_str": "초구 스트라이크 수",
         "mb_n": "한가운데(Meatball) 공 수",
         "mb_sw": "한가운데 공 스윙 수"
+      }
+    },
+    "batter_run_value": {
+      "category": "세이버메트릭스 분석",
+      "table_desc": "타자별로 그 시즌 받은 공의 가치(공 하나마다 기대 득점 변화 + 그 공의 득점, 구종 가치와 같은 값의 반대 부호)와 선구(Plate Discipline) 개수를 더한 표입니다. 2016년부터 정규시즌만 셉니다. 타자를 알 수 없는 공(2017·2019·2022 일부)은 빠집니다.",
+      "update_freq": "매일 03:33 (daily, 올 시즌)",
+      "columns": {
+        "season": "시즌 연도",
+        "batter_ID": "타자 선수 ID",
+        "pa_n": "타석 수(문자중계로 셈, 공식 기록보다 조금 적을 수 있음)",
+        "n": "가치를 매긴 공 수",
+        "rv": "타격 가치 합(점, +면 득점을 만듦)",
+        "pd_n": "선구 집계 공 수(스윙·스트라이크·볼 결과인 공)",
+        "sw": "스윙 수",
+        "wh": "헛스윙 수",
+        "z_n": "스트라이크 존 안 공 수",
+        "o_n": "존 밖 공 수",
+        "z_sw": "존 안 스윙 수",
+        "o_sw": "존 밖 스윙(체이스) 수"
       }
     }
   }

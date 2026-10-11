@@ -28,6 +28,7 @@ import { movementAvg } from './routes/movementAvg.js';
 import { pitchValues } from './routes/pitchValues.js';
 import { pitchTrend } from './routes/pitchTrend.js';
 import { plateDiscipline } from './routes/plateDiscipline.js';
+import { batterValues } from './routes/batterValues.js';
 import {
   wrcSeasons, wrcByStadium, wrcLeaderboard,
   wrcTopChanges, wrcBatter, wrcBatterSearch, wrcDistribution,
@@ -84,6 +85,7 @@ router.add('GET', '/stats/team_range', statsTeamRange);
 router.add('GET', '/stats/movement_avg', movementAvg);
 // 리그 선구(Plate Discipline) 시즌 합계. 매일 pitch_run_value.py 가 미리 계산해 둡니다.
 router.add('GET', '/stats/plate_discipline', plateDiscipline);
+router.add('GET', '/stats/batter_values', batterValues);
 router.add('GET', '/stats/batters', statsBatters);
 router.add('GET', '/stats/pitchers', statsPitchers);
 router.add('GET', '/games', games);

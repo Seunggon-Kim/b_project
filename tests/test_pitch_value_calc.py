@@ -157,3 +157,48 @@ def test_리그_선구_합계는_pitch_trend_와_같은_분류입니다():
     assert d == {"n": 6, "pd_n": 4, "sw": 2, "wh": 1, "ct": 1, "cs": 1,
                  "z_n": 2, "o_n": 2, "z_sw": 1, "o_sw": 1, "z_ct": 0, "o_ct": 1,
                  "edge_n": 2, "fp_n": 2, "fp_str": 1, "mb_n": 1, "mb_sw": 1}
+
+
+# --- 타자별 시즌 합계(/stats/batter_values, 2026-10-11) ---
+
+def test_타자_가치는_투수_가치와_같은_공_반대_부호이고_타자_ID_빈_공은_뺍니다():
+    re = {(0, 0, 0, 0): 0.5, (0, 0, 1, 0): 0.6}
+    h = [dict(row(1, ptype="직구"), batter_ID=7),                          # 투수 −0.1 → 타자 +0.1
+         dict(row(2, balls=1, result="타격", ptype="커브", runs=1), batter_ID=8, pa_result="안타")]  # 투수 −0.4 → 타자 +0.4
+    other = [dict(row(3, inning=2, ptype="직구"), batter_ID=None)]        # 타자 모름
+    halves = [h, other]
+    vals = pv.pitch_values(halves, dict(re))
+    b = pv.batter_values(h + other, halves, dict(re))
+    assert set(b) == {7, 8}
+    assert b[7]["n"] == 1 and b[7]["rv"] == pytest.approx(0.1)
+    assert b[8]["rv"] == pytest.approx(0.4)
+    assert b[8]["pa_n"] == 1 and b[7]["pa_n"] == 0
+    # 타자 합 + 투수 합 = 타자 ID 빈 공의 투수 쪽 값(그 공이 없으면 0).
+    known = sum(v["rv"] for v in b.values())
+    unknown = pv.pitch_values([other], dict(re))
+    assert known + sum(v[1] for v in vals.values()) == pytest.approx(sum(v[1] for v in unknown.values()))
+
+
+def test_타자_선구_개수는_리그_합계와_같은_분류입니다():
+    rows = [
+        at(row(1, result="헛스윙", balls=0, strikes=0), 0.0, 2.5),
+        at(row(2, result="볼", balls=0, strikes=0), 1.8, 2.5),
+        at(row(3, result="스트라이크", balls=1, strikes=0), 0.7, 2.5),
+        at(row(4, result="타격", balls=1), 1.0, 2.5),
+        row(5, result="고의 볼"),
+        row(6, result="파울", ptype=None),
+    ]
+    rows = [dict(r, batter_ID=9) for r in rows]
+    b = pv.batter_values(rows, [], {})[9]
+    league = pv.discipline_counts(rows)
+    for k in ("pd_n", "sw", "wh", "z_n", "o_n", "z_sw", "o_sw"):
+        assert b[k] == league[k], k
+    assert b["n"] == 0 and b["rv"] == 0.0          # 가치는 halves 로만 셉니다
+    assert tuple(b) == pv.BATTER_KEYS
+
+
+def test_타석은_결과가_있는_행만_구종과_상관없이_셉니다():
+    rows = [dict(row(1, ptype=None), batter_ID=3, pa_result="삼진"),
+            dict(row(2), batter_ID=3, pa_result=""),
+            dict(row(3), batter_ID=3, pa_result=None)]
+    assert pv.batter_values(rows, [], {})[3]["pa_n"] == 1

@@ -586,3 +586,18 @@ CREATE TABLE `plate_discipline_league` (
   `mb_sw` INT NOT NULL,
   PRIMARY KEY (`season`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CREATE TABLE `batter_run_value` (
+  `season` SMALLINT NOT NULL,
+  `batter_ID` INT NOT NULL,
+  `pa_n` INT NOT NULL,
+  `n` INT NOT NULL,
+  `rv` DOUBLE NOT NULL,
+  `pd_n` INT NOT NULL,
+  `sw` INT NOT NULL,
+  `wh` INT NOT NULL,
+  `z_n` INT NOT NULL,
+  `o_n` INT NOT NULL,
+  `z_sw` INT NOT NULL,
+  `o_sw` INT NOT NULL,
+  PRIMARY KEY (`season`, `batter_ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
