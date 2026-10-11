@@ -169,6 +169,16 @@
                         <h3 class="card-title mb-0">시즌별 구종 추이</h3>
                         <div class="flex-group gap-3 pa-ars-controls">
                             <select id="pa-tr-metric" class="pa-move-season" aria-label="지표 고르기"></select>
+                            <select id="pa-tr-by" class="pa-move-season" aria-label="Pitches 고르기" data-tip="Pitches&#10;구종별: 구종마다 한 줄. 구종 묶음: 패스트볼·오프스피드·브레이킹(Savant 묶음). 모든 공: 모든 구종을 합친 한 줄입니다.">
+                                <option value="pitches">구종별</option>
+                                <option value="group">구종 묶음</option>
+                                <option value="all">모든 공</option>
+                            </select>
+                            <select id="pa-tr-unit" class="pa-move-season" aria-label="단위 고르기" data-tip="단위&#10;시즌·월·경기 가운데 무엇으로 묶을지 고릅니다.">
+                                <option value="season">시즌</option>
+                                <option value="month" disabled>월</option>
+                                <option value="game" disabled>경기</option>
+                            </select>
                             <select id="pa-tr-side" class="pa-move-season" aria-label="타자 손 고르기">
                                 <option value="">모든 타자</option>
                                 <option value="R">우타자 상대</option>
@@ -177,10 +187,13 @@
                             <select id="pa-tr-count" class="pa-move-season" aria-label="카운트 고르기" data-tip="카운트 고르기&#10;던지기 전 카운트, 투수 기준입니다(FanGraphs). 유리한 카운트 0-1·0-2·1-2, 불리한 카운트 1-0·2-0·3-0·2-1·3-1, 같은 카운트 0-0·1-1·2-2, 풀카운트 3-2.&#10;카운트별(0-0 … 3-2)도 고를 수 있습니다. 볼 4는 3, 스트라이크 3은 2로 봅니다.">
                                 <option value="">모든 카운트</option>
                             </select>
+                            <select id="pa-tr-type" class="pa-move-season" aria-label="구종 고르기"><option value="">모든 구종</option></select>
+                            <select id="pa-tr-season" class="pa-move-season" aria-label="연도 고르기"><option value="">모든 시즌</option></select>
                         </div>
                     </div>
                     <p id="pa-tr-desc" class="pa-ars-note"></p>
                     <div id="pa-tr-chart" class="pa-tr-chart"></div>
+                    <div id="pa-tr-groups" class="hidden"></div>
                     <!-- 구종별 시즌 표(Savant 참고): 위 고르기(타자 손·카운트)와 연동, 고른 지표 열을 칠함 -->
                     <div id="pa-tr-table" class="pa-tr-table"></div>
                 </div>
@@ -1165,6 +1178,7 @@
         // /players/{id}/pitch_trend(시즌 × 구종 × 타자 손 × 카운트 합계)를 한 번 받아 둡니다.
         // 고르기를 바꾸면 받아 둔 합계로 다시 그립니다. 응답이 비면(API 배포 전·투수 자료 없음) 카드를 숨깁니다.
         let trToken = 0, trData = null, trMetric = 'pct', trSide = '', trCnt = '';
+        let trBy = 'pitches', trType = '', trSeason = '';   // Pitches·구종·연도 고르기(Savant Pitch Tracking, evan)
         let trAll = false;          // 구종별 시즌 표: 모든 시즌을 펼쳤는지
         let trWeightsNow = null;    // 지금 선수 표에 쓰는 wOBA 가중치
         let rvAll = false;          // 구종별 Run Value 표: 모든 시즌을 펼쳤는지
@@ -1197,6 +1211,12 @@
             metric.onchange = () => { trMetric = metric.value; renderTrend(); };
             side.onchange = () => { trSide = side.value; renderTrend(); };
             count.onchange = () => { trCnt = count.value; renderTrend(); };
+            const by = document.getElementById('pa-tr-by');
+            const type = document.getElementById('pa-tr-type');
+            const season = document.getElementById('pa-tr-season');
+            by.onchange = () => { trBy = by.value; renderTrend(); };
+            type.onchange = () => { trType = type.value; renderTrend(); };
+            season.onchange = () => { trSeason = season.value; renderTrend(); };
             document.getElementById('pa-tr-table').addEventListener('click', e => {
                 if (!(e.target.closest && e.target.closest('.pa-tb-more'))) return;
                 trAll = !trAll;
@@ -1238,6 +1258,15 @@
             countSel.innerHTML = window.PlayerAnalytics.trend.countOptionsHtml(trData);
             if (![...countSel.options].some(o => o.value === trCnt)) trCnt = '';
             countSel.value = trCnt;
+            // 구종·연도 목록은 선수마다 다릅니다. 지금 고른 값이 없으면 모두로.
+            const typeSel = document.getElementById('pa-tr-type');
+            typeSel.innerHTML = window.PlayerAnalytics.trend.typeOptionsHtml(trData);
+            if (![...typeSel.options].some(o => o.value === trType)) trType = '';
+            typeSel.value = trType;
+            const seasonSel = document.getElementById('pa-tr-season');
+            seasonSel.innerHTML = window.PlayerAnalytics.trend.seasonOptionsHtml(trData);
+            if (![...seasonSel.options].some(o => o.value === trSeason)) trSeason = '';
+            seasonSel.value = trSeason;
             renderTrend();
             renderRvTable();
             renderPrvTable();
@@ -1295,17 +1324,26 @@
             if (rvOpt) rvOpt.disabled = !T.metricOk('rv', trCnt);
             if (!T.metricOk(trMetric, trCnt)) { trMetric = 'pct'; metricSel.value = 'pct'; }
             const m = T.metric(trMetric);
-            const agg = T.aggregate(trData, trSide, trCnt);
+            // 구종 고르기는 구종별일 때만 씁니다(묶음과 섞으면 공 수·평균 기준이 애매해짐).
+            const typeSel = document.getElementById('pa-tr-type');
+            typeSel.disabled = trBy !== 'pitches';
+            typeSel.dataset.tip = typeSel.disabled ? '구종 고르기\n구종별을 골랐을 때만 쓸 수 있습니다.'
+                : '구종 고르기\n고른 구종만 그립니다. 비율은 그대로 그 시즌 모든 공 대비입니다(Savant).';
+            const opt = { by: trBy, type: trBy === 'pitches' ? trType : '', season: trSeason };
+            document.getElementById('pa-tr-groups').classList.toggle('hidden', trBy !== 'group');
+            document.getElementById('pa-tr-groups').innerHTML = trBy === 'group' ? T.groupNoteHtml() : '';
+            const agg = T.aggregate(trData, trSide, trCnt, opt);
             const sr = T.series(agg, trMetric, trWeightsNow).filter(s => s.points.length);
             const countSel = document.getElementById('pa-tr-count');
-            const cond = [trSide === 'R' ? '우타자 상대' : trSide === 'L' ? '좌타자 상대' : '',
+            const cond = [opt.type, opt.season ? opt.season + '시즌' : '',
+                trSide === 'R' ? '우타자 상대' : trSide === 'L' ? '좌타자 상대' : '',
                 trCnt ? (/^\d-\d$/.test(trCnt) ? '카운트 ' + trCnt : countSel.selectedOptions[0].textContent) : ''].filter(Boolean).join(' · ');
             desc.textContent = m.tip + (cond ? ` 고른 조건: ${cond}.` : '') + ' 점에 마우스를 올리면 값이 나옵니다.';
             chart.innerHTML = sr.length
                 ? T.chartSvg(sr, agg.seasons, trMetric, trSize(chart)) + T.legendHtml(sr)
                 : '<p class="text-secondary pa-ars-empty">고른 조건에 맞는 값이 없습니다.</p>';
             document.getElementById('pa-tr-table').innerHTML = sr.length
-                ? T.tableHtml(trData, trSide, trCnt, trMetric, trAll, trWeightsNow) : '';
+                ? T.tableHtml(trData, trSide, trCnt, trMetric, trAll, trWeightsNow, opt) : '';
         }
 
         /** 공 고르기 항목은 응답에 그 값이 있을 때만 둡니다(API 배포 전엔 모든 공·헛스윙만). */

@@ -33,6 +33,33 @@
   function colorOf(t) { const M = PA.movement; return M && M.colorOf ? M.colorOf(t) : '#3b82f6'; }
   function ratio(a, b) { return b > 0 ? a / b : null; }
 
+  // ---- Pitches 고르기(Savant Pitch Tracking, evan 26-10-11) ----
+  // 구종 묶음은 Savant pitchChartLegend 그대로입니다. 목록에 없는 구종은 Savant 의 Other 처럼 브레이킹입니다.
+  const GROUPS = [
+    ['패스트볼', '#f00', ['포심 패스트볼', '싱커', '커터']],
+    ['오프스피드', '#24CA24', ['체인지업', '스플리터', '포크']],
+    ['브레이킹', '#00f', ['슬라이더', '커브', '너클볼', '스위퍼', '슬러브']],
+  ];
+  const ALL_KEY = '모든 공';
+  const ALL_COLOR = 'var(--text-primary)';   // Pitch Distribution 의 All Pitches 와 같은 글자색
+  /** 화면 구종 이름 → 묶음 이름입니다. */
+  function groupOf(t) {
+    for (let i = 0; i < GROUPS.length; i++) { if (GROUPS[i][2].indexOf(t) >= 0) return GROUPS[i][0]; }
+    return GROUPS[2][0];
+  }
+  /** 선·표 줄의 색입니다(구종, 묶음, 모든 공). */
+  function keyColor(k) {
+    if (k === ALL_KEY) return ALL_COLOR;
+    for (let i = 0; i < GROUPS.length; i++) { if (GROUPS[i][0] === k) return GROUPS[i][1]; }
+    return colorOf(k);
+  }
+  /** 묶음 설명 한 줄입니다(구종 묶음을 골랐을 때 그래프 아래). */
+  function groupNoteHtml() {
+    return '<p class="pa-tr-groups">' + GROUPS.map(function (g, i) {
+      return '<span><b style="color:' + g[1] + '">' + esc(g[0]) + '</b>: ' + esc(g[2].join('·') + (i === 2 ? '·그 밖' : '')) + '</span>';
+    }).join('') + '</p>';
+  }
+
   // 지표 목록입니다. 묶음(group)은 고르기 칸의 optgroup 이고, tip 은 마우스를 올리면 나오는 설명입니다.
   // v(합계, 그 시즌 전체 공 수) → 값(없으면 null), note(합계) → 툴팁의 바탕 수.
   /** wOBA 입니다(선수 통계 metrics.wobaOf 와 같은 식, BB 는 고의4구 포함). 가중치 w 가 없거나 분모가 0 이면 null. */
@@ -136,8 +163,15 @@
   /**
    * 응답을 고른 타자 손(''·'L'·'R')과 카운트(''·'ahead'·'behind'·'even'·'full')로 합칩니다.
    * 구종 이름은 화면 이름으로 바꿔 합칩니다(투심+싱커 → 싱커 등).
+   * opt(드롭다운, 없으면 예전과 같음):
+   *   by: 'pitches'(구종별) | 'group'(구종 묶음) | 'all'(모든 공)
+   *   type: 화면 구종 이름 하나만 남김. 비율의 바탕(그 시즌 전체 공)은 그대로입니다(Savant).
+   *   season: 그 해만
    */
-  function aggregate(data, side, cnt) {
+  function aggregate(data, side, cnt, opt) {
+    opt = opt || {};
+    const by = opt.by || 'pitches', onlyType = opt.type || '', onlySeason = num(opt.season);
+    const keyOf = function (t) { return by === 'all' ? ALL_KEY : by === 'group' ? groupOf(t) : t; };
     const bySeason = {};
     const seasonOf = function (y) {
       if (!bySeason[y]) bySeason[y] = { total: 0, types: {} };
@@ -146,13 +180,16 @@
     ((data && data.rows) || []).forEach(function (r) {
       const y = num(r.season);
       if (y === null) return;
+      if (onlySeason !== null && y !== onlySeason) return;
       if (side && r.bat_side !== side) return;
       if (cnt && (isExact(cnt) ? r.bc !== cnt : r.cnt !== cnt)) return;
-      const S = seasonOf(y), t = nameOf(r.pitch_type);
-      const s = S.types[t] || (S.types[t] = emptySums());
-      SUMS.forEach(function (k) { s[k] += num(r[k]) || 0; });
+      const S = seasonOf(y), name = nameOf(r.pitch_type);
       const rn = num(r.n) || 0;
       S.total += rn;
+      if (onlyType && name !== onlyType) return;
+      const t = keyOf(name);
+      const s = S.types[t] || (S.types[t] = emptySums());
+      SUMS.forEach(function (k) { s[k] += num(r[k]) || 0; });
       if (r.bat_side === 'R') s.n_r += rn; else if (r.bat_side === 'L') s.n_l += rn;
       // 2스트라이크(bc 끝이 -2) 공과 그 삼진: PutAway% 입니다(삼진은 늘 2스트라이크에서 나옴).
       if (r.bc && /-2$/.test(r.bc)) { s.ts_n += rn; s.ts_so += num(r.so) || 0; }
@@ -161,15 +198,20 @@
       ((data && data.values) || []).forEach(function (r) {
         const y = num(r.season);
         if (y === null || !bySeason[y]) return;
-        const t = nameOf(r.pitch_type), s = bySeason[y].types[t];
+        const name = nameOf(r.pitch_type);
+        if (onlyType && name !== onlyType) return;
+        const s = bySeason[y].types[keyOf(name)];
         if (!s) return;
         const nl = num(r.n_l) || 0, nr = num(r.n_r) || 0, rl = num(r.rv_l) || 0, rr = num(r.rv_r) || 0;
         if (side !== 'R') { s.rv += rl; s.rv_n += nl; }
         if (side !== 'L') { s.rv += rr; s.rv_n += nr; }
       });
     }
-    const seasons = Object.keys(bySeason).map(Number).filter(function (y) { return bySeason[y].total > 0; })
-      .sort(function (a, b) { return a - b; });
+    // 구종을 골랐으면 그 구종을 안 던진 시즌은 뺍니다(표 줄·더 보기 개수).
+    const seasons = Object.keys(bySeason).map(Number).filter(function (y) {
+      const S = bySeason[y];
+      return S.total > 0 && Object.keys(S.types).some(function (t) { return S.types[t].n > 0; });
+    }).sort(function (a, b) { return a - b; });
     return { seasons: seasons, bySeason: bySeason };
   }
 
@@ -191,8 +233,32 @@
           if (v === null || !Number.isFinite(v)) return;
           points.push({ season: y, v: v, note: m.note(s, S.total) });
         });
-        return { type: t, color: colorOf(t), points: points };
+        return { type: t, color: keyColor(t), points: points };
       });
+  }
+
+  /** 응답의 구종별 전체 공 수입니다(화면 이름으로 합침). 많이 던진 순, 같으면 이름 순. */
+  function typeTotals(data) {
+    const tot = {};
+    ((data && data.rows) || []).forEach(function (r) {
+      const t = nameOf(r.pitch_type);
+      tot[t] = (tot[t] || 0) + (num(r.n) || 0);
+    });
+    return Object.keys(tot).filter(function (t) { return tot[t] > 0; })
+      .sort(function (a, b) { return tot[b] - tot[a] || (a < b ? -1 : 1); });
+  }
+  /** 구종 고르기 option 글자입니다(그 투수가 던진 구종). */
+  function typeOptionsHtml(data) {
+    return '<option value="">모든 구종</option>' + typeTotals(data).map(function (t) {
+      return '<option value="' + esc(t) + '">' + esc(t) + '</option>';
+    }).join('');
+  }
+  /** 연도 고르기 option 글자입니다(최근 순). */
+  function seasonOptionsHtml(data) {
+    const ys = {};
+    ((data && data.rows) || []).forEach(function (r) { const y = num(r.season); if (y !== null && (num(r.n) || 0) > 0) ys[y] = 1; });
+    return '<option value="">모든 시즌</option>' + Object.keys(ys).map(Number).sort(function (a, b) { return b - a; })
+      .map(function (y) { return '<option value="' + y + '">' + y + '</option>'; }).join('');
   }
 
   function isPct(key) { return key === 'pct' || key === 'bb_pct' || key === 'k_pct' || !!metric(key).pct; }
@@ -271,11 +337,11 @@
         if (prev !== null && i === prev + 1) { d += 'L' + xy; } else { d += 'M' + xy; }
         prev = i;
       });
-      if (/L/.test(d)) out += '<path class="pa-tr-line" d="' + d + '" stroke="' + s.color + '"/>';
+      if (/L/.test(d)) out += '<path class="pa-tr-line" d="' + d + '" style="stroke:' + s.color + '"/>';
     });
     sr.forEach(function (s) {
       s.points.forEach(function (p) {
-        out += '<circle class="pa-tr-pt" cx="' + f(X(p.season)) + '" cy="' + f(Y(p.v)) + '" r="4" fill="' + s.color + '"'
+        out += '<circle class="pa-tr-pt" cx="' + f(X(p.season)) + '" cy="' + f(Y(p.v)) + '" r="4" style="fill:' + s.color + '"'
           + ' data-tip="' + esc(s.type + ' · ' + p.season + '\n' + metric(key).label + ': ' + fmt(key, p.v) + (p.note ? '\n' + p.note : '')) + '"/>';
       });
     });
@@ -325,7 +391,7 @@
    * weights 는 { 시즌: kbo_woba_weights_by_season 행 } 입니다. 응답에 hbp 가 없거나 가중치가 없으면 wOBA 열을,
    * bc(카운트별)가 없으면 PutAway% 열을 숨깁니다(데이터에 없는 값은 두지 않음).
    */
-  function tableHtml(data, side, cnt, metricKey, showAll, weights) {
+  function tableHtml(data, side, cnt, metricKey, showAll, weights, opt) {
     const rows = (data && data.rows) || [];
     const hasBc = rows.some(function (r) { return r.bc; });
     const hasHbp = rows.some(function (r) { return r.hbp !== undefined && r.hbp !== null; });
@@ -335,7 +401,7 @@
       if (c[0] === 'wOBA') return hasHbp && hasW;
       return true;
     });
-    const agg = aggregate(data, side, cnt);
+    const agg = aggregate(data, side, cnt, opt);
     const seasons = agg.seasons.slice().sort(function (a, b) { return b - a; });
     const shown = showAll ? seasons : seasons.slice(0, TB_SEASONS);
     const th = function (label, tip, key) {
@@ -352,7 +418,7 @@
       types.forEach(function (t, i) {
         const s = S.types[t], w = weights ? weights[y] : null;
         h += '<tr class="pa-tb-row' + (i === 0 ? ' pa-tb-first' : '') + '"><td>' + y + '</td>'
-          + '<td class="pa-tb-type" style="--c:' + colorOf(t) + '">' + esc(t) + '</td>';
+          + '<td class="pa-tb-type" style="--c:' + keyColor(t) + '">' + esc(t) + '</td>';
         cols.forEach(function (c) {
           h += '<td' + (c[1] && c[1] === metricKey ? ' class="pa-tb-on"' : '') + '>' + esc(c[3](s, S.total, w)) + '</td>';
         });
@@ -558,7 +624,8 @@
     return html + (group ? '</optgroup>' : '');
   }
 
-  const api = { METRICS, metric, metricOk, aggregate, series, fmt, chartSvg, legendHtml, metricOptionsHtml, countOptionsHtml, tableHtml, rvTableHtml, pdTableHtml, prvTableHtml };
+  const api = { METRICS, metric, metricOk, aggregate, series, fmt, chartSvg, legendHtml, metricOptionsHtml, countOptionsHtml, tableHtml, rvTableHtml, pdTableHtml, prvTableHtml,
+    groupOf, groupNoteHtml, typeOptionsHtml, seasonOptionsHtml };
   PA.trend = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

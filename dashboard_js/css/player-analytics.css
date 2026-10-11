@@ -207,6 +207,7 @@
 .pa-tr-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.4rem 1rem; margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary); }
 .pa-tr-key { display: inline-flex; align-items: center; gap: 0.35rem; }
 .pa-tr-key i { width: 0.7rem; height: 0.7rem; border-radius: 999px; display: inline-block; }
+.pa-tr-groups { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.25rem 1.25rem; margin: 0.4rem 0 0; font-size: 0.78rem; color: var(--text-secondary); }  /* 구종 묶음 설명(Savant pitchChartLegend) */
 /* ---------- Pitch Distribution(Savant 참고, 구속별 투구 비율) ---------- */
 .pa-pdist-line { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; transition: opacity 0.15s; }
 .pa-pdist-all { stroke: var(--text-primary); stroke-width: 2; stroke-dasharray: 6 4; }
