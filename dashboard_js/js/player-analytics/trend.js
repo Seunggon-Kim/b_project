@@ -37,7 +37,7 @@
   // 구종 묶음은 Savant pitchChartLegend 그대로입니다. 목록에 없는 구종은 Savant 의 Other 처럼 브레이킹입니다.
   const GROUPS = [
     ['패스트볼', '#f00', ['포심 패스트볼', '싱커', '커터']],
-    ['오프스피드', '#24CA24', ['체인지업', '스플리터', '포크']],
+    ['오프스피드', '#24CA24', ['체인지업', '스플리터']],   // 문자중계 포크는 화면에서 스플리터(movement.pitchName)
     ['브레이킹', '#00f', ['슬라이더', '커브', '너클볼', '스위퍼', '슬러브']],
   ];
   const ALL_KEY = '모든 공';
@@ -534,7 +534,7 @@
       return '<th' + (key && key === metricKey ? ' class="pa-tb-on"' : '') + ' data-tip="' + esc(tip) + '">' + esc(label) + '</th>';
     };
     let h = '<div class="pa-tb-wrap"><table class="pa-tb"><thead><tr>'
-      + '<th data-tip="' + esc(U[1]) + '">' + U[0] + '</th><th data-tip="구종\n화면 구종 이름입니다(직구 → 포심 패스트볼, 투심 → 싱커).">구종</th>';
+      + '<th data-tip="' + esc(U[1]) + '">' + U[0] + '</th><th data-tip="구종\n화면 구종 이름입니다(직구 → 포심 패스트볼, 투심 → 싱커, 포크 → 스플리터).">구종</th>';
     cols.forEach(function (c) { h += th(c[0], c[2], c[1]); });
     h += '</tr></thead><tbody>';
     shown.forEach(function (y) {
@@ -595,7 +595,7 @@
     const seasons = agg.seasons.slice().sort(function (a, b) { return b - a; });
     const shown = showAll ? seasons : seasons.slice(0, TB_SEASONS);
     let h = '<div class="pa-tb-wrap"><table class="pa-tb pa-rvt"><thead><tr>'
-      + '<th data-tip="시즌\n정규시즌입니다.">시즌</th><th data-tip="구종\n화면 구종 이름입니다(직구 → 포심 패스트볼, 투심 → 싱커).">구종</th>';
+      + '<th data-tip="시즌\n정규시즌입니다.">시즌</th><th data-tip="구종\n화면 구종 이름입니다(직구 → 포심 패스트볼, 투심 → 싱커, 포크 → 스플리터).">구종</th>';
     RVCOLS.concat(stats).forEach(function (c) { h += '<th data-tip="' + esc(c[1]) + '">' + esc(c[0]) + '</th>'; });
     h += '</tr></thead><tbody>';
     shown.forEach(function (y) {

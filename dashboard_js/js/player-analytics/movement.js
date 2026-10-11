@@ -26,7 +26,8 @@
   const MIN_AVG_N = 100;   // 리그 평균은 이 공 수 이상인 구종만
 
   // 화면에 보이는 구종 이름입니다(데이터·API 는 원래 이름 그대로).
-  const NAMES = { '직구': '포심 패스트볼', '투심': '싱커' };
+  // 문자중계의 '포크'는 스플리터로 보여 줍니다(evan 26-10-11, Savant FS). 스플리터와 같은 구종으로 합쳐집니다.
+  const NAMES = { '직구': '포심 패스트볼', '투심': '싱커', '포크': '스플리터' };
   function pitchName(raw) {
     return Object.prototype.hasOwnProperty.call(NAMES, raw) ? NAMES[raw] : raw;
   }
