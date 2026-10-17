@@ -22,8 +22,8 @@ const GUARDS = [
   ['players.js', "FROM kbo_official_batter_stats WHERE player_id = ? ORDER BY season DESC, player_team'"],
   ['players.js', "FROM kbo_official_pitcher_stats WHERE player_id = ? ORDER BY season DESC, player_team'"],
   ['players.js', 'WHERE p.player_name LIKE ? ORDER BY p.player_name, p.player_id LIMIT 50'],
-  ['futuresplayer.js', 'ORDER BY season DESC, player_team LIMIT 1) AS stats_team'],
-  ['futuresplayer.js', 'WHERE player_id = ? AND kind = ? ORDER BY season DESC, team\''],
+  // futuresplayer.js 의 두 질의는 KBO 이용약관(2026-10-14)으로 경로를 410 으로
+  // 바꾸면서 없어졌습니다.
   ['roster.js', "'ORDER BY kind DESC, team, name LIMIT ?'"],
   ['roster.js', "'ORDER BY move_date DESC, kind DESC, team, name LIMIT ?'"],
   ['roster.js', 'CAST(back_number AS SIGNED), name, player_id"'],

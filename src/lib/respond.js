@@ -25,6 +25,21 @@ export function serverError(err) {
 }
 
 /**
+ * KBO 사이트(koreabaseball.com)를 그때그때 읽던 경로입니다. 410 을 돌려주고
+ * 캐시하지 않습니다.
+ *
+ * 2026-10-14 시행 KBO 이용약관 제14조 차항(크롤링 등 자동화 수집 금지,
+ * 재배포 금지)에 따라 외부 호출 없이 제공을 멈췄습니다.
+ */
+export const KBO_TOS_MESSAGE = 'KBO 이용약관(2026-10-14 시행)에 따라 제공을 중단했습니다.';
+
+export function kboTosGone() {
+  const res = json({ error: KBO_TOS_MESSAGE }, 410);
+  res.headers.set('cache-control', 'no-store');
+  return res;
+}
+
+/**
  * DB 를 못 읽은 경우입니다. 503 으로 돌려주고 캐시하지 않습니다.
  *
  * 200 으로 내보내면 엣지가 한 시간(+하루 stale) 동안 이 실패를 보여 줍니다.

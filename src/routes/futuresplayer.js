@@ -1,7 +1,5 @@
-import { json } from '../lib/respond.js';
-import { ttlCache } from '../lib/cache.js';
+import { kboTosGone } from '../lib/respond.js';
 import { stripTags } from '../lib/html.js';
-import { FUTURES_TEAM_CODE } from './futuresrecord.js';
 
 // 퓨처스(2군) 선수 한 명의 프로필과 올 시즌 기록입니다.
 //
@@ -33,11 +31,12 @@ import { FUTURES_TEAM_CODE } from './futuresrecord.js';
 // wOBA·wRC+ 도 없습니다. 그 지표는 play_by_play 로 계산하는데 퓨처스는
 // 타석 단위 자료가 공개되지 않습니다. 구종 분석과 투구 위치도 같은
 // 이유로 만들 수 없습니다. 화면이 퓨처스 모드에서 그 카드들을 숨깁니다.
-
-const cache = ttlCache(300); // 퓨처스 순위와 같은 5분
-
-const BASE = 'https://www.koreabaseball.com/Futures/Player';
-const UA = { 'user-agent': 'Mozilla/5.0' };
+//
+// ## 멈춤
+//
+// **2026-10-14 시행 KBO 이용약관 제14조 차항에 따라 KBO 사이트 읽기를
+// 멈췄습니다.** 두 경로 모두 외부 호출 없이 410 을 돌려줍니다. 아래 HTML
+// 해석 함수들은 테스트가 쓰고 있어 남겨 둡니다.
 
 // 프로필 항목입니다. ASP.NET 컨트롤 id 의 꼬리로 찾습니다.
 //
@@ -289,35 +288,11 @@ export function parseSearchRows(page) {
 }
 
 /**
- * 이름으로 선수를 찾습니다. 1군·2군을 모두 돌려줍니다.
- *
- * 화면은 우리 `players` 검색이 빈손일 때만 이리로 옵니다. 대부분의
- * 검색은 D1 안에서 끝나고, 못 찾을 때만 KBO 를 한 번 더 봅니다.
+ * 2026-10-14 시행 KBO 이용약관 제14조 차항(자동 수집·재배포 금지)에 따라
+ * KBO 사이트를 읽지 않고 410 을 돌려줍니다.
  */
-export async function futuresSearch(request, env) {
-  const q = (new URL(request.url).searchParams.get('q') || '').trim();
-  if (!q) return json({ players: [] });
-  try {
-    const key = `search:${q}`;
-    const hit = cache.get(key);
-    if (hit) return json(hit);
-
-    const res = await fetch(
-      'https://www.koreabaseball.com/Player/Search.aspx?searchWord='
-      + encodeURIComponent(q),
-      { headers: UA },
-    );
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const players = parseSearchRows(await res.text());
-    const result = { players, source: 'koreabaseball.com' };
-    if (players.length) cache.set(key, result);
-    return json(result);
-  } catch (err) {
-    return json({
-      players: [],
-      error: String(err && err.message ? err.message : err),
-    });
-  }
+export function futuresSearch() {
+  return kboTosGone();
 }
 
 /**
@@ -341,122 +316,9 @@ export function pickTeam(seasonTeam, rosterTeam, statsTeam, registered = true) {
 }
 
 /**
- * 퓨처스 선수 한 명입니다.
- *
- * 타자·투수 어느 쪽인지 모르니 두 경로를 나란히 부르고 기록이 있는
- * 쪽을 씁니다. 둘 다 비면 프로필이 잡힌 쪽을 씁니다. 줄 세우면
- * 응답이 두 배 느려지는데 서로 다른 페이지라 순서가 결과에 영향을
- * 주지 않습니다.
+ * 2026-10-14 시행 KBO 이용약관 제14조 차항(자동 수집·재배포 금지)에 따라
+ * KBO 사이트를 읽지 않고 410 을 돌려줍니다.
  */
-export async function futuresPlayer(request, env, ctx, params) {
-  const id = String(params.id || '').trim();
-  if (!/^\d+$/.test(id)) {
-    return json({ error: 'bad player id' }, 400);
-  }
-  try {
-    const hit = cache.get(id);
-    if (hit) return json(hit);
-
-    const [hitRes, pitRes] = await Promise.all([
-      fetch(`${BASE}/HitterDetail.aspx?playerId=${id}`, { headers: UA }),
-      fetch(`${BASE}/PitcherDetail.aspx?playerId=${id}`, { headers: UA }),
-    ]);
-    const pages = {
-      batter: hitRes.ok ? await hitRes.text() : '',
-      pitcher: pitRes.ok ? await pitRes.text() : '',
-    };
-
-    const parsed = {};
-    for (const kind of ['batter', 'pitcher']) {
-      if (!pages[kind]) continue;
-      parsed[kind] = {
-        profile: parseProfile(pages[kind]),
-        season: parseSeasonRow(pages[kind]),
-        recent: parseRecentGames(pages[kind]),
-      };
-    }
-
-    // 기록이 있는 쪽이 그 선수의 자리입니다. 둘 다 없으면 이름이라도
-    // 잡힌 쪽을 씁니다. 그래야 화면이 프로필만이라도 보여 줍니다.
-    const withStats = ['batter', 'pitcher']
-      .filter((k) => parsed[k] && parsed[k].season.cells.length);
-    const withName = ['batter', 'pitcher']
-      .filter((k) => parsed[k] && parsed[k].profile.name);
-    const kind = withStats[0] || withName[0] || null;
-
-    if (!kind) {
-      return json({ found: false, player_id: Number(id) }, 404);
-    }
-
-    const picked = parsed[kind];
-
-    // 2군 경기에 안 나온 선수는 시즌 표에 팀 이름이 없습니다. 그때는
-    // 우리 D1 에서 1군 소속을 가져옵니다. 같은 구단이기 때문입니다.
-    // 기록이 있으면 D1 을 아예 두드리지 않습니다.
-    let rosterTeam = null;
-    let statsTeam = null;
-    if (!picked.season.cells.length && picked.profile.registered
-        && env && env.MYSQL) {
-      try {
-        const row = await env.MYSQL.prepare(
-          'SELECT (SELECT team FROM kbo_roster WHERE player_id = p.player_id'
-          + ' LIMIT 1) AS roster_team,'
-          + ' (SELECT player_team FROM ('
-          + '   SELECT season, player_team FROM kbo_official_batter_stats'
-          + '    WHERE player_id = p.player_id AND player_team IS NOT NULL'
-          + '   UNION ALL'
-          + '   SELECT season, player_team FROM kbo_official_pitcher_stats'
-          + '    WHERE player_id = p.player_id AND player_team IS NOT NULL'
-          + ' ) AS lt ORDER BY season DESC, player_team LIMIT 1) AS stats_team'
-          + ' FROM players p WHERE p.player_id = ? LIMIT 1',
-        ).bind(id).first();
-        if (row) {
-          rosterTeam = row.roster_team || null;
-          statsTeam = row.stats_team || null;
-        }
-      } catch {
-        // 표가 없는 환경입니다. 소속 없이 갑니다.
-      }
-    }
-
-    const teamName = pickTeam(picked.season.cells[0], rosterTeam,
-                              statsTeam, picked.profile.registered);
-
-    // 시즌별 기록입니다. KBO 선수 페이지는 올 시즌만 주는데, 기록실
-    // 쪽에는 2010년부터 있습니다. `futures_records.py` 가 미리 받아
-    // D1 에 넣어 둡니다(13,036행).
-    let seasons = [];
-    if (env && env.MYSQL) {
-      try {
-        const { results } = await env.MYSQL.prepare(
-          'SELECT * FROM futures_season_stats '
-          + 'WHERE player_id = ? AND kind = ? ORDER BY season DESC, team',
-        ).bind(id, kind).all();
-        seasons = results || [];
-      } catch {
-        // 표가 아직 없는 환경입니다.
-      }
-    }
-    const result = {
-      found: true,
-      player_id: Number(id),
-      kind,                       // 'batter' | 'pitcher'
-      ...picked.profile,
-      team: teamName,
-      team_code: teamName ? (FUTURES_TEAM_CODE[teamName] ?? '') : '',
-      season: picked.season,
-      // 연도별 기록입니다. 1군 화면의 시즌별 표에 해당합니다.
-      seasons,
-      recent: picked.recent,
-      source: 'koreabaseball.com',
-    };
-    cache.set(id, result);
-    return json(result);
-  } catch (err) {
-    return json({
-      found: false,
-      player_id: Number(id),
-      error: String(err && err.message ? err.message : err),
-    });
-  }
+export function futuresPlayer() {
+  return kboTosGone();
 }

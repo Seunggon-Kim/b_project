@@ -1,5 +1,4 @@
-import { json } from '../lib/respond.js';
-import { ttlCache } from '../lib/cache.js';
+import { kboTosGone } from '../lib/respond.js';
 import { stripTags } from '../lib/html.js';
 
 // 원본 api/main.py:1399-1402 의 _KBO_TEAM_CODE 입니다.
@@ -48,8 +47,6 @@ export const KBO_CODE_TO_TEAM = {
   LT: '롯데', SK: 'SSG', NC: 'NC', WO: '키움', HH: '한화',
 };
 
-const cache = ttlCache(300); // 원본 _STANDINGS_TTL = 300
-
 /**
  * TeamRank.aspx 의 순위표를 읽습니다.
  *
@@ -89,34 +86,10 @@ export function parseStandings(page) {
   return teams;
 }
 
-export async function standings() {
-  try {
-    const hit = cache.get('rank');
-    if (hit) return json(hit);
-
-    const res = await fetch(
-      'https://www.koreabaseball.com/Record/TeamRank/TeamRank.aspx',
-      { headers: { 'user-agent': 'Mozilla/5.0' } },
-    );
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const page = await res.text();
-
-    const teams = parseStandings(page);
-    const result = {
-      count: teams.length,
-      teams,
-      source: 'koreabaseball.com',
-    };
-    // 원본도 teams 가 비면 캐시하지 않습니다. 일시 실패를 5분간 물고 있지
-    // 않으려는 것입니다.
-    if (teams.length) cache.set('rank', result);
-    return json(result);
-  } catch (err) {
-    // 원본은 예외 시 200 과 함께 error 필드를 돌려줍니다. 500 이 아닙니다.
-    return json({
-      count: 0,
-      teams: [],
-      error: String(err && err.message ? err.message : err),
-    });
-  }
+/**
+ * 2026-10-14 시행 KBO 이용약관 제14조 차항(자동 수집·재배포 금지)에 따라
+ * KBO 사이트를 읽지 않고 410 을 돌려줍니다.
+ */
+export function standings() {
+  return kboTosGone();
 }
