@@ -133,7 +133,7 @@
     },
     pit: {
       dash: ['w', 'l', 'sv', 'g', 'gs', 'outs', 'k9', 'bb9', 'hr9', 'babip', 'lobpct', 'era', 'fip'],
-      std: ['w', 'l', 'era', 'g', 'gs', 'cg', 'sho', 'sv', 'hld', 'bs', 'outs', 'tbf', 'h', 'r', 'er', 'hr', 'bb', 'ibb', 'hbp', 'wp', 'bk', 'so'],
+      std: ['w', 'l', 'era', 'g', 'gs', 'cg', 'sho', 'sv', 'hld', 'outs', 'tbf', 'h', 'r', 'er', 'hr', 'bb', 'ibb', 'hbp', 'wp', 'bk', 'so'],
       adv: ['k9', 'bb9', 'kbb', 'hr9', 'kpct', 'bbpct', 'kbbpct', 'oavg', 'whip', 'babip', 'lobpct', 'erap', 'fipp', 'fip', 'ef'],
     },
   };
@@ -150,11 +150,11 @@
     wraa: Object.assign({}, BAT.wraa, { desc: '리그 평균 타자보다 더 만든 득점입니다. 0이 평균입니다.' }),
     wrc: Object.assign({}, BAT.wrc, { desc: 'wOBA로 잰 득점 생산량입니다.' }),
     wrcp: Object.assign({}, BAT.wrcp, { desc: '타석당 득점 생산을 리그 평균 100에 맞춘 값입니다. 110이면 평균보다 10% 더 만듭니다. 소속팀 홈구장 영향을 반만 덜어 냅니다.' }),
-    risp: { label: '득점권', kind: 'avg3', range: false, desc: '주자가 2루나 3루에 있을 때의 타율입니다. KBO 공식 기록 값입니다.' },
-    ph: { label: '대타', kind: 'avg3', range: false, desc: '대타로 나왔을 때의 타율입니다. KBO 공식 기록 값입니다.' },
-    xr: { label: 'XR', kind: 'f1', range: false, desc: '추정 득점입니다. 안타·볼넷·도루 같은 결과마다 득점 가치를 매겨 더합니다. KBO 공식 기록 값입니다.' },
-    gpa: { label: 'GPA', kind: 'avg3', range: false, desc: '출루율에 장타율보다 큰 무게를 둔 타격 지표입니다. KBO 공식 기록 값입니다.', formula: '(1.8 × OBP + SLG) ÷ 4' },
-    ppa: { label: 'P/PA', kind: 'f2', range: false, desc: '타석당 상대한 투구 수입니다. KBO 공식 기록 값입니다.' },
+    risp: { label: '득점권', kind: 'avg3', range: false, desc: '주자가 2루나 3루에 있을 때의 타율입니다. 네이버 문자중계로 셉니다. 중계가 끊긴 경기가 있는 시즌은 비워 둡니다.' },
+    ph: { label: '대타', kind: 'avg3', range: false, desc: '대타로 나왔을 때의 타율입니다. 네이버 문자중계로 셉니다. 중계가 끊긴 경기가 있는 시즌은 비워 둡니다.' },
+    xr: { label: 'XR', kind: 'f1', range: false, desc: '추정 득점입니다. 안타·볼넷·도루 같은 결과마다 득점 가치를 매겨 더합니다. 도루·도루자는 네이버 기록으로 계산합니다.' },
+    gpa: { label: 'GPA', kind: 'avg3', range: false, desc: '출루율에 장타율보다 큰 무게를 둔 타격 지표입니다.', formula: '(1.8 × OBP + SLG) ÷ 4' },
+    ppa: { label: 'P/PA', kind: 'f2', range: false, desc: '타석당 상대한 투구 수입니다. 네이버 문자중계로 셉니다. 중계가 끊긴 경기가 있는 시즌은 비워 둡니다.' },
   });
   const PPIT = Object.assign({}, PIT, {
     g: Object.assign({}, PIT.g, { desc: '등판한 경기 수입니다.' }),

@@ -442,7 +442,7 @@
          * 선수 머리 배너입니다.
          */
         function renderHeaderBar(player) {
-            const PHOTO_PLACEHOLDER = '../assets/player_no_image.png';  // KBO 공식 no-Image
+            const PHOTO_PLACEHOLDER = '../assets/player_no_image.svg';  // 사진이 없을 때(우리가 그린 빈 얼굴)
             const cdnImg = player.image_url || '';
             const localImg = `../assets/player_photos/${player.player_id}.jpg`;  // 로컬 미러(CDN 404 폴백)
             const imageUrl = cdnImg || localImg;  // CDN 우선, 없으면 로컬
@@ -881,15 +881,11 @@
                 headerBar.innerHTML = renderHeaderBar(player);
 
                 const money = (v) => formatMoney(v, isForeign ? 'USD' : 'KRW');
-                const draft = (player.draft_year || '')
-                    + (player.draft_year && player.draft_order ? ' / ' : '')
-                    + (player.draft_order || '');
+                // 입단 계약금·입단년도·지명순위·경력은 KBO 선수 상세에서만 오던 값이라
+                // 내렸습니다(KBO 이용약관 2026-10-14 시행, 네이버로 옮김).
                 cardDiv.innerHTML = profileHtml([
                 ...profileBasics(player),
                     ['연봉', money(player.salary)],
-                    ['입단 계약금', money(player.signing_bonus)],
-                    ['입단년도 / 지명순위', draft || '-'],
-                    ['경력', player.career || '-'],
                 ]);
 
                 // 한눈에 보기: 최근 3시즌 + 통산. 계산은 quicklook.js 입니다.
@@ -946,7 +942,6 @@
                         { key: 'shutout' },
                         { key: 'save' },
                         { key: 'hold' },
-                        { key: 'blown_save' },
                         { key: 'innings_pitched' },
                         { key: 'total_batters_faced' },
                         { key: 'hits' },

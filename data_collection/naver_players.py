@@ -116,7 +116,11 @@ def play_type(s):
 
 
 def won(s):
-    """'50,000만원' → 500000000."""
+    """연봉 글자 → 숫자. '50,000만원' → 500000000(원), '1,100,000달러' → 1100000(달러).
+
+    외국인 선수는 예전 KBO 값처럼 달러 그대로 둡니다. 화면(isForeignPlayer)이
+    1,000만 미만을 달러로 읽습니다.
+    """
     if not s:
         return None
     digits = "".join(ch for ch in str(s) if ch.isdigit())

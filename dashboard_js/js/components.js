@@ -10,15 +10,17 @@ function formatNumber(num) {
 
 /**
  * 외국인 선수 여부 판정.
- * KBO 외국인 선수는 신인 드래프트가 아니라 '자유선발'·'부상 대체 외국인선수'(향후 '아시아쿼터' 포함)로
- * 입단하며, 그 표기가 players.draft_order/draft_year에 그대로 남는다. 국내 선수는 연봉·계약금이 원,
- * 외국인 선수는 달러 단위로 저장되어 있어 통화 표기의 기준으로 쓴다.
- * (검증: 전체 585명 중 43명이 이 신호로 분류 → 저장 연봉이 외국인 ≤160만, 국내 ≥1,500만으로 완전 분리)
+ * 국내 선수는 연봉이 원, 외국인 선수는 달러 단위로 저장되어 통화 표기의 기준으로 씁니다.
+ * 드래프트 표기('자유선발' 등)는 KBO 선수 상세에서만 오던 값이라 2026-10-18 에 비웠습니다
+ * (KBO 이용약관). 그래서 연봉 크기로도 가립니다. 외국인은 달러로 160만 이하, 국내는 원으로
+ * 최저 연봉 3,000만 이상이라 1,000만에서 완전히 나뉩니다(전체 585명 검증 때 확인한 경계).
  */
 function isForeignPlayer(player) {
     if (!player) return false;
     const draft = `${player.draft_order || ''} ${player.draft_year || ''}`;
-    return draft.includes('자유선발') || draft.includes('외국인선수') || draft.includes('아시아쿼터');
+    if (draft.includes('자유선발') || draft.includes('외국인선수') || draft.includes('아시아쿼터')) return true;
+    const salary = Number(player.salary);
+    return salary > 0 && salary < 10000000;
 }
 
 /**

@@ -48,6 +48,7 @@ def test_타석_방향이_갈리면_비웁니다():
 def test_표기():
     assert np_.play_type("우언양타") == ("R", "S")
     assert np_.won("50,000만원") == 500000000 and np_.won(None) is None
+    assert np_.won("1,100,000달러") == 1100000
 
 
 def test_사진은_404_면_비웁니다():
