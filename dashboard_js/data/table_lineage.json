@@ -57,6 +57,18 @@
    "to": "page:index.html"
   },
   {
+   "from": "source:kbo_live",
+   "to": "page:pages/player-analytics.html"
+  },
+  {
+   "from": "source:kbo_live",
+   "to": "page:pages/player-stats.html"
+  },
+  {
+   "from": "source:kbo_live",
+   "to": "page:pages/team-stats.html"
+  },
+  {
    "from": "source:naver_relay",
    "to": "job:daily"
   },
@@ -1124,7 +1136,7 @@
   },
   {
    "file": "src/routes/standings.js",
-   "live": false,
+   "live": true,
    "pages": [
     "index.html",
     "pages/player-analytics.html",
@@ -1830,8 +1842,8 @@
   },
   {
    "id": "kbo_live",
-   "name": "KBO 실시간(순위·일정)",
-   "url": "https://www.koreabaseball.com/"
+   "name": "네이버 스포츠 실시간(일정·1군 순위)",
+   "url": "https://m.sports.naver.com/kbaseball/"
   },
   {
    "id": "kbo_player_detail",

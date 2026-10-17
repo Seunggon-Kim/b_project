@@ -2,16 +2,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { KBO_TOS_MESSAGE } from '../src/lib/respond.js';
-import { standings } from '../src/routes/standings.js';
 import { futures } from '../src/routes/futures.js';
 import { futuresStandings, futuresLeaders } from '../src/routes/futuresrecord.js';
 import { futuresPlayer, futuresSearch } from '../src/routes/futuresplayer.js';
 
 // 2026-10-14 시행 KBO 이용약관 제14조 차항(자동 수집·재배포 금지)에 따라
-// KBO 사이트를 그때그때 읽던 경로는 외부 호출 없이 410 을 돌려줍니다.
+// KBO 사이트를 그때그때 읽던 퓨처스 경로는 외부 호출 없이 410 을 돌려줍니다.
+// 1군 순위(/standings)는 네이버로 바꿨습니다(test/standings_parse.test.js).
 
 const HANDLERS = {
-  standings: () => standings(),
   futures: () => futures(new Request('https://x/schedule/futures?date=2026-10-17')),
   futuresStandings: () => futuresStandings(),
   futuresLeaders: () => futuresLeaders(),

@@ -4,6 +4,7 @@ import { kstToday } from '../lib/kst.js';
 import { KBO_CODE_TO_TEAM } from './standings.js';
 import { LATEST_TEAM_SQL } from './players.js';
 import { tableColumns } from '../lib/schema.js';
+import { kboFetchJson } from '../lib/naver.js';
 
 // KBO 경기 일정/결과 (Naver 스포츠 API 프록시).
 //
@@ -13,23 +14,6 @@ import { tableColumns } from '../lib/schema.js';
 // 를 옮긴 것입니다.
 
 const cache = ttlCache(30); // 원본 _SCHEDULE_TTL = 30
-
-/**
- * 원본 _kbo_fetch_json(url, timeout=8) 입니다.
- *
- * requests 의 timeout=8 은 연결·읽기 단위이고 AbortSignal.timeout 은 전체
- * 경과 시간이라 엄밀히는 다르지만, 8초를 넘겨 정상 응답이 오는 경우가
- * 없어 실질적인 차이는 없습니다.
- */
-async function kboFetchJson(url) {
-  const res = await fetch(url, {
-    headers: { 'user-agent': 'Mozilla/5.0' },
-    signal: AbortSignal.timeout(8000),
-  });
-  // 원본 raise_for_status() 자리입니다. 예외 메시지 문구만 다릅니다.
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
 
 // 원본 _kbo_game_meta 입니다. 실패한 경기는 null 로 두고 건너뜁니다.
 async function kboGameMeta(gameId) {

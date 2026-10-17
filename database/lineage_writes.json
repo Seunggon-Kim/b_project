@@ -25,8 +25,8 @@
       "url": "https://www.koreabaseball.com/Futures/"
     },
     "kbo_live": {
-      "name": "KBO 실시간(순위·일정)",
-      "url": "https://www.koreabaseball.com/"
+      "name": "네이버 스포츠 실시간(일정·1군 순위)",
+      "url": "https://m.sports.naver.com/kbaseball/"
     }
   },
   "stopped": {
@@ -356,7 +356,6 @@
   },
   "routes_without_tables": {
     "/jobs/status": "작업 실행 기록(meta_job_runs)만 읽습니다. meta_ 표는 계보에서 뺍니다.",
-    "/standings": "KBO 이용약관(2026-10-14 시행)에 따라 KBO 사이트를 읽지 않고 410 만 돌려줍니다. 읽는 표가 없습니다.",
     "/schedule/futures": "KBO 이용약관(2026-10-14 시행)에 따라 KBO 사이트를 읽지 않고 410 만 돌려줍니다. 읽는 표가 없습니다.",
     "/futures/standings": "KBO 이용약관(2026-10-14 시행)에 따라 KBO 사이트를 읽지 않고 410 만 돌려줍니다. 읽는 표가 없습니다.",
     "/futures/leaders": "KBO 이용약관(2026-10-14 시행)에 따라 KBO 사이트를 읽지 않고 410 만 돌려줍니다. 읽는 표가 없습니다.",
@@ -364,6 +363,7 @@
     "/futures/player/:id": "KBO 이용약관(2026-10-14 시행)에 따라 KBO 사이트를 읽지 않고 410 만 돌려줍니다. 읽는 표가 없습니다."
   },
   "live_route_files": [
+    "src/routes/standings.js",
     "src/routes/schedule.js"
   ]
 }

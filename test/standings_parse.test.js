@@ -2,80 +2,86 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  KBO_TEAM_CODE, KBO_CODE_TO_TEAM, parseStandings,
+  KBO_TEAM_CODE, KBO_CODE_TO_TEAM, parseNaverStandings, standings,
 } from '../src/routes/standings.js';
 
-const PAGE = `
-<html><body>
-<table summary="팀간승패표 입니다">
-  <tbody><tr><td>1</td><td>속임수</td><td>0</td><td>0</td>
-  <td>0</td><td>0</td><td>0</td><td>0</td></tr></tbody>
-</table>
-<table summary="순위 입니다">
-  <tbody>
-    <tr>
-      <td>1</td><td>LG</td><td>144</td><td>90</td><td>50</td><td>4</td>
-      <td>0.643</td><td>-</td><td>7-3-0</td><td>2승</td>
-    </tr>
-    <tr>
-      <td>2</td><td>한화</td><td>144</td><td>85</td><td>55</td><td>4</td>
-      <td>0.607</td><td>5.0</td><td>5-5-0</td><td>1패</td>
-    </tr>
-    <tr><td colspan="10">합계 행처럼 숫자가 아닌 첫 칸</td></tr>
-  </tbody>
-</table>
-</body></html>`;
+// 네이버 statistics/categories/kbo/seasons/{year}/teams 응답 일부입니다
+// (2026-10-18 에 받은 값에서 필요한 칸만 남김, 순서는 일부러 섞음).
+const NAVER = {
+  code: 200,
+  result: {
+    seasonTeamStats: [
+      {
+        teamId: 'SS', teamName: '삼성', ranking: 2, gameCount: 144, winGameCount: 83,
+        loseGameCount: 58, drawnGameCount: 3, wra: 0.589, gameBehind: 8.0,
+        continuousGameResult: '4패', lastFiveGames: 'WLLLL',
+      },
+      {
+        teamId: 'KT', teamName: 'KT', ranking: 1, gameCount: 144, winGameCount: 90,
+        loseGameCount: 49, drawnGameCount: 5, wra: 0.647, gameBehind: 0.0,
+        continuousGameResult: '10승', lastFiveGames: 'WWWWW',
+      },
+      {
+        teamId: 'HT', teamName: 'KIA', ranking: 3, gameCount: 144, winGameCount: 79,
+        loseGameCount: 63, drawnGameCount: 2, wra: 0.5, gameBehind: 12.5,
+        continuousGameResult: null,
+      },
+    ],
+  },
+};
 
-test('순위표만 읽고 팀간승패표는 건너뜁니다', () => {
-  const rows = parseStandings(PAGE);
-  assert.equal(rows.length, 2);
-  assert.equal(rows[0].team, 'LG');
-  assert.equal(rows[1].team, '한화');
+test('네이버 팀 기록을 예전 순위 행 모양으로 바꿉니다', () => {
+  const rows = parseNaverStandings(NAVER);
+  assert.deepEqual(rows[0], {
+    rank: 1, team: 'KT', code: 'KT', games: '144', wins: '90', losses: '49',
+    draws: '5', pct: '0.647', gb: '0', last10: '', streak: '10승',
+  });
 });
 
-test('첫 칸이 숫자가 아닌 행은 버립니다', () => {
-  const rows = parseStandings(PAGE);
-  assert.ok(rows.every((r) => typeof r.rank === 'number'));
+test('순위대로 정렬하고 팀 이름은 현재 이름입니다', () => {
+  const rows = parseNaverStandings(NAVER);
+  assert.deepEqual(rows.map((r) => r.rank), [1, 2, 3]);
+  assert.deepEqual(rows.map((r) => r.team), ['KT', '삼성', 'KIA']);
+  assert.deepEqual(rows.map((r) => r.code), ['KT', 'SS', 'HT']);
 });
 
-test('rank 는 정수이고 나머지 수치는 문자열입니다', () => {
-  // 원본이 rank 만 int() 로 바꾸고 나머지는 문자열로 둡니다.
-  // 여기서 타입이 어긋나면 골든 비교가 바로 잡아냅니다.
-  const [first] = parseStandings(PAGE);
-  assert.equal(first.rank, 1);
-  assert.equal(first.games, '144');
-  assert.equal(first.pct, '0.643');
-  assert.equal(first.gb, '-');
+test('승률은 소수 셋째 자리, 게임차는 글자, 연속 기록이 없으면 빈 문자열입니다', () => {
+  const kia = parseNaverStandings(NAVER)[2];
+  assert.equal(kia.pct, '0.500');
+  assert.equal(kia.gb, '12.5');
+  assert.equal(kia.streak, '');
+  // 네이버는 최근 열 경기를 주지 않습니다. 지어내지 않습니다.
+  assert.equal(kia.last10, '');
 });
 
-test('팀 코드를 붙입니다', () => {
-  const [first] = parseStandings(PAGE);
-  assert.equal(first.code, 'LG');
+test('결과가 없으면 빈 배열입니다', () => {
+  assert.deepEqual(parseNaverStandings({}), []);
+  assert.deepEqual(parseNaverStandings({ result: { seasonTeamStats: [] } }), []);
+  assert.deepEqual(parseNaverStandings(null), []);
 });
 
-test('모르는 팀명이면 코드는 빈 문자열입니다', () => {
-  const page = PAGE.replace('<td>한화</td>', '<td>없는팀</td>');
-  const rows = parseStandings(page);
-  assert.equal(rows[1].code, '');
-});
-
-test('순위표가 없으면 빈 배열입니다', () => {
-  assert.deepEqual(parseStandings('<html></html>'), []);
-});
-
-test('칸이 8개 미만인 행은 버립니다', () => {
-  const page = `<table summary="순위">
-    <tbody><tr><td>1</td><td>LG</td><td>144</td></tr></tbody></table>`;
-  assert.deepEqual(parseStandings(page), []);
-});
-
-test('last10 과 streak 이 없으면 빈 문자열입니다', () => {
-  const page = `<table summary="순위"><tbody><tr>
-    <td>1</td><td>LG</td><td>144</td><td>90</td><td>50</td><td>4</td>
-    <td>0.643</td><td>-</td></tr></tbody></table>`;
-  const [first] = parseStandings(page);
-  assert.equal(first.last10, '');
-  assert.equal(first.streak, '');
+test('/standings 는 네이버를 Referer 와 함께 부르고 KBO 사이트는 부르지 않습니다', async () => {
+  const realFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), headers: init.headers });
+    return new Response(JSON.stringify(NAVER), { status: 200 });
+  };
+  try {
+    const res = await standings();
+    const body = await res.json();
+    assert.equal(res.status, 200);
+    assert.equal(body.source, 'sports.naver.com');
+    assert.equal(body.count, 3);
+    assert.equal(body.teams[0].code, 'KT');
+    assert.equal(calls.length, 1);
+    assert.match(calls[0].url,
+      /^https:\/\/api-gw\.sports\.naver\.com\/statistics\/categories\/kbo\/seasons\/\d{4}\/teams$/);
+    assert.equal(calls[0].headers.referer, 'https://m.sports.naver.com/');
+    assert.ok(calls.every((c) => !c.url.includes('koreabaseball')));
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });
 
 test('현재 열 팀이 원본과 같은 코드를 씁니다', () => {

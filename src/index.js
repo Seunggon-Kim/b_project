@@ -45,9 +45,10 @@ router.add('GET', '/', () => json({
 router.add('GET', '/standings', standings);
 router.add('GET', '/schedule', schedule);
 router.add('GET', '/schedule/futures', futures);
-// KBO 사이트를 그때그때 읽던 경로들(1군 순위, 퓨처스 일정·순위·개인 기록·
-// 선수·검색)은 2026-10-14 시행 KBO 이용약관 제14조 차항에 따라 외부 호출
-// 없이 410 을 돌려줍니다(src/lib/respond.js 의 kboTosGone).
+// KBO 사이트를 그때그때 읽던 퓨처스 경로들(일정·순위·개인 기록·선수·검색)은
+// 2026-10-14 시행 KBO 이용약관 제14조 차항에 따라 외부 호출 없이 410 을
+// 돌려줍니다(src/lib/respond.js 의 kboTosGone). 1군 순위(/standings)는
+// 네이버 스포츠 API 로 바꿨습니다.
 // 퓨처스 순위·개인 기록입니다.
 // `/schedule/futures` 보다 뒤에 둬도 경로가 겹치지 않습니다.
 router.add('GET', '/futures/standings', futuresStandings);
