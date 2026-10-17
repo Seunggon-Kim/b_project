@@ -15,13 +15,14 @@
       .replace(/[&<>"]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
   }
 
-  const STATE_LABEL = { ok: '정상', fail: '실패', stale: '오래됨', none: '기록 없음', manual: '기준 표' };
+  const STATE_LABEL = { ok: '정상', fail: '실패', stale: '오래됨', none: '기록 없음', stopped: '멈춤', manual: '기준 표' };
   const KIND_LABEL = { collected: '받아 온 표', derived: '계산 표', manual: '기준 표' };
   const SUM_TIP = {
     ok: '이 표를 쓰는 작업의 마지막 실행이 성공했고 기준 시간 안에 갱신된 표입니다.',
     fail: '이 표를 쓰는 작업 가운데 마지막 실행이 실패한 것이 있는 표입니다.',
     stale: '기준 시간(daily·roster 36시간, weekly 8일, monthly 35일)보다 오래 갱신되지 않은 표입니다.',
     none: '이 표를 쓰는 작업의 실행 기록이 아직 없는 표입니다.',
+    stopped: 'KBO 이용약관(2026-10-14 시행)으로 수집을 멈춘 표입니다. 멈추기 전까지 받은 값이 남아 있습니다.',
     manual: '정기 수집 작업 없이 직접 채워 두는 기준 표(팀·구장 등)입니다. 상태 점을 붙이지 않습니다.',
   };
 
@@ -52,7 +53,7 @@
       ? `기준 시간(${rule})보다 오래 갱신되지 않은 표입니다.` : SUM_TIP[k];
     const btn = k => `<button type="button" class="lin-sum-btn${active === k ? ' on' : ''}" data-state="${k}" data-tooltip="${esc(tip(k))}">`
       + `<span class="lin-dot lin-${k}"></span>${STATE_LABEL[k]} <b>${sum[k]}</b></button>`;
-    return ['ok', 'fail', 'stale', 'none'].map(btn).join('')
+    return ['ok', 'fail', 'stale', 'none', 'stopped'].map(btn).join('')
       + `<span class="lin-sum-manual" tabindex="0" data-tooltip="${esc(SUM_TIP.manual)}">기준 표 <b>${sum.manual}</b></span>`;
   }
 
@@ -70,8 +71,14 @@
     return `<span class="lin-dot lin-${st.state}" data-tooltip="${esc(m.dotText(lin, st))}"></span>`;
   }
 
-  /** 상자에 마우스를 올렸을 때 보이는 설명입니다. */
-  function boxTip(n) {
+  /** 상자에 마우스를 올렸을 때 보이는 설명입니다. 멈춘 상자는 끝에 사유를 붙입니다. */
+  function boxTip(n, lin) {
+    const base = boxTipBase(n);
+    return n.stopped ? `${base}
+수집 중단: ${M().stoppedReason(lin)}` : base;
+  }
+
+  function boxTipBase(n) {
     if (n.kind === 'collected' || n.kind === 'derived' || n.kind === 'manual') return n.ref.desc ? `${n.label}\n${n.ref.desc}` : n.label;
     if (n.kind === 'job') return `${n.label}: ${n.sub} 실행`;
     if (n.kind === 'page') return `${n.label} (${n.sub})`;
@@ -80,10 +87,11 @@
   }
 
   function boxHtml(n, lin, status, style) {
-    return `<button type="button" class="lin-box lin-k-${n.kind}" data-id="${esc(n.id)}"${style ? ` style="${style}"` : ''} data-tooltip="${esc(boxTip(n))}">`
+    return `<button type="button" class="lin-box lin-k-${n.kind}${n.stopped ? ' lin-stopped' : ''}" data-id="${esc(n.id)}"${style ? ` style="${style}"` : ''} data-tooltip="${esc(boxTip(n, lin))}">`
       + markHtml(n, lin, status)
       + `<span class="lin-label">${esc(n.label).replace(/_/g, '_<wbr>')}</span>`
       + (n.sub && n.kind !== 'page' ? `<span class="lin-sub">${esc(n.sub)}</span>` : '')
+      + (n.stopped && n.kind === 'source' ? '<span class="lin-sub">멈춤</span>' : '')
       + '</button>';
   }
 
@@ -156,7 +164,9 @@
       return p ? `<li><a href="${esc(pageHref(p.path))}">${esc(m.pageLabel(p))}</a></li>` : '';
     };
     let title = esc(node.label);
-    let body = '';
+    let body = node.stopped
+      ? `<p class="lin-stopped-note"><span class="lin-dot lin-stopped"></span>수집 중단. ${esc(m.stoppedReason(lin))}</p>`
+      : '';
 
     if (node.kind === 'collected' || node.kind === 'derived' || node.kind === 'manual') {
       const t = node.ref;

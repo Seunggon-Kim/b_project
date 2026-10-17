@@ -40,12 +40,17 @@
 [data-theme="dark"] .lin-k-derived { border-color: #a78bfa; }
 [data-theme="dark"] .lin-k-page { border-color: #fb7185; }
 
-/* 상태 점(초록 정상·빨강 실패·회색 오래됨·기록 없음)과 기준 표 표시 */
+/* 상태 점(초록 정상·빨강 실패·회색 오래됨·기록 없음·속 빈 회색 멈춤)과 기준 표 표시 */
 .lin-dot { flex: 0 0 auto; display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
 .lin-ok { background: var(--success); }
 .lin-fail { background: var(--danger); }
 .lin-stale, .lin-none { background: #94a3b8; }
 .lin-tag { flex: 0 0 auto; font-size: 0.68rem; color: var(--text-muted); border: 1px solid var(--border-color); border-radius: 4px; padding: 0 0.25rem; }
+
+/* 수집을 멈춘 원천·작업·표(KBO 이용약관 2026-10-14 시행)입니다. 회색 상자와 속 빈 점으로 둡니다. */
+.lin-dot.lin-stopped { background: transparent; border: 2px solid #94a3b8; box-sizing: border-box; }
+.lin-box.lin-stopped { border-color: #94a3b8; border-style: solid; background: var(--bg-tertiary); color: var(--text-muted); }
+.lin-stopped-note { display: flex; align-items: center; gap: 0.4rem; margin: 0 0 0.6rem; font-size: 0.85rem; color: var(--text-muted); }
 
 /* 누른 상자·요약 숫자에 이어진 것만 진하게 */
 .lin-focus .lin-box { opacity: 0.25; }

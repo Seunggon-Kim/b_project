@@ -30,11 +30,25 @@
     return String((p && (p.title || p.path)) || '').replace(/\s*-\s*Bstats\s*$/, '');
   }
 
+  // 멈춘 수집의 사유입니다. 계보 파일의 stopped_reason 이 비었을 때만 씁니다.
+  const STOPPED_DEFAULT = 'KBO 이용약관(2026-10-14 시행)으로 수집을 멈췄습니다.';
+
+  /** 멈춘 수집의 사유 글자입니다. */
+  function stoppedReason(lin) {
+    return (lin && lin.stopped_reason) || STOPPED_DEFAULT;
+  }
+
+  /** 원천을 받는 스크립트가 있고 모두 멈췄으면 그 원천도 멈춘 것입니다. */
+  function sourceStopped(lin, id) {
+    const ss = (lin.scripts || []).filter(s => (s.sources || []).includes(id));
+    return ss.length > 0 && ss.every(s => s.stopped);
+  }
+
   /**
    * 그림에 쓸 노드와 선입니다.
    *   opts.manualOpen  기준 표를 펼쳤으면 true
    * 반환 { cols: {source:[], job:[], table:[], derived:[], page:[]}, nodes: {id: node}, edges: [{from, to}] }
-   *   node = { id, col, label, sub, kind, ref }   ref 는 계보 파일의 원래 항목
+   *   node = { id, col, label, sub, kind, ref, stopped }   ref 는 계보 파일의 원래 항목, stopped 는 수집을 멈췄는지
    * 숨김: kind 'meta' 표, explorer 페이지. 기준 표가 접혀 있으면 묶음 노드 하나로 바꾸고,
    * 펼쳐 있으면 묶음 노드(접기)를 맨 위에 두고 기준 표를 그 아래에 둡니다.
    */
@@ -46,14 +60,14 @@
     const alias = {};   // 원래 id → 그림 id (접힌 기준 표 → 묶음)
 
     (lin.sources || []).slice().sort((a, b) => byName(a.id, b.id)).forEach(function (s) {
-      add({ id: 'source:' + s.id, col: 'source', label: s.name, sub: '', kind: 'source', ref: s });
+      add({ id: 'source:' + s.id, col: 'source', label: s.name, sub: '', kind: 'source', ref: s, stopped: sourceStopped(lin, s.id) });
     });
     (lin.jobs || []).slice().sort((a, b) => byName(a.id, b.id)).forEach(function (j) {
-      add({ id: 'job:' + j.id, col: 'job', label: j.id, sub: j.schedule_kst || '', kind: 'job', ref: j });
+      add({ id: 'job:' + j.id, col: 'job', label: j.id, sub: j.schedule_kst || '', kind: 'job', ref: j, stopped: !!j.stopped });
     });
     const tables = (lin.tables || []).slice().sort((a, b) => byName(a.name, b.name));
     tables.filter(t => t.kind === 'collected').forEach(function (t) {
-      add({ id: 'table:' + t.name, col: 'table', label: t.name, sub: '', kind: 'collected', ref: t });
+      add({ id: 'table:' + t.name, col: 'table', label: t.name, sub: '', kind: 'collected', ref: t, stopped: !!t.stopped });
     });
     // 기준 표 묶음 상자는 접었을 때 '펼치기', 펼쳤을 때 '접기' 로 늘 둡니다(다시 접을 수 있게).
     const manual = tables.filter(t => t.kind === 'manual');
@@ -65,7 +79,7 @@
       else alias['table:' + t.name] = GROUP_ID;
     });
     tables.filter(t => t.kind === 'derived').forEach(function (t) {
-      add({ id: 'table:' + t.name, col: 'derived', label: t.name, sub: '', kind: 'derived', ref: t });
+      add({ id: 'table:' + t.name, col: 'derived', label: t.name, sub: '', kind: 'derived', ref: t, stopped: !!t.stopped });
     });
     (lin.pages || []).filter(p => !p.explorer).slice().sort((a, b) => byName(a.path, b.path)).forEach(function (p) {
       add({ id: 'page:' + p.path, col: 'page', label: pageLabel(p), sub: p.path, kind: 'page', ref: p });
@@ -153,7 +167,8 @@
 
   // ===== 상태 =====
 
-  // 나쁜 순서입니다. 숫자가 클수록 나쁩니다.
+  // 나쁜 순서입니다. 숫자가 클수록 나쁩니다. 멈춤(stopped)은 고장이 아니라 일부러 끈 것이라
+  // 여기에 넣지 않고 tableStatus·jobStatus 가 따로 정합니다.
   const RANK = { ok: 0, none: 1, stale: 2, fail: 3 };
 
   /** 'YYYY-MM-DD HH:MM'(한국 시각) 글자를 ms 로 읽습니다. 못 읽으면 null. */
@@ -192,7 +207,7 @@
   function scriptByPath(lin, path) { return (lin.scripts || []).find(s => s.path === path) || null; }
 
   /**
-   * 표의 상태입니다. 기준 표는 'manual'.
+   * 표의 상태입니다. 기준 표는 'manual', 수집을 멈춘 표는 'stopped'(마지막 실행 기록은 items 에 남김).
    * 반환 { state, items: [{ script, job, key, state, at, status, note, staleHours }] }
    * details 는 /jobs/status 의 details 객체입니다.
    */
@@ -211,10 +226,10 @@
           keyState((details || {})[key], staleHours, nowMs)));
       });
     });
-    return { state: worst(items), items: items };
+    return { state: t.stopped ? 'stopped' : worst(items), items: items };
   }
 
-  /** 작업 상자의 상태입니다. 기록 키가 있는 단계만 봅니다(같은 키는 한 번). */
+  /** 작업 상자의 상태입니다. 기록 키가 있는 단계만 봅니다(같은 키는 한 번). 멈춘 작업은 'stopped'. */
   function jobStatus(lin, job, details, nowMs) {
     const items = [];
     const seen = new Set();
@@ -225,12 +240,12 @@
       items.push(Object.assign({ step: st.name, script: st.script, job: job.id, key: key, staleHours: job.stale_hours },
         keyState((details || {})[key], job.stale_hours, nowMs)));
     });
-    return { state: worst(items), items: items };
+    return { state: job.stopped ? 'stopped' : worst(items), items: items };
   }
 
-  /** 요약 줄 숫자입니다. meta 를 빼고 셉니다. 반환 { ok, fail, stale, none, manual, byTable: {name: state} } */
+  /** 요약 줄 숫자입니다. meta 를 빼고 셉니다. 반환 { ok, fail, stale, none, stopped, manual, byTable: {name: state} } */
   function summarize(lin, details, nowMs) {
-    const out = { ok: 0, fail: 0, stale: 0, none: 0, manual: 0, byTable: {} };
+    const out = { ok: 0, fail: 0, stale: 0, none: 0, stopped: 0, manual: 0, byTable: {} };
     (lin.tables || []).forEach(function (t) {
       if (t.kind === 'meta') return;
       const st = tableStatus(lin, t, details, nowMs).state;
@@ -283,6 +298,8 @@
   /** 점에 붙일 설명 문구입니다. st = tableStatus/jobStatus 결과. manualNote 는 기준 표 설명. */
   function dotText(lin, st, manualNote) {
     if (st.state === 'manual') return `정기 수집 작업 없이 직접 채워 두는 기준 표입니다${manualNote ? ': ' + manualNote : ''}`;
+    if (st.state === 'stopped') return `수집 중단
+${stoppedReason(lin)}`;
     if (!st.items.length) return '실행 기록이 아직 없습니다';
     return st.items.map(it => itemText(lin, it)).join('\n');
   }
@@ -336,7 +353,7 @@
 
   const api = {
     COLS, COL_LABEL, LAYERS, GROUP_ID, RANK, BOX_H, GAP, MIN_BOX_W, COL_PAD,
-    nodeType, nodeName, pageLabel, buildGraph, reach,
+    nodeType, nodeName, pageLabel, stoppedReason, sourceStopped, buildGraph, reach,
     kstMs, keyState, tableStatus, jobStatus, summarize, shortTime, hoursText, staleRuleText, itemText, dotText,
     layout, edgePath,
   };
