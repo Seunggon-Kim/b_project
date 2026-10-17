@@ -7,6 +7,7 @@ MySQL 은 SQLite 에 기댄 가짜 연결로 대신합니다.
 import datetime
 import decimal
 import io
+import json
 import re
 import sqlite3
 import sys
@@ -398,8 +399,9 @@ def test_열_이름은_대소문자를_가리지_않고_찾습니다(tmp_path):
 # --- 적재 ------------------------------------------------------------------
 
 class FakeTable:
-    def __init__(self, num_rows):
+    def __init__(self, num_rows, num_bytes=None):
         self.num_rows = num_rows
+        self.num_bytes = num_rows * 100 if num_bytes is None else num_bytes
         self.description = None
 
 
@@ -733,3 +735,43 @@ def test_요약과_마지막_판정에_빅쿼리_복사가_있습니다():
     assert judge["name"] == "빅쿼리 복사 판정"
     assert judge["if"] == "${{ always() && steps.bq_copy.outcome == 'failure' }}"
     assert "exit 1" in judge["run"]
+
+
+def test_복사_결과에_빅쿼리_용량을_담습니다(tmp_path):
+    sq, specs, my = two_table_db(tmp_path)
+    res = m.copy_tables(sq, my, specs, ALL3, FakeClient(), tmp_path)
+    assert [(r.table, r.rows, r.bytes) for r in res] == [
+        ("mixed", 5, 500), ("players", 3, 300), ("teams", 2, 200)]
+
+
+def test_실패한_표는_용량이_없습니다(tmp_path):
+    sq, specs, my = two_table_db(tmp_path)
+    res = m.copy_tables(sq, my, specs, ALL3, FakeClient(fail={"mixed"}), tmp_path)
+    assert res[0].error and res[0].bytes is None
+
+
+def test_빅쿼리_현황_표는_복사하지_않습니다():
+    specs = {"teams": [], m.SNAPSHOT_TABLE: []}
+    copy, skipped = m.plan(specs, set())
+    assert copy == [("teams", "mysql")]
+    assert skipped == [(m.SNAPSHOT_TABLE, "빅쿼리 현황 표라 복사하지 않습니다")]
+
+
+def test_main_은_결과_JSON_을_씁니다(tmp_path, monkeypatch):
+    out = tmp_path / "bq_result.json"
+    code, _, _ = run_main(tmp_path, monkeypatch, FakeClient(fail={"teams"}),
+                          ["--result-json", str(out)])
+    assert code == 1
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", data["tried_at"])
+    assert sorted(data["mysql_tables"]) == ["mixed", "players", "teams"]
+    by = {t["name"]: t for t in data["tables"]}
+    assert by["players"] == {"name": "players", "source": "mysql", "rows": 3,
+                             "bytes": 300, "error": None}
+    assert by["teams"]["error"] and by["teams"]["bytes"] is None
+
+
+def test_dry_run_은_결과_JSON_을_쓰지_않습니다(tmp_path, monkeypatch):
+    out = tmp_path / "bq_result.json"
+    run_main(tmp_path, monkeypatch, FakeClient(), ["--dry-run", "--result-json", str(out)])
+    assert not out.exists()

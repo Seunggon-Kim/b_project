@@ -72,6 +72,7 @@ MySQL 접속은 `migration.mysql.conn` 을 씁니다(BSTATS_MYSQL_SETTINGS, CI �
 import argparse
 import datetime
 import decimal
+import json
 import os
 import re
 import sqlite3
@@ -134,7 +135,12 @@ RESERVED_PREFIXES = ("_TABLE_", "_FILE_", "_PARTITION", "_ROW_TIMESTAMP", "__ROO
                      "_CHANGE_TIMESTAMP")
 
 Column = namedtuple("Column", "name bq_name bq_type mysql_type")
-Result = namedtuple("Result", "table source rows seconds error")
+# bytes 는 뒤에 더한 칸이라 기본값을 둡니다(칸 5개로 만드는 기존 코드·시험이 그대로 돕니다).
+Result = namedtuple("Result", "table source rows seconds error bytes", defaults=(None,))
+
+# 빅쿼리 현황을 적는 MySQL 표입니다(record_bq_snapshot.py 가 씀). 복사하면
+# 지난주 스냅샷이 다시 빅쿼리로 가므로 뺍니다.
+SNAPSHOT_TABLE = "meta_bq_tables"
 
 
 # --- 타입과 이름 -----------------------------------------------------------
@@ -387,7 +393,9 @@ def plan(specs, local, wanted=None):
     names = wanted if wanted else sorted(set(specs) | set(local))
     copy, skipped = [], []
     for t in names:
-        if t not in specs:
+        if t == SNAPSHOT_TABLE:
+            skipped.append((t, "빅쿼리 현황 표라 복사하지 않습니다"))
+        elif t not in specs:
             skipped.append((t, "MySQL 에 없는 표입니다(로컬 계산용)"))
         elif t in local and t not in WEEKLY_CHANGED:
             copy.append((t, SQLITE))
@@ -488,7 +496,7 @@ def table_description(table, columns, copied_at):
 
 
 def load_table(client, table_id, path, schema, description):
-    """Parquet 파일 하나를 표 하나로 올립니다(통째로 바꿈). 올린 뒤 빅쿼리 행 수입니다."""
+    """Parquet 파일 하나를 표 하나로 올립니다(통째로 바꿈). 올린 뒤 빅쿼리 (행 수, 용량)입니다."""
     cfg = bigquery.LoadJobConfig(
         source_format=bigquery.SourceFormat.PARQUET,
         schema=schema,
@@ -500,7 +508,7 @@ def load_table(client, table_id, path, schema, description):
     t = client.get_table(table_id)
     t.description = description
     client.update_table(t, ["description"])
-    return t.num_rows
+    return t.num_rows, t.num_bytes
 
 
 def one_line(e):
@@ -518,7 +526,7 @@ def copy_tables(sq, my, specs, tables, client, workdir, dry_run=False,
     for i, (t, source) in enumerate(tables, start=1):
         t0 = time.time()
         path = Path(workdir) / ("%s.parquet" % t)
-        rows, error = None, None
+        rows, error, nbytes = None, None, None
         try:
             cols = table_columns(specs[t])
             batches = (sqlite_batches(sq, t, cols, chunk_rows) if source == SQLITE
@@ -533,9 +541,10 @@ def copy_tables(sq, my, specs, tables, client, workdir, dry_run=False,
                 for c in cols:
                     print("    %-28s %-9s MySQL %s" % (c.bq_name, c.bq_type, c.mysql_type))
             else:
-                got = load_table(client, "%s.%s" % (dataset, t), path, bq_schema(cols),
-                                 table_description(t, cols, now))
+                got, nbytes = load_table(client, "%s.%s" % (dataset, t), path, bq_schema(cols),
+                                         table_description(t, cols, now))
                 if got != rows:
+                    nbytes = None
                     raise RuntimeError("빅쿼리 행 수가 다릅니다. %s %s / 빅쿼리 %s"
                                        % (source, format(rows, ","), format(got or 0, ",")))
         except Exception as e:  # noqa: BLE001  표 하나가 실패해도 나머지를 마저 합니다
@@ -544,7 +553,7 @@ def copy_tables(sq, my, specs, tables, client, workdir, dry_run=False,
             if path.exists():
                 path.unlink()
         secs = time.time() - t0
-        results.append(Result(t, source, rows, secs, error))
+        results.append(Result(t, source, rows, secs, error, None if error else nbytes))
         print("[%2d/%d] %-32s %-6s %11s행 %6.1f초  %s"
               % (i, len(tables), t, source, "-" if rows is None else format(rows, ","), secs,
                  "실패: " + error if error else ("확인" if dry_run else "복사")), flush=True)
@@ -567,6 +576,18 @@ def open_mysql():
     """MySQL 연결입니다(BSTATS_MYSQL_SETTINGS). 읽기만 합니다."""
     from migration.mysql import conn as myconn
     return myconn.connect()
+
+
+def write_result_json(path, results, tried_at, mysql_tables):
+    """복사 결과를 record_bq_snapshot.py 가 읽을 파일로 씁니다."""
+    data = {
+        "tried_at": tried_at.astimezone(KST).strftime("%Y-%m-%d %H:%M"),
+        "tables": [{"name": r.table, "source": r.source,
+                    "rows": None if r.error else r.rows,
+                    "bytes": r.bytes, "error": r.error} for r in results],
+        "mysql_tables": sorted(mysql_tables),
+    }
+    Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
 def summary_note(results, limit=NOTE_MAX):
@@ -618,6 +639,8 @@ def main(argv=None):
     ap.add_argument("--dry-run", action="store_true", help="Parquet 을 만들고 스키마만 찍습니다")
     ap.add_argument("--token-env", default=None,
                     help="로컬 실행용. OAuth 액세스 토큰이 든 환경 변수 이름")
+    ap.add_argument("--result-json", default=None,
+                    help="표마다 결과를 이 JSON 파일에 씁니다(record_bq_snapshot.py 가 읽음)")
     args = ap.parse_args(argv)
 
     db = Path(args.db)
@@ -627,6 +650,7 @@ def main(argv=None):
               if args.tables else None)
 
     t0 = time.time()
+    tried_at = datetime.datetime.now(KST)
     my = open_mysql()
     try:
         specs = mysql_columns(my)
@@ -664,6 +688,8 @@ def main(argv=None):
     finally:
         my.close()
 
+    if args.result_json and not args.dry_run:
+        write_result_json(args.result_json, results, tried_at, specs)
     note = summary_note(results)
     print("%s%s (%.0f초)" % ("[dry-run] 올리지 않았습니다. " if args.dry_run else "빅쿼리 복사: ",
                             note, time.time() - t0))
