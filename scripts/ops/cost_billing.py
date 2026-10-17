@@ -20,13 +20,19 @@ FIXED_SKU_PATTERNS = [r"\bmicro instance\b", r"\bsmall instance\b", r"\bvcpu\b",
 
 
 def billing_sql(table):
+    """결제 내보내기에서 일 단위 순액을 뽑는 질의입니다.
+
+    계약: `@start` 는 반드시 달의 1일이어야 합니다. 그렇지 않으면 가장 오래된 달이
+    잘린 합계가 되는데, summarize 는 그 달을 partial 로 표시하지 않습니다.
+    GROUP BY 는 위치 번호를 씁니다(별칭이 최상위 열 이름과 겹치기 때문입니다).
+    """
     return (
         "SELECT invoice.month AS month, service.description AS service, sku.description AS sku, "
         "DATE(usage_start_time, 'Asia/Seoul') AS day, currency, "
         "SUM(cost) + SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)) AS net "
         "FROM `%s` "
         "WHERE project.id = 'bstats-kbo' AND DATE(usage_start_time, 'Asia/Seoul') >= @start "
-        "GROUP BY month, service, sku, day, currency" % table)
+        "GROUP BY 1, 2, 3, 4, 5" % table)
 
 
 def is_fixed(sku):
