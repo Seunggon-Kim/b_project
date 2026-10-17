@@ -72,6 +72,11 @@ def allowed(kind, column, season, table=None):
     last = max((y for ys in v.get(kind, {}).values() for y in ys), default=None)
     return last is not None and season > last and last in seasons
 
+# 네이버 시즌 API 가 통째로 뺀 투수(2013~2021, 10명 27행)를 박스 투수 줄 합계로 넣을지.
+# evan 결정 대기(결정 2 의 투수 쪽). 켜면 docs/naver-migration/missing-pitchers.md 의
+# 방법(가)입니다.
+INCLUDE_BOX_ONLY_PITCHERS = False
+
 # 늘 None 인 칸(evan 결정 3: 네이버에 없고 만들면 애매함).
 NEVER = {
     "pitcher": ("blown_save", "save_opportunity", "total_saves"),
@@ -217,6 +222,24 @@ BASE_COLUMNS = {
 }
 
 
+def box_pitcher_row(pid, k, season, name, team):
+    """박스 투수 줄 합계(nbx.pitcher_lines) → 네이버 시즌 API 와 같은 칸의 행."""
+    outs = k["outs"]
+    w, l = k["w"], k["l"]
+    ip = "%d" % (outs // 3) if outs % 3 == 0 else (
+        "%d/3" % outs if outs < 3 else "%d %d/3" % (outs // 3, outs % 3))
+    return {
+        "player_id": pid, "season": season, "player_name": name, "player_team": team,
+        "earned_run_average": nss.per9(k["er"], outs), "games": k["games"], "wins": w, "losses": l,
+        "save": k["sv"], "hold": k["hld"], "winning_percentage": nss.r(w / (w + l), 3) if w + l else None,
+        "innings_pitched": ip, "hits": k["h"], "home_run": k["hr"], "base_on_balls": k["bb"],
+        "hit_by_pitch": k["hbp"], "strikeout": k["so"], "run": k["r"], "earned_run": k["er"],
+        "walks_plus_hits_per_inning_pitched": nss.r(Decimal(k["h"] + k["bb"]) * 3 / outs, 2) if outs else None,
+        "quality_start": k["qs"], "k_9": nss.per9(k["so"], outs), "bb_9": nss.per9(k["bb"], outs),
+        "k_bb": nss.fmt2(Decimal(k["so"]) / k["bb"]) if k["bb"] else None,
+    }
+
+
 def stolen(season_raw_hitters):
     """{player_id: 도루} 네이버 시즌 API(경기 수 큰 행)."""
     best = nss.pick(season_raw_hitters, "hitterGameCount")
@@ -259,6 +282,13 @@ def build_season(season, names, pbp_rows, box_files, naver_cache=None, cl=None, 
         row = dict(nv)
         row.update(batter_extra(nv, box, pb, ok, sb.get(pid, 0), cs.get(pid, 0)))
         bats.append(gate(row, season, BATTER_COLUMNS, "batter") if gated else row)
+    if INCLUDE_BOX_ONLY_PITCHERS:
+        seen = set(box_pit)
+        lines, bnames, bteams = nbx.pitcher_lines(box_files, only=seen - set(nv_pit))
+        for pid, k in lines.items():
+            nv_pit[pid] = box_pitcher_row(pid, k, season, bnames.get(pid),
+                                          names.get((bteams.get(pid), season)) or bteams.get(pid))
+        note["box_only_pitchers"] = sorted(lines)
     pits = []
     for pid, nv in nv_pit.items():
         box = box_pit.get(pid, collections.Counter())

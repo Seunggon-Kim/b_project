@@ -264,14 +264,18 @@ def pitcher_lines(files, only=None):
 
     네이버 시즌 기록 API 가 통째로 빼 둔 투수(2013~2021, 10명 27행)의 시즌 기록을
     박스에서 다시 만들 때 씁니다. 경기마다 승·패·세이브·홀드는 pitchingResult 를,
-    없으면 투수 줄의 wls 를 봅니다. (합계 {ID: Counter}, 마지막 이름 {ID: 이름}).
+    없으면 투수 줄의 wls 를 봅니다. (합계 {ID: Counter}, 마지막 이름 {ID: 이름},
+    마지막 팀 코드 {ID: 'NC'}).
     """
     out = collections.defaultdict(collections.Counter)
     names = {}
+    teams = {}
     for f in files:
         box = load(f)
         result = {int(x["pCode"]): x.get("wls") for x in box.get("pitchingResult") or []}
+        info = box.get("gameInfo") or {}
         for side in ("away", "home"):
+            code = info.get("aCode" if side == "away" else "hCode")
             seq = (box.get("pitchersBoxscore") or {}).get(side) or []
             for i, p in enumerate(seq):
                 pid = int(p["pcode"])
@@ -295,4 +299,5 @@ def pitcher_lines(files, only=None):
                     k["cg"] += 1
                     k["sho"] += (p.get("r") or 0) == 0
                 names[pid] = p.get("name")
-    return out, names
+                teams[pid] = code
+    return out, names, teams
