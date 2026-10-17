@@ -41,7 +41,11 @@ REGULAR = "정규시즌"
 
 
 def season_of(game_id):
-    return int(str(game_id)[:4])
+    """경기 ID 의 시즌. 순위결정전은 '66661031KTSS02021' 처럼 앞이 6666 이라 끝 네 자리입니다."""
+    g = str(game_id)
+    if g.startswith("6666") and len(g) == 17:
+        return int(g[-4:])
+    return int(g[:4])
 
 
 def path_of(out, game_id):

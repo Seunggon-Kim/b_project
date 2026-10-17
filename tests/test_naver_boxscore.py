@@ -58,3 +58,7 @@ def test_박스_약어():
     import naver_box_stats as nbx
     assert [nbx.kind(c) for c in ("유땅", "좌중2", "우홈", "고4", "투희번", "우희번", "중희실", "3실", "좌실", "스낫")] == \
         ["go", "h2", "hr", "ibb", "sh", "fly", "sf", "err_if", "err_of", "so"]
+
+
+def test_순위결정전_경기의_시즌():
+    assert nb.season_of("66661031KTSS02021") == 2021 and nb.season_of("20100701LTSS0") == 2010
