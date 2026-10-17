@@ -20,6 +20,7 @@ KBO 이용약관(2026-10-14 시행)으로 KBO 기록실을 못 읽게 되어, �
 파일: <out>/<시즌>/<game_id>.json.gz (기본 out = ~/.bstats/naver_boxscore)
 """
 import argparse
+import concurrent.futures
 import csv
 import gzip
 import json
@@ -80,24 +81,34 @@ def games_from_csv(path, first, last):
                   if r.get("game_type") == REGULAR and first <= int(r["season"]) <= last)
 
 
-def fetch_all(game_ids, out, cl=None, log=print):
-    """받지 않은 경기만 받습니다. (받음, 건너뜀, 실패 목록) 을 돌려줍니다."""
+def fetch_all(game_ids, out, cl=None, log=print, workers=1):
+    """받지 않은 경기만 받습니다. (받음, 건너뜀, 실패 목록) 을 돌려줍니다.
+
+    workers 가 2 이상이면 응답을 기다리는 동안 다음 경기를 부릅니다. 호출 시작
+    간격(1.1초)은 손님(naver_http.Client)이 여전히 지킵니다. 네이버 응답이 2~3초
+    걸려 한 줄로 받으면 12,400경기에 열 시간이 넘었습니다.
+    """
     cl = cl or naver_http.client()
-    got = skipped = 0
+    todo = [g for g in game_ids if not path_of(out, g).exists()]
+    skipped = len(game_ids) - len(todo)
+    got = 0
     failed = []
     t0 = time.time()
-    for i, gid in enumerate(game_ids, 1):
-        if path_of(out, gid).exists():
-            skipped += 1
-            continue
-        try:
-            save(out, gid, slim(cl.get("/schedule/games/%s/record" % gid)))
-            got += 1
-        except (naver_http.NaverError, ValueError) as e:
-            failed.append((gid, str(e)[:120]))
-        if i % 200 == 0:
-            log("  %d/%d (받음 %d·건너뜀 %d·실패 %d, %.0f분)"
-                % (i, len(game_ids), got, skipped, len(failed), (time.time() - t0) / 60))
+
+    def one(gid):
+        save(out, gid, slim(cl.get("/schedule/games/%s/record" % gid)))
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
+        futs = {ex.submit(one, g): g for g in todo}
+        for i, f in enumerate(concurrent.futures.as_completed(futs), 1):
+            try:
+                f.result()
+                got += 1
+            except (naver_http.NaverError, ValueError, OSError) as e:
+                failed.append((futs[f], str(e)[:120]))
+            if i % 200 == 0:
+                log("  %d/%d (받음 %d·실패 %d, %.0f분)"
+                    % (i, len(todo), got, len(failed), (time.time() - t0) / 60))
     return got, skipped, failed
 
 
@@ -108,6 +119,7 @@ def main(argv=None):
     ap.add_argument("--to", dest="last", type=int, default=2026)
     ap.add_argument("--game", action="append", default=[])
     ap.add_argument("--out", default=str(DEFAULT_OUT))
+    ap.add_argument("--workers", type=int, default=3)
     a = ap.parse_args(argv)
     ids = list(a.game)
     if a.games_csv:
@@ -115,7 +127,7 @@ def main(argv=None):
     if not ids:
         ap.error("--games-csv 나 --game 이 필요합니다")
     print("경기 %d개, 저장 %s" % (len(ids), a.out))
-    got, skipped, failed = fetch_all(ids, a.out)
+    got, skipped, failed = fetch_all(ids, a.out, workers=a.workers)
     print("끝: 받음 %d · 건너뜀 %d · 실패 %d" % (got, skipped, len(failed)))
     if failed:
         fl = Path(a.out) / "failed.txt"

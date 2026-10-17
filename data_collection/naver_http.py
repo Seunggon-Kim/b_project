@@ -18,6 +18,7 @@ KBO 이용약관 제14조 차항(2026-10-14 시행)이 KBO 사이트 자동 수�
 Worker 쪽 src/lib/naver.js 와 같은 헤더입니다.
 """
 import json
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -56,6 +57,7 @@ class Client:
         self.sleep = sleep
         self.opener = opener or _open
         self._last = None
+        self._lock = threading.Lock()
         self.calls = 0
 
     def url(self, path, params=None):
@@ -71,11 +73,15 @@ class Client:
         return u
 
     def _wait(self):
-        if self._last is not None:
-            left = self.gap - (self.clock() - self._last)
-            if left > 0:
-                self.sleep(left)
-        self._last = self.clock()
+        """호출 **시작** 사이를 gap 이상 벌립니다. 여러 스레드가 한 손님을 같이
+        써도 시작 간격은 지켜집니다(응답을 기다리는 동안 다음 호출이 출발할 수는
+        있습니다)."""
+        with self._lock:
+            if self._last is not None:
+                left = self.gap - (self.clock() - self._last)
+                if left > 0:
+                    self.sleep(left)
+            self._last = self.clock()
 
     def get(self, path, params=None):
         """JSON 을 돌려줍니다. `code` 가 200 이 아니면 NaverError 입니다."""
