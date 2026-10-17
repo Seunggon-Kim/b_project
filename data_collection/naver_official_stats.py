@@ -270,8 +270,15 @@ def build_season(season, names, pbp_rows, box_files, naver_cache=None, cl=None, 
     nv_bat = {pid: nss.batter_row(x, season, names) for pid, x in nss.pick(raw["HITTER"], "hitterGameCount").items()}
     nv_pit = {pid: nss.pitcher_row(x, season, names) for pid, x in nss.pick(raw["PITCHER"], "pitcherGameCount").items()}
     sb = stolen(raw["HITTER"])
+    # 순위결정전(6666…)은 KBO·네이버 개인 기록에 들어가지 않습니다(2021·2024 대조: 빼면
+    # 투수 상대 타자 수 308/308·291/291, 넣으면 301·284).
+    pbp_rows = [x for x in pbp_rows if not str(x["gameID"]).startswith("6666")]
+    box_files = [f for f in box_files if not Path(f).name.startswith("6666")]
     pbg = pss.pas_by_game_batter(pbp_rows)
-    box_bat, box_pit, unmatched = nbx.season(box_files, pbg)
+    by_game = collections.defaultdict(list)
+    for x in pbp_rows:
+        by_game[x["gameID"]].append(x)
+    box_bat, box_pit, unmatched = nbx.season(box_files, pbg, by_game)
     cs = caught_stealing(box_files)
     pb_bat = pss.batter_counts(pbp_rows)
     pb_pit = pss.pitcher_counts(pbp_rows, {})

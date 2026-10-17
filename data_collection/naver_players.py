@@ -90,22 +90,42 @@ _photo_lock = threading.Lock()
 _photo_last = [0.0]
 
 
-def photo(pid, opener=None, gap=naver_http.MIN_GAP_SEC):
-    """사진 주소. 없는 선수(404)면 None."""
+def photo(pid, opener=None, gap=naver_http.MIN_GAP_SEC, cache=None, retries=3):
+    """사진 주소. 없는 선수(404)면 None.
+
+    연결이 끊기면(2026-10-18 미리보기 400명째에 한 번) 5초 쉬고 다시 묻고, 끝내 안 되면
+    예외를 올립니다(사진이 없다고 잘못 적지 않게). cache 폴더에 결과를 남겨 다시 돌릴 때
+    묻지 않습니다.
+    """
     u = PHOTO % pid
-    with _photo_lock:
-        left = gap - (time.monotonic() - _photo_last[0])
-        if left > 0:
-            time.sleep(left)
-        _photo_last[0] = time.monotonic()
-    if opener:
-        return u if opener(u) == 200 else None
-    req = urllib.request.Request(u, method="HEAD", headers=naver_http.HEADERS)
-    try:
-        with urllib.request.urlopen(req, timeout=20) as r:
-            return u if r.status == 200 else None
-    except urllib.error.HTTPError:
-        return None
+    mark = Path(cache) / ("photo_%d.txt" % pid) if cache else None
+    if mark and mark.exists():
+        return mark.read_text(encoding="utf-8") or None
+    for attempt in range(retries + 1):
+        with _photo_lock:
+            left = gap - (time.monotonic() - _photo_last[0])
+            if left > 0:
+                time.sleep(left)
+            _photo_last[0] = time.monotonic()
+        if opener:
+            got = u if opener(u) == 200 else None
+            break
+        req = urllib.request.Request(u, method="HEAD", headers=naver_http.HEADERS)
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                got = u if r.status == 200 else None
+            break
+        except urllib.error.HTTPError:
+            got = None
+            break
+        except OSError:
+            if attempt >= retries:
+                raise
+            time.sleep(5)
+    if mark:
+        mark.parent.mkdir(parents=True, exist_ok=True)
+        mark.write_text(got or "", encoding="utf-8")
+    return got
 
 
 def play_type(s):
@@ -259,7 +279,7 @@ def main(argv=None):
     for i, pid in enumerate(ids, 1):
         d = detail(pid, last.get(pid, season), cache=a.detail_cache)
         miss += d is None
-        img = photo(pid) if d else None
+        img = photo(pid, cache=a.detail_cache) if d else None
         rows.append(build_row(pid, d, teams.get(pid), throw, bat, img, pbp_names.get(pid)))
         if i % 100 == 0:
             print("  %d/%d" % (i, len(ids)), flush=True)

@@ -190,12 +190,31 @@ def resolve(name, sides, prefer=None):
     return next(iter(cands)) if len(cands) == 1 else None
 
 
-def season(files, pbp_by_game_batter=None):
+def pbp_pitcher_game(rows, side):
+    """박스 투수 줄이 빈 경기(2011 전체, 2022 열 경기)를 PBP 로 대신합니다.
+
+    그 경기 그 수비 쪽의 [(투수 ID, 상대 타자 수, 투구 수)] 나온 순서대로.
+    """
+    import pbp_season_stats as pss
+    seq = pss.team_pitchers(rows).get((rows[0]["gameID"], side), []) if rows else []
+    ibb = pss.auto_ibb_pas(rows)
+    tbf = collections.Counter(int(x["pitcher_ID"]) for x in pss.plate_appearances(rows)
+                              if x.get("pitcher_ID") and pss.pitching_side(x) == side)
+    np_ = collections.Counter(int(x["pitcher_ID"]) for x in rows
+                              if pss.thrown(x, ibb) and x.get("pitcher_ID") and pss.pitching_side(x) == side)
+    return [(p, tbf[p], np_[p]) for p in seq]
+
+
+def season(files, pbp_by_game_batter=None, pbp_games=None):
     """박스 파일들 → (타자 {id: Counter}, 투수 {id: Counter}, 못 이은 이름 수).
 
     pbp_by_game_batter: {(gameID, 타자 ID): [PBP 타석 끝 행...]} (없으면 박스만).
+    pbp_games: {gameID: [PBP 행...]}. 박스 투수 줄이 비면 그 경기 투수 칸을 PBP 로
+    셉니다(2011 은 시즌 전체, 2022 는 열 경기가 비어 있음). 그 경기의 폭투·보크도 PBP 로.
     """
+    import pbp_season_stats as pss
     pbg = pbp_by_game_batter or {}
+    pgames = pbp_games or {}
     bat = collections.defaultdict(collections.Counter)
     pit = collections.defaultdict(collections.Counter)
     unmatched = collections.Counter()
@@ -204,12 +223,20 @@ def season(files, pbp_by_game_batter=None):
         sides = names_by_side(box)
         # 승리 투수는 pitchingResult 에 있습니다(pitchersBoxscore 의 wls 는 비어 있는 해가 있음).
         winners = {int(x["pCode"]) for x in box.get("pitchingResult") or [] if x.get("wls") == "W"}
+        pbp_sides = set()
         for side in ("away", "home"):
             gid = Path(f).name.split(".")[0]
             for b in (box.get("battersBoxscore") or {}).get(side) or []:
                 pid = int(b["playerCode"])
                 bat[pid].update(batter_game(b, pbg.get((gid, pid))))
             seq = (box.get("pitchersBoxscore") or {}).get(side) or []
+            if not seq and pgames.get(gid):
+                # 박스에 투수 줄이 없으면 PBP 로: 상대 타자·투구 수·나온 순서.
+                other = "awayTotal" if side == "home" else "homeTotal"
+                allowed = ((box.get("battersBoxscore") or {}).get(other) or {}).get("run")
+                seq = [{"pcode": pid, "pa": t, "bf": n, "r": allowed}
+                       for pid, t, n in pbp_pitcher_game(pgames[gid], side)]
+                pbp_sides.add(side)
             for i, p in enumerate(seq):
                 k = pit[int(p["pcode"])]
                 k["games"] += 1
@@ -228,6 +255,13 @@ def season(files, pbp_by_game_batter=None):
                 bat[pid]["gw"] += 1
             else:
                 unmatched["결승타"] += 1
+        if pbp_sides:
+            # 투수 이름을 이을 박스 줄이 없어 그 경기 폭투·보크는 PBP 로 셉니다.
+            rows = pgames[Path(f).name.split(".")[0]]
+            for words, key in ((("폭투로", "낫아웃 폭투"), "wp"), (("보크",), "bk")):
+                for pid, n in pss.count_events(rows, words).items():
+                    pit[pid][key] += n
+            continue
         for how, key in (("폭투", "wp"), ("보크", "bk")):
             for name in etc_names(box, how):
                 pid = resolve(name, sides)
