@@ -1,20 +1,21 @@
 # -*- coding: utf-8 -*-
 """Cloudflare GraphQL 분석 API 응답을 무료 한도 대비 일별 값으로 바꿉니다.
 
-날짜는 Cloudflare 집계 기준인 UTC 하루입니다. CPU 시간은 마이크로초로 오므로
-밀리초로 바꿉니다. 호출은 cost_report.py 가 합니다.
+날짜는 Cloudflare 집계 기준인 UTC 하루입니다. CPU 시간은 마이크로초로 온다고
+보고 밀리초로 바꿉니다(단위는 아래처럼 미확인). 호출은 cost_report.py 가 합니다.
 
-데이터셋·칸 이름과 한도 값은 Cloudflare 문서·스키마로 확인한 값입니다.
-(확인 날짜를 아래 상수 옆에 적습니다. 다르면 SchemaMismatch 로 멈춥니다.)
+확인한 항목은 상수 옆에 날짜를, 확인하지 못한 항목은 '미확인'을 적었습니다.
 
 문서 확인 결과(2026-10-18):
 - workersInvocationsAdaptive 데이터셋, dimensions scriptName·status, sum requests,
   quantiles cpuTimeP50·cpuTimeP99: 확인(Querying Workers Metrics with GraphQL).
-- dimensions date: 미확인(문서에는 datetime 만 나옴) — 첫 실제 실행에서 SchemaMismatch 로 확인
-- CPU 시간 단위(마이크로초): 미확인(문서에서 찾지 못함) — 첫 실제 실행에서 SchemaMismatch 로 확인
+- dimensions date(두 데이터셋): 미확인(문서에는 datetime 만 나옴) — 없는 칸이면
+  GraphQL 이 오류를 돌려주므로 첫 실제 실행에서 SchemaMismatch 로 드러납니다.
+- CPU 시간 단위(마이크로초): 미확인(문서에서 찾지 못함). 단위가 달라도 응답 모양은
+  같아 SchemaMismatch 가 나지 않고 값만 1000배 어긋납니다. 첫 실제 실행에서
+  CPU 중앙값이 수 ms 범위(운영 기록상 대략 4~25ms)인지 눈으로 확인합니다.
 - hyperdriveQueriesAdaptiveGroups 와 count: 확인(Hyperdrive Metrics). dimensions date 는 미확인.
 """
-import datetime as dt
 
 WORKER = "kbo-api"
 # 확인: 2026-10-18, Workers 'Platform limits' 문서(Free: 하루 100,000 요청, UTC 자정 초기화)
@@ -24,7 +25,8 @@ HYPERDRIVE_FREE_PER_DAY = 100_000
 CPU_LIMIT_MS = 10                   # 확인: 2026-10-18, Workers 'Platform limits'(Free: HTTP 요청당 CPU 10ms)
 LIMIT_LINE_AT = 0.5                 # 가장 많은 날이 한도의 50% 를 넘으면 한도선을 그립니다
 # 확인: 2026-10-18, Workers 'Metrics and analytics' 문서의 상태 표(exceededResources 는 주로 CPU 초과).
-# 단 CPU 초과 전용 값인지는 미확인(문서에서 찾지 못함) — 첫 실제 실행에서 확인
+# 단 CPU 초과 전용 값인지는 미확인(문서에서 찾지 못함). 뜻이 달라도 SchemaMismatch 는 나지 않으므로
+# 첫 실제 실행에서 끊긴 요청 수가 운영 기록과 맞는지 눈으로 확인합니다
 CUT_STATUS = "exceededResources"
 
 
