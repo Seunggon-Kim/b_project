@@ -75,3 +75,13 @@ def test_ERA_는_개수에서_다시_셉니다():
     p = ns.pitcher_row(x, 2025, {})
     assert p["earned_run_average"] == 3.01 and p["walks_plus_hits_per_inning_pitched"] == 1.21
     assert p["k_bb"] == "3.00"
+
+
+def test_검증한_칸_시즌만_씁니다():
+    import naver_official_stats as no
+    v = {"batter": {"gw_rbi": [2014, 2015, 2026], "ground_outs": [2012]}}
+    assert no.allowed("batter", "gw_rbi", 2014, v)
+    assert not no.allowed("batter", "gw_rbi", 2013, v)
+    assert no.allowed("batter", "gw_rbi", 2027, v)        # 새 시즌은 마지막 검증 시즌(2026)을 따름
+    assert not no.allowed("batter", "ground_outs", 2027, v)
+    assert not no.allowed("batter", "p_pa", 2026, v)

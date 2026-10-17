@@ -14,9 +14,12 @@ docs/superpowers/plans/2026-10-18-naver-official-stats.md).
 
 ## 검증한 칸만 씁니다
 
-칸마다 2008~2026 의 지금 DB 값(10/14 전에 KBO 에서 받은 값)과 맞춰 보고 시즌마다
-99% 이상 같은 칸만 그 시즌부터 씁니다(FROM_SEASON). 못 미치는 칸·시즌은 None 으로
-두고 화면에서 숨깁니다(evan 결정 3). 결과: docs/naver-migration/official-verify.md.
+칸마다 2008~2026 의 지금 DB 값(10/14 전에 KBO 에서 받은 값)과 맞춰 보고(migration/
+naver_verify.py) 시즌마다 99% 이상 같은 (칸, 시즌)만 씁니다. 결과는
+database/naver_verified.json 이고 표는 docs/naver-migration/official-verify.md 입니다.
+못 미치는 칸·시즌은 None 으로 두고 화면에서 숨깁니다(evan 결정 3). 검증한 마지막
+시즌보다 뒤(새 시즌)는 그 마지막 시즌이 통과한 칸만 씁니다. 네이버 시즌 API 가 바로
+주는 기본 칸(BASE_COLUMNS)은 늘 씁니다.
 
 PBP 로 세는 칸은 그 선수 시즌의 PBP 가 온전할 때만 씁니다. 중계가 끊긴 경기가
 있으면(2008~2011·2013 에 많음) 개수가 모자라 틀린 값이 되기 때문입니다. 온전함은
@@ -44,9 +47,30 @@ import pbp_season_stats as pss  # noqa: E402
 FIRST_SEASON = 2008
 DEFAULT_BOX_DIR = Path(os.path.expanduser("~")) / ".bstats" / "naver_boxscore"
 
-# 칸 → 이 시즌부터 씁니다(그 전 시즌은 None). 없는 칸은 늘 None 입니다.
-# docs/naver-migration/official-verify.md 의 시즌별 일치율로 정했습니다.
-FROM_SEASON = {}
+VERIFIED_PATH = ROOT / "database" / "naver_verified.json"
+_verified = None
+
+
+def verified():
+    """{'batter': {칸: [시즌]}, 'pitcher': {...}}. 파일이 없으면 빈 사전(기본 칸만 씀)."""
+    global _verified
+    if _verified is None:
+        import json
+        try:
+            _verified = json.loads(VERIFIED_PATH.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            _verified = {"batter": {}, "pitcher": {}}
+    return _verified
+
+
+def allowed(kind, column, season, table=None):
+    """이 칸을 이 시즌에 써도 되는가(검증 통과). 새 시즌은 검증한 마지막 시즌을 따릅니다."""
+    v = table if table is not None else verified()
+    seasons = set(v.get(kind, {}).get(column, []))
+    if season in seasons:
+        return True
+    last = max((y for ys in v.get(kind, {}).values() for y in ys), default=None)
+    return last is not None and season > last and last in seasons
 
 # 늘 None 인 칸(evan 결정 3: 네이버에 없고 만들면 애매함).
 NEVER = {
@@ -166,14 +190,14 @@ def pitcher_extra(nv, box, pbp, pbp_ok):
 
 
 def gate(row, season, columns, kind):
-    """FROM_SEASON 에 없거나 그 시즌 전이면 None. 기본 칸(네이버 시즌 API)은 그대로."""
+    """검증을 통과하지 못한 (칸, 시즌)은 None. 기본 칸(네이버 시즌 API)은 그대로."""
     base = BASE_COLUMNS[kind]
     out = {}
     for c in columns:
         v = row.get(c)
         if c in NEVER.get(kind, ()):
             v = None
-        elif c not in base and season < FROM_SEASON.get((kind, c), 10 ** 6):
+        elif c not in base and not allowed(kind, c, season):
             v = None
         out[c] = v
     return out
