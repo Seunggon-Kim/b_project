@@ -60,7 +60,7 @@
     return rows.map(function (r) {
       const s = scripts[r.path] || {};
       const desc = s.desc ? String(s.desc) : [r.stepNames.join(' · '), s.note || ''].filter(Boolean).join('. ');
-      return { path: r.path, name: r.name, desc: desc, runs: r.runs };
+      return { path: r.path, name: r.name, desc: desc, runs: r.runs, stopped: !!s.stopped };
     });
   }
 
@@ -91,9 +91,10 @@
         const note = details && x.key && details[x.key] && details[x.key].note;
         return `<span class="dbx-run${fail ? ' fail' : ''}"${note ? ` title="${esc(note)}"` : ''}>${esc(t)}</span>`;
       }).join('<br>');
-      return '<tr>'
+      // 멈춘 수집(KBO 이용약관 2026-10-14 시행)은 회색 줄로 두고 설명 앞에 밝힙니다.
+      return (r.stopped ? '<tr class="stopped">' : '<tr>')
         + `<td class="dbx-cron-mods">${esc(r.name)}<span class="sub">${esc(r.path)}</span></td>`
-        + `<td class="dbx-cron-desc">${esc(r.desc)}</td>`
+        + `<td class="dbx-cron-desc">${r.stopped ? '<strong>수집 중단(KBO 이용약관).</strong> ' : ''}${esc(r.desc)}</td>`
         + `<td class="dbx-cron-kst">${sched}</td>`
         + `<td class="dbx-cron-upd">${upd}</td>`
         + '</tr>';

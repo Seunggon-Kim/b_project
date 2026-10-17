@@ -290,6 +290,15 @@
             background: rgba(59, 130, 246, 0.10);
         }
 
+        /* 멈춘 수집(KBO 이용약관 2026-10-14 시행) 줄입니다. 계보 탭의 멈춤 회색과 맞춥니다. */
+        .dbx-cron-table tbody tr.stopped td {
+            color: var(--text-muted);
+        }
+
+        .dbx-cron-table tbody tr.stopped .dbx-cron-kst {
+            color: var(--text-muted);
+        }
+
         .dbx-cron-table tbody tr:last-child td {
             border-bottom: none;
         }
@@ -540,9 +549,11 @@
                     <p class="text-secondary mt-2" style="font-size: 0.85rem;">
                         손으로 돌리는 작업도 있습니다.
                         <strong>daily_player_detector.py</strong>(이적·등번호 변경 감지),
-                        <strong>daily_cleanup_orphan_stats.py</strong>(PBP 없는 통계 행 정리),
-                        <strong>player_registry_sync.py</strong>(구단 등록 명단 대조)는
+                        <strong>daily_cleanup_orphan_stats.py</strong>(PBP 없는 통계 행 정리)는
                         스크립트로 남아 있지만 사람이 직접 돌려야 합니다.
+                        KBO 이용약관(2026-10-14 시행)이 자동 수집을 금지해 KBO 사이트를 읽는 수집은 모두 멈췄습니다.
+                        회색 줄이 멈춘 수집이고, 마지막 업데이트는 멈추기 전 시각입니다.
+                        <strong>player_registry_sync.py</strong>(구단 등록 명단 대조)도 KBO 사이트를 읽어 쓰지 않습니다.
                         서버 자동 배포(auto_deploy)는 Pages·Workers 배포로 대체되어 없어졌습니다.
                         마지막 업데이트가 '-'인 단계는 실행 기록을 따로 남기지 않습니다. 같은 작업의 다른 단계 기록을 보면 됩니다.
                     </p>
