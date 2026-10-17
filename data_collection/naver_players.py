@@ -180,10 +180,20 @@ def build_row(pid, d, current_team, pbp_throw, pbp_bat, image_url, pbp_name=None
     return row
 
 
-def write(sink, rows):
-    """있으면 고치고 없으면 넣습니다. created_at 은 그대로 두고 updated_at 을 지금으로."""
-    n = sink.upsert("players", COLUMNS + ["created_at"], ["player_id"],
-                    [dict(r, created_at=None) for r in rows], touch="updated_at", keep=("created_at",))
+def write(sink, rows, teams=None):
+    """있으면 고치고 없으면 넣습니다. created_at 은 그대로 두고 updated_at 을 지금으로.
+
+    teams({선수 ID: 그 시즌 팀 이름})를 주면 이미 있는 선수의 소속도 맞춥니다
+    (sync_players_from_roster.py 를 대신합니다. 바뀐 줄만 고칩니다).
+    """
+    n = 0
+    if rows:
+        # created_at 은 넘기지 않습니다(넣을 때 MySQL 기본값, 고칠 때 그대로).
+        n = sink.upsert("players", COLUMNS, ["player_id"], rows, touch="updated_at")
+    for pid, team in sorted((teams or {}).items()):
+        n += sink.execute("UPDATE players SET team_id = %s, updated_at = UTC_TIMESTAMP() "
+                          "WHERE player_id = %s AND (team_id IS NULL OR team_id <> %s)",
+                          (team, pid, team))
     sink.refresh_count("players")
     return n
 
@@ -254,7 +264,7 @@ def main(argv=None):
         print("[미리보기] 넣지 않았습니다.")
         return 0
     from mysql_sink import mirror
-    mirror("players", lambda sink: write(sink, rows))
+    mirror("players", lambda sink: write(sink, rows, teams if a.new else None))
     return 0
 
 

@@ -132,11 +132,69 @@ jobs:
           python data_collection/record_job_run.py --job pitch_values \
             --status ${{ steps.pitch_values.outcome == 'success' && 'ok' || (steps.pitch_values.outcome == 'skipped' && 'skip' || 'fail') }}
 
-      # --- KBO 사이트 수집: 멈춤 ------------------------------------
+      # --- KBO 사이트 수집: 멈춤, 네이버로 대신함 ---------------------
       # 2026-10-14 시행 KBO 이용약관 제14조 차항(크롤링 등 자동화 수집 금지)에
       # 따라 KBO 사이트(koreabaseball.com)를 읽는 단계를 뺐습니다: 퓨처스 일정,
       # 올 시즌 팀 순위, 공식 타자·투수 기록, 1군 등록 현황, players 소속·등번호
       # 갱신, 새 선수 추가. 수집 스크립트는 data_collection/ 에 그대로 둡니다.
+      # 팀 순위·공식 기록·선수 정보는 아래 세 단계가 네이버 스포츠 API 로
+      # 대신합니다(계획서 docs/superpowers/plans/2026-10-18-naver-official-stats.md).
+      # 퓨처스·1군 등록 명단은 네이버에 없어 대신하지 않습니다.
+
+      # --- 3-1. 팀 순위(네이버) ---------------------------------------
+      - name: 팀 순위(네이버)
+        id: team_ranks
+        continue-on-error: true
+        run: python data_collection/naver_team_ranks.py --current
+
+      - name: 팀 순위 결과 기록
+        if: always()
+        continue-on-error: true
+        run: |
+          python data_collection/record_job_run.py --job team_ranks \
+            --status ${{ steps.team_ranks.outcome == 'success' && 'ok' || 'fail' }}
+
+      # --- 3-2. 공식 기록(네이버 시즌 API + 박스스코어 + PBP) -------------
+      # 박스스코어는 경기마다 한 번만 받습니다. 받은 파일을 캐시에 두고 다음
+      # 실행이 이어 씁니다(새 경기만 받음). 캐시가 비면 올 시즌 전체를 다시
+      # 받습니다(정규시즌 720경기, 호출 시작 간격 1.1초, 약 15분).
+      - name: 박스스코어 캐시
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/naver_boxscore
+          key: naver-box-${{ github.run_id }}
+          restore-keys: naver-box-
+
+      - name: 공식 기록(네이버)
+        id: official_stats
+        if: steps.pbp.outcome == 'success'
+        continue-on-error: true
+        run: |
+          python data_collection/naver_official_stats.py --current --fetch-box \
+            --box-dir "$RUNNER_TEMP/naver_boxscore"
+
+      - name: 공식 기록 결과 기록
+        if: always()
+        continue-on-error: true
+        run: |
+          python data_collection/record_job_run.py --job official_stats \
+            --status ${{ steps.official_stats.outcome == 'success' && 'ok' || (steps.official_stats.outcome == 'skipped' && 'skip' || 'fail') }}
+
+      # --- 3-3. 새 선수·소속(네이버) ----------------------------------
+      # 올 시즌 PBP 에 처음 나온 선수를 네이버 선수 상세로 넣고, 올 시즌 선수
+      # 목록의 소속으로 players.team_id 를 맞춥니다.
+      - name: 새 선수·소속(네이버)
+        id: players
+        if: steps.pbp.outcome == 'success'
+        continue-on-error: true
+        run: python data_collection/naver_players.py --new
+
+      - name: 새 선수 결과 기록
+        if: always()
+        continue-on-error: true
+        run: |
+          python data_collection/record_job_run.py --job add_new_players \
+            --status ${{ steps.players.outcome == 'success' && 'ok' || (steps.players.outcome == 'skipped' && 'skip' || 'fail') }}
 
       # --- 4. 옛 시즌 PBP 되채우기 (2008~2014): 끝남---------------------
       # 2026-08-29 에 두 커서 모두 마지막 경기까지 넣어 단계를 뺐습니다.
@@ -216,6 +274,9 @@ jobs:
             echo "| PBP 수집·적재 | ${{ steps.pbp.outcome }} |"
             echo "| games 적재 | ${{ steps.games.outcome }} |"
             echo "| 구종 가치 계산 | ${{ steps.pitch_values.outcome }} |"
+            echo "| 팀 순위(네이버) | ${{ steps.team_ranks.outcome }} |"
+            echo "| 공식 기록(네이버) | ${{ steps.official_stats.outcome }} |"
+            echo "| 새 선수·소속(네이버) | ${{ steps.players.outcome }} |"
             echo "| 캐시 비우기 | ${{ steps.purge.outcome }} |"
             echo "| MySQL 연결 | ${{ steps.mysql.outcome }} |"
             echo "| MySQL 적재 | ${{ steps.mirror_check.outcome }} |"
@@ -228,11 +289,15 @@ jobs:
         run: |
           fail=0
           for s in "${{ steps.pbp.outcome }}" "${{ steps.purge.outcome }}" \
-                   "${{ steps.pitch_values.outcome }}"; do
+                   "${{ steps.pitch_values.outcome }}" "${{ steps.team_ranks.outcome }}"; do
             if [ "$s" != "success" ]; then fail=1; fi
           done
           # games 는 경기가 없는 날 건너뛰므로 skipped 를 실패로 보지 않습니다.
           if [ "${{ steps.games.outcome }}" = "failure" ]; then fail=1; fi
+          # 공식 기록·새 선수는 PBP 가 실패하면 건너뜁니다(그때는 PBP 가 빨갛게 합니다).
+          for s in "${{ steps.official_stats.outcome }}" "${{ steps.players.outcome }}"; do
+            if [ "$s" = "failure" ]; then fail=1; fi
+          done
           # MySQL 연결·적재는 늘 성공해야 합니다(사이트가 MySQL 을 읽습니다).
           for s in "${{ steps.mysql.outcome }}" "${{ steps.mirror_check.outcome }}"; do
             if [ "$s" != "success" ]; then fail=1; fi

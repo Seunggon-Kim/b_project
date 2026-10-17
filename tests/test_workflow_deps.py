@@ -57,6 +57,10 @@ ENTRYPOINTS = {
         "data_collection/sync_players_from_roster.py",
         # 명단에 있는데 players 에 없는 새 선수를 찾아 넣습니다.
         "data_collection/add_new_players.py",
+        # KBO 사이트 대신 네이버(2026-10-14 시행 KBO 이용약관).
+        "data_collection/naver_team_ranks.py",
+        "data_collection/naver_official_stats.py",
+        "data_collection/naver_players.py",
         # subprocess 로 부릅니다. import 로는 안 보입니다.
         "crawler/pbp.py",
         "crawler/download.py",

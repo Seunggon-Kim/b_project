@@ -94,10 +94,15 @@ def test_결과_모양():
     daily = next(j for j in d["jobs"] if j["id"] == "daily")
     assert daily["schedule_kst"] == "매일 03:33" and daily["stale_hours"] == 36
     tr = next(t for t in d["tables"] if t["name"] == "team_season_rank")
-    assert tr["kind"] == "collected" and tr["written_by"] == ["data_collection/team_ranks.py"]
-    # 팀 순위 수집은 KBO 이용약관(2026-10-14)으로 멈췄습니다. 표는 남고 선은 없습니다.
-    assert tr["stopped"] is True
-    assert {"from": "job:daily", "to": "table:team_season_rank"} not in d["edges"]
+    assert tr["kind"] == "collected" and tr["written_by"] == [
+        "data_collection/naver_team_ranks.py", "data_collection/team_ranks.py"]
+    # KBO 기록실 수집은 KBO 이용약관(2026-10-14)으로 멈췄고 네이버가 대신합니다.
+    assert tr["stopped"] is False
+    assert {"from": "job:daily", "to": "table:team_season_rank"} in d["edges"]
+    assert {"from": "source:naver_stats", "to": "job:daily"} in d["edges"]
+    # 퓨처스·1군 등록 명단은 대신하지 않아 멈춘 채입니다.
+    for name in ("futures_season_stats", "kbo_roster", "kbo_roster_moves"):
+        assert next(t for t in d["tables"] if t["name"] == name)["stopped"] is True, name
     assert not next(t for t in d["tables"] if t["name"] == "play_by_play")["stopped"]
     for name in ("games", "players", "play_by_play"):
         assert next(t for t in d["tables"] if t["name"] == name)["kind"] == "collected", name

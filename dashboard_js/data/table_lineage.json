@@ -10,6 +10,14 @@
   },
   {
    "from": "job:daily",
+   "to": "table:kbo_official_batter_stats"
+  },
+  {
+   "from": "job:daily",
+   "to": "table:kbo_official_pitcher_stats"
+  },
+  {
+   "from": "job:daily",
    "to": "table:pitch_run_value"
   },
   {
@@ -26,7 +34,19 @@
   },
   {
    "from": "job:daily",
+   "to": "table:players"
+  },
+  {
+   "from": "job:daily",
    "to": "table:run_expectancy"
+  },
+  {
+   "from": "job:daily",
+   "to": "table:team_season_rank"
+  },
+  {
+   "from": "job:daily",
+   "to": "table:team_seasons"
   },
   {
    "from": "job:weekly",
@@ -69,7 +89,15 @@
    "to": "page:pages/team-stats.html"
   },
   {
+   "from": "source:naver_record",
+   "to": "job:daily"
+  },
+  {
    "from": "source:naver_relay",
+   "to": "job:daily"
+  },
+  {
+   "from": "source:naver_stats",
    "to": "job:daily"
   },
   {
@@ -102,6 +130,14 @@
   },
   {
    "from": "table:games",
+   "to": "table:kbo_official_batter_stats"
+  },
+  {
+   "from": "table:games",
+   "to": "table:kbo_official_pitcher_stats"
+  },
+  {
+   "from": "table:games",
    "to": "table:kbo_run_values_by_season"
   },
   {
@@ -154,6 +190,10 @@
   },
   {
    "from": "table:kbo_official_batter_stats",
+   "to": "table:players"
+  },
+  {
+   "from": "table:kbo_official_batter_stats",
    "to": "table:weighted_pf_by_batter_season"
   },
   {
@@ -179,6 +219,10 @@
   {
    "from": "table:kbo_official_pitcher_stats",
    "to": "page:pages/team-stats.html"
+  },
+  {
+   "from": "table:kbo_official_pitcher_stats",
+   "to": "table:players"
   },
   {
    "from": "table:kbo_roster",
@@ -250,6 +294,14 @@
   },
   {
    "from": "table:play_by_play",
+   "to": "table:kbo_official_batter_stats"
+  },
+  {
+   "from": "table:play_by_play",
+   "to": "table:kbo_official_pitcher_stats"
+  },
+  {
+   "from": "table:play_by_play",
    "to": "table:kbo_run_values_by_season"
   },
   {
@@ -267,6 +319,10 @@
   {
    "from": "table:play_by_play",
    "to": "table:plate_discipline_league"
+  },
+  {
+   "from": "table:play_by_play",
+   "to": "table:players"
   },
   {
    "from": "table:play_by_play",
@@ -363,6 +419,18 @@
   {
    "from": "table:team_seasons",
    "to": "page:pages/team-record.html"
+  },
+  {
+   "from": "table:team_seasons",
+   "to": "table:kbo_official_batter_stats"
+  },
+  {
+   "from": "table:team_seasons",
+   "to": "table:kbo_official_pitcher_stats"
+  },
+  {
+   "from": "table:team_seasons",
+   "to": "table:players"
   },
   {
    "from": "table:team_stadium_by_season",
@@ -468,6 +536,36 @@
     },
     {
      "name": "구종 가치 결과 기록",
+     "script": "data_collection/record_job_run.py",
+     "status_key": null
+    },
+    {
+     "name": "팀 순위(네이버)",
+     "script": "data_collection/naver_team_ranks.py",
+     "status_key": "team_ranks"
+    },
+    {
+     "name": "팀 순위 결과 기록",
+     "script": "data_collection/record_job_run.py",
+     "status_key": null
+    },
+    {
+     "name": "공식 기록(네이버)",
+     "script": "data_collection/naver_official_stats.py",
+     "status_key": "official_stats"
+    },
+    {
+     "name": "공식 기록 결과 기록",
+     "script": "data_collection/record_job_run.py",
+     "status_key": null
+    },
+    {
+     "name": "새 선수·소속(네이버)",
+     "script": "data_collection/naver_players.py",
+     "status_key": "add_new_players"
+    },
+    {
+     "name": "새 선수 결과 기록",
      "script": "data_collection/record_job_run.py",
      "status_key": null
     }
@@ -1501,6 +1599,75 @@
    ]
   },
   {
+   "desc": "공식 타자·투수 시즌 기록을 네이버 시즌 기록 API(타율·홈런·ERA 같은 기본 칸), 네이버 박스스코어(타석·희생타·고의4구·병살·선발·완투·투구 수·폭투·보크·결승타), PBP(득점권·대타 타율, 피안타율·땅볼/뜬공)로 만들어 MySQL 에 그 시즌 행을 지우고 넣습니다. KBO 이용약관(2026-10-14 시행)으로 KBO 기록실 대신 씁니다.",
+   "jobs": [
+    "daily"
+   ],
+   "note": "박스스코어는 경기마다 한 번만 받아 캐시에 둡니다. 검증한 칸·시즌만 쓰고 나머지는 비웁니다.",
+   "path": "data_collection/naver_official_stats.py",
+   "reads": [
+    "games",
+    "play_by_play",
+    "team_seasons"
+   ],
+   "sources": [
+    "naver_record",
+    "naver_stats"
+   ],
+   "status_keys": {
+    "daily": "official_stats"
+   },
+   "stopped": false,
+   "writes": [
+    "kbo_official_batter_stats",
+    "kbo_official_pitcher_stats"
+   ]
+  },
+  {
+   "desc": "올 시즌 PBP 에 처음 나온 선수를 네이버 선수 상세(생년월일·투타·키·몸무게·등번호·포지션·사진)로 MySQL players 에 넣고, 올 시즌 선수 목록의 소속으로 team_id 를 맞춥니다. KBO 선수 검색·등록 명단 대신 씁니다.",
+   "jobs": [
+    "daily"
+   ],
+   "note": "투타가 네이버에 없으면 PBP 의 투구 손·타석 방향으로 채웁니다. 드래프트·계약금·출신 경로는 비웁니다.",
+   "path": "data_collection/naver_players.py",
+   "reads": [
+    "kbo_official_batter_stats",
+    "kbo_official_pitcher_stats",
+    "play_by_play",
+    "team_seasons"
+   ],
+   "sources": [
+    "naver_stats"
+   ],
+   "status_keys": {
+    "daily": "add_new_players"
+   },
+   "stopped": false,
+   "writes": [
+    "players"
+   ]
+  },
+  {
+   "desc": "네이버 스포츠 팀 순위에서 올 시즌 순위·경기 수·승패무·승률·게임차를 받아 MySQL team_season_rank 의 그 시즌 행을 지우고 넣습니다. KBO 이용약관(2026-10-14 시행)으로 KBO 기록실 대신 씁니다. 네이버는 2008년부터 줍니다.",
+   "jobs": [
+    "daily"
+   ],
+   "note": "team_seasons 는 그 시즌 팀 이름을 붙이는 데 쓰고, 새 시즌 줄이 없으면 그것만 넣습니다.",
+   "path": "data_collection/naver_team_ranks.py",
+   "reads": [],
+   "sources": [
+    "naver_stats"
+   ],
+   "status_keys": {
+    "daily": "team_ranks"
+   },
+   "stopped": false,
+   "writes": [
+    "team_season_rank",
+    "team_seasons"
+   ]
+  },
+  {
    "desc": "KBO 공식 타자·투수 통계를 CSV 로 받습니다. 표에는 바로 뒤 단계의 csv_to_d1.py 가 넣습니다.",
    "jobs": [],
    "note": "공식 기록을 CSV 로 받습니다. 표에는 csv_to_d1.py 가 넣습니다.",
@@ -1832,9 +1999,19 @@
    "url": "https://www.koreabaseball.com/Player/RegisterAll.aspx"
   },
   {
+   "id": "naver_record",
+   "name": "네이버 경기 기록(박스스코어)",
+   "url": "https://m.sports.naver.com/kbaseball/schedule/index"
+  },
+  {
    "id": "naver_relay",
    "name": "네이버 문자중계",
    "url": "https://sports.naver.com/kbaseball/"
+  },
+  {
+   "id": "naver_stats",
+   "name": "네이버 스포츠 기록(시즌·팀·선수)",
+   "url": "https://m.sports.naver.com/kbaseball/record/kbo"
   }
  ],
  "stopped_reason": "2026-10-14 시행 KBO 이용약관 제14조 차항(크롤링 등 자동화 수집 금지)에 따라 KBO 사이트(koreabaseball.com)를 읽는 수집을 멈췄습니다. 표에는 멈추기 전까지 받은 값이 남아 있습니다.",
@@ -1950,7 +2127,11 @@
   },
   {
    "category": "공식 통계",
-   "derived_from": [],
+   "derived_from": [
+    "games",
+    "play_by_play",
+    "team_seasons"
+   ],
    "desc": "KBO 공식 홈페이지 수집 타자 시즌 통계(선수x시즌, 카운팅·비율·세이버 지표 포함)",
    "kind": "collected",
    "manual_note": null,
@@ -1983,14 +2164,19 @@
     "/wrc/seasons",
     "/wrc/top-changes"
    ],
-   "stopped": true,
+   "stopped": false,
    "written_by": [
-    "data_collection/csv_to_d1.py"
+    "data_collection/csv_to_d1.py",
+    "data_collection/naver_official_stats.py"
    ]
   },
   {
    "category": "공식 통계",
-   "derived_from": [],
+   "derived_from": [
+    "games",
+    "play_by_play",
+    "team_seasons"
+   ],
    "desc": "KBO 공식 기록 시즌별 투수 성적 및 파생 지표(피출루율·BABIP·K%·BB% 등) 테이블",
    "kind": "collected",
    "manual_note": null,
@@ -2015,9 +2201,10 @@
     "/stats/seasons",
     "/teams/:id"
    ],
-   "stopped": true,
+   "stopped": false,
    "written_by": [
-    "data_collection/csv_to_d1.py"
+    "data_collection/csv_to_d1.py",
+    "data_collection/naver_official_stats.py"
    ]
   },
   {
@@ -2252,7 +2439,11 @@
   {
    "category": "선수·팀·구장 마스터",
    "derived_from": [
-    "kbo_roster"
+    "kbo_official_batter_stats",
+    "kbo_official_pitcher_stats",
+    "kbo_roster",
+    "play_by_play",
+    "team_seasons"
    ],
    "desc": "KBO 선수 기본 신상·신체·계약·드래프트 정보 마스터 테이블",
    "kind": "collected",
@@ -2277,10 +2468,11 @@
     "/stats/regulation",
     "/stats/seasons"
    ],
-   "stopped": true,
+   "stopped": false,
    "written_by": [
     "data_collection/add_new_players.py",
     "data_collection/heal_player_photos.py",
+    "data_collection/naver_players.py",
     "data_collection/player_info_scraper.py",
     "data_collection/sync_players_from_roster.py"
    ]
@@ -2418,8 +2610,9 @@
    "routes": [
     "/teams/:id"
    ],
-   "stopped": true,
+   "stopped": false,
    "written_by": [
+    "data_collection/naver_team_ranks.py",
     "data_collection/team_ranks.py"
    ]
   },
@@ -2437,8 +2630,9 @@
     "/teams",
     "/teams/:id"
    ],
-   "stopped": true,
+   "stopped": false,
    "written_by": [
+    "data_collection/naver_team_ranks.py",
     "data_collection/team_ranks.py"
    ]
   },
