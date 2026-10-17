@@ -221,6 +221,7 @@ def main(argv=None):
     ap.add_argument("--detail-cache")
     ap.add_argument("--naver-cache")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--dump", help="만든 행을 이 JSON 파일로도 씁니다(미리보기 대조용)")
     a = ap.parse_args(argv)
     from d1_load import query
     from kbo_season import record_season
@@ -264,6 +265,9 @@ def main(argv=None):
             print("  %d/%d" % (i, len(ids)), flush=True)
     print("행 %d, 네이버 상세 없음 %d, 사진 없음 %d"
           % (len(rows), miss, sum(1 for r in rows if not r["image_url"])))
+    if a.dump:
+        Path(a.dump).write_text(json.dumps({"rows": rows, "teams": teams}, ensure_ascii=False, default=str),
+                                encoding="utf-8")
     if a.dry_run:
         print("[미리보기] 넣지 않았습니다.")
         return 0
