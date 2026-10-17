@@ -240,3 +240,59 @@ def season(files, pbp_by_game_batter=None):
 
 def season_files(root, year):
     return sorted((Path(root) / str(year)).glob("*.json.gz"))
+
+
+FRACTION = {"⅓": 1, "⅔": 2}
+
+
+def inn_outs(text):
+    """박스 이닝 글자 → 아웃 수. '4 ⅓' → 13, '0 ⅔' → 2, '6' → 18."""
+    outs = 0
+    for part in str(text or "").split():
+        if part in FRACTION:
+            outs += FRACTION[part]
+        elif part.isdigit():
+            outs += int(part) * 3
+    return outs
+
+
+WLS = {"W": "w", "L": "l", "S": "sv", "H": "hld", "승": "w", "패": "l", "세": "sv", "홀": "hld"}
+
+
+def pitcher_lines(files, only=None):
+    """박스 투수 줄을 선수별로 더합니다(only 가 있으면 그 ID 들만).
+
+    네이버 시즌 기록 API 가 통째로 빼 둔 투수(2013~2021, 10명 27행)의 시즌 기록을
+    박스에서 다시 만들 때 씁니다. 경기마다 승·패·세이브·홀드는 pitchingResult 를,
+    없으면 투수 줄의 wls 를 봅니다. (합계 {ID: Counter}, 마지막 이름 {ID: 이름}).
+    """
+    out = collections.defaultdict(collections.Counter)
+    names = {}
+    for f in files:
+        box = load(f)
+        result = {int(x["pCode"]): x.get("wls") for x in box.get("pitchingResult") or []}
+        for side in ("away", "home"):
+            seq = (box.get("pitchersBoxscore") or {}).get(side) or []
+            for i, p in enumerate(seq):
+                pid = int(p["pcode"])
+                if only is not None and pid not in only:
+                    continue
+                k = out[pid]
+                k["games"] += 1
+                k["outs"] += inn_outs(p.get("inn"))
+                for key, src in (("h", "hit"), ("hr", "hr"), ("bb", "bb"), ("so", "kk"),
+                                 ("r", "r"), ("er", "er"), ("tbf", "pa"), ("np", "bf")):
+                    k[key] += p.get(src) or 0
+                k["hbp"] += (p.get("bbhp") or 0) - (p.get("bb") or 0)
+                w = WLS.get(result.get(pid) or p.get("wls") or "")
+                if w:
+                    k[w] += 1
+                if i == 0:
+                    k["gs"] += 1
+                    k["qs"] += inn_outs(p.get("inn")) >= 18 and (p.get("er") or 0) <= 3
+                k["gf"] += i == len(seq) - 1
+                if len(seq) == 1:
+                    k["cg"] += 1
+                    k["sho"] += (p.get("r") or 0) == 0
+                names[pid] = p.get("name")
+    return out, names

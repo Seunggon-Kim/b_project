@@ -46,3 +46,15 @@ def test_정규시즌만_고릅니다(tmp_path):
     p.write_text("game_id,season,game_type\n20080329HTSS0,2008,정규시즌\n"
                  "20081016SKOB0,2008,포스트시즌\n20070405HTSS0,2007,정규시즌\n", encoding="utf-8")
     assert nb.games_from_csv(p, 2008, 2026) == ["20080329HTSS0"]
+
+
+def test_박스_이닝_글자():
+    import naver_box_stats as nbx
+    assert nbx.inn_outs("4 ⅓") == 13 and nbx.inn_outs("0 ⅔") == 2 and nbx.inn_outs("6") == 18
+    assert nbx.inn_outs("") == 0
+
+
+def test_박스_약어():
+    import naver_box_stats as nbx
+    assert [nbx.kind(c) for c in ("유땅", "좌중2", "우홈", "고4", "투희번", "우희번", "중희실", "3실", "좌실", "스낫")] == \
+        ["go", "h2", "hr", "ibb", "sh", "fly", "sf", "err_if", "err_of", "so"]
