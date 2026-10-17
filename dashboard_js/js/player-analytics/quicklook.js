@@ -32,13 +32,6 @@
     ],
   };
 
-  // 퓨처스 한눈에 보기 줄입니다. 퓨처스 응답의 칸 이름 그대로입니다.
-  // wOBA·wRC+ 는 2군에 타석 단위 자료가 없어 만들 수 없습니다.
-  const FUT = {
-    batter: ['G', 'PA', 'AB', 'R', 'H', 'HR', 'RBI', 'AVG', 'OBP', 'SLG'],
-    pitcher: ['W', 'L', 'ERA', 'G', 'SV', 'HLD', 'IP', 'H', 'BB', 'SO'],
-  };
-
   function kindOf(player) {
     return player && player.position === '투수' ? 'pit' : 'bat';
   }
@@ -142,7 +135,6 @@
     const career = total(all, kind);
     if (kind === 'bat') addWoba(career, null, all, ext);
     cols.push({ head: '통산', team: '-', t: career });
-    // 리그(1군·퓨처스) 줄은 두지 않습니다. 위의 1군·퓨처스 전환이 이미 알려 줍니다(evan 결정).
     const rows = [['팀'].concat(cols.map(function (c) { return c.team; }))];
     ROWS[kind].forEach(function (d) {
       rows.push([d[0]].concat(cols.map(function (c) { return c.t ? cell(c.t[d[1]], d[2]) : '-'; })));
@@ -150,36 +142,11 @@
     return { head: ['시즌'].concat(cols.map(function (c) { return c.head; })), rows: rows, career: true };
   }
 
-  function text(x) {
-    return x === null || x === undefined || x === '' ? '-' : String(x);
-  }
-
-  /** 퓨처스 한눈에 보기 입니다. 응답은 최신 시즌이 앞이고, 통산 칸은 없습니다. */
-  function buildFutures(seasons, kind) {
-    const use = (seasons || []).slice(0, 3).reverse();
-    if (!use.length) return null;
-    const metrics = FUT[kind] || FUT.batter;
-    const rows = [['팀'].concat(use.map(function (s) { return text(s.team); }))];
-    metrics.forEach(function (m) {
-      rows.push([m].concat(use.map(function (s) { return text(s[m]); })));
-    });
-    return { head: ['시즌'].concat(use.map(function (s) { return String(s.season); })), rows: rows, career: false };
-  }
-
-  /** 연도별 기록이 없는 퓨처스 선수의 올 시즌 요약입니다. */
-  function summary(columns, cells) {
-    const rows = [];
-    (columns || []).forEach(function (c, i) { rows.push([c, text(cells && cells[i])]); });
-    return { head: ['시즌', '올해'], rows: rows, career: false };
-  }
-
   // 프로필 카드 아래 '시즌 타일' 지표입니다. [라벨, 합계 키, 표시 형식]
   const TILES = {
     pit: [['ERA', 'era', 'f2'], ['IP', 'outs', 'ip'], ['K%', 'kpct', 'pct'], ['K-BB%', 'kbbpct', 'pct']],
     bat: [['AVG', 'avg', 'avg3'], ['OPS', 'ops', 'avg3'], ['HR', 'hr', 'int'], ['RBI', 'rbi', 'int']],
   };
-  // 퓨처스 응답에는 OPS 가 없어 타자는 OBP·SLG 를 씁니다.
-  const FUT_TILES = { pitcher: ['ERA', 'IP', 'SO', 'G'], batter: ['AVG', 'OBP', 'SLG', 'HR'] };
 
   /**
    * 기록이 있는 가장 최근 1군 시즌의 핵심 숫자 넷입니다. 기록이 없으면 null.
@@ -195,16 +162,6 @@
     return {
       title: y + ' 시즌',
       items: TILES[kind].map(function (d) { return { label: d[0], value: cell(t[d[1]], d[2]) }; }),
-    };
-  }
-
-  /** 퓨처스 최신 시즌(응답 맨 앞)의 핵심 숫자 넷입니다. 기록이 없으면 null. */
-  function futuresTiles(seasons, kind) {
-    const s = (seasons || [])[0];
-    if (!s) return null;
-    return {
-      title: s.season + ' 퓨처스',
-      items: (FUT_TILES[kind] || FUT_TILES.batter).map(function (k) { return { label: k, value: text(s[k]) }; }),
     };
   }
 
@@ -258,8 +215,8 @@
     return /^\d{8}$/.test(s) ? s.slice(0, 4) + '.' + s.slice(4, 6) + '.' + s.slice(6, 8) : null;
   }
 
-  const api = { ROWS, FUT, kindOf, baseYear, pickSeasons, total, build, buildFutures, summary, tableHtml, ageParts, dobText,
-    TILES, FUT_TILES, seasonTiles, futuresTiles, tilesHtml };
+  const api = { ROWS, kindOf, baseYear, pickSeasons, total, build, tableHtml, ageParts, dobText,
+    TILES, seasonTiles, tilesHtml };
   PA.quicklook = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -193,10 +193,6 @@
    "to": "table:players"
   },
   {
-   "from": "table:kbo_roster_moves",
-   "to": "page:index.html"
-  },
-  {
    "from": "table:kbo_woba_weights_by_season",
    "to": "page:pages/player-analytics.html"
   },
@@ -347,10 +343,6 @@
   {
    "from": "table:stadium_dim",
    "to": "table:wrc_plus_comparison"
-  },
-  {
-   "from": "table:team_logos",
-   "to": "page:index.html"
   },
   {
    "from": "table:team_season_rank",
@@ -644,16 +636,9 @@
    "explorer": false,
    "path": "index.html",
    "routes": [
-    "/futures/leaders",
-    "/futures/search",
-    "/futures/standings",
     "/leaders",
-    "/logo/:code",
     "/players/search",
-    "/roster",
-    "/roster/moves",
     "/schedule",
-    "/schedule/futures",
     "/standings"
    ],
    "title": "KBO 야구 데이터 대시보드"
@@ -696,8 +681,6 @@
    "path": "pages/player-analytics.html",
    "routes": [
     "/db/table/:name",
-    "/futures/player/:id",
-    "/futures/search",
     "/games",
     "/players/:id",
     "/players/:id/arsenal",
@@ -904,9 +887,7 @@
   {
    "file": "src/routes/futuresrecord.js",
    "live": false,
-   "pages": [
-    "index.html"
-   ],
+   "pages": [],
    "path": "/futures/leaders",
    "reads_all_tables": false,
    "tables": []
@@ -914,9 +895,7 @@
   {
    "file": "src/routes/futuresplayer.js",
    "live": false,
-   "pages": [
-    "pages/player-analytics.html"
-   ],
+   "pages": [],
    "path": "/futures/player/:id",
    "reads_all_tables": false,
    "tables": []
@@ -924,10 +903,7 @@
   {
    "file": "src/routes/futuresplayer.js",
    "live": false,
-   "pages": [
-    "index.html",
-    "pages/player-analytics.html"
-   ],
+   "pages": [],
    "path": "/futures/search",
    "reads_all_tables": false,
    "tables": []
@@ -935,9 +911,7 @@
   {
    "file": "src/routes/futuresrecord.js",
    "live": false,
-   "pages": [
-    "index.html"
-   ],
+   "pages": [],
    "path": "/futures/standings",
    "reads_all_tables": false,
    "tables": []
@@ -986,9 +960,7 @@
   {
    "file": "src/routes/logo.js",
    "live": false,
-   "pages": [
-    "index.html"
-   ],
+   "pages": [],
    "path": "/logo/:code",
    "reads_all_tables": false,
    "tables": [
@@ -1089,9 +1061,7 @@
   {
    "file": "src/routes/roster.js",
    "live": false,
-   "pages": [
-    "index.html"
-   ],
+   "pages": [],
    "path": "/roster",
    "reads_all_tables": false,
    "tables": [
@@ -1102,9 +1072,7 @@
   {
    "file": "src/routes/roster.js",
    "live": false,
-   "pages": [
-    "index.html"
-   ],
+   "pages": [],
    "path": "/roster/moves",
    "reads_all_tables": false,
    "tables": [
@@ -1127,9 +1095,7 @@
   {
    "file": "src/routes/futures.js",
    "live": false,
-   "pages": [
-    "index.html"
-   ],
+   "pages": [],
    "path": "/schedule/futures",
    "reads_all_tables": false,
    "tables": []
@@ -2086,9 +2052,7 @@
    "kind": "collected",
    "manual_note": null,
    "name": "kbo_roster_moves",
-   "pages": [
-    "index.html"
-   ],
+   "pages": [],
    "routes": [
     "/roster",
     "/roster/moves"
@@ -2431,9 +2395,7 @@
    "kind": "manual",
    "manual_note": "팀 로고 이미지입니다. data_collection/team_logos.py 로 로컬 PNG 와 생성 배지를 한 번 넣었고, 정기 작업은 없습니다.",
    "name": "team_logos",
-   "pages": [
-    "index.html"
-   ],
+   "pages": [],
    "routes": [
     "/logo/:code"
    ],

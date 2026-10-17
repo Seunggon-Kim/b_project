@@ -72,13 +72,6 @@
 
         <!-- Player Info Section -->
         <section id="player-info-section" class="hidden">
-            <!-- 1군 / 퓨처스 전환입니다. 홈 화면 토글과 같은 모양입니다.
-                 1군 기록이 한 번도 없는 선수는 1군 쪽이 꺼집니다. -->
-            <div id="player-mode-tabs" class="player-mode-tabs hidden">
-                <button type="button" class="leaders-tab active" data-pmode="first">1군</button>
-                <button type="button" class="leaders-tab" data-pmode="futures">퓨처스</button>
-            </div>
-
             <!-- Player Header Banner -->
             <div id="player-header-bar" class="player-header-bar pa-hdr fade-in">
                 <!-- Filled dynamically -->
@@ -121,16 +114,6 @@
                         <button type="button" class="pa-mv-view-btn" data-view="pitcher" aria-pressed="false">투수 시점</button>
                     </div>
                     <div class="pa-card-body" id="pa-move-body"></div>
-                </div>
-
-                <!-- 퓨처스 최근 경기입니다. 전체 폭을 씁니다.
-                     시즌별 성적 칸에 같이 넣었더니 표가 길어지면서
-                     옆의 상세 프로필까지 늘어났습니다(align-items:
-                     stretch). 프로필 3줄에 1,600px 짜리 빈 칸이
-                     생겼습니다. -->
-                <div id="futures-recent-section" class="detailed-stats-container fade-in hidden">
-                    <h3 class="card-title mb-3">최근 경기</h3>
-                    <div id="futures-recent-content"></div>
                 </div>
 
                 <!-- Standard Stats Table (Pitching) -->
@@ -427,27 +410,6 @@
                     });
                 });
 
-                // 우리 표에서 못 찾으면 2군까지 찾아봅니다.
-                //
-                // `players` 는 1군 공식 기록에서 만든 표라 2군에만 있는
-                // 선수가 없습니다. 그 선수들은 이름을 쳐도 "검색 결과가
-                // 없습니다" 만 나왔습니다.
-                //
-                // **빈손일 때만 부릅니다.** 타이핑마다 KBO 를 두드리면
-                // 느려집니다. 대부분의 검색은 D1 안에서 끝납니다.
-                if (players.length === 0) {
-                    const fut = await API.searchFuturesPlayers(query);
-                    ((fut && fut.players) ? fut.players : []).forEach(p => {
-                        if (!seen.has(p.player_id)) {
-                            seen.add(p.player_id);
-                            // 등번호가 없으면 계약이 끝난 선수입니다.
-                            // is_active 0 이면 화면이 소속과 등번호를
-                            // 감춥니다. 'No.?' 로 읽히지 않습니다.
-                            players.push({ ...p, is_active: p.registered ? 1 : 0 });
-                        }
-                    });
-                }
-
                 if (players.length === 0) {
                     resultsDiv.innerHTML = `<p class="text-muted mt-2">검색 결과가 없습니다.</p>`;
                     return;
@@ -460,7 +422,7 @@
                             ${players.map(player => `
                                 <button 
                                     class="btn btn-secondary" 
-                                    onclick="showPlayer('${player.player_id}', ${player.futures ? "'futures'" : 'null'})"
+                                    onclick="showPlayer('${player.player_id}')"
                                     style="text-align: left; justify-content: flex-start;"
                                 >
                                     ${player.player_name}${(player.is_active && player.team_id) ? ' (' + player.team_id + ')' : ''}${player.is_active ? (' - No.' + ((player.back_number !== null && player.back_number !== undefined) ? player.back_number : '?') + (player.position ? ' ' + player.position : '')) : (player.position ? ' - ' + player.position : '')}
@@ -477,33 +439,7 @@
         }
 
         /**
-         * 1군 등록 배지입니다.
-         *
-         * `first_team` 은 KBO 등록 현황에서 매일 받은 것입니다. 그 표에
-         * 있으면 지금 1군에 있는 것이고, 없으면 **모르는 것**입니다.
-         *
-         * `is_active`(올 시즌 기록 있음)와 다릅니다. 어제 말소된 선수는
-         * is_active 는 1 이지만 1군에는 없습니다.
-         *
-         * **없을 때 "말소" 라고 쓰면 안 됩니다.** 2군에 있는 것과 우리가
-         * 아직 못 받은 것을 구분할 수 없습니다. 은퇴 선수도 마찬가지라
-         * 그때는 배지를 아예 안 보여 줍니다.
-         */
-        function firstTeamBadge(player) {
-            const ft = player.first_team;
-            if (!ft) return '';
-            // 등번호는 배지에 넣지 않습니다. 바로 옆 이름 줄에 이미
-            // 'No.29' 가 있어 두 번 나옵니다.
-            return `<span class="first-team-badge" data-tip="1군 등록&#10;${ft.as_of} 기준 KBO 1군 등록 현황입니다.">`
-                + '1군 등록</span>';
-        }
-
-        /**
          * 선수 머리 배너입니다.
-         *
-         * 1군과 퓨처스가 **같은 함수를 씁니다.** 퓨처스 응답은
-         * `futuresToPlayer` 가 1군과 같은 모양으로 바꿔 줍니다. 두
-         * 벌로 두면 한쪽만 고쳤을 때 조용히 어긋납니다.
          */
         function renderHeaderBar(player) {
             const PHOTO_PLACEHOLDER = '../assets/player_no_image.png';  // KBO 공식 no-Image
@@ -529,7 +465,7 @@
                         <div class="pa-hdr-top">
                             <div class="pa-hdr-name">${escapeHtml(player.player_name)}</div>
                             ${player.is_active ? '<span class="pa-hdr-num">No.' + backNum + '</span>' : ''}
-                            <span class="pa-hdr-team">${escapeHtml(team)}${firstTeamBadge(player)}</span>
+                            <span class="pa-hdr-team">${escapeHtml(team)}</span>
                         </div>
                         <div class="pa-hdr-data">
                             <span>나이: ${age ? age.years + '세' : '-'}</span>
@@ -542,107 +478,30 @@
                 `;
         }
 
-        // --- 1군 / 퓨처스 전환 -------------------------------------
-        //
-        // 홈 화면 토글과 같은 방식입니다. 다른 점은 1군 기록이 한 번도
-        // 없는 선수가 있다는 것입니다. 그때는 1군 단추를 끕니다.
-
-        let playerMode = 'first';
-        let modePlayerId = null;
-
         /**
          * 지금 보고 있는 선수를 주소창에 반영합니다.
          *
-         * 예전에는 검색으로 선수를 열어도 주소가 그대로였습니다. 그래서
-         * 링크를 복사해 보내면 엉뚱한 선수가 열리고, 새로고침하면 검색
-         * 화면으로 돌아갔습니다. 실제로 타무라를 보고 있는데 주소창에는
-         * 앞서 본 선수(52765)가 남아 있었습니다.
-         *
-         *     ?id=56218&mode=futures
+         * 링크를 복사해 보내거나 새로고침해도 같은 선수가 열립니다.
+         * 옛 퓨처스 링크의 `mode` 는 지웁니다(퓨처스는 KBO 이용약관
+         * 2026-10-14 시행으로 내렸습니다).
          *
          * 이미 같은 주소면 아무것도 하지 않습니다. 뒤로 가기로 돌아온
          * 직후에 다시 쌓으면 히스토리가 꼬입니다.
          */
-        function syncUrl(playerId, mode) {
+        function syncUrl(playerId) {
             if (!playerId) return;
             const url = new URL(window.location.href);
             url.searchParams.set('id', playerId);
-            if (mode === 'futures') {
-                url.searchParams.set('mode', 'futures');
-            } else {
-                url.searchParams.delete('mode');
-            }
+            url.searchParams.delete('mode');
             if (url.href !== window.location.href) {
-                history.pushState({ id: String(playerId), mode: mode || null },
-                                  '', url);
+                history.pushState({ id: String(playerId) }, '', url);
             }
-        }
-
-        /**
-         * 토글 상태를 맞춥니다.
-         *
-         * `firstTeamEmpty` 가 참이면 1군 단추를 끕니다. 그 선수는 1군
-         * 기록이 없어서 보여 줄 것이 없습니다.
-         */
-        function setPlayerMode(mode, playerId, hasFirstTeam) {
-            playerMode = mode;
-            modePlayerId = playerId;
-            syncUrl(playerId, mode);
-            const tabs = document.getElementById('player-mode-tabs');
-            if (!tabs) return;
-            tabs.classList.remove('hidden');
-            tabs.querySelectorAll('.leaders-tab').forEach(btn => {
-                const on = btn.dataset.pmode === mode;
-                btn.classList.toggle('active', on);
-                const dead = btn.dataset.pmode === 'first' && !hasFirstTeam;
-                btn.disabled = dead;
-                if (dead) btn.dataset.tip = '1군 기록 없음\n이 선수는 1군 기록이 없습니다.'; else delete btn.dataset.tip;
-            });
-        }
-
-        /**
-         * 퓨처스 응답을 1군 `players` 행과 같은 모양으로 바꿉니다.
-         *
-         * 머리 배너와 프로필 카드를 1군과 같은 코드로 그리려는 것입니다.
-         * 값의 단위와 형식은 Worker 가 이미 맞춰서 보냅니다
-         * (`throw`/`bat` 은 R/L/S, `birthday` 는 YYYYMMDD, 연봉은 원).
-         */
-        function futuresToPlayer(f) {
-            return {
-                player_id: f.player_id,
-                player_name: f.name || '-',
-                back_number: f.back_number,
-                birthday: f.birthday_ymd,
-                position: f.position_name,
-                throw: f.throw,
-                bat: f.bat,
-                height: f.height,
-                weight: f.weight,
-                salary: f.salary_won,
-                signing_bonus: null,
-                team_name: f.team,
-                team_id: f.team_code,
-                image_url: f.photo,
-                // **등번호가 있어야 지금 그 팀 선수입니다.**
-                //
-                // KBO 는 등번호 자리로 알려 줍니다. 비어 있으면 계약이
-                // 끝난 선수이고, '#' 이면 은퇴입니다. 옛 소속을 그대로
-                // 보여 주면 아직 그 팀에 있는 것처럼 읽힙니다.
-                //
-                // 화면은 is_active 가 0 이면 소속을 '-' 로 쓰고 등번호와
-                // 팀 색을 감춥니다. 1군 은퇴 선수와 같은 모양입니다.
-                is_active: f.registered ? 1 : 0,
-                // 1군 등록 배지는 퓨처스 화면에서 뜻이 없습니다.
-                first_team: null,
-            };
         }
 
         /**
          * play_by_play 로 만드는 카드들을 감춥니다.
          *
-         * 구종 분석·투구 위치·wOBA 는 타석 단위 자료가 있어야 하는데
-         * 퓨처스는 그것이 공개되지 않습니다. 빈 카드를 남기면 자료가
-         * 없는 것인지 고장인지 구분되지 않습니다.
+         * 선수를 찾지 못했을 때 앞 선수의 카드가 남지 않게 합니다.
          */
         function hidePbpSections() {
             arsToken++;
@@ -660,7 +519,7 @@
                 `<div class="pa-prof-row"><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join('') + '</dl>';
         }
 
-        /** 프로필 표 맨 앞 줄(헤더와 같은 값)입니다. 1군·퓨처스 공통. */
+        /** 프로필 표 맨 앞 줄(헤더와 같은 값)입니다. */
         function profileBasics(player) {
             const Q = window.PlayerAnalytics.quicklook;
             const age = Q.ageParts(player.birthday, new Date());
@@ -905,97 +764,9 @@
                 : '<p class="pa-bp-empty">리그 기록을 불러오지 못했습니다.</p>';
         }
 
-        /**
-         * 퓨처스(2군) 화면입니다.
-         *
-         * KBO 퓨처스 선수 페이지를 Worker 가 그때그때 읽습니다. 시즌별
-         * 기록은 없습니다. 올 시즌 요약과 최근 경기만 공개됩니다.
-         */
-        async function loadFuturesPlayer(playerId, opts) {
-            const section = document.getElementById('player-info-section');
-            const cardDiv = document.getElementById('player-card');
-            const statsDiv = document.getElementById('player-stats');
-            const headerBar = document.getElementById('player-header-bar');
-
-            section.classList.remove('hidden');
-            headerBar.innerHTML = '';
-            cardDiv.innerHTML = createLoadingSpinner();
-            statsDiv.innerHTML = createLoadingSpinner();
-            hidePbpSections();
-            hideMovementCard();
-            hideBatPctCard();
-
-            const f = await API.getFuturesPlayer(playerId);
-            if (!f) {
-                cardDiv.innerHTML = createErrorMessage('퓨처스 기록을 찾지 못했습니다.');
-                statsDiv.innerHTML = '';
-                return;
-            }
-
-            const player = futuresToPlayer(f);
-            currentPlayer = player;
-            setPlayerMode('futures', playerId,
-                          !(opts && opts.firstTeamEmpty));
-
-            headerBar.innerHTML = renderHeaderBar(player);
-
-            cardDiv.innerHTML = profileHtml([
-                ...profileBasics(player),
-                ['연봉', formatMoney(player.salary, 'KRW')],
-                ['지명순위', f.draft || '-'],
-                ['출신교', f.career || '-'],
-            ]);
-
-            // 연도별 기록이 있으면 최근 3시즌, 없으면 올 시즌 요약입니다.
-            const Q = window.PlayerAnalytics.quicklook;
-            const seasons = f.seasons || [];
-            const season = f.season || { columns: [], cells: [] };
-            const model = seasons.length ? Q.buildFutures(seasons, f.kind)
-                : (season.cells.length ? Q.summary(season.columns, season.cells) : null);
-            let html = '<div class="futures-stat-head">'
-                + '<span class="futures-badge">퓨처스(2군)</span>'
-                + '<span class="futures-note">'
-                + (seasons.length ? '2010년부터의 기록입니다.' : '올 시즌 기록입니다.')
-                + '</span></div>';
-            html += model ? Q.tableHtml(model) : '<p class="text-muted mt-2">퓨처스 기록이 없습니다.</p>';
-            statsDiv.innerHTML = html;
-            // 프로필 아래 최신 퓨처스 시즌 타일입니다. 연도별 기록이 없으면 붙이지 않습니다.
-            cardDiv.insertAdjacentHTML('beforeend', Q.tilesHtml(Q.futuresTiles(seasons, f.kind)));
-
-            // 최근 경기는 전체 폭 카드로 뺍니다. 시즌별 성적 칸에 같이
-            // 넣으면 표가 길어지면서 옆의 상세 프로필까지 늘어납니다.
-            const recent = f.recent || { columns: [], rows: [] };
-            const recentSection = document.getElementById('futures-recent-section');
-            const recentContent = document.getElementById('futures-recent-content');
-            if (recentSection && recentContent) {
-                if (recent.rows.length) {
-                    recentContent.innerHTML = createTable(recent.columns, recent.rows);
-                    recentSection.classList.remove('hidden');
-                } else {
-                    recentContent.innerHTML = '';
-                    recentSection.classList.add('hidden');
-                }
-            }
-
-            // 등록되지 않은 선수에게 팀 색을 입히면 아직 그 팀에
-            // 있는 것처럼 보입니다. 소속 이름은 이미 '-' 인데
-            // 배경만 삼성 파랑이면 한 화면에서 두 값이 어긋납니다.
-            applyTeamTheme(player.is_active
-                ? (player.team_name || player.team_id || null) : null);
-        }
-
-        /**
-         * 선수 화면 진입점입니다. 모드에 따라 갈립니다.
-         *
-         * 주소에 `?mode=futures` 가 있으면 바로 퓨처스로 엽니다. 홈
-         * 화면 퓨처스 개인 순위에서 넘어올 때 그렇게 옵니다.
-         */
-        async function showPlayer(playerId, mode) {
-            if (mode === 'futures') {
-                await loadFuturesPlayer(playerId);
-            } else {
-                await loadPlayerInfo(playerId);
-            }
+        /** 선수 화면 진입점입니다. */
+        async function showPlayer(playerId) {
+            await loadPlayerInfo(playerId);
         }
 
         // 백분위 색: 시즌별 리그 투수 기록은 페이지 안에서 한 번만 받습니다.
@@ -1086,23 +857,23 @@
             headerBar.innerHTML = '';
             cardDiv.innerHTML = createLoadingSpinner();
             statsDiv.innerHTML = createLoadingSpinner();
-            // 퓨처스에서 넘어왔을 수 있습니다. 1군에는 없는 카드입니다.
-            const futuresRecent = document.getElementById('futures-recent-section');
-            if (futuresRecent) futuresRecent.classList.add('hidden');
 
             try {
                 const player = await API.getPlayerInfo(playerId);
 
-                // 1군 기록이 한 번도 없는 선수입니다. `players` 표는 1군
-                // 공식 기록에서 만들기 때문에 2군에만 있는 선수는 아예
-                // 들어 있지 않습니다. 예전에는 화면이 통째로 비었습니다.
+                // 1군 기록이 한 번도 없는 선수입니다. 2군 화면은 KBO
+                // 이용약관(2026-10-14 시행)으로 내렸습니다.
                 if (!player) {
-                    await loadFuturesPlayer(playerId, { firstTeamEmpty: true });
+                    currentPlayer = null;
+                    hidePbpSections();
+                    cardDiv.innerHTML = createErrorMessage('선수를 찾을 수 없습니다.');
+                    statsDiv.innerHTML = '';
+                    applyTeamTheme(null);
                     return;
                 }
 
                 currentPlayer = player;
-                setPlayerMode('first', playerId, true);
+                syncUrl(playerId);
 
                 // 외국인 선수는 연봉/계약금이 달러, 국내 선수는 원 단위로 저장되어 통화 표기를 구분한다.
                 const isForeign = isForeignPlayer(player);
@@ -1132,7 +903,7 @@
                     const qlId = playerId;
                     const qlSeasons = Q.build(player, qlYear).head.slice(1, -1).map(Number);
                     Promise.all([batRefs()].concat(qlSeasons.map(y => leagueBatCalc(y)))).then(([ix, ...calcs]) => {
-                        if (!currentPlayer || String(currentPlayer.player_id) !== String(qlId) || playerMode !== 'first') return;
+                        if (!currentPlayer || String(currentPlayer.player_id) !== String(qlId)) return;
                         const wrc = {};
                         qlSeasons.forEach((y, i) => {
                             const c = calcs[i] && calcs[i][String(qlId)];
@@ -1694,17 +1465,7 @@
             const urlParams = new URLSearchParams(window.location.search);
             const playerId = urlParams.get('id');
             if (playerId) {
-                showPlayer(playerId, urlParams.get('mode'));
-            }
-
-            const tabs = document.getElementById('player-mode-tabs');
-            if (tabs) {
-                tabs.addEventListener('click', (e) => {
-                    const btn = e.target.closest('.leaders-tab');
-                    if (!btn || btn.disabled || btn.dataset.pmode === playerMode) return;
-                    if (!modePlayerId) return;
-                    showPlayer(modePlayerId, btn.dataset.pmode);
-                });
+                showPlayer(playerId);
             }
         }
 
@@ -1745,7 +1506,7 @@
         window.addEventListener('popstate', () => {
             const p = new URLSearchParams(window.location.search);
             const id = p.get('id');
-            if (id) showPlayer(id, p.get('mode'));
+            if (id) showPlayer(id);
         });
 
         document.addEventListener('DOMContentLoaded', init);

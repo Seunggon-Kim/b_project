@@ -53,9 +53,7 @@ class API {
      * Get player info
      *
      * **404 면 null 입니다.** 오류가 아니라 "1군 기록이 한 번도 없는
-     * 선수" 라는 뜻입니다. `players` 표는 1군 공식 기록에서 만들기
-     * 때문에 2군에만 있는 선수는 아예 들어 있지 않습니다. 부르는 쪽이
-     * 그때 퓨처스 기록으로 넘어갑니다.
+     * 선수" 라는 뜻입니다. 부르는 쪽이 "찾을 수 없습니다" 로 보여 줍니다.
      */
     static async getPlayerInfo(playerId) {
         try {
@@ -66,43 +64,6 @@ class API {
         } catch (error) {
             console.error('Error fetching player info:', error);
             throw error;
-        }
-    }
-
-    /**
-     * Search players by name, including 2군 only players
-     *
-     * `players` 표는 1군 공식 기록에서 만들어서 2군에만 있는 선수가
-     * 없습니다. 이름을 쳐도 "검색 결과가 없습니다" 만 나왔습니다.
-     * KBO 선수 검색을 Worker 가 대신 읽습니다.
-     */
-    static async searchFuturesPlayers(query) {
-        try {
-            const response = await fetch(
-                `${API_BASE_URL}/futures/search?q=${encodeURIComponent(query)}`);
-            if (!response.ok) return { players: [] };
-            return await response.json();
-        } catch (error) {
-            console.error('Error searching futures players:', error);
-            return { players: [] };
-        }
-    }
-
-    /**
-     * Get futures (2군) player profile and current-season record
-     *
-     * KBO 퓨처스 선수 페이지를 Worker 가 그때그때 읽어 돌려줍니다.
-     * 시즌별 기록은 없습니다. 올 시즌 요약과 최근 경기만 공개됩니다.
-     */
-    static async getFuturesPlayer(playerId) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/futures/player/${playerId}`);
-            if (!response.ok) return null;
-            const data = await response.json();
-            return data && data.found ? data : null;
-        } catch (error) {
-            console.error('Error fetching futures player:', error);
-            return null;
         }
     }
 
@@ -307,7 +268,7 @@ class API {
     }
 
     /**
-     * Get KBO team standings (koreabaseball.com 공식 TeamRank 스크래핑)
+     * Get KBO team standings (Naver 스포츠 팀 순위)
      */
     static async getStandings() {
         try {
@@ -332,39 +293,6 @@ class API {
         } catch (error) {
             console.error('Error fetching leaders:', error);
             throw error;
-        }
-    }
-
-    /**
-     * 최근 1군 등록·말소입니다.
-     *
-     * KBO 는 오늘 것만 보여 줍니다. daily 가 매일 받아 쌓은 것을
-     * 읽으므로, 쌓기 시작한 날(2026-08-28)부터만 있습니다.
-     */
-    static async getRosterMoves(days = 7) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/roster/moves?days=${days}`);
-            if (!response.ok) throw new Error('Failed to fetch roster moves');
-            return await response.json();
-        } catch (error) {
-            console.error('Error fetching roster moves:', error);
-            // 홈 화면의 다른 칸까지 죽이지 않습니다.
-            return { dates: [], count: 0 };
-        }
-    }
-
-    /** 지금 1군 명단입니다. 팀을 주면 그 팀만. */
-    static async getRoster(team) {
-        try {
-            const url = team
-                ? `${API_BASE_URL}/roster?team=${encodeURIComponent(team)}`
-                : `${API_BASE_URL}/roster`;
-            const response = await fetch(url);
-            if (!response.ok) throw new Error('Failed to fetch roster');
-            return await response.json();
-        } catch (error) {
-            console.error('Error fetching roster:', error);
-            return { players: [], count: 0 };
         }
     }
 

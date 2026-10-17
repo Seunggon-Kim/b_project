@@ -93,7 +93,6 @@
 .pa-ql .pa-ql-label { text-align: left; font-weight: 600; color: var(--text-secondary); }
 .pa-ql .pa-ql-career { font-weight: 700; background: rgba(59, 130, 246, 0.08); }
 .pa-ql tbody tr:last-child td { border-bottom: 0; }
-.pa-card-body .futures-stat-head { margin-bottom: 0.4rem; }
 
 /* ---------- 프로필 ---------- */
 .pa-prof { margin: 0; }

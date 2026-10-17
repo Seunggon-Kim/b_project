@@ -65,10 +65,6 @@
             <div class="schedule-bar">
                 <div class="schedule-bar-left">
                     <h2 class="schedule-title">KBO 경기</h2>
-                    <div class="leaders-tabs" id="sched-toggle">
-                        <button type="button" class="leaders-tab active" data-mode="main">1군</button>
-                        <button type="button" class="leaders-tab" data-mode="futures">퓨처스</button>
-                    </div>
                 </div>
                 <div class="date-nav">
                     <button id="date-prev" class="date-nav-btn" aria-label="이전 날짜"><span class="material-symbols-outlined">chevron_left</span></button>
@@ -89,7 +85,7 @@
                     <h2 class="schedule-title">팀 순위</h2>
                 </div>
                 <div id="standings-wrap" class="standings-wrap"></div>
-                <p class="schedule-note">데이터 출처: KBO 공식 (koreabaseball.com) · 5분 캐시</p>
+                <p class="schedule-note">데이터 출처: Naver 스포츠 · 5분 캐시</p>
             </div>
             <!-- 우: 개인 순위 -->
             <div class="rank-col-players">
@@ -105,33 +101,12 @@
             </div>
         </section>
 
-        <!-- 1군 등말소 + 팀별 명단 (2단) -->
-        <section class="rank-row roster-row mb-3">
-            <!-- 좌: 최근 등록·말소 -->
-            <div class="rank-col-team">
-                <div class="schedule-bar">
-                    <h2 class="schedule-title">1군 등록·말소</h2>
-                </div>
-                <div id="moves-wrap" class="standings-wrap"></div>
-                <p class="schedule-note" id="moves-note">데이터 출처: KBO 등록 현황</p>
-            </div>
-            <!-- 우: 팀별 1군 명단 -->
-            <div class="rank-col-players">
-                <div class="schedule-bar">
-                    <h2 class="schedule-title">1군 명단</h2>
-                    <select id="roster-team" class="roster-team-select" aria-label="구단 선택"></select>
-                </div>
-                <div id="roster-wrap" class="leaders-wrap"></div>
-                <p class="schedule-note" id="roster-note">데이터 출처: KBO 등록 현황</p>
-            </div>
-        </section>
-
     </main>
 
     <!-- Footer -->
     <footer
         style="text-align: center; padding: 2rem; color: var(--text-muted); border-top: 1px solid var(--border-color); margin-top: 0;">
-        <p>KBO 야구 데이터 대시보드 | 데이터 출처: Naver 스포츠, KBO 공식 홈페이지</p>
+        <p>KBO 야구 데이터 대시보드 | 데이터 출처: Naver 스포츠, KBO 공식 기록</p>
     </footer>
 
     <!-- Scripts -->
@@ -174,9 +149,7 @@
         /**
          * 팀 이름을 팀 기록실 링크로 감쌉니다.
          *
-         * 기록실에 없는 팀은 글자 그대로 둡니다. 퓨처스에는 고양·울산·
-         * 상무·경찰처럼 1군 프랜차이즈가 아닌 팀이 있습니다. 그런 팀은
-         * 볼 기록실이 없습니다.
+         * 기록실에 없는 팀은 글자 그대로 둡니다.
          *
          * 판정은 components.js 의 `teamRecordHref` 가 합니다. 팀 이름
          * -> 프랜차이즈 표가 거기 한 곳에만 있어야 화면마다 어긋나지
@@ -272,83 +245,8 @@
             </div>`;
         }
 
-        // ===== 퓨처스리그 렌더링 =====
-        // 본 리그와 달리 실시간(라이브)·선발투수·방송 정보가 없고, 로고는 로고 DB(/logo/{code})에서 서빙.
-        function futuresTeamBlock(t, side, winner) {
-            const win = winner && winner.toUpperCase() === side.toUpperCase();
-            const code = esc(t.code || '');
-            const emblem = `<img class="team-emblem" src="${API_BASE_URL}/logo/${code}" data-code="${code}" alt="" loading="lazy" onerror="emblemError(this)">`;
-            const div = t.division ? `<span class="team-div">${esc(t.division)}</span>` : '';
-            return `<div class="team ${side}${win ? ' win' : ''}">
-                ${emblem}
-                <span class="team-name">${teamLink(t.name || t.code)}</span>
-                ${div}
-            </div>`;
-        }
-
-        // 퓨처스 투수 행: 라이브는 '투수/타자'(KBO 퓨처스 피드는 양 팀 투수가 아니라
-        // 현재 투수 + 현재 타자만 제공), 종료는 승/패/세(KBO 확정 후 채워짐).
-        function futuresPitcherRow(g) {
-            if (g.cancel) return '';
-            if (g.final) {
-                const d = g.decisions || {};
-                const items = [];
-                // 1군 카드와 같이 이름을 누르면 선수 분석으로 갑니다.
-                // ID 를 못 찾은 선수는 링크 없이 이름만 나옵니다
-                // (동명이인을 팀으로도 못 가린 경우).
-                if (d.win)  items.push(`<span class="pdec"><span class="pdec-tag win">승</span>${playerLink(d.win, d.winId)}</span>`);
-                if (d.lose) items.push(`<span class="pdec"><span class="pdec-tag lose">패</span>${playerLink(d.lose, d.loseId)}</span>`);
-                if (d.save) items.push(`<span class="pdec"><span class="pdec-tag save">세</span>${playerLink(d.save, d.saveId)}</span>`);
-                if (!items.length) return '';
-                return `<div class="game-pitchers final">${items.join('')}</div>`;
-            }
-            if (g.live && (g.currentPitcher || g.currentBatter)) {
-                return `<div class="game-pitchers live">
-                    <span class="pp away">투수 ${g.currentPitcher ? playerLink(g.currentPitcher, g.currentPitcherId) : '미정'}</span>
-                    <span class="pp-label">vs</span>
-                    <span class="pp home">타자 ${g.currentBatter ? playerLink(g.currentBatter, g.currentBatterId) : '미정'}</span>
-                </div>`;
-            }
-            return '';
-        }
-
-        function renderFuturesGame(g) {
-            const cls = g.cancel ? 'cancel' : (g.final ? 'final' : (g.live ? 'live' : 'before'));
-            let center;
-            if (g.cancel) {
-                center = `<div class="game-vs">취소</div>`;
-            } else if (g.showScore) {
-                const aw = g.winner === 'AWAY', hw = g.winner === 'HOME';
-                center = `<div class="game-score">
-                    <span class="score${aw ? ' win' : ''}">${g.away.score ?? '-'}</span>
-                    <span class="score-sep">:</span>
-                    <span class="score${hw ? ' win' : ''}">${g.home.score ?? '-'}</span>
-                </div>`;
-            } else {
-                center = `<div class="game-vs">VS</div>`;
-            }
-            const statusText = g.statusInfo || (g.cancel ? '취소' : (g.final ? '종료' : (g.live ? '경기중' : '경기예정')));
-            const timeText = g.live ? (g.currentInning || '경기중') : (g.time || '');
-            const exhibition = g.seriesId === 10;
-            return `<div class="game-card ${cls}">
-                <div class="game-card-top">
-                    <span class="stadium">${esc(g.stadium)}</span>
-                    <span class="game-time">${esc(timeText)}</span>
-                </div>
-                <div class="game-card-body">
-                    ${futuresTeamBlock(g.away, 'away', g.winner)}
-                    <div class="game-center">
-                        ${center}
-                        <span class="status-badge ${cls}">${esc(statusText)}</span>
-                    </div>
-                    ${futuresTeamBlock(g.home, 'home', g.winner)}
-                </div>
-                ${futuresPitcherRow(g)}
-                ${exhibition ? `<div class="game-card-foot"><span class="series-badge exhibition">교류전</span></div>` : ''}
-            </div>`;
-        }
-
-        // 일정 모드(1군/퓨처스)별 엔드포인트·출처문구·빈메시지(그날 empty, 앞으로 7일 idle)·렌더러
+        // 일정 엔드포인트·출처문구·빈메시지(그날 empty, 앞으로 7일 idle)·렌더러입니다.
+        // 퓨처스는 KBO 이용약관(2026-10-14 시행)으로 내렸습니다. 1군만 남았습니다.
         const SCHED_META = {
             main: {
                 ep: 'schedule',
@@ -356,13 +254,6 @@
                 empty: '이 날짜에 KBO 경기가 없습니다.',
                 idle: '앞으로 7일 안에 KBO 경기가 없습니다(비시즌일 수 있습니다).',
                 render: renderGame,
-            },
-            futures: {
-                ep: 'schedule/futures',
-                note: '데이터 출처: KBO 공식 (퓨처스리그 실시간) · 30초 캐시',
-                empty: '이 날짜에 퓨처스 경기가 없습니다.',
-                idle: '앞으로 7일 안에 퓨처스 경기가 없습니다(비시즌일 수 있습니다).',
-                render: renderFuturesGame,
             },
         };
         let scheduleMode = 'main';
@@ -407,22 +298,11 @@
         document.getElementById('date-next').addEventListener('click', () => { curDate.setDate(curDate.getDate() + 1); loadSchedule(0); });
         document.getElementById('date-today').addEventListener('click', () => { curDate = kstNow(); loadSchedule(7); });
 
-        // 1군/퓨처스 토글: 모드 전환 시 출처문구 갱신 + 오늘 기준 재로드(경기일까지 자동 전진)
         document.getElementById('schedule-note').textContent = SCHED_META[scheduleMode].note;
-        document.getElementById('sched-toggle').addEventListener('click', (e) => {
-            const btn = e.target.closest('.leaders-tab');
-            if (!btn || btn.dataset.mode === scheduleMode) return;
-            scheduleMode = btn.dataset.mode;
-            document.querySelectorAll('#sched-toggle .leaders-tab').forEach(b => b.classList.toggle('active', b === btn));
-            document.getElementById('schedule-note').textContent = SCHED_META[scheduleMode].note;
-            curDate = kstNow();
-            loadSchedule(7);
-            applyMode();
-        });
 
         loadSchedule(7);  // 첫 로드: 오늘 경기 없으면 다음 경기일로 자동 이동 (최대 7일)
 
-        // ===== 팀 순위 (KBO 공식) =====
+        // ===== 팀 순위 (Naver 스포츠) =====
         function streakClass(s) { return /승/.test(s) ? 'streak-w' : (/패/.test(s) ? 'streak-l' : ''); }
         function renderStandings(teams) {
             const head = `<thead><tr>
@@ -474,8 +354,7 @@
                 wrap.innerHTML = '<div class="schedule-msg error">순위를 불러오지 못했습니다.</div>';
             }
         }
-        // 첫 로드는 아래 applyMode() 가 맡습니다. 여기서 또 부르면
-        // 1군 순위를 두 번 읽습니다.
+        // 첫 로드는 스크립트 맨 끝에서 합니다.
 
         // ===== 개인 순위 (KBO 공식 기록) =====
         let LEADERS_DATA = null;
@@ -542,28 +421,22 @@
             const btn = ev.target.closest('.leaders-tab');
             if (!btn) return;
             leadersTab = btn.dataset.tab;
-            // **이 칸의 탭만 봅니다.** `.leaders-tab` 을 통째로 고르면
-            // 위쪽 1군/퓨처스 토글도 같은 클래스라 함께 꺼집니다.
+            // 이 칸의 탭만 봅니다.
             document.querySelectorAll('#leaders-tabs .leaders-tab')
                 .forEach(b => b.classList.toggle('active', b === btn));
-            // 퓨처스 모드면 퓨처스 기록으로 그립니다. 두 모드가 탭을
-            // 함께 씁니다.
-            if (scheduleMode === 'futures') renderFuturesLeaders();
-            else renderLeaders();
+            renderLeaders();
         });
 
         // ===== 선수 빠른 검색 =====
         //
-        // 우리 `players` 를 먼저 보고, 빈손이면 2군까지 찾습니다. 선수
-        // 분석 화면과 같은 순서입니다. 타이핑마다 KBO 를 두드리지
-        // 않으려고 못 찾을 때만 한 번 더 봅니다.
+        // 우리 `players` 에서만 찾습니다. 2군 검색은 KBO 이용약관
+        // (2026-10-14 시행)으로 내렸습니다.
         let homeSearchTimer = null;
         const homeSearchBox = document.getElementById('home-player-search');
         const homeSearchOut = document.getElementById('home-search-results');
 
         function homePlayerHref(p) {
-            const base = 'pages/player-analytics?id=' + encodeURIComponent(p.player_id);
-            return p.futures ? base + '&mode=futures' : base;
+            return 'pages/player-analytics?id=' + encodeURIComponent(p.player_id);
         }
 
         function renderHomeSearch(players, query) {
@@ -592,12 +465,7 @@
         async function homeSearch(query) {
             try {
                 const first = await API.searchPlayers(query).catch(() => ({ players: [] }));
-                let players = (first && first.players) ? first.players.slice() : [];
-                if (!players.length) {
-                    const fut = await API.searchFuturesPlayers(query);
-                    players = ((fut && fut.players) ? fut.players : [])
-                        .map(p => ({ ...p, is_active: p.registered ? 1 : 0 }));
-                }
+                const players = (first && first.players) ? first.players.slice() : [];
                 renderHomeSearch(players, query);
             } catch (e) {
                 homeSearchOut.innerHTML =
@@ -631,357 +499,8 @@
             });
         }
 
-        // 등록·말소와 팀별 명단이 함께 씁니다. 등록·말소가 먼저 그려지므로
-        // 그보다 위에 둡니다.
-        const ROSTER_TEAMS = ['KIA', 'KT', 'LG', 'NC', 'SSG', '두산', '롯데', '삼성', '키움', '한화'];
-
-        // ===== 1군 등록·말소 =====
-        //
-        // KBO 는 **오늘 것만** 보여 줍니다. 어제 누가 등록됐는지 묻는
-        // 화면이 없어서 daily 가 매일 받아 쌓습니다. 그래서 쌓기
-        // 시작한 날부터만 나옵니다. 처음 며칠은 하루치뿐입니다.
-        // 팀별로 묶어 보여 줍니다. 등록·말소로 나누면 "우리 팀에 무슨
-        // 일이 있었나" 를 보려고 두 목록을 번갈아 훑어야 합니다.
-        // 팀이 기준이면 한 줄에서 들어온 사람과 나간 사람이 같이 보입니다.
-        // 가장 최근 하루치만 보여 줍니다. 여러 날을 쌓아 두면 칸이
-        // 길어져 옆의 1군 명단보다 훨씬 내려갑니다. 빈 날은 건너뜁니다.
-        function latestMoveDay(dates) {
-            return dates
-                .filter((d) => (d.added || []).length + (d.removed || []).length)
-                .sort((a, b) => String(b.date).localeCompare(String(a.date)))
-                .slice(0, 1);
-        }
-
-        function renderMoves(dates) {
-            if (!dates.length) {
-                return '<div class="schedule-msg">아직 쌓인 등록·말소가 없습니다.</div>';
-            }
-            return dates.map((d) => {
-                const byTeam = new Map();
-                const put = (list, key) => (list || []).forEach((p) => {
-                    if (!byTeam.has(p.team)) byTeam.set(p.team, { added: [], removed: [] });
-                    byTeam.get(p.team)[key].push(p);
-                });
-                put(d.added, 'added');
-                put(d.removed, 'removed');
-                if (!byTeam.size) return '';
-
-                // 열 팀을 전부 둡니다. 변동이 있는 팀만 두면 칸이 그 몇 줄에
-                // 맞춰 벌어지고, 어느 팀이 조용했는지도 보이지 않습니다.
-                // 변동이 있는 팀을 위에, 없는 팀은 '-' 하나만 적어 아래에 둡니다.
-                const byKo = (a, b) => a.localeCompare(b, 'ko');
-                const quiet = ROSTER_TEAMS.filter((t) => !byTeam.has(t)).sort(byKo);
-
-                const rows = [...byTeam.entries()].sort((a, b) =>
-                    byKo(a[0], b[0])).map(([team, v]) => {
-                    const side = (list, cls, mark) => (list.length ? list.map((p) => `
-                        <span class="mv-item">
-                            <span class="mv-mark ${cls}">${mark}</span>
-                            ${playerLink(p.name, p.playerId, 'mv-name')}
-                            <span class="mv-pos">${esc(p.position || '')}</span>
-                        </span>`).join('') : '<span class="mv-none">-</span>');
-                    return `<div class="mv-row">
-                        <div class="mv-team">${esc(team)}</div>
-                        <div class="mv-side">${side(v.added, 'mv-in', '등록')}</div>
-                        <div class="mv-side">${side(v.removed, 'mv-out', '말소')}</div>
-                    </div>`;
-                }).join('') + quiet.map((team) => `<div class="mv-row mv-quiet">
-                        <div class="mv-team">${esc(team)}</div>
-                        <div class="mv-side"><span class="mv-none">-</span></div>
-                    </div>`).join('');
-
-                return `<div class="mv-day">
-                    <div class="mv-date">${esc(d.date)}
-                        <span class="mv-sum">등록 ${(d.added || []).length} · 말소 ${(d.removed || []).length}</span>
-                    </div>
-                    <div class="mv-rows">${rows}</div>
-                </div>`;
-            }).join('');
-        }
-
-        async function loadMoves() {
-            const wrap = document.getElementById('moves-wrap');
-            wrap.innerHTML = '<div class="schedule-msg">불러오는 중…</div>';
-            const data = await API.getRosterMoves(7);
-            const latest = latestMoveDay(data.dates || []);
-            wrap.innerHTML = renderMoves(latest);
-            const note = document.getElementById('moves-note');
-            if (note) {
-                note.textContent = latest.length
-                    ? '가장 최근 변동일 기준 · 데이터 출처: KBO 등록 현황'
-                    : 'KBO 는 당일 현황만 공개해 매일 모읍니다. 모으기 시작한 날부터 보입니다.';
-            }
-        }
-        loadMoves();
-
-        // ===== 팀별 1군 명단 =====
-        // 야구 화면다운 순서입니다. 사전순으로 두면 내야수가 맨 앞에 옵니다.
-        const ROLE_ORDER = ['투수', '포수', '내야수', '외야수'];
-
-        function renderRoster(players) {
-            if (!players.length) {
-                return '<div class="schedule-msg">명단이 없습니다.</div>';
-            }
-            const byRole = new Map();
-            for (const p of players) {
-                if (!byRole.has(p.role)) byRole.set(p.role, []);
-                byRole.get(p.role).push(p);
-            }
-            return ROLE_ORDER.filter((r) => byRole.has(r)).map((role) => {
-                const list = byRole.get(role);
-                const items = list.map((p) => `
-                    <div class="rs-item">
-                        <span class="rs-num">${esc(p.back_number)}</span>
-                        ${playerLink(p.name, p.player_id, 'rs-name')}
-                    </div>`).join('');
-                return `<div class="rs-group">
-                    <div class="rs-head">${esc(role)} <span class="rs-cnt">${list.length}</span></div>
-                    <div class="rs-list">${items}</div>
-                </div>`;
-            }).join('');
-        }
-
-        async function loadRoster(team) {
-            const wrap = document.getElementById('roster-wrap');
-            wrap.innerHTML = '<div class="schedule-msg">불러오는 중…</div>';
-            const data = await API.getRoster(team);
-            wrap.innerHTML = renderRoster(data.players || []);
-            const note = document.getElementById('roster-note');
-            if (note) {
-                note.textContent = data.asOf
-                    ? `${data.asOf} 기준 ${data.count}명 · 데이터 출처: KBO 등록 현황`
-                    : '데이터 출처: KBO 등록 현황';
-            }
-        }
-
-        const rosterSel = document.getElementById('roster-team');
-        rosterSel.innerHTML = ROSTER_TEAMS
-            .map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
-        rosterSel.addEventListener('change', () => loadRoster(rosterSel.value));
-
-        // ===== 퓨처스 =====
-        //
-        // 상단 1군/퓨처스 토글이 경기만 바꾸던 것을 페이지 전체로
-        // 넓힙니다. 퓨처스일 때는 이렇게 됩니다.
-        //
-        //     팀 순위      북부·남부 두 표
-        //     개인 순위    wOBA·wRC+ 대신 안타·홈런
-        //     등말소·명단  숨김 (1군 전용입니다)
-        //
-        // **wOBA·wRC+ 를 빼는 이유**는 그 지표가 play_by_play 로 계산되는데
-        // 퓨처스는 타석 단위 자료가 공개되지 않기 때문입니다. 빈 칸을
-        // 보여 주는 것보다 안 보여 주는 편이 낫습니다.
-
-        // 퓨처스 개인 순위에 쓸 지표입니다. KBO 퓨처스 기록실의 컬럼
-        // 이름을 그대로 씁니다. 없는 컬럼은 카드가 빠집니다.
-        // 1군과 같은 지표를 씁니다. 순서도 1군과 맞춥니다(좌열 3개 →
-        // 우열 3개).
-        //
-        // `calc` 가 있으면 원본 컬럼 대신 계산합니다. 퓨처스 기록실이
-        // 안 주는 값이 있기 때문입니다.
-        //
-        //     OPS            OBP + SLG. 둘 다 표에 있습니다.
-        //     BB%·K%·K-BB%   상대타자수(TBF)가 없어 어림합니다.
-        //
-        // **TBF 를 어림하는 근거**: 타자는 안타·볼넷·사구로 나가거나
-        // 아웃됩니다. 아웃은 이닝 x 3 입니다.
-        //
-        //     TBF ≈ 3 x IP + H + BB + HBP
-        //
-        // 도루 실패 같은 주루 아웃이 아웃 수에 섞여 TBF 가 조금 크게
-        // 나오고, 그만큼 K% 가 조금 작게 나옵니다. 순위가 뒤집힐
-        // 정도는 아니지만 1군의 정확한 값과 같지는 않습니다. 그래서
-        // 화면 아래에 밝힙니다.
-        const futNum = (v) => {
-            // 이닝은 '112 2/3' 처럼 옵니다. 분수까지 더합니다.
-            // 계산 지표는 '12.3%' 로 돌아오므로 % 를 먼저 뗍니다.
-            const s = String(v == null ? '' : v).trim().replace(/%$/, '');
-            const m = /^(-?\d+(?:\.\d+)?)(?:\s+(\d+)\/(\d+))?$/.exec(s);
-            if (!m) return NaN;
-            const base = Number.parseFloat(m[1]);
-            return m[2] ? base + Number(m[2]) / Number(m[3]) : base;
-        };
-        const futTbf = (g) => {
-            const ip = futNum(g.IP); const h = futNum(g.H);
-            const bb = futNum(g.BB); const hbp = futNum(g.HBP);
-            if (![ip, h, bb, hbp].every(Number.isFinite)) return NaN;
-            return 3 * ip + h + bb + hbp;
-        };
-        const pct = (n, d) => (Number.isFinite(n) && Number.isFinite(d) && d > 0
-            ? `${(100 * n / d).toFixed(1)}%` : null);
-
-        const FUT_LEADER_DEFS = {
-            batter: [
-                { col: 'AVG', label: '타율' },
-                { col: 'SLG', label: '장타율' },
-                { label: 'OPS', calc: (g) => {
-                    const v = futNum(g.OBP) + futNum(g.SLG);
-                    return Number.isFinite(v) ? v.toFixed(3) : null;
-                } },
-                { col: 'OBP', label: '출루율' },
-                { col: 'H', label: '안타' },
-                { col: 'HR', label: '홈런' },
-            ],
-            pitcher: [
-                { col: 'IP', label: '이닝' },
-                { col: 'SO', label: '탈삼진' },
-                // 볼넷은 적을수록 좋습니다.
-                { label: 'BB%', lower: true, calc: (g) => pct(futNum(g.BB), futTbf(g)) },
-                { col: 'ERA', label: 'ERA', lower: true },
-                { label: 'K%', calc: (g) => pct(futNum(g.SO), futTbf(g)) },
-                { label: 'K-BB%', calc: (g) => {
-                    const t = futTbf(g);
-                    const v = futNum(g.SO) - futNum(g.BB);
-                    return pct(v, t);
-                } },
-            ],
-        };
-        let FUT_STANDINGS = null;
-        let FUT_LEADERS = null;
-
-        function renderFuturesStandings(groups) {
-            if (!groups.length) {
-                return '<div class="schedule-msg error">퓨처스 순위를 불러오지 못했습니다.</div>';
-            }
-            return groups.map((g) => {
-                const rows = g.teams.map((t) => {
-                    const emblem = t.code
-                        ? `<img class="rank-emblem" src="assets/logos/${esc(t.code)}.png" alt="" loading="lazy" onerror="this.style.display='none'">`
-                        : '';
-                    return `<tr>
-                        <td class="rank-col"><span class="rank-badge rank-${t.rank}">${t.rank}</span></td>
-                        <td class="team-col"><div class="team-cell">${emblem}<span>${teamLink(t.team)}</span></div></td>
-                        <td>${esc(t.games)}</td>
-                        <td>${esc(t.wins)}</td>
-                        <td>${esc(t.losses)}</td>
-                        <td>${esc(t.draws)}</td>
-                        <td class="pct">${esc(t.pct)}</td>
-                        <td>${esc(t.gb)}</td>
-                        <td class="${streakClass(t.streak)}">${esc(t.streak)}</td>
-                    </tr>`;
-                }).join('');
-                return `<div class="fut-league">
-                    <div class="fut-league-name">${esc(g.league)}리그</div>
-                    <table class="standings-table"><thead><tr>
-                        <th class="rank-col">순위</th><th class="team-col">팀</th>
-                        <th>경기</th><th>승</th><th>패</th><th>무</th><th>승률</th><th>게임차</th><th>연속</th>
-                    </tr></thead><tbody>${rows}</tbody></table>
-                </div>`;
-            }).join('');
-        }
-
-        // 퓨처스 기록은 표 하나로 오므로 지표별 상위 5명을 여기서 뽑습니다.
-        // 1군은 서버가 이미 지표별로 나눠 주지만 퓨처스는 원본이 순위표
-        // 한 장입니다.
-        function futTop(group, def) {
-            const cols = group.columns || [];
-            // 행을 {컬럼명: 값} 으로 바꿔 둡니다. 계산 지표가 여러
-            // 컬럼을 함께 봐야 합니다.
-            const items = (group.rows || []).map((r) => {
-                const o = {};
-                cols.forEach((c, i) => { o[c] = r.cells[i]; });
-                const v = def.calc ? def.calc(o) : o[def.col];
-                return {
-                    name: r.cells[1], team: r.cells[2],
-                    playerId: r.playerId, teamCode: r.teamCode, v,
-                };
-            }).filter((x) => x.v != null && Number.isFinite(futNum(x.v)))
-                .sort((a, b) => (def.lower
-                    ? futNum(a.v) - futNum(b.v)
-                    : futNum(b.v) - futNum(a.v)))
-                .slice(0, 5);
-            return items.length ? items : null;
-        }
-
-        // 1군 `leaderCard` 와 같은 마크업을 씁니다. 클래스가 다르면
-        // 같은 자리에 다른 모양이 나옵니다.
-        function futLeaderCard(def, items) {
-            const rows = (items || []).map((x, i) => {
-                const code = x.teamCode || '';
-                const emblem = code
-                    ? `<img class="lr-emblem" src="assets/logos/${esc(code)}.png" alt="" loading="lazy" onerror="this.style.display='none'">`
-                    : '';
-                const nameHtml = x.playerId
-                    // 퓨처스 순위에서 넘어가는 링크라 `mode=futures` 를 붙입니다.
-                    // 1군 기록이 있는 선수도 여기서는 2군 화면으로 열립니다.
-                    ? `<a class="lr-name player-link" href="pages/player-analytics?id=${encodeURIComponent(x.playerId)}&mode=futures">${esc(x.name)}</a>`
-                    : `<span class="lr-name">${esc(x.name)}</span>`;
-                return `<li class="lr-row">
-                    <span class="lr-rank">${i + 1}</span>
-                    ${emblem}
-                    ${nameHtml}
-                    <span class="lr-val">${esc(x.v)}</span>
-                </li>`;
-            }).join('');
-            return `<div class="leader-card">
-                <div class="leader-card-title">${esc(def.label)}</div>
-                <ol class="leader-list">${rows || '<li class="lr-empty">데이터 없음</li>'}</ol>
-            </div>`;
-        }
-
-        function renderFuturesLeaders() {
-            const wrap = document.getElementById('leaders-wrap');
-            if (!FUT_LEADERS) {
-                wrap.innerHTML = '<div class="schedule-msg error">퓨처스 개인 순위를 불러오지 못했습니다.</div>';
-                return;
-            }
-            const group = FUT_LEADERS[leadersTab] || {};
-            const cards = FUT_LEADER_DEFS[leadersTab]
-                .map((d) => futLeaderCard(d, futTop(group, d)))
-                .join('');
-            wrap.innerHTML = cards
-                ? `<div class="leaders-grid">${cards}</div>`
-                : '<div class="schedule-msg">퓨처스 기록이 없습니다.</div>';
-        }
-
-        async function loadFutures() {
-            const sw = document.getElementById('standings-wrap');
-            const lw = document.getElementById('leaders-wrap');
-            sw.innerHTML = '<div class="schedule-msg">불러오는 중…</div>';
-            lw.innerHTML = '<div class="schedule-msg">불러오는 중…</div>';
-            const [s, l] = await Promise.all([
-                fetch(`${API_BASE_URL}/futures/standings`).then((r) => r.json()).catch(() => null),
-                fetch(`${API_BASE_URL}/futures/leaders`).then((r) => r.json()).catch(() => null),
-            ]);
-            FUT_STANDINGS = s;
-            FUT_LEADERS = l;
-            sw.innerHTML = renderFuturesStandings((s && s.groups) || []);
-            renderFuturesLeaders();
-        }
-
-        /** 토글에 맞춰 순위·개인순위·등말소·명단을 갈아 끼웁니다. */
-        function applyMode() {
-            const fut = scheduleMode === 'futures';
-            // 등말소와 1군 명단은 1군 전용입니다. 퓨처스에는 해당 자료가
-            // 없어 빈 칸을 보여 주느니 줄을 통째로 감춥니다.
-            document.querySelector('.roster-row').style.display = fut ? 'none' : '';
-
-            document.querySelectorAll('.rank-row:not(.roster-row) .schedule-note')
-                .forEach((n) => {
-                    if (n.id === 'leaders-note') return;
-                    n.textContent = fut
-                        ? '데이터 출처: KBO 퓨처스 기록실 · 5분 캐시'
-                        : '데이터 출처: KBO 공식 (koreabaseball.com) · 5분 캐시';
-                });
-            const ln = document.getElementById('leaders-note');
-            if (ln && fut) {
-                // 어림값을 정확한 값처럼 두지 않습니다. 1군 K%·BB% 는
-                // 상대타자수를 그대로 쓰지만 퓨처스는 그 값이 공개되지
-                // 않아 이닝·피안타·볼넷·사구로 되짚습니다.
-                ln.textContent = '퓨처스 기록실 기준 · BB%·K%·K-BB% 는 상대타자수가 '
-                    + '공개되지 않아 (3×이닝+피안타+볼넷+사구)로 어림한 값입니다';
-            }
-
-            if (fut) {
-                loadFutures();
-            } else {
-                loadStandings();
-                if (LEADERS_DATA) renderLeaders(); else loadLeaders();
-                loadRoster(rosterSel.value || ROSTER_TEAMS[0]);
-            }
-        }
-
-        applyMode();
+        loadStandings();
+        loadLeaders();
 
     </script>
 </body>
