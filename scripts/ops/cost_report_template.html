@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bstats 비용 보고서</title>
+<style>
+@font-face{font-family:'KBO Dia Gothic';src:url('fonts/KBO-Dia-Gothic_light.woff') format('woff');font-weight:300;font-display:swap}
+@font-face{font-family:'KBO Dia Gothic';src:url('fonts/KBO-Dia-Gothic_medium.woff') format('woff');font-weight:400 500;font-display:swap}
+@font-face{font-family:'KBO Dia Gothic';src:url('fonts/KBO-Dia-Gothic_bold.woff') format('woff');font-weight:600 900;font-display:swap}
+:root{--bg:#f8fafc;--card:#fff;--line:rgba(15,23,42,.08);--t1:#0f172a;--t2:#334155;--tm:#64748b;--blue:#3b82f6;--warn:#b45309;--warnbg:#fef3c7;--tipbg:#0f172a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--t1);font-family:'KBO Dia Gothic',"Malgun Gothic",sans-serif;font-size:14px;line-height:1.55}
+.wrap{max-width:1160px;margin:0 auto;padding:28px 24px 40px}
+.mock{background:var(--warnbg);color:var(--warn);border:1px solid #fcd34d;border-radius:8px;padding:8px 12px;font-weight:700;margin-bottom:18px}
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:18px}
+h1{font-size:24px;margin:0;font-weight:700}
+.sub{color:var(--tm);font-size:13px;font-weight:300}
+.meta{color:var(--tm);font-size:12px;text-align:right;font-weight:300}
+.priv{display:inline-block;background:#fee2e2;color:#b91c1c;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700;margin-bottom:4px}
+section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:16px;box-shadow:0 2px 8px rgba(15,23,42,.05)}
+h2{font-size:17px;margin:0 0 4px;font-weight:700;display:flex;align-items:center;gap:6px}
+h3{display:flex;align-items:center;gap:6px}
+.h2sub{color:var(--tm);font-size:12px;margin:0 0 14px;font-weight:300}
+.info{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;border:1.5px solid #94a3b8;color:#64748b;font:700 10px/1 Georgia,serif;font-style:italic;cursor:help;flex:none;vertical-align:middle}
+.info:hover,.info:focus-visible{border-color:var(--blue);color:var(--blue);outline:none}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.tile{border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.tile .k{color:var(--t2);font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px}
+.tile .v{font-size:30px;font-weight:700;letter-spacing:-.5px;margin:4px 0}
+.tile .v small{font-size:15px;font-weight:500;color:var(--t2);margin-left:2px}
+.tile .f{color:var(--tm);font-size:12px;font-weight:300}
+.tile .gauge{height:8px;background:#e2e8f0;border-radius:99px;overflow:hidden;margin:8px 0 6px}
+.tile .gauge span{display:block;height:100%;background:var(--blue)}
+.two{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px}
+.two section{min-width:0}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:13px}
+th,td{padding:8px 7px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+td .info{margin-left:4px}
+thead th{color:var(--tm);font-size:12px;font-weight:500;background:#f1f5f9}
+thead th .info{width:14px;height:14px;font-size:9px;margin-left:3px}
+th[scope=row],thead th:first-child{text-align:left;font-weight:500}
+tbody tr:hover{background:#f8fafc}
+td.sum{font-weight:700}
+.bar{height:8px;background:#e2e8f0;border-radius:99px;overflow:hidden;min-width:56px}
+.bar span{display:block;height:100%;background:var(--blue)}
+svg .grid{stroke:rgba(15,23,42,.08)}
+svg .limit{stroke:#ef4444;stroke-dasharray:5 4;stroke-width:1.2}
+svg .ax{fill:#64748b;font-size:11px;font-family:'KBO Dia Gothic',"Malgun Gothic",sans-serif}
+svg .note{fill:#b45309}
+svg .limtxt{fill:#ef4444;font-weight:700}
+svg .hit{fill:transparent;cursor:crosshair}
+svg .hit:hover,svg .hit.on{fill:rgba(15,23,42,.06)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+.lg{display:inline-flex;align-items:center;gap:6px;color:var(--t2);font-size:12px}
+.lg i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.lg i.dash{width:16px;height:0;border-radius:0;border-top:1.5px dashed rgba(15,23,42,.5)}
+.cf{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.cfbox{border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:0}
+.cfbox h3{font-size:14px;margin:0;font-weight:700}
+.cfbox .peak{color:var(--t2);font-size:12px;margin:2px 0 8px;font-weight:300;min-height:36px}
+.cfbox .peak b{color:var(--t1);font-weight:700}
+.cfbox .stats{display:flex;flex-wrap:wrap;gap:4px 12px;margin:2px 0 8px;min-height:36px;font-size:12px;color:var(--t2);font-weight:300}
+.cfbox .stats b{color:var(--t1);font-weight:700}
+.cfbox .stats .hot{color:#b91c1c}
+.lim{margin:0 0 6px;cursor:help;outline:none;border-radius:6px}
+.lim:focus-visible{box-shadow:0 0 0 2px var(--blue)}
+.limbar{height:10px;background:#e2e8f0;border-radius:99px;overflow:hidden;position:relative}
+.limbar span{display:block;height:100%;background:#334155;border-radius:99px}
+.limbar::after{content:"";position:absolute;left:50%;top:0;bottom:0;border-left:1px dashed #94a3b8}
+.limtxt{display:flex;justify-content:space-between;font-size:11px;color:var(--tm);margin-top:3px}
+.limtxt b{color:var(--t1);font-weight:700}
+.limnone{height:31px;margin:0 0 6px;font-size:11px;color:var(--tm);display:flex;align-items:center}
+.fixline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#f1f5f9;border-radius:10px;padding:8px 12px;margin:0 0 12px;font-size:13px;color:var(--t2)}
+.fixline b{color:var(--t1);font-weight:700}
+.kind{display:inline-block;font-size:10.5px;font-weight:500;border-radius:4px;padding:0 5px;margin-left:4px;vertical-align:1px}
+.kind.fx{background:#e2e8f0;color:#475569}
+.kind.vr{background:#dbeafe;color:#1d4ed8}
+svg .med{stroke:#0f172a;stroke-dasharray:2 3;stroke-width:1;opacity:.5}
+svg .medtxt{fill:#334155}
+.notes{margin:0;padding-left:18px;color:var(--t2);font-size:13px;font-weight:300}
+.notes li{margin:3px 0}
+.ok{color:#047857;font-weight:700}
+/* 툴팁: bstats 공용 모양(첫 줄 굵게, 둘째 보통, 셋째부터 흐림) */
+.tip{position:fixed;z-index:50;max-width:320px;background:var(--tipbg);color:#f8fafc;border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.55;box-shadow:0 8px 24px rgba(15,23,42,.25);pointer-events:none;opacity:0;transition:opacity .12s}
+.tip.show{opacity:1}
+.tip .l1{font-weight:700;font-size:13px;margin-bottom:2px}
+.tip .l2{font-weight:500}
+.tip .lx{font-weight:300;color:#cbd5e1;margin-top:3px}
+.tip .row{display:flex;justify-content:space-between;gap:18px;font-weight:500}
+.tip .row i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px}
+.tip .row.tot{border-top:1px solid rgba(248,250,252,.2);margin-top:4px;padding-top:4px;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <span class="priv">비공개 · evan 님 PC 전용</span>
+      <h1>bstats 비용 보고서</h1>
+      <div class="sub">GCP · Cloudflare 무료 플랜 · $month_label</div>
+    </div>
+    <div class="meta">만든 시각 $made_at</div>
+  </header>
+  $billing_html
+  $cf_html
+  <section>
+    <h2>기준과 주의</h2>
+    <ul class="notes">$notes_html</ul>
+  </section>
+</div>
+<script>
+(function () {
+  var COLORS = $colors_json;
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  // 줄 바꿈으로 나눈 설명: 첫 줄 굵게, 둘째 보통, 셋째부터 흐리게.
+  // '이름<탭>값' 줄은 색 점이 붙은 값 줄, '=' 로 시작하면 합계 줄입니다.
+  function render(text) {
+    return text.split('\n').map(function (ln, i) {
+      var m = ln.match(/^(=?)([^\t]+)\t(.+)$$/);
+      if (i > 0 && m) {
+        var dot = COLORS[m[2]] ? '<i style="background:' + COLORS[m[2]] + '"></i>' : '';
+        return '<div class="row' + (m[1] ? ' tot' : '') + '"><span>' + dot + esc(m[2]) + '</span><span>' + esc(m[3]) + '</span></div>';
+      }
+      return '<div class="' + (i === 0 ? 'l1' : i === 1 ? 'l2' : 'lx') + '">' + esc(ln) + '</div>';
+    }).join('');
+  }
+  function place(tip, r) {
+    var x = r.left + r.width / 2 - tip.offsetWidth / 2;
+    var y = r.top - tip.offsetHeight - 10;
+    if (y < 8) y = r.bottom + 10;
+    x = Math.max(8, Math.min(x, innerWidth - tip.offsetWidth - 8));
+    tip.style.left = x + 'px'; tip.style.top = y + 'px';
+  }
+  function make(el) {
+    var tip = document.createElement('div');
+    tip.className = 'tip';
+    tip.innerHTML = render(el.getAttribute('data-tip'));
+    document.body.appendChild(tip);
+    place(tip, el.getBoundingClientRect());
+    tip.classList.add('show');
+    return tip;
+  }
+  var cur = null;
+  function hide() { if (cur) { cur.remove(); cur = null; } }
+  document.addEventListener('mouseover', function (e) { var el = e.target.closest('[data-tip]'); hide(); if (el) cur = make(el); });
+  document.addEventListener('focusin', function (e) { var el = e.target.closest('[data-tip]'); hide(); if (el) cur = make(el); });
+  document.addEventListener('focusout', hide);
+  addEventListener('scroll', hide, true);
+})();
+</script>
+</body>
+</html>
