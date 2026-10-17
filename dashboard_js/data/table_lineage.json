@@ -6,27 +6,7 @@
   },
   {
    "from": "job:daily",
-   "to": "table:futures_games"
-  },
-  {
-   "from": "job:daily",
    "to": "table:games"
-  },
-  {
-   "from": "job:daily",
-   "to": "table:kbo_official_batter_stats"
-  },
-  {
-   "from": "job:daily",
-   "to": "table:kbo_official_pitcher_stats"
-  },
-  {
-   "from": "job:daily",
-   "to": "table:kbo_roster"
-  },
-  {
-   "from": "job:daily",
-   "to": "table:kbo_roster_moves"
   },
   {
    "from": "job:daily",
@@ -46,39 +26,7 @@
   },
   {
    "from": "job:daily",
-   "to": "table:players"
-  },
-  {
-   "from": "job:daily",
    "to": "table:run_expectancy"
-  },
-  {
-   "from": "job:daily",
-   "to": "table:team_season_rank"
-  },
-  {
-   "from": "job:daily",
-   "to": "table:team_seasons"
-  },
-  {
-   "from": "job:monthly",
-   "to": "table:players"
-  },
-  {
-   "from": "job:roster",
-   "to": "table:futures_season_stats"
-  },
-  {
-   "from": "job:roster",
-   "to": "table:kbo_roster"
-  },
-  {
-   "from": "job:roster",
-   "to": "table:kbo_roster_moves"
-  },
-  {
-   "from": "job:roster",
-   "to": "table:players"
   },
   {
    "from": "job:weekly",
@@ -105,52 +53,8 @@
    "to": "table:wrc_plus_comparison"
   },
   {
-   "from": "source:kbo_futures",
-   "to": "job:daily"
-  },
-  {
-   "from": "source:kbo_futures",
-   "to": "job:roster"
-  },
-  {
    "from": "source:kbo_live",
    "to": "page:index.html"
-  },
-  {
-   "from": "source:kbo_live",
-   "to": "page:pages/player-analytics.html"
-  },
-  {
-   "from": "source:kbo_live",
-   "to": "page:pages/player-stats.html"
-  },
-  {
-   "from": "source:kbo_live",
-   "to": "page:pages/team-stats.html"
-  },
-  {
-   "from": "source:kbo_player_detail",
-   "to": "job:monthly"
-  },
-  {
-   "from": "source:kbo_player_search",
-   "to": "job:daily"
-  },
-  {
-   "from": "source:kbo_player_search",
-   "to": "job:roster"
-  },
-  {
-   "from": "source:kbo_record",
-   "to": "job:daily"
-  },
-  {
-   "from": "source:kbo_register",
-   "to": "job:daily"
-  },
-  {
-   "from": "source:kbo_register",
-   "to": "job:roster"
   },
   {
    "from": "source:naver_relay",
@@ -163,18 +67,6 @@
   {
    "from": "table:franchises",
    "to": "page:pages/team-record.html"
-  },
-  {
-   "from": "table:futures_season_stats",
-   "to": "page:index.html"
-  },
-  {
-   "from": "table:futures_season_stats",
-   "to": "page:pages/player-analytics.html"
-  },
-  {
-   "from": "table:futures_teams",
-   "to": "page:index.html"
   },
   {
    "from": "table:games",
@@ -566,26 +458,6 @@
      "status_key": null
     },
     {
-     "name": "퓨처스 일정 적재",
-     "script": "data_collection/futures_to_d1.py",
-     "status_key": "futures"
-    },
-    {
-     "name": "퓨처스 결과 기록",
-     "script": "data_collection/record_job_run.py",
-     "status_key": null
-    },
-    {
-     "name": "올 시즌 팀 순위 적재",
-     "script": "data_collection/team_ranks.py",
-     "status_key": "team_ranks"
-    },
-    {
-     "name": "팀 순위 결과 기록",
-     "script": "data_collection/record_job_run.py",
-     "status_key": null
-    },
-    {
      "name": "구종 가치 계산",
      "script": "data_collection/pitch_run_value.py",
      "status_key": "pitch_values"
@@ -594,64 +466,15 @@
      "name": "구종 가치 결과 기록",
      "script": "data_collection/record_job_run.py",
      "status_key": null
-    },
-    {
-     "name": "타자 기록 수집",
-     "script": "data_collection/official_stats_http.py",
-     "status_key": null
-    },
-    {
-     "name": "타자 기록 적재",
-     "script": "data_collection/csv_to_d1.py",
-     "status_key": "official_stats"
-    },
-    {
-     "name": "투수 기록 수집",
-     "script": "data_collection/official_stats_http.py",
-     "status_key": null
-    },
-    {
-     "name": "투수 기록 적재",
-     "script": "data_collection/csv_to_d1.py",
-     "status_key": "official_stats"
-    },
-    {
-     "name": "공식 통계 결과 기록",
-     "script": "data_collection/record_job_run.py",
-     "status_key": null
-    },
-    {
-     "name": "1군 등록 현황 적재",
-     "script": "data_collection/roster_to_d1.py",
-     "status_key": "roster"
-    },
-    {
-     "name": "players 소속·등번호 갱신",
-     "script": "data_collection/sync_players_from_roster.py",
-     "status_key": null
-    },
-    {
-     "name": "새 선수 추가",
-     "script": "data_collection/add_new_players.py",
-     "status_key": "add_new_players"
-    },
-    {
-     "name": "새 선수 추가 결과 기록",
-     "script": "data_collection/record_job_run.py",
-     "status_key": null
-    },
-    {
-     "name": "등록 현황 결과 기록",
-     "script": "data_collection/record_job_run.py",
-     "status_key": null
     }
    ],
+   "stopped": false,
    "workflow": "daily.yml"
   },
   {
-   "cron_utc": "13 4 1 * *",
+   "cron_utc": null,
    "id": "monthly",
-   "schedule_kst": "매월 1일 13:13",
+   "schedule_kst": "멈춤",
    "stale_hours": 840,
    "steps": [
     {
@@ -685,12 +508,13 @@
      "status_key": null
     }
    ],
+   "stopped": true,
    "workflow": "monthly.yml"
   },
   {
-   "cron_utc": "7 7 * * *, 7 10 * * *",
+   "cron_utc": null,
    "id": "roster",
-   "schedule_kst": "매일 16:07·19:07",
+   "schedule_kst": "멈춤",
    "stale_hours": 36,
    "steps": [
     {
@@ -734,6 +558,7 @@
      "status_key": null
     }
    ],
+   "stopped": true,
    "workflow": "roster.yml"
   },
   {
@@ -783,11 +608,6 @@
      "status_key": null
     },
     {
-     "name": "CSV 만들기",
-     "script": "migration/export_csv.py",
-     "status_key": null
-    },
-    {
      "name": "빅쿼리 복사",
      "script": "migration/mysql/sqlite_to_bigquery.py",
      "status_key": "bq_copy"
@@ -803,6 +623,7 @@
      "status_key": null
     }
    ],
+   "stopped": false,
    "workflow": "weekly.yml"
   }
  ],
@@ -1070,7 +891,7 @@
   },
   {
    "file": "src/routes/futuresrecord.js",
-   "live": true,
+   "live": false,
    "pages": [
     "index.html"
    ],
@@ -1080,40 +901,28 @@
   },
   {
    "file": "src/routes/futuresplayer.js",
-   "live": true,
+   "live": false,
    "pages": [
     "pages/player-analytics.html"
    ],
    "path": "/futures/player/:id",
    "reads_all_tables": false,
-   "tables": [
-    "futures_season_stats",
-    "kbo_official_batter_stats",
-    "kbo_official_pitcher_stats",
-    "kbo_roster",
-    "players"
-   ]
+   "tables": []
   },
   {
    "file": "src/routes/futuresplayer.js",
-   "live": true,
+   "live": false,
    "pages": [
     "index.html",
     "pages/player-analytics.html"
    ],
    "path": "/futures/search",
    "reads_all_tables": false,
-   "tables": [
-    "futures_season_stats",
-    "kbo_official_batter_stats",
-    "kbo_official_pitcher_stats",
-    "kbo_roster",
-    "players"
-   ]
+   "tables": []
   },
   {
    "file": "src/routes/futuresrecord.js",
-   "live": true,
+   "live": false,
    "pages": [
     "index.html"
    ],
@@ -1305,20 +1114,17 @@
   },
   {
    "file": "src/routes/futures.js",
-   "live": true,
+   "live": false,
    "pages": [
     "index.html"
    ],
    "path": "/schedule/futures",
    "reads_all_tables": false,
-   "tables": [
-    "futures_season_stats",
-    "futures_teams"
-   ]
+   "tables": []
   },
   {
    "file": "src/routes/standings.js",
-   "live": true,
+   "live": false,
    "pages": [
     "index.html",
     "pages/player-analytics.html",
@@ -1595,7 +1401,6 @@
   {
    "desc": "1군 등록 명단(kbo_roster)에는 있는데 players 에 없는 새 선수를 KBO 선수 검색으로 찾아 MySQL players 에 넣습니다.",
    "jobs": [
-    "daily",
     "roster"
    ],
    "note": "명단·이동 표에서 번호 없는 이름을 찾아 새 선수를 넣고, 그 표의 빈 player_id 를 채웁니다. 오늘·내일 선발은 우리 일정 API 로 봅니다.",
@@ -1605,9 +1410,9 @@
     "kbo_player_search"
    ],
    "status_keys": {
-    "daily": "add_new_players",
     "roster": "add_new_players"
    },
+   "stopped": true,
    "writes": [
     "kbo_roster",
     "kbo_roster_moves",
@@ -1616,18 +1421,15 @@
   },
   {
    "desc": "official_stats_http.py 가 받은 CSV 를 MySQL kbo_official_batter_stats·kbo_official_pitcher_stats 에 넣습니다(있으면 고치고, 없으면 더합니다).",
-   "jobs": [
-    "daily"
-   ],
+   "jobs": [],
    "note": "--table 인자로 타자·투수 표를 나눠 넣습니다.",
    "path": "data_collection/csv_to_d1.py",
    "reads": [],
    "sources": [
     "kbo_record"
    ],
-   "status_keys": {
-    "daily": "official_stats"
-   },
+   "status_keys": {},
+   "stopped": true,
    "writes": [
     "kbo_official_batter_stats",
     "kbo_official_pitcher_stats"
@@ -1647,6 +1449,7 @@
    "status_keys": {
     "daily": "games"
    },
+   "stopped": false,
    "writes": [
     "games"
    ]
@@ -1665,6 +1468,7 @@
    "status_keys": {
     "daily": "pbp"
    },
+   "stopped": false,
    "writes": [
     "play_by_play"
    ]
@@ -1683,24 +1487,22 @@
    "status_keys": {
     "roster": "futures_records"
    },
+   "stopped": true,
    "writes": [
     "futures_season_stats"
    ]
   },
   {
    "desc": "퓨처스리그(2군) 일정·결과를 KBO Schedule.asmx 에서 받아 MySQL futures_games 를 갱신합니다. 화면의 퓨처스 일정은 실시간 스코어보드를 그때그때 읽으므로 이 표를 기다리지 않습니다.",
-   "jobs": [
-    "daily"
-   ],
+   "jobs": [],
    "note": null,
    "path": "data_collection/futures_to_d1.py",
    "reads": [],
    "sources": [
     "kbo_futures"
    ],
-   "status_keys": {
-    "daily": "futures"
-   },
+   "status_keys": {},
+   "stopped": true,
    "writes": [
     "futures_games"
    ]
@@ -1715,15 +1517,14 @@
    "reads": [],
    "sources": [],
    "status_keys": {},
+   "stopped": true,
    "writes": [
     "players"
    ]
   },
   {
    "desc": "KBO 공식 타자·투수 통계를 CSV 로 받습니다. 표에는 바로 뒤 단계의 csv_to_d1.py 가 넣습니다.",
-   "jobs": [
-    "daily"
-   ],
+   "jobs": [],
    "note": "공식 기록을 CSV 로 받습니다. 표에는 csv_to_d1.py 가 넣습니다.",
    "path": "data_collection/official_stats_http.py",
    "reads": [],
@@ -1731,6 +1532,7 @@
     "kbo_record"
    ],
    "status_keys": {},
+   "stopped": true,
    "writes": []
   },
   {
@@ -1747,6 +1549,7 @@
    "status_keys": {
     "daily": "pitch_values"
    },
+   "stopped": false,
    "writes": [
     "batter_run_value",
     "pitch_run_value",
@@ -1769,6 +1572,7 @@
    "status_keys": {
     "monthly": "player_info"
    },
+   "stopped": true,
    "writes": [
     "players"
    ]
@@ -1786,12 +1590,12 @@
    "reads": [],
    "sources": [],
    "status_keys": {},
+   "stopped": false,
    "writes": []
   },
   {
    "desc": "1군 등록 현황과 퓨처스 등록 명단을 함께 받아 MySQL kbo_roster 에 넣고, 그날 등록·말소를 kbo_roster_moves 에 쌓습니다. KBO 는 오늘 것만 보여 줘서 우리가 매일 받아야 하고 소급이 안 됩니다. 소속 판정은 이 명단 하나로 합니다(1군 339명 + 퓨처스 289명). 하루 두 번 받습니다. 등말소는 경기 2~4시간 전에 갱신되므로 새벽 실행은 전날 것만 봅니다. 오후에 한 번 더 받아 그날 것을 채웁니다.",
    "jobs": [
-    "daily",
     "roster"
    ],
    "note": "공식 기록·players 는 선수 번호를 찾는 조회용입니다. 퓨처스 명단도 함께 받습니다.",
@@ -1802,9 +1606,9 @@
     "kbo_register"
    ],
    "status_keys": {
-    "daily": "roster",
     "roster": "roster_pm"
    },
+   "stopped": true,
    "writes": [
     "kbo_roster",
     "kbo_roster_moves"
@@ -1813,7 +1617,6 @@
   {
    "desc": "등록 명단의 소속·등번호를 MySQL players 에 반영합니다. 바뀐 행만 고칩니다.",
    "jobs": [
-    "daily",
     "roster"
    ],
    "note": "명단의 소속·등번호를 players 에 반영합니다(teams 는 팀 코드 확인용, players 는 비교 대상).",
@@ -1823,24 +1626,22 @@
    ],
    "sources": [],
    "status_keys": {},
+   "stopped": true,
    "writes": [
     "players"
    ]
   },
   {
    "desc": "KBO 기록실 팀 순위에서 올 시즌 순위·경기 수·승패무·승률·게임차를 받아 MySQL team_season_rank 에 덮어씁니다. 올 시즌은 올해 정규시즌 경기가 끝났으면 올해, 아니면 지난해입니다. 그해 순위가 아직 없으면 건너뜁니다. 받은 순위로 team_seasons 에 올 시즌 줄이 없으면 그것만 넣습니다(새 시즌의 팀 기록실이 비지 않게). 1982~2025는 2026-08-29에 한 번 받은 값 그대로입니다.",
-   "jobs": [
-    "daily"
-   ],
+   "jobs": [],
    "note": "team_seasons 는 옛 시즌 표기명을 프랜차이즈에 잇는 조회용이고, 올 시즌 줄이 없으면 그것만 채웁니다.",
    "path": "data_collection/team_ranks.py",
    "reads": [],
    "sources": [
     "kbo_record"
    ],
-   "status_keys": {
-    "daily": "team_ranks"
-   },
+   "status_keys": {},
+   "stopped": true,
    "writes": [
     "team_season_rank",
     "team_seasons"
@@ -1848,14 +1649,13 @@
   },
   {
    "desc": "전체 내려받기용 CSV 파일을 만듭니다.",
-   "jobs": [
-    "weekly"
-   ],
+   "jobs": [],
    "note": "전체 내려받기 CSV 를 만듭니다.",
    "path": "migration/export_csv.py",
    "reads": [],
    "sources": [],
    "status_keys": {},
+   "stopped": false,
    "writes": []
   },
   {
@@ -1871,6 +1671,7 @@
    "reads": [],
    "sources": [],
    "status_keys": {},
+   "stopped": false,
    "writes": []
   },
   {
@@ -1884,6 +1685,7 @@
    "reads": [],
    "sources": [],
    "status_keys": {},
+   "stopped": false,
    "writes": []
   },
   {
@@ -1898,6 +1700,7 @@
    "status_keys": {
     "weekly": "bq_copy"
    },
+   "stopped": false,
    "writes": []
   },
   {
@@ -1911,6 +1714,7 @@
    "reads": [],
    "sources": [],
    "status_keys": {},
+   "stopped": false,
    "writes": []
   },
   {
@@ -1928,6 +1732,7 @@
    "status_keys": {
     "weekly": "park_factors"
    },
+   "stopped": false,
    "writes": [
     "kbo_run_values_by_season",
     "re24_matrix_by_season"
@@ -1949,6 +1754,7 @@
    "status_keys": {
     "weekly": "park_factors"
    },
+   "stopped": false,
    "writes": [
     "kbo_woba_weights_by_season"
    ]
@@ -1973,6 +1779,7 @@
    "status_keys": {
     "weekly": "park_factors"
    },
+   "stopped": false,
    "writes": [
     "weighted_pf_by_batter_season",
     "wrc_plus_comparison"
@@ -1993,6 +1800,7 @@
    "status_keys": {
     "weekly": "park_factors"
    },
+   "stopped": false,
    "writes": [
     "self_park_factor"
    ]
@@ -2010,6 +1818,7 @@
    ],
    "sources": [],
    "status_keys": {},
+   "stopped": false,
    "writes": []
   }
  ],
@@ -2050,6 +1859,7 @@
    "url": "https://sports.naver.com/kbaseball/"
   }
  ],
+ "stopped_reason": "2026-10-14 시행 KBO 이용약관 제14조 차항(크롤링 등 자동화 수집 금지)에 따라 KBO 사이트(koreabaseball.com)를 읽는 수집을 멈췄습니다. 표에는 멈추기 전까지 받은 값이 남아 있습니다.",
  "tables": [
   {
    "category": "세이버메트릭스 분석",
@@ -2066,6 +1876,7 @@
    "routes": [
     "/stats/batter_values"
    ],
+   "stopped": false,
    "written_by": [
     "data_collection/pitch_run_value.py"
    ]
@@ -2085,6 +1896,7 @@
     "/teams",
     "/teams/:id"
    ],
+   "stopped": false,
    "written_by": []
   },
   {
@@ -2096,6 +1908,7 @@
    "name": "futures_games",
    "pages": [],
    "routes": [],
+   "stopped": true,
    "written_by": [
     "data_collection/futures_to_d1.py"
    ]
@@ -2107,15 +1920,9 @@
    "kind": "collected",
    "manual_note": null,
    "name": "futures_season_stats",
-   "pages": [
-    "index.html",
-    "pages/player-analytics.html"
-   ],
-   "routes": [
-    "/futures/player/:id",
-    "/futures/search",
-    "/schedule/futures"
-   ],
+   "pages": [],
+   "routes": [],
+   "stopped": true,
    "written_by": [
     "data_collection/futures_records.py"
    ]
@@ -2127,12 +1934,9 @@
    "kind": "manual",
    "manual_note": "퓨처스 팀 목록입니다. data_collection/futures_schedule.py 의 시드값(INSERT OR REPLACE)으로 한 번 채웠고, 정기 작업은 없습니다.",
    "name": "futures_teams",
-   "pages": [
-    "index.html"
-   ],
-   "routes": [
-    "/schedule/futures"
-   ],
+   "pages": [],
+   "routes": [],
+   "stopped": false,
    "written_by": []
   },
   {
@@ -2161,6 +1965,7 @@
     "/wrc/seasons",
     "/wrc/top-changes"
    ],
+   "stopped": false,
    "written_by": [
     "data_collection/daily_games_to_d1.py"
    ]
@@ -2182,8 +1987,6 @@
    ],
    "routes": [
     "/dashboard/stats",
-    "/futures/player/:id",
-    "/futures/search",
     "/leaders",
     "/players/:id",
     "/players/:id/arsenal",
@@ -2202,6 +2005,7 @@
     "/wrc/seasons",
     "/wrc/top-changes"
    ],
+   "stopped": true,
    "written_by": [
     "data_collection/csv_to_d1.py"
    ]
@@ -2222,8 +2026,6 @@
    ],
    "routes": [
     "/dashboard/stats",
-    "/futures/player/:id",
-    "/futures/search",
     "/leaders",
     "/players/:id",
     "/players/:id/arsenal",
@@ -2235,6 +2037,7 @@
     "/stats/seasons",
     "/teams/:id"
    ],
+   "stopped": true,
    "written_by": [
     "data_collection/csv_to_d1.py"
    ]
@@ -2251,8 +2054,6 @@
     "pages/player-analytics.html"
    ],
    "routes": [
-    "/futures/player/:id",
-    "/futures/search",
     "/players/:id",
     "/players/:id/arsenal",
     "/players/:id/usage",
@@ -2260,6 +2061,7 @@
     "/roster",
     "/roster/moves"
    ],
+   "stopped": true,
    "written_by": [
     "data_collection/add_new_players.py",
     "data_collection/roster_to_d1.py"
@@ -2279,6 +2081,7 @@
     "/roster",
     "/roster/moves"
    ],
+   "stopped": true,
    "written_by": [
     "data_collection/add_new_players.py",
     "data_collection/roster_to_d1.py"
@@ -2296,6 +2099,7 @@
    "name": "kbo_run_values_by_season",
    "pages": [],
    "routes": [],
+   "stopped": false,
    "written_by": [
     "park_factors/build_re24_run_values.py"
    ]
@@ -2317,6 +2121,7 @@
     "pages/team-stats.html"
    ],
    "routes": [],
+   "stopped": false,
    "written_by": [
     "park_factors/build_woba_weights.py"
    ]
@@ -2334,6 +2139,7 @@
    "routes": [
     "/teams/:id"
    ],
+   "stopped": false,
    "written_by": []
   },
   {
@@ -2345,6 +2151,7 @@
    "name": "meta_backfill",
    "pages": [],
    "routes": [],
+   "stopped": false,
    "written_by": []
   },
   {
@@ -2356,6 +2163,7 @@
    "name": "meta_job_runs",
    "pages": [],
    "routes": [],
+   "stopped": false,
    "written_by": []
   },
   {
@@ -2367,6 +2175,7 @@
    "name": "meta_table_counts",
    "pages": [],
    "routes": [],
+   "stopped": false,
    "written_by": []
   },
   {
@@ -2385,6 +2194,7 @@
     "/players/:id/pitch_trend",
     "/players/:id/pitch_values"
    ],
+   "stopped": false,
    "written_by": [
     "data_collection/pitch_run_value.py"
    ]
@@ -2404,6 +2214,7 @@
    "routes": [
     "/players/:id/pitch_trend"
    ],
+   "stopped": false,
    "written_by": [
     "data_collection/pitch_run_value.py"
    ]
@@ -2423,6 +2234,7 @@
    "routes": [
     "/stats/plate_discipline"
    ],
+   "stopped": false,
    "written_by": [
     "data_collection/pitch_run_value.py"
    ]
@@ -2456,6 +2268,7 @@
     "/wrc/seasons",
     "/wrc/top-changes"
    ],
+   "stopped": false,
    "written_by": [
     "data_collection/daily_pbp_to_d1.py"
    ]
@@ -2477,8 +2290,6 @@
    ],
    "routes": [
     "/dashboard/stats",
-    "/futures/player/:id",
-    "/futures/search",
     "/leaders",
     "/players/:id",
     "/players/:id/arsenal",
@@ -2490,6 +2301,7 @@
     "/stats/regulation",
     "/stats/seasons"
    ],
+   "stopped": true,
    "written_by": [
     "data_collection/add_new_players.py",
     "data_collection/heal_player_photos.py",
@@ -2511,6 +2323,7 @@
     "pages/factor-stats.html"
    ],
    "routes": [],
+   "stopped": false,
    "written_by": [
     "park_factors/build_re24_run_values.py"
    ]
@@ -2526,6 +2339,7 @@
    "name": "run_expectancy",
    "pages": [],
    "routes": [],
+   "stopped": false,
    "written_by": [
     "data_collection/pitch_run_value.py"
    ]
@@ -2547,6 +2361,7 @@
     "pages/team-stats.html"
    ],
    "routes": [],
+   "stopped": false,
    "written_by": [
     "park_factors/compute_self_park_factors.py"
    ]
@@ -2570,6 +2385,7 @@
     "/wrc/seasons",
     "/wrc/top-changes"
    ],
+   "stopped": false,
    "written_by": []
   },
   {
@@ -2581,6 +2397,7 @@
    "name": "statiz_park_factor",
    "pages": [],
    "routes": [],
+   "stopped": false,
    "written_by": []
   },
   {
@@ -2592,6 +2409,7 @@
    "name": "statiz_yearly_constants",
    "pages": [],
    "routes": [],
+   "stopped": false,
    "written_by": []
   },
   {
@@ -2607,6 +2425,7 @@
    "routes": [
     "/logo/:code"
    ],
+   "stopped": false,
    "written_by": []
   },
   {
@@ -2625,6 +2444,7 @@
    "routes": [
     "/teams/:id"
    ],
+   "stopped": true,
    "written_by": [
     "data_collection/team_ranks.py"
    ]
@@ -2643,6 +2463,7 @@
     "/teams",
     "/teams/:id"
    ],
+   "stopped": true,
    "written_by": [
     "data_collection/team_ranks.py"
    ]
@@ -2663,6 +2484,7 @@
    "routes": [
     "/teams/:id"
    ],
+   "stopped": false,
    "written_by": []
   },
   {
@@ -2683,6 +2505,7 @@
     "/games",
     "/teams"
    ],
+   "stopped": false,
    "written_by": []
   },
   {
@@ -2712,6 +2535,7 @@
     "/wrc/seasons",
     "/wrc/top-changes"
    ],
+   "stopped": false,
    "written_by": [
     "park_factors/build_wrc_plus.py"
    ]
@@ -2752,6 +2576,7 @@
     "/wrc/seasons",
     "/wrc/top-changes"
    ],
+   "stopped": false,
    "written_by": [
     "park_factors/build_wrc_plus.py"
    ]

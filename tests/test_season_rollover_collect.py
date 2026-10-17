@@ -69,13 +69,12 @@ def test_공식_기록은_받은_시즌을_다음_단계에_알립니다(tmp_pat
     m.announce_season(2026, env={})
 
 
-def test_daily_적재는_수집이_알린_시즌의_CSV_를_읽습니다():
+def test_daily_는_올해를_박아_두지_않습니다():
+    # 공식 기록 수집·적재 단계는 KBO 이용약관(2026-10-14)으로 daily 에서
+    # 뺐습니다. 남은 단계도 `date +%Y` 로 시즌을 박지 않아야 합니다.
     wf = (ROOT / ".github" / "workflows" / "daily.yml").read_text(encoding="utf-8")
     runs = "\n".join(line for line in wf.splitlines() if not line.strip().startswith("#"))
     assert "date +%Y" not in runs
-    for kind, step in (("batter", "scrape_batter"), ("pitcher", "scrape_pitcher")):
-        assert ("%s_stats_${{ steps.%s.outputs.season }}.csv" % (kind, step)) in wf
-        assert re.search(r"id: %s\s" % step, wf)
 
 
 # ------------------------------------------------------------ 팀 순위

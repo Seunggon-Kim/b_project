@@ -95,11 +95,14 @@ def test_결과_모양():
     assert daily["schedule_kst"] == "매일 03:33" and daily["stale_hours"] == 36
     tr = next(t for t in d["tables"] if t["name"] == "team_season_rank")
     assert tr["kind"] == "collected" and tr["written_by"] == ["data_collection/team_ranks.py"]
+    # 팀 순위 수집은 KBO 이용약관(2026-10-14)으로 멈췄습니다. 표는 남고 선은 없습니다.
+    assert tr["stopped"] is True
+    assert {"from": "job:daily", "to": "table:team_season_rank"} not in d["edges"]
+    assert not next(t for t in d["tables"] if t["name"] == "play_by_play")["stopped"]
     for name in ("games", "players", "play_by_play"):
         assert next(t for t in d["tables"] if t["name"] == name)["kind"] == "collected", name
     wrc = next(t for t in d["tables"] if t["name"] == "wrc_plus_comparison")
     assert wrc["kind"] == "derived" and "play_by_play" in wrc["derived_from"]
-    assert {"from": "job:daily", "to": "table:team_season_rank"} in d["edges"]
     assert {"from": "table:play_by_play", "to": "table:wrc_plus_comparison"} in d["edges"]
     # api.js 를 싣기만 하고 부르지 않는 주소가 페이지에 붙지 않습니다.
     stats = next(p for p in d["pages"] if p["path"] == "pages/player-stats.html")
@@ -124,8 +127,10 @@ def scheduled_workflows():
 
 def test_정해진_시각에_도는_워크플로를_모두_봅니다():
     # 새 예약 워크플로를 만들고 계보 목록에 넣지 않으면, 그 작업이 쓰는 표가
-    # 조용히 빠집니다.
-    assert set(WORKFLOWS) == set(bl.WORKFLOWS) == scheduled_workflows()
+    # 조용히 빠집니다. 멈춘 워크플로(KBO 이용약관, 2026-10-14)는 예약이 없습니다.
+    stopped = set(HAND["stopped"]["workflows"])
+    assert not stopped & scheduled_workflows()
+    assert set(WORKFLOWS) == set(bl.WORKFLOWS) == scheduled_workflows() | stopped
 
 
 def test_작업마다_한국_시각_일정이_있습니다():
@@ -140,9 +145,16 @@ def test_손_파일의_스크립트가_실제_파일입니다():
 
 def test_표를_쓰는_스크립트는_예약_워크플로에서_돕니다():
     # 손 파일에 writes 를 적어도 아무 작업도 부르지 않으면 그 표는 갱신되지 않습니다.
+    # 멈춘 스크립트(손 파일 stopped.scripts)는 일부러 부르지 않습니다.
     steps = {s["script"] for w in WORKFLOWS for s in lx.parse_workflow(wf_text(w))["steps"]}
-    idle = sorted(p for p, s in HAND["scripts"].items() if s.get("writes") and p not in steps)
+    stopped = set(HAND["stopped"]["scripts"])
+    idle = sorted(p for p, s in HAND["scripts"].items()
+                  if s.get("writes") and p not in steps and p not in stopped)
     assert not idle, "어떤 예약 워크플로도 부르지 않는 쓰기 스크립트: %s" % idle
+    # 멈췄다고 적은 스크립트를 누가 다시 부르면 stopped 에서 빼야 합니다.
+    live = {s["script"] for w in WORKFLOWS if w not in HAND["stopped"]["workflows"]
+            for s in lx.parse_workflow(wf_text(w))["steps"]}
+    assert not sorted(stopped & live), "stopped.scripts 인데 도는 워크플로가 부릅니다"
 
 
 def test_받아_오거나_계산하는_표는_실행_기록이_있습니다():
@@ -152,7 +164,7 @@ def test_받아_오거나_계산하는_표는_실행_기록이_있습니다():
     ok = HAND.get("no_status_ok", {})
     bad = []
     for t in d["tables"]:
-        if t["kind"] not in ("collected", "derived") or t["name"] in ok:
+        if t["kind"] not in ("collected", "derived") or t["name"] in ok or t["stopped"]:
             continue
         if not any(by_path[p]["status_keys"].get(w)
                    for p in t["written_by"] for w in by_path[p]["jobs"]):
@@ -315,6 +327,10 @@ def test_예약_작업이_부르는_스크립트마다_설명이_있습니다():
             assert "D1_WRITE" not in s["desc"], s["path"]
 
 
-def test_roster_는_하루_두_번_돕니다():
-    roster = next(j for j in bl.build(ROOT)["jobs"] if j["id"] == "roster")
-    assert roster["schedule_kst"] == "매일 16:07·19:07"
+def test_멈춘_작업은_예약이_없고_멈춤으로_보입니다():
+    # roster·monthly 는 KBO 사이트만 읽어 KBO 이용약관(2026-10-14)으로 멈췄습니다.
+    jobs = {j["id"]: j for j in bl.build(ROOT)["jobs"]}
+    for w in ("roster", "monthly"):
+        assert jobs[w]["stopped"] is True and jobs[w]["cron_utc"] is None, w
+        assert jobs[w]["schedule_kst"] == "멈춤", w
+    assert jobs["daily"]["stopped"] is False and jobs["weekly"]["stopped"] is False

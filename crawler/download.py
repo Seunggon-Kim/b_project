@@ -740,7 +740,6 @@ def get_game_data(game_id):
 
 def get_game_data_renewed(game_id):
     nav_api_header = 'https://api-gw.sports.naver.com/schedule/games/'
-    get_boxscore_api = 'https://www.koreabaseball.com/ws/Schedule.asmx/GetBoxScoreScroll'
 
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
@@ -1162,22 +1161,11 @@ def get_game_data_renewed(game_id):
                                        '평균자책점', '볼넷', '사구', 'game_date', 'game_id', 'level', 'level_eng']
                 pitching_df = pitching_df[pitching_df_columns]
             else:
-                params = {
-                    'leId': 1,
-                    'srId': 0,
-                    'seasonId': int(game_id[:4]),
-                    'gameId': game_id[:-4]
-                }
-                req = requests.post(get_boxscore_api, data=params)
-                # KBO 공식 GetBoxScoreScroll fallback은 현재 전역적으로 죽어 있어
-                # JSON 대신 HTML(text/html)을 돌려준다. req.json()이 JSONDecodeError를
-                # 던지면 게임 전체가 실패하므로, 파싱 실패 시 빈 dict로 강등(graceful degrade)한다.
-                # (Naver pitchersBoxscore가 비어 있는 경기: 2011 등)
-                try:
-                    req_js = req.json()
-                except (ValueError, requests.exceptions.JSONDecodeError):
-                    req_js = {}
-                req.close()
+                # KBO 공식 GetBoxScoreScroll 보조 호출을 뺐습니다. 2026-10-14 시행
+                # KBO 이용약관 제14조 차항(크롤링 등 자동화 수집 금지) 때문입니다.
+                # 그 전에도 이 주소는 JSON 대신 HTML 을 돌려줘 늘 빈 dict 로
+                # 강등됐습니다(Naver pitchersBoxscore 가 빈 경기: 2011 등).
+                req_js = {}
 
                 if req_js.get('msg') == '성공':
                     text = [req_js.get('arrPitcher')[0].get('table'), req_js.get('arrPitcher')[1].get('table')]

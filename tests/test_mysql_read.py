@@ -332,12 +332,13 @@ def test_워크플로_수집_스크립트의_질의가_모두_MySQL_로_바뀝�
     found, unknown = _collected_queries()
     files = {rel for rel, _, _ in found}
     # 헛돌지 않게, 읽기가 있는 수집 스크립트가 모두 잡혔는지 봅니다.
-    for rel in ("data_collection/team_ranks.py", "data_collection/roster_to_d1.py",
+    # team_ranks.py 는 KBO 이용약관(2026-10-14)으로 daily 에서 뺐습니다.
+    for rel in ("data_collection/roster_to_d1.py",
                 "data_collection/sync_players_from_roster.py",
                 "data_collection/add_new_players.py", "data_collection/heal_player_photos.py",
                 "data_collection/daily_games_to_d1.py"):
         assert rel in files, rel
-    assert len(found) >= 12, found
+    assert len(found) >= 11, found
     assert {rel for rel, _ in unknown} <= _DYNAMIC_OK, unknown
     bad = []
     for rel, line, sql in found:

@@ -40,16 +40,8 @@ concurrency:
   group: weekly-park-factors
   cancel-in-progress: false
 
-# CSV 를 Releases 에 올리려면 쓰기 권한이 필요합니다. 저장소 기본값이
-# 읽기 전용이면 GITHUB_TOKEN 으로 릴리스를 못 만듭니다.
-#
-#   HTTP 403: Resource not accessible by integration
-#   https://api.github.com/repos/.../releases
-#
-# 여기서 명시하면 저장소 기본값이 읽기 전용이어도 이 워크플로만
-# 쓰기를 얻습니다. 필요한 것만 올리고 나머지는 기본값(읽기)입니다.
 permissions:
-  contents: write
+  contents: read
   id-token: write
 
 env:
@@ -135,44 +127,10 @@ jobs:
         if: steps.re24.outcome == 'success'
         run: python migration/sqlite_to_d1.py --db "$KBO_DB"
 
-      # --- CSV 전량 내려받기 ------------------------------------------
-      #
-      # Workers 에서는 큰 표를 통째로 못 보냅니다. 스트림이 **오류 없이
-      # 조용히 끊깁니다.** 그래서 20,000행을 넘으면 413 과 안내를 냅니다.
-      # `play_by_play` 는 136번 나눠 받아야 하는데 쓸 만하지 않습니다.
-      #
-      # 설계 문서는 R2 사전 생성본을 답으로 적었지만 R2 는 결제수단
-      # 등록이 필요해 예산 조건에 걸립니다. 공개 저장소의 Releases 는
-      # 무료이고 자산 하나에 2GB 까지 되며 저장소 용량에도 안 잡힙니다.
-      #
-      # 시즌별로 나눕니다. 한 덩어리 190MB 보다 18MB 짜리 열두 개가
-      # 받기 좋습니다. 태그는 고정이고 자산만 매주 갈아 끼웁니다.
-      - name: CSV 만들기
-        id: csv
-        if: steps.push.outcome == 'success'
-        run: python migration/export_csv.py --out dist/csv
-
-      - name: CSV 를 Releases 에 올리기
-        id: csv_upload
-        if: steps.csv.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -e
-          TAG=data-latest
-          # 릴리스가 없으면 만듭니다. 있으면 그대로 두고 자산만 바꿉니다.
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" \
-              --title "데이터 전량 내려받기" \
-              --notes "매주 자동으로 갱신됩니다. play_by_play 를 시즌별 gzip CSV 로 나눠 두었습니다." \
-              --latest=false
-          fi
-          gh release upload "$TAG" dist/csv/*.csv.gz --clobber
-          gh release edit "$TAG" \
-            --notes "매주 자동으로 갱신됩니다(마지막 갱신 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M') KST).
-
-          \`play_by_play\` 를 시즌별 gzip CSV 로 나눠 두었습니다.
-          나머지 표는 2만 행 미만이라 화면에서 바로 받을 수 있습니다."
+      # --- CSV 전량 내려받기: 멈춤 -------------------------------------
+      # 2026-10-14 시행 KBO 이용약관 제14조 차항(재배포 금지)에 따라 GitHub
+      # Releases(data-latest)에 전체 데이터 CSV 를 올리던 단계를 뺐습니다.
+      # migration/export_csv.py 는 그대로 둡니다.
 
       - name: 캐시 비우기
         id: purge
@@ -189,7 +147,7 @@ jobs:
           cat /tmp/purge.txt; echo
           test "$code" = "200"
 
-      # MySQL 에 결과를 올린 뒤에만 돕니다. CSV·캐시 단계가 실패해도 돕니다.
+      # MySQL 에 결과를 올린 뒤에만 돕니다. 캐시 단계가 실패해도 돕니다.
       # 실패해도 앞의 MySQL 적재는 그대로이고 뒤 단계도 계속 돕니다
       # (continue-on-error). 대신 마지막 "빅쿼리 복사 판정"이 실행을 빨갛게 끝냅니다.
       - name: 빅쿼리 복사

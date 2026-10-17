@@ -156,12 +156,12 @@ def test_화면이_내려받기_주소를_알려_줍니다():
     assert "download: DOWNLOAD_URL" in js, "413 응답에 주소가 없습니다"
 
 
-def test_주간_워크플로가_만들고_올립니다():
-    import re
-    s = re.sub(r"\\\s*\n\s*", " ",
-               (ROOT / ".github" / "workflows" / "weekly.yml").read_text(
-                   encoding="utf-8"))
-    assert "export_csv.py" in s, "CSV 를 만들지 않습니다"
-    assert "gh release upload" in s, "Releases 에 올리지 않습니다"
-    assert "--clobber" in s, "자산을 갈아 끼우지 않으면 두 번째부터 실패합니다"
-    assert s.index("export_csv.py") < s.index("gh release upload")
+def test_주간_워크플로가_Releases_에_올리지_않습니다():
+    """2026-10-14 시행 KBO 이용약관 제14조 차항(재배포 금지)으로 뺐습니다.
+
+    전체 데이터 CSV 를 공개 Releases(data-latest)에 올리던 단계입니다.
+    export_csv.py 는 남겨 두고 워크플로에서만 부르지 않습니다.
+    """
+    s = (ROOT / ".github" / "workflows" / "weekly.yml").read_text(encoding="utf-8")
+    assert "gh release" not in s
+    assert "migration/export_csv.py --out" not in s

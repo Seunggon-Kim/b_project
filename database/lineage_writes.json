@@ -29,6 +29,19 @@
       "url": "https://www.koreabaseball.com/"
     }
   },
+  "stopped": {
+    "reason": "2026-10-14 시행 KBO 이용약관 제14조 차항(크롤링 등 자동화 수집 금지)에 따라 KBO 사이트(koreabaseball.com)를 읽는 수집을 멈췄습니다. 표에는 멈추기 전까지 받은 값이 남아 있습니다.",
+    "workflows": [
+      "monthly",
+      "roster"
+    ],
+    "scripts": [
+      "data_collection/official_stats_http.py",
+      "data_collection/csv_to_d1.py",
+      "data_collection/team_ranks.py",
+      "data_collection/futures_to_d1.py"
+    ]
+  },
   "scripts": {
     "data_collection/daily_pbp_to_d1.py": {
       "sources": [
@@ -66,9 +79,6 @@
         "futures_games"
       ],
       "reads": [],
-      "status_keys": {
-        "daily": "futures"
-      },
       "desc": "퓨처스리그(2군) 일정·결과를 KBO Schedule.asmx 에서 받아 MySQL futures_games 를 갱신합니다. 화면의 퓨처스 일정은 실시간 스코어보드를 그때그때 읽으므로 이 표를 기다리지 않습니다."
     },
     "data_collection/team_ranks.py": {
@@ -80,9 +90,6 @@
         "team_seasons"
       ],
       "reads": [],
-      "status_keys": {
-        "daily": "team_ranks"
-      },
       "note": "team_seasons 는 옛 시즌 표기명을 프랜차이즈에 잇는 조회용이고, 올 시즌 줄이 없으면 그것만 채웁니다.",
       "desc": "KBO 기록실 팀 순위에서 올 시즌 순위·경기 수·승패무·승률·게임차를 받아 MySQL team_season_rank 에 덮어씁니다. 올 시즌은 올해 정규시즌 경기가 끝났으면 올해, 아니면 지난해입니다. 그해 순위가 아직 없으면 건너뜁니다. 받은 순위로 team_seasons 에 올 시즌 줄이 없으면 그것만 넣습니다(새 시즌의 팀 기록실이 비지 않게). 1982~2025는 2026-08-29에 한 번 받은 값 그대로입니다."
     },
@@ -104,9 +111,6 @@
         "kbo_official_pitcher_stats"
       ],
       "reads": [],
-      "status_keys": {
-        "daily": "official_stats"
-      },
       "note": "--table 인자로 타자·투수 표를 나눠 넣습니다.",
       "desc": "official_stats_http.py 가 받은 CSV 를 MySQL kbo_official_batter_stats·kbo_official_pitcher_stats 에 넣습니다(있으면 고치고, 없으면 더합니다)."
     },
@@ -121,7 +125,6 @@
       ],
       "reads": [],
       "status_keys": {
-        "daily": "roster",
         "roster": "roster_pm"
       },
       "note": "공식 기록·players 는 선수 번호를 찾는 조회용입니다. 퓨처스 명단도 함께 받습니다.",
@@ -149,7 +152,6 @@
       ],
       "reads": [],
       "status_keys": {
-        "daily": "add_new_players",
         "roster": "add_new_players"
       },
       "note": "명단·이동 표에서 번호 없는 이름을 찾아 새 선수를 넣고, 그 표의 빈 player_id 를 채웁니다. 오늘·내일 선발은 우리 일정 API 로 봅니다.",
@@ -353,13 +355,15 @@
     "/wrc/batter/:id": "옛 FastAPI(api/main.py)에서 옮겨 온 주소입니다. 지금 어느 화면도 부르지 않습니다."
   },
   "routes_without_tables": {
-    "/jobs/status": "작업 실행 기록(meta_job_runs)만 읽습니다. meta_ 표는 계보에서 뺍니다."
+    "/jobs/status": "작업 실행 기록(meta_job_runs)만 읽습니다. meta_ 표는 계보에서 뺍니다.",
+    "/standings": "KBO 이용약관(2026-10-14 시행)에 따라 KBO 사이트를 읽지 않고 410 만 돌려줍니다. 읽는 표가 없습니다.",
+    "/schedule/futures": "KBO 이용약관(2026-10-14 시행)에 따라 KBO 사이트를 읽지 않고 410 만 돌려줍니다. 읽는 표가 없습니다.",
+    "/futures/standings": "KBO 이용약관(2026-10-14 시행)에 따라 KBO 사이트를 읽지 않고 410 만 돌려줍니다. 읽는 표가 없습니다.",
+    "/futures/leaders": "KBO 이용약관(2026-10-14 시행)에 따라 KBO 사이트를 읽지 않고 410 만 돌려줍니다. 읽는 표가 없습니다.",
+    "/futures/search": "KBO 이용약관(2026-10-14 시행)에 따라 KBO 사이트를 읽지 않고 410 만 돌려줍니다. 읽는 표가 없습니다.",
+    "/futures/player/:id": "KBO 이용약관(2026-10-14 시행)에 따라 KBO 사이트를 읽지 않고 410 만 돌려줍니다. 읽는 표가 없습니다."
   },
   "live_route_files": [
-    "src/routes/standings.js",
-    "src/routes/schedule.js",
-    "src/routes/futures.js",
-    "src/routes/futuresplayer.js",
-    "src/routes/futuresrecord.js"
+    "src/routes/schedule.js"
   ]
 }

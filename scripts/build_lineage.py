@@ -45,6 +45,10 @@ def build(root=ROOT):
     known = lx.schema_tables(_read(root, "migration/mysql/schema.sql"))
     coldict = json.loads(_read(root, "database/column_descriptions.json")).get("tables", {})
     visible = {t for t in known if not t.startswith("meta_")}
+    # 멈춘 수집입니다(2026-10-14 시행 KBO 이용약관 제14조 차항). 워크플로는 예약이
+    # 없고, 스크립트는 어떤 작업도 부르지 않거나 멈춘 워크플로에서만 불립니다.
+    stopped = hand.get("stopped", {})
+    stopped_wfs = set(stopped.get("workflows", []))
 
     # 작업 → 스크립트
     jobs, script_jobs = [], {}
@@ -55,11 +59,17 @@ def build(root=ROOT):
             keys = hand["scripts"].get(s["script"], {}).get("status_keys", {})
             steps.append({"name": s["name"], "script": s["script"], "status_key": keys.get(w)})
             script_jobs.setdefault(s["script"], set()).add(w)
+        is_stopped = w in stopped_wfs
         jobs.append({
             "id": w, "workflow": w + ".yml", "cron_utc": ", ".join(wf["crons"]) or None,
-            "schedule_kst": lx.schedule_kst(wf["crons"]),
+            "schedule_kst": "멈춤" if is_stopped else lx.schedule_kst(wf["crons"]),
             "stale_hours": STALE_HOURS[w], "steps": steps,
+            "stopped": is_stopped,
         })
+
+    def script_stopped(path):
+        js = script_jobs.get(path, set())
+        return path in stopped.get("scripts", []) or bool(js and js <= stopped_wfs)
 
     scripts = []
     for path in sorted(hand["scripts"]):
@@ -69,6 +79,7 @@ def build(root=ROOT):
             "sources": sorted(s.get("sources", [])), "writes": sorted(s.get("writes", [])),
             "reads": sorted(s.get("reads", [])), "status_keys": s.get("status_keys", {}),
             "note": s.get("note"), "desc": s.get("desc"),
+            "stopped": script_stopped(path),
         })
 
     # API 주소 → 표
@@ -140,12 +151,17 @@ def build(root=ROOT):
             "desc": meta.get("table_desc"),
             "written_by": writers, "derived_from": derived, "routes": t_routes,
             "pages": sorted(t_pages), "manual_note": hand.get("manual_tables", {}).get(t),
+            # 쓰는 스크립트가 모두 멈췄으면 더는 갱신되지 않는 표입니다.
+            "stopped": bool(writers) and kind in ("collected", "derived")
+            and all(script_stopped(p) for p in writers),
         })
 
-    # 그림의 선(4칸)
+    # 그림의 선(4칸). 멈춘 작업은 선을 긋지 않습니다(더는 받지 않습니다).
     edges = set()
     by_path = {s["path"]: s for s in scripts}
     for j in jobs:
+        if j["stopped"]:
+            continue
         for step in j["steps"]:
             s = by_path.get(step["script"], {})
             for src in s.get("sources", []):
@@ -171,6 +187,7 @@ def build(root=ROOT):
                for k, v in sorted(hand["sources"].items())]
     return {
         "version": 1,
+        "stopped_reason": stopped.get("reason"),
         "sources": sources,
         "jobs": sorted(jobs, key=lambda j: j["id"]),
         "scripts": scripts,

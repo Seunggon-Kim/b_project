@@ -19,6 +19,9 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 WF = ROOT / ".github" / "workflows"
 NAMES = ["daily", "roster", "weekly", "monthly"]
+# 2026-10-14 시행 KBO 이용약관 제14조 차항(자동 수집 금지)으로 끈 워크플로입니다.
+STOP_JOB = "kbo-tos-stop"
+KBO_STOPPED = ["roster", "monthly"]
 
 
 def load(name):
@@ -27,7 +30,9 @@ def load(name):
 
 def steps(name):
     doc = load(name)
-    (job,) = doc["jobs"].values()
+    # roster·monthly 는 맨 앞에 KBO 이용약관 멈춤 job 이 있습니다(아래 테스트).
+    jobs = {k: v for k, v in doc["jobs"].items() if k != STOP_JOB}
+    (job,) = jobs.values()
     return job, job["steps"]
 
 
@@ -83,7 +88,7 @@ def test_daily_실패_판정은_수집과_MySQL_을_봅니다():
     judge = next(s for s in ss if s.get("name") == "실패 판정")
     assert judge["if"] == "always()"
     run = judge["run"]
-    for sid in ("pbp", "load_batter", "load_pitcher", "purge", "team_ranks"):
+    for sid in ("pbp", "purge", "pitch_values"):
         assert "steps.%s.outcome" % sid in run, sid
     assert '"${{ steps.games.outcome }}" = "failure"' in run
     m = re.search(r'for s in "\$\{\{ steps\.mysql\.outcome \}\}" '
@@ -136,3 +141,23 @@ def test_머리_주석에_D1_을_걷어냈다고_적었습니다(name):
     assert "D1 은 2026-10-04 에 걷어냈습니다" in head, name
     # 되돌리기 안내(D1_WRITE=on)는 더 없습니다.
     assert "되돌린 뒤" not in head and "D1_WRITE" not in head, name
+
+
+@pytest.mark.parametrize("name", KBO_STOPPED)
+def test_KBO_사이트_수집_워크플로는_예약이_없고_손_실행도_멈춥니다(name):
+    doc = load(name)
+    on = doc[True]  # yaml 1.1 은 on 을 True 로 읽습니다.
+    assert "schedule" not in on, name
+    stop = doc["jobs"][STOP_JOB]
+    assert any("exit 1" in (s.get("run") or "") for s in stop["steps"]), name
+    for k, job in doc["jobs"].items():
+        if k != STOP_JOB:
+            assert job.get("needs") == STOP_JOB, (name, k)
+
+
+def test_daily_는_KBO_사이트를_읽는_스크립트를_부르지_않습니다():
+    text = (WF / "daily.yml").read_text(encoding="utf-8")
+    for script in ("official_stats_http.py", "team_ranks.py", "futures_to_d1.py",
+                   "roster_to_d1.py", "sync_players_from_roster.py",
+                   "add_new_players.py", "csv_to_d1.py"):
+        assert "data_collection/" + script not in text, script

@@ -1,5 +1,10 @@
 name: roster
 
+# 2026-10-14 시행 KBO 이용약관 제14조 차항(자동 수집 금지)에 따라 예약 실행을 끔.
+# 이 워크플로는 전부 KBO 사이트(koreabaseball.com)를 읽습니다. 손 실행도
+# 맨 앞 kbo-tos-stop job 에서 바로 실패하고 수집 job 은 건너뜁니다.
+# 수집 스크립트는 data_collection/ 에 그대로 둡니다.
+#
 # 오후에 오늘 명단을 받습니다.
 #
 # ## 왜 daily 로는 모자라나
@@ -39,9 +44,6 @@ name: roster
 # 수집은 Cloud SQL(MySQL)에만 씁니다. D1 은 2026-10-04 에 걷어냈습니다.
 
 on:
-  schedule:
-    - cron: '7 7 * * *'
-    - cron: '7 10 * * *'
   workflow_dispatch:
 
 concurrency:
@@ -57,7 +59,18 @@ env:
   API_BASE: https://kbo-api.bstats-baseball.workers.dev
 
 jobs:
+  # 손 실행도 여기서 실패합니다. 아래 수집 job 은 이 job 이 성공해야
+  # 돌므로 건너뜁니다(always() 단계까지 모두).
+  kbo-tos-stop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: KBO 이용약관에 따라 실행 중단
+        run: |
+          echo "2026-10-14 시행 KBO 이용약관 제14조 차항(자동 수집 금지)에 따라 이 수집을 멈췄습니다."
+          exit 1
+
   roster:
+    needs: kbo-tos-stop
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

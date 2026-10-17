@@ -1,5 +1,10 @@
 name: monthly
 
+# 2026-10-14 시행 KBO 이용약관 제14조 차항(자동 수집 금지)에 따라 예약 실행을 끔.
+# 이 워크플로는 전부 KBO 사이트(koreabaseball.com)를 읽습니다. 손 실행도
+# 맨 앞 kbo-tos-stop job 에서 바로 실패하고 수집 job 은 건너뜁니다.
+# 수집 스크립트는 data_collection/ 에 그대로 둡니다.
+#
 # 선수 상세 프로필을 전체 다시 수집합니다.
 # EC2 crontab 의 `player_info_scraper.py` (매월 1일 13:00 KST) 를 대신합니다.
 #
@@ -18,9 +23,6 @@ name: monthly
 #   ADMIN_TOKEN            적재 뒤 캐시 비우기
 
 on:
-  # 매월 1일 04:13 UTC = 13:13 KST. 원래 시각과 같습니다.
-  schedule:
-    - cron: '13 4 1 * *'
   workflow_dispatch:
 
 concurrency:
@@ -37,7 +39,18 @@ env:
   KBO_DB: /tmp/kbo_players.db
 
 jobs:
+  # 손 실행도 여기서 실패합니다. 아래 수집 job 은 이 job 이 성공해야
+  # 돌므로 건너뜁니다(always() 단계까지 모두).
+  kbo-tos-stop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: KBO 이용약관에 따라 실행 중단
+        run: |
+          echo "2026-10-14 시행 KBO 이용약관 제14조 차항(자동 수집 금지)에 따라 이 수집을 멈췄습니다."
+          exit 1
+
   player-info:
+    needs: kbo-tos-stop
     runs-on: ubuntu-latest
     timeout-minutes: 300
 

@@ -115,40 +115,6 @@ jobs:
           python data_collection/record_job_run.py --job games \
             --status ${{ steps.games.outcome == 'success' && 'ok' || (steps.games.outcome == 'skipped' && 'skip' || 'fail') }}
 
-      # --- 2-1. 퓨처스 일정 -------------------------------------------
-      # EC2 는 30분마다 돌렸습니다. 그럴 필요가 없습니다. 화면의 퓨처스
-      # 일정(`/schedule/futures`)은 Worker 가 KBO 스코어보드를 그때그때
-      # 프록시하므로 이 표를 읽지 않습니다. `futures_games` 는 분석용
-      # 창고라서 하루 한 번이면 충분합니다.
-      - name: 퓨처스 일정 적재
-        id: futures
-        continue-on-error: true
-        run: python data_collection/futures_to_d1.py
-
-      - name: 퓨처스 결과 기록
-        if: always()
-        continue-on-error: true
-        run: |
-          python data_collection/record_job_run.py --job futures \
-            --status ${{ steps.futures.outcome == 'success' && 'ok' || 'fail' }}
-
-      # --- 2-2. 올 시즌 팀 순위 ---------------------------------------
-      # 팀 기록실(/teams/:id)의 시즌별 순위·승패가 team_season_rank 를
-      # 읽습니다. 처음엔 한 번만 받아 2026 이 8월 말 값에 멈춰 있었습니다
-      # (2026-10-03 발견). KBO 기록실 한 페이지라 가볍습니다. 비시즌에는
-      # 스스로 건너뜁니다.
-      - name: 올 시즌 팀 순위 적재
-        id: team_ranks
-        continue-on-error: true
-        run: python data_collection/team_ranks.py --current
-
-      - name: 팀 순위 결과 기록
-        if: always()
-        continue-on-error: true
-        run: |
-          python data_collection/record_job_run.py --job team_ranks \
-            --status ${{ steps.team_ranks.outcome == 'success' && 'ok' || (steps.team_ranks.outcome == 'skipped' && 'skip' || 'fail') }}
-
       # --- 2-3. 구종 가치 ---------------------------------------------
       # 올 시즌 정규시즌 PBP 로 기대 득점 표(주자×아웃×볼카운트)와 투수 ×
       # 구종 × 타자 손별 구종 가치를 다시 만듭니다(MySQL run_expectancy·
@@ -166,111 +132,11 @@ jobs:
           python data_collection/record_job_run.py --job pitch_values \
             --status ${{ steps.pitch_values.outcome == 'success' && 'ok' || (steps.pitch_values.outcome == 'skipped' && 'skip' || 'fail') }}
 
-      # --- 3. KBO 공식 통계 (원래 02:00 KST) --------------------------
-      # Selenium 으로 KBO 사이트를 읽습니다. 러너 IP 가 막히면 여기서
-      # 실패합니다(설계 7장 위험 1).
-      # 브라우저를 걷어냈습니다. Selenium 은 13분을 쓰고, 브라우저에서만
-      # 나는 고장이 있었습니다. 상단 고정 메뉴바가 '다음' 링크를 가려
-      # 2021 NC 49명의 볼넷·사구·삼진이 통째로 빈 적이 있습니다.
-      # HTTP 는 2분이고 좌표도 겹침도 없습니다. 2021 로 대조해
-      # 타자 394명 37컬럼, 투수 308명 51컬럼이 전부 일치했습니다.
-      - name: 타자 기록 수집
-        id: scrape_batter
-        continue-on-error: true
-        run: python data_collection/official_stats_http.py --kind batter
-
-      # 받을 시즌은 수집 단계가 정해 알려 줍니다(outputs.season). 올해
-      # 정규시즌 경기가 아직 없으면(비시즌·시범경기) 지난 시즌을 다시
-      # 받습니다. 예전처럼 `date +%Y` 로 올해를 박으면 2027년 1~3월에
-      # 기록실에 2027 이 없어 매일 실패합니다(2026-10-05 검토).
-      - name: 타자 기록 적재
-        id: load_batter
-        if: steps.scrape_batter.outcome == 'success'
-        continue-on-error: true
-        run: |
-          python data_collection/csv_to_d1.py \
-            --table kbo_official_batter_stats \
-            --csv "crawler/save/official_stats/batter_stats_${{ steps.scrape_batter.outputs.season }}.csv" \
-            --key player_id,season
-
-      - name: 투수 기록 수집
-        id: scrape_pitcher
-        continue-on-error: true
-        run: python data_collection/official_stats_http.py --kind pitcher
-
-      - name: 투수 기록 적재
-        id: load_pitcher
-        if: steps.scrape_pitcher.outcome == 'success'
-        continue-on-error: true
-        run: |
-          python data_collection/csv_to_d1.py \
-            --table kbo_official_pitcher_stats \
-            --csv "crawler/save/official_stats/pitcher_stats_${{ steps.scrape_pitcher.outputs.season }}.csv" \
-            --key player_id,season
-
-      - name: 공식 통계 결과 기록
-        if: always()
-        continue-on-error: true
-        run: |
-          if [ "${{ steps.load_batter.outcome }}" = "success" ] && [ "${{ steps.load_pitcher.outcome }}" = "success" ]; then
-            S=ok
-          else
-            S=fail
-          fi
-          python data_collection/record_job_run.py --job official_stats --status $S \
-            --note "타자 ${{ steps.load_batter.outcome }} / 투수 ${{ steps.load_pitcher.outcome }}"
-
-      # --- 3-1. 1군 등록 현황·등말소 ----------------------------------
-      # **놓친 날은 영영 못 채웁니다.** KBO 는 오늘 것만 보여 주고
-      # 어제 누가 등록됐는지 묻는 화면이 없습니다. 소급이 안 됩니다.
-      #
-      # 명단은 현재 상태만 덮어쓰고(339행), 등말소만 쌓습니다. 명단을
-      # 날마다 쌓으면 1년에 12만 행이 되는데 대부분 어제와 같습니다.
-      - name: 1군 등록 현황 적재
-        id: roster
-        continue-on-error: true
-        run: python data_collection/roster_to_d1.py
-
-      # 등록 현황에서 최신 소속·등번호를 players 로 옮깁니다.
-      #
-      # monthly 의 선수 프로필 수집은 **새 선수만** 받습니다(이미 있으면
-      # 건너뜀). 그래서 기존 선수가 이적하거나 등번호를 바꿔도 영영
-      # 안 고쳐졌습니다. 실측하니 337명 중 소속 98명, 등번호 58명이
-      # 실제와 달랐습니다.
-      #
-      # 바뀐 것만 씁니다. 평소에는 0건이고 이적·번호 변경이 있는 날만
-      # 몇 건 나갑니다.
-      - name: players 소속·등번호 갱신
-        id: sync_players
-        if: steps.roster.outcome == 'success'
-        continue-on-error: true
-        run: python data_collection/sync_players_from_roster.py
-
-      # players 에 없는 새 선수를 KBO 선수 검색으로 찾아 넣습니다.
-      # 오늘·내일 선발도 봅니다. 선발은 전날 저녁 발표라 새벽에 돌면
-      # 첫 등판 전에 링크가 걸립니다.
-      - name: 새 선수 추가
-        id: new_players
-        if: steps.roster.outcome == 'success'
-        continue-on-error: true
-        run: python data_collection/add_new_players.py
-
-      # 화면의 수집 일정 표가 새 선수 추가의 마지막 실행을 따로 보여 줍니다.
-      # roster(오후)도 같은 키에 남기므로 둘 중 나중 것이 보입니다.
-      - name: 새 선수 추가 결과 기록
-        if: always()
-        continue-on-error: true
-        run: |
-          python data_collection/record_job_run.py --job add_new_players \
-            --status ${{ steps.new_players.outcome == 'success' && 'ok' || (steps.new_players.outcome == 'skipped' && 'skip' || 'fail') }}
-
-      - name: 등록 현황 결과 기록
-        if: always()
-        continue-on-error: true
-        run: |
-          python data_collection/record_job_run.py --job roster \
-            --status ${{ steps.roster.outcome == 'success' && 'ok' || 'fail' }} \
-            --note "players 갱신 ${{ steps.sync_players.outcome }} / 새 선수 ${{ steps.new_players.outcome }}"
+      # --- KBO 사이트 수집: 멈춤 ------------------------------------
+      # 2026-10-14 시행 KBO 이용약관 제14조 차항(크롤링 등 자동화 수집 금지)에
+      # 따라 KBO 사이트(koreabaseball.com)를 읽는 단계를 뺐습니다: 퓨처스 일정,
+      # 올 시즌 팀 순위, 공식 타자·투수 기록, 1군 등록 현황, players 소속·등번호
+      # 갱신, 새 선수 추가. 수집 스크립트는 data_collection/ 에 그대로 둡니다.
 
       # --- 4. 옛 시즌 PBP 되채우기 (2008~2014): 끝남---------------------
       # 2026-08-29 에 두 커서 모두 마지막 경기까지 넣어 단계를 뺐습니다.
@@ -320,14 +186,13 @@ jobs:
           name: daily-output
           path: |
             logs/
-            crawler/save/official_stats/
             log.txt
           if-no-files-found: warn
           retention-days: 7
 
       # 수집 단계는 MySQL 쓰기가 실패하면 그 자리에서 실패합니다. 그래도 이
       # 확인을 둡니다. 실패 기록 파일이 어느 작업이 못 썼는지 모아 보여 주고,
-      # 아래 실패 판정에 넣지 않은 단계(퓨처스·명단 등)의 MySQL 실패도 잡습니다.
+      # 아래 실패 판정에 넣지 않은 단계의 MySQL 실패도 잡습니다.
       - name: MySQL 적재 실패 확인
         id: mirror_check
         if: ${{ always() && steps.mysql.outcome == 'success' }}
@@ -350,13 +215,7 @@ jobs:
             echo "|---|---|"
             echo "| PBP 수집·적재 | ${{ steps.pbp.outcome }} |"
             echo "| games 적재 | ${{ steps.games.outcome }} |"
-            echo "| 올 시즌 팀 순위 | ${{ steps.team_ranks.outcome }} |"
             echo "| 구종 가치 계산 | ${{ steps.pitch_values.outcome }} |"
-            echo "| 타자 수집 | ${{ steps.scrape_batter.outcome }} |"
-            echo "| 타자 적재 | ${{ steps.load_batter.outcome }} |"
-            echo "| 투수 수집 | ${{ steps.scrape_pitcher.outcome }} |"
-            echo "| 투수 적재 | ${{ steps.load_pitcher.outcome }} |"
-            echo "| 1군 등록 현황 | ${{ steps.roster.outcome }} |"
             echo "| 캐시 비우기 | ${{ steps.purge.outcome }} |"
             echo "| MySQL 연결 | ${{ steps.mysql.outcome }} |"
             echo "| MySQL 적재 | ${{ steps.mirror_check.outcome }} |"
@@ -368,9 +227,8 @@ jobs:
         if: always()
         run: |
           fail=0
-          for s in "${{ steps.pbp.outcome }}" "${{ steps.load_batter.outcome }}" \
-                   "${{ steps.load_pitcher.outcome }}" "${{ steps.purge.outcome }}" \
-                   "${{ steps.team_ranks.outcome }}" "${{ steps.pitch_values.outcome }}"; do
+          for s in "${{ steps.pbp.outcome }}" "${{ steps.purge.outcome }}" \
+                   "${{ steps.pitch_values.outcome }}"; do
             if [ "$s" != "success" ]; then fail=1; fi
           done
           # games 는 경기가 없는 날 건너뛰므로 skipped 를 실패로 보지 않습니다.
