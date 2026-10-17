@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bstats 비용 보고서</title>
+<style>
+@font-face{font-family:'KBO Dia Gothic';src:url('fonts/KBO-Dia-Gothic_light.woff') format('woff');font-weight:300;font-display:swap}
+@font-face{font-family:'KBO Dia Gothic';src:url('fonts/KBO-Dia-Gothic_medium.woff') format('woff');font-weight:400 500;font-display:swap}
+@font-face{font-family:'KBO Dia Gothic';src:url('fonts/KBO-Dia-Gothic_bold.woff') format('woff');font-weight:600 900;font-display:swap}
+:root{--bg:#f8fafc;--card:#fff;--line:rgba(15,23,42,.08);--t1:#0f172a;--t2:#334155;--tm:#64748b;--blue:#3b82f6;--warn:#b45309;--warnbg:#fef3c7;--tipbg:#0f172a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--t1);font-family:'KBO Dia Gothic',"Malgun Gothic",sans-serif;font-size:14px;line-height:1.55}
+.wrap{max-width:1160px;margin:0 auto;padding:28px 24px 40px}
+.mock{background:var(--warnbg);color:var(--warn);border:1px solid #fcd34d;border-radius:8px;padding:8px 12px;font-weight:700;margin-bottom:18px}
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:18px}
+h1{font-size:24px;margin:0;font-weight:700}
+.sub{color:var(--tm);font-size:13px;font-weight:300}
+.meta{color:var(--tm);font-size:12px;text-align:right;font-weight:300}
+.priv{display:inline-block;background:#fee2e2;color:#b91c1c;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700;margin-bottom:4px}
+section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:16px;box-shadow:0 2px 8px rgba(15,23,42,.05)}
+h2{font-size:17px;margin:0 0 4px;font-weight:700;display:flex;align-items:center;gap:6px}
+h3{display:flex;align-items:center;gap:6px}
+.h2sub{color:var(--tm);font-size:12px;margin:0 0 14px;font-weight:300}
+.info{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;border:1.5px solid #94a3b8;color:#64748b;font:700 10px/1 Georgia,serif;font-style:italic;cursor:help;flex:none;vertical-align:middle}
+.info:hover,.info:focus-visible{border-color:var(--blue);color:var(--blue);outline:none}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.tile{border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.tile .k{color:var(--t2);font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px}
+.tile .v{font-size:30px;font-weight:700;letter-spacing:-.5px;margin:4px 0}
+.tile .v small{font-size:15px;font-weight:500;color:var(--t2);margin-left:2px}
+.tile .f{color:var(--tm);font-size:12px;font-weight:300}
+.tile .gauge{height:8px;background:#e2e8f0;border-radius:99px;overflow:hidden;margin:8px 0 6px}
+.tile .gauge span{display:block;height:100%;background:var(--blue)}
+.two{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px}
+.two section{min-width:0}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:13px}
+th,td{padding:8px 7px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+td .info{margin-left:4px}
+thead th{color:var(--tm);font-size:12px;font-weight:500;background:#f1f5f9}
+thead th .info{width:14px;height:14px;font-size:9px;margin-left:3px}
+th[scope=row],thead th:first-child{text-align:left;font-weight:500}
+tbody tr:hover{background:#f8fafc}
+td.sum{font-weight:700}
+.bar{height:8px;background:#e2e8f0;border-radius:99px;overflow:hidden;min-width:56px}
+.bar span{display:block;height:100%;background:var(--blue)}
+svg .grid{stroke:rgba(15,23,42,.08)}
+svg .limit{stroke:#ef4444;stroke-dasharray:5 4;stroke-width:1.2}
+svg .ax{fill:#64748b;font-size:11px;font-family:'KBO Dia Gothic',"Malgun Gothic",sans-serif}
+svg .note{fill:#b45309}
+svg .limtxt{fill:#ef4444;font-weight:700}
+svg .hit{fill:transparent;cursor:crosshair}
+svg .hit:hover,svg .hit.on{fill:rgba(15,23,42,.06)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+.lg{display:inline-flex;align-items:center;gap:6px;color:var(--t2);font-size:12px}
+.lg i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.lg i.dash{width:16px;height:0;border-radius:0;border-top:1.5px dashed rgba(15,23,42,.5)}
+.cf{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.cfbox{border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:0}
+.cfbox h3{font-size:14px;margin:0;font-weight:700}
+.cfbox .peak{color:var(--t2);font-size:12px;margin:2px 0 8px;font-weight:300;min-height:36px}
+.cfbox .peak b{color:var(--t1);font-weight:700}
+.cfbox .stats{display:flex;flex-wrap:wrap;gap:4px 12px;margin:2px 0 8px;min-height:36px;font-size:12px;color:var(--t2);font-weight:300}
+.cfbox .stats b{color:var(--t1);font-weight:700}
+.cfbox .stats .hot{color:#b91c1c}
+.lim{margin:0 0 6px;cursor:help;outline:none;border-radius:6px}
+.lim:focus-visible{box-shadow:0 0 0 2px var(--blue)}
+.limbar{height:10px;background:#e2e8f0;border-radius:99px;overflow:hidden;position:relative}
+.limbar span{display:block;height:100%;background:#334155;border-radius:99px}
+.limbar::after{content:"";position:absolute;left:50%;top:0;bottom:0;border-left:1px dashed #94a3b8}
+.limtxt{display:flex;justify-content:space-between;font-size:11px;color:var(--tm);margin-top:3px}
+.limtxt b{color:var(--t1);font-weight:700}
+.limnone{height:31px;margin:0 0 6px;font-size:11px;color:var(--tm);display:flex;align-items:center}
+.fixline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#f1f5f9;border-radius:10px;padding:8px 12px;margin:0 0 12px;font-size:13px;color:var(--t2)}
+.fixline b{color:var(--t1);font-weight:700}
+.kind{display:inline-block;font-size:10.5px;font-weight:500;border-radius:4px;padding:0 5px;margin-left:4px;vertical-align:1px}
+.kind.fx{background:#e2e8f0;color:#475569}
+.kind.vr{background:#dbeafe;color:#1d4ed8}
+svg .med{stroke:#0f172a;stroke-dasharray:2 3;stroke-width:1;opacity:.5}
+svg .medtxt{fill:#334155}
+.notes{margin:0;padding-left:18px;color:var(--t2);font-size:13px;font-weight:300}
+.notes li{margin:3px 0}
+.ok{color:#047857;font-weight:700}
+/* 툴팁: bstats 공용 모양(첫 줄 굵게, 둘째 보통, 셋째부터 흐림) */
+.tip{position:fixed;z-index:50;max-width:320px;background:var(--tipbg);color:#f8fafc;border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.55;box-shadow:0 8px 24px rgba(15,23,42,.25);pointer-events:none;opacity:0;transition:opacity .12s}
+.tip.show{opacity:1}
+.tip .l1{font-weight:700;font-size:13px;margin-bottom:2px}
+.tip .l2{font-weight:500}
+.tip .lx{font-weight:300;color:#cbd5e1;margin-top:3px}
+.tip .row{display:flex;justify-content:space-between;gap:18px;font-weight:500}
+.tip .row i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px}
+.tip .row.tot{border-top:1px solid rgba(248,250,252,.2);margin-top:4px;padding-top:4px;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="mock">미리보기 목업입니다. 아래 숫자는 모두 예시 값이며 실제 결제·사용량이 아닙니다. ⓘ 와 막대에 마우스를 올리면 설명이 나옵니다.</div>
+
+  <header>
+    <div>
+      <span class="priv">비공개 · evan 님 PC 전용</span>
+      <h1>bstats 비용 보고서</h1>
+      <div class="sub">GCP 프로젝트 bstats-kbo · Cloudflare 무료 플랜 · 2026년 10월</div>
+    </div>
+    <div class="meta">만든 시각 2026-10-18 21:40 KST<br>결제 데이터 마지막 반영 2026-10-18 15:00 KST</div>
+  </header>
+
+  <section>
+    <h2>이번 달 요약 <span class="info" tabindex="0" data-tip="이번 달 요약
+GCP 에서 이번 달에 나간 돈을 세 가지로 봅니다.
+모든 금액은 크레딧을 뺀 순액(원)입니다.
+순액 = 비용 + 크레딧 합계(크레딧은 음수로 들어옵니다).">i</span></h2>
+    <p class="h2sub">GCP 금액은 크레딧을 뺀 순액(원)입니다.</p>
+    <div class="tiles">
+      <div class="tile">
+        <div class="k">이번 달 누적 <span class="info" tabindex="0" data-tip="이번 달 누적
+10월 1일부터 결제 데이터가 들어온 마지막 시각까지 GCP 순액을 더한 값입니다.
+계산식: 1일부터 마지막 반영 시각까지 (비용 + 크레딧) 합계
+결제 데이터는 몇 시간에서 하루 늦게 들어오므로 오늘 쓴 돈은 아직 덜 잡혀 있습니다.">i</span></div>
+        <div class="v">$total<small>원</small></div>
+        <div class="f">10/1 ~ 10/$days · 하루 평균 $avg원</div>
+      </div>
+      <div class="tile">
+        <div class="k" id="demo-forecast">월말 예상 (단순 추정) <span class="info" tabindex="0" data-tip="월말 예상 (단순 추정)
+지금까지의 하루 평균이 월말까지 이어진다고 보고 곱한 값입니다.
+계산식: 누적 ÷ 지난 날 수($days) × 그 달 일수(31)
+학습 기간: 이번 달 1일 ~ 마지막 반영일. 예측 범위: 이번 달 말일까지.
+DB 사양 변경, 새 서비스 추가, 백업 증가처럼 쓰임이 바뀌면 맞지 않습니다. 오차 범위는 따로 계산하지 않습니다.">i</span></div>
+        <div class="v">$forecast<small>원</small></div>
+        <div class="f">누적 ÷ 지난 날 수($days) × 그 달 일수(31)</div>
+      </div>
+      <div class="tile">
+        <div class="k">예산 대비 <span class="info" tabindex="0" data-tip="예산 대비
+이번 달 누적이 월 예산의 몇 % 인지 봅니다.
+계산식: 누적 ÷ 30,000원 × 100 (월말 예상 기준: 월말 예상 ÷ 30,000원 × 100)
+GCP 예산 알림은 이와 별도로 50·90·100% 에서 메일로 옵니다.">i</span></div>
+        <div class="v">$ratio<small>%</small></div>
+        <div class="gauge"><span style="width:$ratio%"></span></div>
+        <div class="f">누적 ÷ 월 예산 30,000원 · 월말 예상 기준 $fratio%</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="two">
+    <section>
+      <h2>GCP 서비스별 월 비용 <span class="info" tabindex="0" data-tip="GCP 서비스별 월 비용
+달마다 서비스별 순액을 원 단위로 더한 표입니다.
+결제 내보내기를 켠 뒤 들어온 달만 나옵니다. 그 전 달은 결제 콘솔에서 확인하십시오.">i</span></h2>
+      <p class="h2sub">단위: 원 · 결제 내보내기를 켠 뒤 들어온 달만 나옵니다.</p>
+      <table>
+        <thead><tr><th>월</th>
+          <th>Cloud SQL<span class="info" tabindex="0" data-tip="Cloud SQL
+bstats 의 MySQL 데이터베이스 비용입니다.
+서버가 켜져 있는 시간, 디스크, 백업, 나가는 트래픽이 모두 이 칸에 들어갑니다. 오른쪽 '세부' 표에서 나눠 봅니다.">i</span></th>
+          <th>BigQuery<span class="info" tabindex="0" data-tip="BigQuery
+주간 복사본(bstats-kbo.bstats)과 결제 내보내기 표의 저장·조회 비용입니다.
+무료 한도(저장 10GB, 조회 월 1TB) 안이면 0원입니다.
+0원이 아니면 큰 조회가 있었는지 확인할 대상입니다.">i</span></th>
+          <th>Monitoring<span class="info" tabindex="0" data-tip="Cloud Monitoring
+가동 확인(15분마다 /jobs/status, 3개 지역)과 경보 4개의 비용입니다.
+무료 한도 안이면 0원입니다.">i</span></th>
+          <th>기타<span class="info" tabindex="0" data-tip="기타
+위 세 서비스 밖의 비용입니다.
+예: 공용 네트워크 요금, Secret Manager, 로그 저장.
+꾸준히 0원이 아니면 무엇이 붙는지 확인할 대상입니다.">i</span></th>
+          <th>합계<span class="info" tabindex="0" data-tip="합계
+그 달 네 칸을 더한 순액입니다.
+계산식: Cloud SQL + BigQuery + Monitoring + 기타">i</span></th></tr></thead>
+        <tbody>$month_rows</tbody>
+      </table>
+    </section>
+    <section>
+      <h2>Cloud SQL 세부 (10월) <span class="info" tabindex="0" data-tip="Cloud SQL 세부
+Cloud SQL 비용을 요금 항목(SKU)별로 나눈 표입니다.
+DB 사양을 바꿀지, 디스크를 줄일지 판단할 때 씁니다.">i</span></h2>
+      <p class="h2sub">합계 $sql_oct원 · 비중 = 그 항목 금액 ÷ Cloud SQL 합계 × 100</p>
+      <table>
+        <thead><tr><th>항목</th><th>금액</th><th></th><th>비중</th></tr></thead>
+        <tbody>$sku_rows</tbody>
+      </table>
+    </section>
+  </div>
+
+  <section>
+    <h2>GCP 일별 변동비 (최근 30일) <span class="info" tabindex="0" data-tip="GCP 일별 변동비
+날마다 달라지는 비용만 쌓은 막대입니다. 매일 같은 고정비는 위 회색 줄에 따로 적었습니다.
+변동비 = 백업·PITR 로그 + 네트워크 + BigQuery + 기타
+점선은 지난 29일 변동비의 중앙값입니다. 막대가 점선보다 훨씬 높은 날은 재적재·큰 복사·큰 조회가 있었는지 확인할 날입니다.
+날짜는 결제 데이터의 사용 시작 시각을 KST 로 바꾼 날 기준입니다. 오늘 칸은 결제 데이터가 아직 다 들어오지 않아 흐리게 그립니다.">i</span></h2>
+    <p class="h2sub">단위: 원/일 · 막대에 마우스를 올리면 그날 고정비를 더한 전체 금액도 나옵니다.</p>
+    <div class="fixline"><span class="kind fx">고정</span><span>인스턴스 시간 + 저장소 <b>하루 $fixed_day원</b> · 30일 동안 같음 · 하루 비용의 약 $fixed_share% <span class="info" tabindex="0" data-tip="고정비
+Cloud SQL 인스턴스 시간과 디스크 저장소입니다. 질의 양과 관계없이 매일 같은 금액이 붙어서 막대에서 뺐습니다.
+비율 계산식: 고정비 ÷ 지난 29일 하루 평균 전체 비용 × 100
+이 줄이 바뀌면 DB 사양이나 디스크 크기가 바뀐 것입니다.">i</span></span></div>
+    <div class="legend">$legend</div>
+    $daily_svg
+  </section>
+
+  <section>
+    <h2>Cloudflare 무료 한도 대비 사용량 (최근 30일) <span class="info" tabindex="0" data-tip="Cloudflare 무료 한도 대비 사용량
+bstats API 는 Cloudflare 무료 플랜이라 금액은 0원입니다. 대신 하루 한도를 넘으면 그날 남은 요청이 오류가 되므로 한도까지 얼마나 남았는지 봅니다.
+회색 게이지가 30일 중 가장 많은 날이 한도의 몇 % 였는지 보여 줍니다. 가운데 점선이 50% 입니다.
+차트 세로축은 실제 값에 맞춰 날마다의 차이가 보이게 했습니다. 가장 많은 날이 한도의 50% 를 넘으면 세로축을 한도까지 늘리고 빨간 한도 선을 그립니다.
+날짜는 Cloudflare 집계 기준인 UTC 하루입니다(KST 오전 9시에 바뀝니다).">i</span></h2>
+    <p class="h2sub">금액은 0원(무료 플랜)입니다. 게이지 = 한도까지 거리, 차트 = 날마다의 변화(세로축은 실제 값). 날짜 기준 UTC 하루.</p>
+    <div class="cf">
+      <div class="cfbox">
+        <h3>Workers 요청 수 · kbo-api <span class="info" tabindex="0" data-tip="Workers 요청 수
+bstats API Worker(kbo-api)가 처리한 요청 수입니다.
+화면 한 번 열 때 보통 여러 건이 나갑니다. 주말에 늘어납니다.
+무료 플랜 한도: 하루 100,000건. 넘으면 그날 남은 요청이 오류로 돌아갑니다.">i</span></h3>
+        <div class="peak">가장 많은 날 <b>$req_day · $req_max건</b><br>막대에 마우스를 올리면 그날 값이 나옵니다.</div>
+        $req_gauge
+        $req_svg
+      </div>
+      <div class="cfbox">
+        <h3>Hyperdrive 질의 수 · bstats-mysql <span class="info" tabindex="0" data-tip="Hyperdrive 질의 수
+Worker 가 Hyperdrive 를 거쳐 MySQL 에 보낸 질의 수입니다. Hyperdrive 캐시에서 바로 답한 질의도 포함합니다.
+무료 플랜 하루 한도 기준입니다. 한도 값은 보고서를 만들 때 Cloudflare 안내에서 다시 확인합니다.">i</span></h3>
+        <div class="peak">가장 많은 날 <b>$hyp_day · $hyp_max건</b><br>요청 1건이 질의 여러 건을 부르기도 합니다.</div>
+        $hyp_gauge
+        $hyp_svg
+      </div>
+      <div class="cfbox">
+        <h3>CPU 한도 초과로 끊긴 요청 <span class="info" tabindex="0" data-tip="CPU 한도 초과로 끊긴 요청
+CPU 한도(요청당 10ms)를 넘어 Cloudflare 가 중간에 멈춘 요청 수입니다. 이 요청은 사용자 화면에 오류나 빈칸으로 보입니다.
+끊긴 비율 = 30일 끊긴 요청 ÷ 30일 전체 요청 × 100
+CPU 중앙값·P99 는 요청 하나가 Worker 에서 쓴 CPU 시간입니다(MySQL 응답을 기다린 시간은 빠짐). P99 는 가장 무거운 1% 의 경계입니다.
+무료 플랜은 가끔 넘는 요청을 봐주기도 해서, P99 가 10ms 를 넘어도 끊긴 요청은 적게 나올 수 있습니다.">i</span></h3>
+        <div class="stats"><span>30일 <b class="hot">$cut_total건</b></span><span>전체의 <b>$cut_pct%</b></span><span>CPU 중앙값 <b>4.8ms</b></span><span>P99 <b>${p99}ms</b> (한도의 $p99x배)</span></div>
+        <div class="limnone">한도 없음: 0건이 목표입니다 · 가장 많은 날 $cut_day $cut_max건</div>
+        $cut_svg
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>기준과 주의</h2>
+    <ul class="notes">
+      <li>GCP: 결제 빅쿼리 내보내기(표준 사용 비용) 기준입니다. 결제 데이터는 몇 시간에서 하루 늦게 들어옵니다.</li>
+      <li>내보내기를 켜기 전 기간은 비어 있을 수 있습니다. 그 기간은 결제 콘솔에서 확인하십시오.</li>
+      <li>Cloudflare: GraphQL 분석 API 기준입니다. 무료 한도 값은 보고서를 만든 날의 Cloudflare 안내를 따르며 바뀔 수 있습니다.</li>
+      <li>읽은 데이터: 빅쿼리 시험 실행 0.4MB 확인 뒤 질의(한도 50MB) <span class="ok">통과</span> · Cloudflare 토큰 <span class="ok">있음</span></li>
+    </ul>
+  </section>
+</div>
+<script>
+(function () {
+  var COLORS = $colors_json;
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  // 줄 바꿈으로 나눈 설명: 첫 줄 굵게, 둘째 보통, 셋째부터 흐리게.
+  // '이름<탭>값' 줄은 색 점이 붙은 값 줄, '=' 로 시작하면 합계 줄입니다.
+  function render(text) {
+    return text.split('\n').map(function (ln, i) {
+      var m = ln.match(/^(=?)([^\t]+)\t(.+)$$/);
+      if (i > 0 && m) {
+        var dot = COLORS[m[2]] ? '<i style="background:' + COLORS[m[2]] + '"></i>' : '';
+        return '<div class="row' + (m[1] ? ' tot' : '') + '"><span>' + dot + esc(m[2]) + '</span><span>' + esc(m[3]) + '</span></div>';
+      }
+      return '<div class="' + (i === 0 ? 'l1' : i === 1 ? 'l2' : 'lx') + '">' + esc(ln) + '</div>';
+    }).join('');
+  }
+  function place(tip, r) {
+    var x = r.left + r.width / 2 - tip.offsetWidth / 2;
+    var y = r.top - tip.offsetHeight - 10;
+    if (y < 8) y = r.bottom + 10;
+    x = Math.max(8, Math.min(x, innerWidth - tip.offsetWidth - 8));
+    tip.style.left = x + 'px'; tip.style.top = y + 'px';
+  }
+  function make(el) {
+    var tip = document.createElement('div');
+    tip.className = 'tip';
+    tip.innerHTML = render(el.getAttribute('data-tip'));
+    document.body.appendChild(tip);
+    place(tip, el.getBoundingClientRect());
+    tip.classList.add('show');
+    return tip;
+  }
+  var cur = null;
+  function hide() { if (cur) { cur.remove(); cur = null; } }
+  document.addEventListener('mouseover', function (e) { var el = e.target.closest('[data-tip]'); hide(); if (el) cur = make(el); });
+  document.addEventListener('focusin', function (e) { var el = e.target.closest('[data-tip]'); hide(); if (el) cur = make(el); });
+  document.addEventListener('focusout', hide);
+  addEventListener('scroll', hide, true);
+  // 미리보기 캡처용: #demo 면 툴팁 몇 개를 펼친 채로 둡니다.
+  if (location.hash === '#demo') {
+    window.addEventListener('load', function () {
+      ['#demo-forecast .info', '[data-demo="day"]', '[data-demo="req"]', '[data-demo="cut"]'].forEach(function (s) {
+        var el = document.querySelector(s); if (!el) return;
+        if (el.classList.contains('hit')) el.classList.add('on');
+        make(el);
+      });
+    });
+  }
+})();
+</script>
+</body>
+</html>
