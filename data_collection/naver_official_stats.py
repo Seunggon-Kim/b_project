@@ -122,6 +122,9 @@ def batter_extra(nv, box, pbp, pbp_ok, sb, cs):
     hbp = nv.get("hit_by_pitch") or 0
     sf, sh, ibb, gidp = box["sf"], box["sh"], box["ibb"], box["gidp"]
     out = {
+        # 경기 수는 박스 출장 수입니다. 네이버 시즌 API 는 타석 없이 나온 선수(대주자·
+        # 대수비)의 경기 수를 1 로 줍니다(2011 4명·2018·2021, 박스·KBO 는 2~5).
+        "games": box["games"] or nv.get("games"),
         # 타석 = 타수+볼넷(고의4구 포함)+사구+희생번트+희생플라이+타격방해. 박스 칸 수를
         # 그대로 세는 것보다 KBO 값과 잘 맞았습니다(2008 271/273, 박스 칸 수는 270).
         "plate_appearance": ab + bb + hbp + sh + sf + box["ci"],
