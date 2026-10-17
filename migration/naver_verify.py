@@ -53,7 +53,12 @@ def same(a, b):
 
 
 def rates(old_rows, new_rows, columns):
-    """{칸: (같은 행, 겹친 행)} — 두 쪽에 다 있는 선수만 셉니다."""
+    """{칸: (같은 행, 쓴 행, 비운 행)} — 두 쪽에 다 있는 선수만 셉니다.
+
+    '비운 행'은 우리가 None 으로 둔 행입니다(PBP 가 온전하지 않은 선수 등). 그 행은
+    틀린 값을 쓰지 않으므로 맞음·틀림에 넣지 않고 따로 셉니다. 지금 DB 도 비어
+    있으면 같은 것으로 봅니다.
+    """
     old = {int(float(r["player_id"])): r for r in old_rows}
     new = {int(r["player_id"]): r for r in new_rows}
     both = set(old) & set(new)
@@ -61,15 +66,26 @@ def rates(old_rows, new_rows, columns):
     for c in columns:
         if c in ("player_id", "season"):
             continue
-        out[c] = (sum(1 for p in both if same(old[p].get(c), new[p].get(c))), len(both))
+        ok = written = blank = 0
+        for p in both:
+            a, b = old[p].get(c), new[p].get(c)
+            if b is None and a not in (None, ""):
+                blank += 1
+                continue
+            written += 1
+            ok += same(a, b)
+        out[c] = (ok, written, blank)
     return out
 
 
 def passed(table, threshold=THRESHOLD):
-    """{칸: [통과한 시즌]} table = {시즌: {칸: (ok, n)}}."""
+    """{칸: [통과한 시즌]} table = {시즌: {칸: (ok, 쓴 행, 비운 행)}}.
+
+    쓴 행의 99% 이상이 지금 값과 같고, 쓴 행이 하나 이상인 시즌만 통과입니다.
+    """
     out = collections.defaultdict(list)
     for y, cols in sorted(table.items()):
-        for c, (ok, n) in cols.items():
+        for c, (ok, n, _blank) in cols.items():
             if n and ok / n >= threshold:
                 out[c].append(int(y))
     return dict(out)
@@ -79,7 +95,8 @@ def markdown(result):
     lines = ["# 네이버 전환 칸 검증", "",
              "`migration/naver_verify.py` 가 만든 표입니다. 지금 DB 값(2026-10-14 전에 KBO 에서 받은 값)과",
              "네이버로 만든 값이 같은 행의 비율(%)입니다. 두 쪽에 다 있는 선수만 셉니다.",
-             "99% 이상인 칸·시즌만 씁니다(**굵게**). 나머지는 비우고 화면에서 숨깁니다.", ""]
+             "괄호 안은 우리가 비운 행 수입니다(PBP 중계가 끊겨 셀 수 없는 선수 등, 틀린 값을 쓰지 않음).",
+             "쓴 행의 99% 이상이 같은 칸·시즌만 씁니다(**굵게**). 나머지는 비우고 화면에서 숨깁니다.", ""]
     for kind in ("batter", "pitcher"):
         t = result[kind]
         ys = sorted(t)
@@ -91,9 +108,10 @@ def markdown(result):
         for c in t[ys[0]]:
             cells = []
             for y in ys:
-                ok, n = t[y][c]
+                ok, n, blank = t[y][c]
                 v = 100.0 * ok / n if n else 0.0
-                cells.append(("**%.1f**" if n and ok / n >= THRESHOLD else "%.1f") % v)
+                cell = ("**%.1f**" if n and ok / n >= THRESHOLD else "%.1f") % v
+                cells.append(cell + (" (%d)" % blank if blank else ""))
             lines.append("| %s | %s |" % (c, " | ".join(cells)))
         lines.append("")
     notes = result.get("notes") or {}
@@ -113,6 +131,7 @@ def main(argv=None):
     ap.add_argument("--naver-cache")
     ap.add_argument("--out-json", default=str(OUT_JSON))
     ap.add_argument("--out-md", default=str(OUT_MD))
+    ap.add_argument("--rates-file", help="시즌별 일치율을 이 파일에 쌓습니다(여러 번 나눠 돌릴 때)")
     a = ap.parse_args(argv)
 
     if a.csv_dir:
@@ -135,6 +154,11 @@ def main(argv=None):
         old_of = lambda k, y: query("SELECT * FROM %s WHERE season = %d" % (TABLE[k], y))  # noqa: E731
 
     result = {"batter": {}, "pitcher": {}, "notes": {}}
+    if a.rates_file and Path(a.rates_file).exists():
+        saved = json.loads(Path(a.rates_file).read_text(encoding="utf-8"))
+        for k in result:
+            result[k] = {int(y): ({c: tuple(v) for c, v in cols.items()} if k != "notes" else cols)
+                         for y, cols in saved.get(k, {}).items()}
     for y in range(a.first, a.last + 1):
         reg = reg_of(y)
         files = [f for f in nbx.season_files(a.box_dir, y) if f.name.split(".")[0] in reg]
@@ -152,6 +176,8 @@ def main(argv=None):
         result["pitcher"][y] = rates(old_of("pitcher", y), pits, no.PITCHER_COLUMNS)
         result["notes"][y] = note
         print(y, note, flush=True)
+        if a.rates_file:
+            Path(a.rates_file).write_text(json.dumps(result, ensure_ascii=False, default=list), encoding="utf-8")
 
     verified = {
         "generated": datetime.date.today().isoformat(),
