@@ -84,6 +84,20 @@ def test_시즌과_팀을_따로_보냅니다():
     assert i < j, "팀을 시즌보다 먼저 보내면 초기화됩니다"
 
 
+def test_정규시즌을_직접_고릅니다():
+    """포스트시즌엔 기록실 기본 시리즈가 준플레이오프 등으로 바뀝니다.
+    그러면 Basic2·Detail 이 포스트시즌 표를 줍니다(2026-10-15~16)."""
+    src = HTTP.read_text(encoding="utf-8")
+    assert 'REGULAR_SERIES = "0"' in src
+    body = src[src.index("def fetch_table("):]
+    i = body.index('s.post("ddlSeries$ddlSeries"')
+    assert i < body.index('s.post("ddlSeason$ddlSeason"'), (
+        "시리즈를 시즌보다 먼저 골라야 합니다")
+    # 시즌·팀·쪽 넘김 포스트백에도 같이 실어야 선택이 안 풀립니다.
+    assert "sel = dict(series," in body
+    assert 's.post("ucPager$btnNo%d" % p, sel)' in body
+
+
 # ------------------------------------------------------- 프랜차이즈 표
 
 def test_프랜차이즈가_열둘입니다():

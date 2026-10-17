@@ -102,11 +102,26 @@ def test_핵심_컬럼이_비면_결손으로_셉니다():
     m = mod()
     good = {"1": {"plate_appearance": "100", "at_bat": "90",
                   "base_on_balls": "8", "hit_by_pitch": "1",
-                  "strikeout": "20"}}
+                  "strikeout": "20", "ground_outs": "30"}}
     assert m.holes("batter", good) == 0
     for blank in ("", "-", "   "):
         bad = {"1": dict(good["1"], base_on_balls=blank)}
         assert m.holes("batter", bad) == 1, "%r 을 결손으로 안 봅니다" % blank
+
+
+@pytest.mark.parametrize("col", ["total_batters_faced", "games_started",
+                                 "p_g"])
+def test_투수_세부_쪽이_비어도_결손으로_셉니다(col):
+    """2026-10-16 에 Basic1 칸만 보고 통과해 286명 세부 칸이 빈 채
+    들어갔습니다. Basic2·Detail1·Detail2 에서 하나씩 봅니다."""
+    m = mod()
+    good = {"1": {"games": "46", "innings_pitched": "46 1/3",
+                  "base_on_balls": "7", "strikeout": "38",
+                  "total_batters_faced": "176", "games_started": "0",
+                  "p_g": "14.0"}}
+    assert m.holes("pitcher", good) == 0
+    bad = {"1": {k: v for k, v in good["1"].items() if k != col}}
+    assert m.holes("pitcher", bad) == 1, "%s 가 비어도 통과합니다" % col
 
 
 def test_결손이_있으면_적재하지_않습니다():

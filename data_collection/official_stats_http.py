@@ -180,10 +180,21 @@ def write_csv(kind, year, data):
 
 
 def holes(kind, data):
-    """핵심 컬럼이 빈 선수 수입니다. 2021 NC 같은 결손을 잡습니다."""
+    """핵심 컬럼이 빈 선수 수입니다. 2021 NC 같은 결손을 잡습니다.
+
+    **쪽마다 하나씩 봅니다.** 예전에는 투수를 Basic1 컬럼으로만 봐서
+    Basic2·Detail 이 통째로 비어도 통과했습니다(2026-10-16, 투수 286명
+    세부 칸이 빈 채 적재). 여기 넣는 컬럼은 정상 시즌에 빈 적이 없는
+    것입니다. K/9 처럼 0이닝이면 "-" 가 되는 컬럼은 넣지 않습니다.
+    """
     keys = (["plate_appearance", "at_bat", "base_on_balls", "hit_by_pitch",
-             "strikeout"] if kind == "batter"
-            else ["games", "innings_pitched", "base_on_balls", "strikeout"])
+             "strikeout",
+             "ground_outs"]                      # Detail1
+            if kind == "batter"
+            else ["games", "innings_pitched", "base_on_balls", "strikeout",
+                  "total_batters_faced",         # Basic2
+                  "games_started",               # Detail1
+                  "p_g"])                        # Detail2
     bad = 0
     for rec in data.values():
         if any(not str(rec.get(k, "")).strip() or rec.get(k) == "-"

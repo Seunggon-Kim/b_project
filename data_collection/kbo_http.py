@@ -49,6 +49,10 @@ PREFIX = "ctl00$ctl00$ctl00$cphContents$cphContents$cphContents$"
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
 
+# 기록실 시리즈 드롭다운의 정규시즌 값입니다. 다른 값은 시범경기 1,
+# 와일드카드 4, 준플레이오프 3, 플레이오프 5, 한국시리즈 7 입니다.
+REGULAR_SERIES = "0"
+
 # 한 요청과 다음 요청 사이 간격입니다. 사이트에 부담을 주지 않습니다.
 DELAY_SEC = 0.4
 
@@ -171,9 +175,19 @@ def fetch_table(page, season, team, delay=DELAY_SEC):
     s = Session(delay)
     entry = page.split("/")[0] + "/Basic1.aspx"
     s.open(entry)
-    sel = {"ddlSeason$ddlSeason": str(season), "ddlTeam$ddlTeam": team}
+    # **정규시즌을 직접 고릅니다.** 기록실의 기본 시리즈는 철마다
+    # 바뀝니다. 포스트시즌이 열리면 기본값이 준플레이오프 같은 것이
+    # 되고, Basic1 은 정규시즌 표를 주지만 Basic2·Detail 은 포스트시즌
+    # 표를 줍니다. 2026-10-15~16 에 투수 286명의 세부 칸이 비고,
+    # 포스트시즌 팀(LG·두산) 10명은 포스트시즌 값이 들어갔습니다.
+    # 포스트백마다 같이 실어야 선택이 풀리지 않습니다.
+    series = {"ddlSeries$ddlSeries": REGULAR_SERIES}
+    sel = dict(series, **{"ddlSeason$ddlSeason": str(season),
+                          "ddlTeam$ddlTeam": team})
+    s.post("ddlSeries$ddlSeries", series)
     # 시즌을 바꾸면 팀 선택이 초기화됩니다. 두 번에 나눠 보냅니다.
-    s.post("ddlSeason$ddlSeason", {"ddlSeason$ddlSeason": str(season)})
+    s.post("ddlSeason$ddlSeason",
+           dict(series, **{"ddlSeason$ddlSeason": str(season)}))
     s.post("ddlTeam$ddlTeam", sel)
     if page != entry:
         # 고른 상태 그대로 목표 페이지로 넘어갑니다.
