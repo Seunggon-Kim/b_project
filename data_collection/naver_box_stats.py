@@ -55,6 +55,11 @@ def kind(code):
     if "희비" in c:
         return "sf"
     if "희번" in c or "희실" in c or "희선" in c:
+        # 외야수가 받은 '희번'은 2008 기록지의 뜬공(주자 진루)입니다. KBO 는 희생번트로
+        # 세지 않습니다(2008 대조: 우희번=우익수 플라이 아웃).
+        # 외야 '희실'은 희생플라이 실책이라 희생플라이로 셉니다(2008 이현곤).
+        if c[0] in ("좌", "중", "우"):
+            return "fly" if "희번" in c else "sf"
         return "sh"
     if c.endswith("홈"):
         return "hr"
