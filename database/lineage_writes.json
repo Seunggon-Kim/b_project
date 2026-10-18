@@ -223,6 +223,13 @@
       "note": "주간 계산과 월간 선수 프로필 수집용으로 MySQL 을 로컬 SQLite 로 내려받습니다.",
       "desc": "주간 계산과 월간 선수 프로필 수집에 쓸 표를 MySQL 에서 러너의 임시 SQLite 로 내려받습니다."
     },
+    "migration/mysql/record_bq_snapshot.py": {
+      "sources": [],
+      "writes": [],
+      "reads": [],
+      "note": "빅쿼리 사본 현황(meta_bq_tables)을 씁니다. meta_ 표는 계보에 그리지 않습니다.",
+      "desc": "주간 빅쿼리 복사가 남긴 결과 파일을 읽어 표마다 빅쿼리 행 수·용량·마지막 성공 시각을 MySQL meta_bq_tables 에 씁니다. 공개 데이터 관리 화면이 이 값을 읽습니다. 실패해도 주간 작업 판정은 바꾸지 않습니다."
+    },
     "migration/sqlite_to_d1.py": {
       "sources": [],
       "writes": [],
@@ -428,6 +435,7 @@
   },
   "routes_without_tables": {
     "/jobs/status": "작업 실행 기록(meta_job_runs)만 읽습니다. meta_ 표는 계보에서 뺍니다.",
+    "/ops/storage": "표 크기(information_schema)와 meta_table_counts·meta_bq_tables 를 읽습니다. meta_ 표는 계보에 그리지 않습니다.",
     "/schedule/futures": "KBO 이용약관(2026-10-14 시행)에 따라 KBO 사이트를 읽지 않고 410 만 돌려줍니다. 읽는 표가 없습니다.",
     "/futures/standings": "KBO 이용약관(2026-10-14 시행)에 따라 KBO 사이트를 읽지 않고 410 만 돌려줍니다. 읽는 표가 없습니다.",
     "/futures/leaders": "KBO 이용약관(2026-10-14 시행)에 따라 KBO 사이트를 읽지 않고 410 만 돌려줍니다. 읽는 표가 없습니다.",

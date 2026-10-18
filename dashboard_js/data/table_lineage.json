@@ -733,6 +733,11 @@
      "name": "빅쿼리 복사 기록",
      "script": "data_collection/record_job_run.py",
      "status_key": null
+    },
+    {
+     "name": "빅쿼리 현황 기록",
+     "script": "migration/mysql/record_bq_snapshot.py",
+     "status_key": null
     }
    ],
    "stopped": false,
@@ -762,6 +767,15 @@
     "/wrc/top-changes"
    ],
    "title": "아티클 - Bstats"
+  },
+  {
+   "explorer": false,
+   "path": "pages/data-ops.html",
+   "routes": [
+    "/jobs/status",
+    "/ops/storage"
+   ],
+   "title": "데이터 관리 - Bstats"
   },
   {
    "explorer": true,
@@ -1041,6 +1055,7 @@
    "file": "src/routes/jobs.js",
    "live": false,
    "pages": [
+    "pages/data-ops.html",
     "pages/database-explorer.html"
    ],
    "path": "/jobs/status",
@@ -1071,6 +1086,16 @@
    "tables": [
     "team_logos"
    ]
+  },
+  {
+   "file": "src/routes/ops.js",
+   "live": false,
+   "pages": [
+    "pages/data-ops.html"
+   ],
+   "path": "/ops/storage",
+   "reads_all_tables": false,
+   "tables": []
   },
   {
    "file": "src/routes/players.js",
@@ -1833,6 +1858,19 @@
    "writes": []
   },
   {
+   "desc": "주간 빅쿼리 복사가 남긴 결과 파일을 읽어 표마다 빅쿼리 행 수·용량·마지막 성공 시각을 MySQL meta_bq_tables 에 씁니다. 공개 데이터 관리 화면이 이 값을 읽습니다. 실패해도 주간 작업 판정은 바꾸지 않습니다.",
+   "jobs": [
+    "weekly"
+   ],
+   "note": "빅쿼리 사본 현황(meta_bq_tables)을 씁니다. meta_ 표는 계보에 그리지 않습니다.",
+   "path": "migration/mysql/record_bq_snapshot.py",
+   "reads": [],
+   "sources": [],
+   "status_keys": {},
+   "stopped": false,
+   "writes": []
+  },
+  {
    "desc": "MySQL 의 모든 표를 빅쿼리 bstats 데이터셋(asia-northeast3)에 매주 통째로 복사합니다. 결과 표를 MySQL 에 올린 뒤에 돌고, 주간 작업이 받아 두고 바꾸지 않은 표(play_by_play 등)는 러너의 SQLite 에서, 나머지는 MySQL 에서 바로 읽습니다. 정본은 MySQL 이며 빅쿼리는 길게는 한 주 늦은 읽기용 사본입니다.",
    "jobs": [
     "weekly"
@@ -2298,6 +2336,18 @@
    "kind": "meta",
    "manual_note": null,
    "name": "meta_backfill",
+   "pages": [],
+   "routes": [],
+   "stopped": false,
+   "written_by": []
+  },
+  {
+   "category": null,
+   "derived_from": [],
+   "desc": null,
+   "kind": "meta",
+   "manual_note": null,
+   "name": "meta_bq_tables",
    "pages": [],
    "routes": [],
    "stopped": false,
