@@ -64,3 +64,39 @@ def test_한도선은_규칙대로만_그립니다():
     big[DAYS[1]] = 70_000
     html2 = r.render(None, c.summarize(resp(big), DAYS), META)
     assert 'class="limit"' in html2
+
+
+def test_맨_위에_한눈에_보기와_읽는_법이_나옵니다():
+    html = r.render(billing(), cf(), META)
+    top = html.index("한눈에 보기")
+    assert top < html.index("이번 달 요약") and top < html.index("Cloudflare 무료 한도 대비 사용량")
+    assert "읽는 법" in html
+    assert "돈이 아니라 무료 한도" in html
+
+
+def test_요점은_숫자에서_만듭니다():
+    bb, cc = billing(), cf()
+    html = r.render(bb, cc, META)
+    assert f"월말 예상 {r._won(bb['forecast'])}원" in html
+    assert f"Workers 최고 {cc['req_peak'] / c.WORKERS_FREE_PER_DAY * 100:.1f}%" in html
+    assert f"끊긴 요청 {cc['cut_total']}건" in html
+
+
+def test_요점은_빠진_칸을_말합니다():
+    html = r.render(None, None, META)
+    assert "GCP 비용은 아직 볼 수 없습니다" in html
+    assert "Cloudflare 사용량은 아직 볼 수 없습니다" in html
+
+
+def test_CPU_중앙값이_한도에_가까우면_요점에_적습니다():
+    cc = cf()
+    cc["cpu_p50_ms"] = 10.3
+    assert "여유가 거의 없습니다" in r.render(None, cc, META)
+    cc["cpu_p50_ms"] = 3.0
+    assert "여유가 거의 없습니다" not in r.render(None, cc, META)
+
+
+def test_결제가_없으면_부제_끝에_가운뎃점이_남지_않습니다():
+    html = r.render(None, cf(), META)
+    assert "무료 플랜 ·</div>" not in html and "무료 플랜 · </div>" not in html
+    assert "무료 플랜 · 2026년 10월" in r.render(billing(), cf(), META)

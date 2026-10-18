@@ -340,12 +340,61 @@ def _notes_html(b, c):
     return "".join(f"<li>{_e(n)}</li>" for n in notes)
 
 
+def _points(b, c):
+    """맨 위 요점 글입니다. 숫자에서 만들고, 빠진 칸은 빠졌다고 적습니다."""
+    out = []
+    if b:
+        over = b["forecast"] > b["budget"]
+        out.append(f"GCP: 이번 달 {b['days_elapsed']}일까지 {_won(b['total'])}원, 월말 예상 {_won(b['forecast'])}원"
+                   f"(예산의 {b['forecast_ratio_pct']}%). " + ("예산을 넘을 것으로 보입니다." if over else "예산 안입니다."))
+        out.append(f"GCP 고정비는 하루 {_won(b['fixed_per_day'])}원 꼴입니다. 비용을 줄이려면 고정비(Cloud SQL 서버·디스크)가 먼저 볼 곳입니다.")
+    else:
+        out.append("GCP 비용은 아직 볼 수 없습니다. 결제 내보내기를 켠 뒤 몇 시간에서 하루가 지나야 데이터가 들어옵니다.")
+    if c:
+        rp = c["req_peak"] / cfm.WORKERS_FREE_PER_DAY * 100
+        hp = c["hyd_peak"] / cfm.HYPERDRIVE_FREE_PER_DAY * 100
+        worst = max(rp, hp)
+        state = "넉넉합니다" if worst < 50 else "절반을 넘은 날이 있어 지켜볼 만합니다" if worst < 80 else "한도에 가깝습니다"
+        out.append(f"Cloudflare 무료 한도: 가장 많은 날 기준 Workers 최고 {rp:.1f}%, Hyperdrive 최고 {hp:.1f}%로 {state}.")
+        if c["cut_total"]:
+            ci = max(range(len(c["cut"])), key=lambda i: c["cut"][i])
+            d = c["days"][ci]
+            out.append(f"CPU 한도로 끊긴 요청 {c['cut_total']}건(전체의 {c['cut_pct']}%)이 있었고, 가장 많은 날은 "
+                       f"{d.month}/{d.day} {c['cut'][ci]}건입니다. 그날 대량 조회나 봇 방문이 있었는지 볼 만합니다.")
+        else:
+            out.append("CPU 한도로 끊긴 요청은 없었습니다.")
+        if c["cpu_p50_ms"] >= cfm.CPU_LIMIT_MS * 0.8:
+            out.append(f"CPU 중앙값 {c['cpu_p50_ms']}ms 로 요청 하나당 한도 {cfm.CPU_LIMIT_MS}ms 에 가까워 여유가 거의 없습니다. "
+                       "요청이 몰리면 끊길 수 있습니다.")
+    else:
+        out.append("Cloudflare 사용량은 아직 볼 수 없습니다. 토큰과 계정 ID 파일이 있는지 확인하십시오.")
+    return out
+
+
+READING = [
+    "GCP 칸은 실제로 내는 돈입니다. 고정비(Cloud SQL 서버·디스크)는 매일 거의 같고, "
+    "변동비(백업·네트워크·BigQuery)는 그날 한 작업에 따라 달라집니다.",
+    "Cloudflare 칸은 돈이 아니라 무료 한도를 얼마나 썼는지입니다(0원). 한도를 넘으면 그날 요청이 거절됩니다.",
+    "끊긴 요청은 0건이 목표입니다. 생긴 날은 그날 무슨 일이 있었는지 확인합니다.",
+    "ⓘ 표시와 막대에 마우스를 올리면 정의·계산식·그날 값이 나옵니다.",
+]
+
+
+def _overview_html(b, c):
+    li = lambda xs: "".join(f"<li>{_e(x)}</li>" for x in xs)
+    return ('<section><h2>한눈에 보기</h2><div class="two">'
+            f'<div><h3 class="ovh">이번 보고서 요점</h3><ul class="notes">{li(_points(b, c))}</ul></div>'
+            f'<div><h3 class="ovh">읽는 법</h3><ul class="notes">{li(READING)}</ul></div>'
+            '</div></section>')
+
+
 def render(billing, cf, meta):
     month = billing["month"] if billing else ""
     tpl = Template(TEMPLATE.read_text(encoding="utf-8"))
     return tpl.substitute(
-        month_label=_e(f"{month[:4]}년 {int(month[5:7])}월" if month else ""),
+        month_label=_e(f" · {month[:4]}년 {int(month[5:7])}월" if month else ""),
         made_at=_e(meta["made_at"]),
+        overview_html=_overview_html(billing, cf),
         billing_html=_billing_html(billing, meta.get("billing_note", "")),
         cf_html=_cf_html(cf, meta.get("cf_note", "")),
         notes_html=_notes_html(billing, cf),

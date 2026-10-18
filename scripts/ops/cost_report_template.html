@@ -82,6 +82,7 @@ svg .med{stroke:#0f172a;stroke-dasharray:2 3;stroke-width:1;opacity:.5}
 svg .medtxt{fill:#334155}
 .notes{margin:0;padding-left:18px;color:var(--t2);font-size:13px;font-weight:300}
 .notes li{margin:3px 0}
+.ovh{font-size:14px;margin:6px 0 6px;font-weight:700}
 .ok{color:#047857;font-weight:700}
 /* 툴팁: bstats 공용 모양(첫 줄 굵게, 둘째 보통, 셋째부터 흐림) */
 .tip{position:fixed;z-index:50;max-width:320px;background:var(--tipbg);color:#f8fafc;border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.55;box-shadow:0 8px 24px rgba(15,23,42,.25);pointer-events:none;opacity:0;transition:opacity .12s}
@@ -100,10 +101,11 @@ svg .medtxt{fill:#334155}
     <div>
       <span class="priv">비공개 · evan 님 PC 전용</span>
       <h1>bstats 비용 보고서</h1>
-      <div class="sub">GCP · Cloudflare 무료 플랜 · $month_label</div>
+      <div class="sub">GCP · Cloudflare 무료 플랜$month_label</div>
     </div>
     <div class="meta">만든 시각 $made_at</div>
   </header>
+  $overview_html
   $billing_html
   $cf_html
   <section>
