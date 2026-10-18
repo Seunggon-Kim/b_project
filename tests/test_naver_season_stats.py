@@ -85,3 +85,14 @@ def test_검증한_칸_시즌만_씁니다():
     assert no.allowed("batter", "gw_rbi", 2027, v)        # 새 시즌은 마지막 검증 시즌(2026)을 따름
     assert not no.allowed("batter", "ground_outs", 2027, v)
     assert not no.allowed("batter", "p_pa", 2026, v)
+
+
+def test_네이버가_뺀_투수는_박스_합계로():
+    import collections
+    import naver_official_stats as no
+    assert no.INCLUDE_BOX_ONLY_PITCHERS is True
+    k = collections.Counter(games=45, outs=392, h=150, hr=15, bb=40, hbp=5, so=100, r=85, er=80,
+                            w=5, l=10, sv=0, hld=1, qs=6, tbf=600, np=2300)
+    r = no.box_pitcher_row(62929, k, 2016, "이민호", "NC")
+    assert r["innings_pitched"] == "130 2/3" and r["earned_run_average"] == 5.51
+    assert no.box_pitcher_row(1, collections.Counter(outs=1), 2020, "가", "두산")["innings_pitched"] == "1/3"

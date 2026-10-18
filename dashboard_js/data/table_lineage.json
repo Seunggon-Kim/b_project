@@ -226,14 +226,6 @@
   },
   {
    "from": "table:kbo_roster",
-   "to": "page:index.html"
-  },
-  {
-   "from": "table:kbo_roster",
-   "to": "page:pages/player-analytics.html"
-  },
-  {
-   "from": "table:kbo_roster",
    "to": "table:players"
   },
   {
@@ -1076,7 +1068,6 @@
    "tables": [
     "kbo_official_batter_stats",
     "kbo_official_pitcher_stats",
-    "kbo_roster",
     "play_by_play",
     "players"
    ]
@@ -1092,7 +1083,6 @@
    "tables": [
     "kbo_official_batter_stats",
     "kbo_official_pitcher_stats",
-    "kbo_roster",
     "play_by_play",
     "players"
    ]
@@ -1134,7 +1124,6 @@
    "tables": [
     "kbo_official_batter_stats",
     "kbo_official_pitcher_stats",
-    "kbo_roster",
     "play_by_play",
     "players"
    ]
@@ -1151,7 +1140,6 @@
    "tables": [
     "kbo_official_batter_stats",
     "kbo_official_pitcher_stats",
-    "kbo_roster",
     "play_by_play",
     "players"
    ]
@@ -2214,15 +2202,8 @@
    "kind": "collected",
    "manual_note": null,
    "name": "kbo_roster",
-   "pages": [
-    "index.html",
-    "pages/player-analytics.html"
-   ],
+   "pages": [],
    "routes": [
-    "/players/:id",
-    "/players/:id/arsenal",
-    "/players/:id/usage",
-    "/players/search",
     "/roster",
     "/roster/moves"
    ],

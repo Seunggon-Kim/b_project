@@ -72,10 +72,10 @@ def allowed(kind, column, season, table=None):
     last = max((y for ys in v.get(kind, {}).values() for y in ys), default=None)
     return last is not None and season > last and last in seasons
 
-# 네이버 시즌 API 가 통째로 뺀 투수(2013~2021, 10명 27행)를 박스 투수 줄 합계로 넣을지.
-# evan 결정 대기(결정 2 의 투수 쪽). 켜면 docs/naver-migration/missing-pitchers.md 의
-# 방법(가)입니다.
-INCLUDE_BOX_ONLY_PITCHERS = False
+# 네이버 시즌 API 가 통째로 뺀 투수(2013~2021, 10명 27행)를 박스 투수 줄 합계로 넣습니다.
+# evan 결정(2026-10-18, 결정 2 의 투수 쪽). 27행 모두 19칸이 지금 DB 와 같았습니다
+# (docs/naver-migration/missing-pitchers.md). daily 도 같은 규칙입니다.
+INCLUDE_BOX_ONLY_PITCHERS = True
 
 # 늘 None 인 칸(evan 결정 3: 네이버에 없고 만들면 애매함).
 NEVER = {

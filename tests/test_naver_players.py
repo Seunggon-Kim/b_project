@@ -19,9 +19,26 @@ def test_현역은_네이버_값입니다():
     assert r["salary"] == 330000000 and r["team_id"] == "KT" and r["image_url"] == "u"
 
 
-def test_드래프트_계약금_출신학교는_비웁니다():
+def test_드래프트_경력은_네이버_값_계약금은_비웁니다():
     r = np_.build_row(50030, D, "KT", {}, {}, "u")
-    assert all(r[c] is None for c in ("career", "draft_year", "draft_order", "signing_bonus"))
+    assert (r["draft_year"], r["draft_order"], r["career"]) == ("20KT", "20 KT 1차", "유신고")
+    assert r["signing_bonus"] is None
+
+
+def test_드래프트_표기():
+    assert np_.draft("20 LG 2차 8R 73순위") == ("20LG", "8라운드 73순위")
+    assert np_.draft("23 키움 11R 106순위") == ("23키움", "11라운드 106순위")
+    assert np_.draft("20 두산 육성선수") == ("20두산", "20 두산 육성선수")
+    assert np_.draft(None) == (None, None)
+
+
+def test_소속은_시즌_기록_상세_빈값_차례():
+    names = {("OB", 2026): "두산"}
+    assert np_.team_of(1, None, 2026, {1: "LG"}, names) == ("LG", "season")
+    d = {"teamId": "OB", "year": 2026, "isRetire": False}
+    assert np_.team_of(2, d, 2026, {}, names) == ("두산", "detail")
+    assert np_.team_of(3, dict(d, isRetire=True), 2026, {}, names) == (None, None)
+    assert np_.team_of(4, dict(d, year=2024), 2026, {}, names) == (None, None)
 
 
 def test_은퇴_선수는_소속_연봉_없이():

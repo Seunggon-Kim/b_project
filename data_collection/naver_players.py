@@ -9,8 +9,8 @@ KBO 이용약관(2026-10-14 시행)으로 KBO 선수 상세(player_info_scraper.
   (나) 네이버가 비운 투구 손(throw)은 PBP throws 의 다수 값(2008 이후 던진 투수만).
        타석 방향(bat)도 PBP stands 가 80% 이상 한쪽이면 그 값, 아니면 None.
        2008~2026 대조: 투구 손 947/949, 타석 방향 883/886.
-  (다) draft_year·draft_order·signing_bonus·career(출신 학교 전체 경로)는 None.
-       네이버 career 는 마지막 학교 하나라 경로를 대신하지 못합니다.
+  (다) draft_year·draft_order·career 는 네이버 값(2026-10-18 evan 결정 고침). career 는
+       네이버가 주는 마지막 학교 하나입니다. signing_bonus 는 네이버에 없어 None 입니다.
   나머지 KBO 사이트에서 온 값은 남기지 않습니다.
 
     GET /statistics/categories/kbo/seasons/{y}/players/{id}   (y = 그 선수가 뛴 시즌)
@@ -25,9 +25,9 @@ KBO 이용약관(2026-10-14 시행)으로 KBO 선수 상세(player_info_scraper.
 
 ## 소속
 
-team_id 는 그 시즌 팀 이름(team_seasons)입니다. 올 시즌 선수 목록에 있는 선수만
-소속을 넣고, 은퇴(isRetire)면 '' 입니다. 1군 등록 명단은 네이버에 없어 대신하지
-않습니다.
+team_id 는 그 시즌 팀 이름(team_seasons)입니다. team_of 의 차례(올 시즌 1군 기록,
+없으면 올해 상세의 소속, 그 밖에는 빈 값)로 정합니다. 1군 등록 명단은 네이버에 없어
+대신하지 않습니다.
 
     py data_collection/naver_players.py --all --dry-run       # 2008~ 전원
     py data_collection/naver_players.py --new --season 2026    # daily: PBP 에 처음 나온 선수
@@ -35,6 +35,7 @@ team_id 는 그 시즌 팀 이름(team_seasons)입니다. 올 시즌 선수 목�
 import argparse
 import collections
 import json
+import re
 import sys
 import threading
 import time
@@ -52,7 +53,7 @@ PHOTO = "https://sports-phinf.pstatic.net/player/kbo/default/%d.png"
 COLUMNS = ["player_id", "player_name", "team_id", "back_number", "position", "throw", "bat",
            "birthday", "height", "weight", "career", "draft_year", "draft_order",
            "signing_bonus", "salary", "image_url"]
-BLANK = ("career", "draft_year", "draft_order", "signing_bonus")  # 결정 5 (다)
+BLANK = ("signing_bonus",)  # 네이버에 계약금이 없습니다(결정 5 (다), 2026-10-18 고침)
 
 POSITION = {
     "PITCHER": "투수", "CATCHER": "포수",
@@ -135,6 +136,29 @@ def play_type(s):
     return HAND.get(s[0]), HAND.get(s[2])
 
 
+DRAFT_PICK = re.compile(r"(\d+)R (\d+)순위$")
+
+
+def draft(info):
+    """네이버 draftInfo → (draft_year, draft_order). 예전 KBO 칸 표기에 맞춥니다.
+
+        '20 LG 2차 8R 73순위' → ('20LG', '8라운드 73순위')
+        '23 키움 11R 106순위' → ('23키움', '11라운드 106순위')
+        '20 두산 1차'        → ('20두산', '20 두산 1차')
+        '20 두산 육성선수'    → ('20두산', '20 두산 육성선수')
+
+    지금 DB(KBO 값)와 둘 다 있는 선수끼리 대조해 맞췄습니다(2026-10-18).
+    """
+    if not info:
+        return None, None
+    parts = str(info).split()
+    if len(parts) < 2:
+        return None, str(info)
+    m = DRAFT_PICK.search(str(info))
+    order = "%s라운드 %s순위" % (m.group(1), m.group(2)) if m else str(info)
+    return parts[0] + parts[1], order
+
+
 def won(s):
     """연봉 글자 → 숫자. '50,000만원' → 500000000(원), '1,100,000달러' → 1100000(달러).
 
@@ -182,9 +206,26 @@ def finish_hands(acc):
     return throw, bat
 
 
+def team_of(pid, d, season, list_teams, names):
+    """올 시즌 소속(evan 결정 2026-10-18, 차례대로).
+
+    a. 올 시즌 1군 기록(네이버 시즌 선수 목록)의 팀
+    b. 없으면 네이버 선수 상세의 teamId(상세의 year 가 올 시즌이고 은퇴가 아닐 때만)
+    c. 그 밖에는 빈 값(은퇴·옛 선수는 지금 소속으로 보이지 않게)
+
+    돌려주는 값: (팀 이름 또는 None, 'season'|'detail'|None)
+    """
+    if list_teams.get(pid):
+        return list_teams[pid], "season"
+    if d and d.get("teamId") and not d.get("isRetire") and int(d.get("year") or 0) == int(season):
+        return names.get((d["teamId"], int(season))) or d["teamId"], "detail"
+    return None, None
+
+
 def build_row(pid, d, current_team, pbp_throw, pbp_bat, image_url, pbp_name=None):
     """d: 네이버 상세(None 이면 네이버가 뺀 선수). current_team: 올 시즌 소속 이름 또는 None."""
     t, b = play_type((d or {}).get("playerPlayType"))
+    dy, do = draft((d or {}).get("draftInfo"))
     row = {
         "player_id": pid,
         "player_name": (d or {}).get("playerName") or pbp_name,
@@ -198,6 +239,10 @@ def build_row(pid, d, current_team, pbp_throw, pbp_bat, image_url, pbp_name=None
         "weight": (d or {}).get("weight"),
         "salary": won((d or {}).get("salary")) if current_team else None,
         "image_url": image_url,
+        # 드래프트·경력은 네이버 값입니다(경력은 네이버가 주는 마지막 학교 하나).
+        "draft_year": dy,
+        "draft_order": do,
+        "career": (d or {}).get("career") or None,
     }
     for c in BLANK:
         row[c] = None
@@ -276,15 +321,19 @@ def main(argv=None):
     print("대상 %d명" % len(ids), flush=True)
     rows = []
     miss = 0
+    team_source = collections.Counter()
     for i, pid in enumerate(ids, 1):
         d = detail(pid, last.get(pid, season), cache=a.detail_cache)
         miss += d is None
         img = photo(pid, cache=a.detail_cache) if d else None
-        rows.append(build_row(pid, d, teams.get(pid), throw, bat, img, pbp_names.get(pid)))
+        team, why = team_of(pid, d, season, teams, names)
+        team_source[why] += 1
+        rows.append(build_row(pid, d, team, throw, bat, img, pbp_names.get(pid)))
         if i % 100 == 0:
             print("  %d/%d" % (i, len(ids)), flush=True)
-    print("행 %d, 네이버 상세 없음 %d, 사진 없음 %d"
-          % (len(rows), miss, sum(1 for r in rows if not r["image_url"])))
+    print("행 %d, 네이버 상세 없음 %d, 사진 없음 %d, 소속(시즌 기록 %d · 선수 상세 %d · 없음 %d)"
+          % (len(rows), miss, sum(1 for r in rows if not r["image_url"]),
+             team_source["season"], team_source["detail"], team_source[None]))
     if a.dump:
         Path(a.dump).write_text(json.dumps({"rows": rows, "teams": teams}, ensure_ascii=False, default=str),
                                 encoding="utf-8")

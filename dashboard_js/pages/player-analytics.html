@@ -452,7 +452,7 @@
             const age = Q.ageParts(player.birthday, new Date());
             const dob = Q.dobText(player.birthday);
             const team = (player.is_active && (player.team_name || player.team_id))
-                ? (player.team_name || player.team_id) : '-';
+                ? (player.team_name || player.team_id) : lastTeamText(player);
 
             // 팬그래프 헤더 모양입니다. 이름·팀 / 나이·투타·키몸무게 / 생년월일.
             // 포지션만 오른쪽 끝입니다.
@@ -514,6 +514,18 @@
         }
 
         /** 프로필 카드 본문입니다. items = [[라벨, 값], ...] */
+        /**
+         * 지금 소속이 없는 선수(은퇴·올 시즌 기록 없음)는 공식 기록의 가장 최근 시즌 팀을
+         * '마지막 소속 KT (2022)' 처럼 보입니다. 기록이 없으면 '-' 입니다.
+         */
+        function lastTeamText(player) {
+            const rows = [].concat(player.batter_seasons || [], player.pitcher_seasons || [])
+                .filter(r => r && r.player_team && r.season);
+            if (!rows.length) return '-';
+            const last = rows.reduce((a, b) => (Number(b.season) > Number(a.season) ? b : a));
+            return `마지막 소속 ${last.player_team} (${last.season})`;
+        }
+
         function profileHtml(items) {
             return '<dl class="pa-prof">' + items.map(([k, v]) =>
                 `<div class="pa-prof-row"><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join('') + '</dl>';
@@ -881,12 +893,19 @@
                 headerBar.innerHTML = renderHeaderBar(player);
 
                 const money = (v) => formatMoney(v, isForeign ? 'USD' : 'KRW');
-                // 입단 계약금·입단년도·지명순위·경력은 KBO 선수 상세에서만 오던 값이라
-                // 내렸습니다(KBO 이용약관 2026-10-14 시행, 네이버로 옮김).
-                cardDiv.innerHTML = profileHtml([
+                // 입단년도·지명순위·경력은 Naver 스포츠 선수 정보입니다(경력은 마지막 학교).
+                // 입단 계약금은 Naver 에 없어 보이지 않습니다(KBO 이용약관 2026-10-14 시행).
+                const draft = (player.draft_year || '')
+                    + (player.draft_year && player.draft_order ? ' / ' : '')
+                    + (player.draft_order || '');
+                const profile = [
                 ...profileBasics(player),
                     ['연봉', money(player.salary)],
-                ]);
+                ];
+                if (draft) profile.push(['입단년도 / 지명순위', draft]);
+                if (player.career) profile.push(['경력(최종 학교)', player.career]);
+                profile.push(['선수 정보 출처', 'Naver 스포츠']);
+                cardDiv.innerHTML = profileHtml(profile);
 
                 // 한눈에 보기: 최근 3시즌 + 통산. 계산은 quicklook.js 입니다.
                 const isPitcher = player.position === '투수';

@@ -113,14 +113,15 @@ export async function playersSearch(request, env) {
   // 상세 페이지와 같은 이유로 소속을 그 시즌 기록에서 가져옵니다.
   // `players.team_id` 는 아무도 채우지 않아 대부분 비어 있습니다.
   // 검색 결과만 '-' 로 남으면 상세 페이지와 어긋나 보입니다.
-  const cur = await currentSeason(env.MYSQL);
+  // 지금 소속(players.team_id, 네이버 수집이 정함)이 있으면 그 팀·현역이고, 없으면
+  // 마지막 시즌 기록의 팀·비현역입니다(currentTeam 설명).
   const { results } = await env.MYSQL
     .prepare(
-      `SELECT p.*, COALESCE((${LATEST_TEAM_SQL}), p.team_id) AS team_id,
-              CASE WHEN (${LATEST_SEASON_SQL}) >= ? THEN 1 ELSE 0 END AS is_active
+      `SELECT p.*, COALESCE(NULLIF(TRIM(p.team_id), ''), (${LATEST_TEAM_SQL})) AS team_id,
+              CASE WHEN NULLIF(TRIM(p.team_id), '') IS NOT NULL THEN 1 ELSE 0 END AS is_active
        FROM players p WHERE p.player_name LIKE ?
        ORDER BY p.player_name, p.player_id LIMIT 50`)
-    .bind(cur == null ? 9999 : cur, `%${q}%`)
+    .bind(`%${q}%`)
     .all();
   return json({ players: results });
 }
@@ -152,109 +153,37 @@ export async function playerDetail(request, env, ctx, params) {
     + 'FROM kbo_official_pitcher_stats WHERE player_id = ? ORDER BY season DESC, player_team',
   ).bind(dbPid).all();
 
-  // `players.team_id` 는 **아무 작업도 채우지 않는 컬럼**입니다.
-  // player_info_scraper 의 INSERT 문에 team_id 가 없어서, 새로 넣은
-  // 선수는 전부 비어 있습니다(1,745명 중 1,160명). 화면에 소속이
-  // '-' 로 나옵니다. 있는 값도 최초 적재 이후 갱신되지 않아 낡았습니다
-  // (강백호가 한화인데 KT 로 남아 있었습니다).
+  // 지금 소속은 players.team_id 입니다(currentTeam). 없으면 마지막 시즌 기록의 팀을
+  // 내보내고 is_active 는 0 입니다. 화면은 그때 '마지막 소속 KT (2022)' 로 보입니다.
   //
-  // 그 시즌 기록 행에는 player_team 이 있습니다. 가장 최근 시즌 것을
-  // 씁니다. 현역은 올해 소속이 되고 은퇴 선수는 마지막 소속이 됩니다.
-  // 리더보드·기록실과 같은 규칙입니다(routes/leaders.js, routes/stats.js).
-  const cur = await currentSeason(db);
-
-  // 지금 1군에 등록돼 있는지입니다.
-  //
-  // `is_active` 와 다릅니다. `is_active` 는 "올 시즌 기록이 있나" 이고
-  // 이것은 "지금 1군 엔트리에 있나" 입니다. 어제 말소된 선수는
-  // is_active 는 1 이지만 1군에는 없습니다.
-  //
-  // `kbo_roster` 는 daily 가 KBO 등록 현황에서 매일 새로 받습니다.
-  // 그 표가 없거나(옛 스냅샷) 못 찾으면 null 입니다. 화면은 그때
-  // 배지를 안 보여 줍니다. "말소" 로 단정하면 안 됩니다. 2군에
-  // 있는 것과 표가 없는 것은 다릅니다.
-  let roster = null;
-  let rosterSize = 0;
-  try {
-    roster = await db.prepare(
-      'SELECT team, back_number, role, as_of, league FROM kbo_roster '
-      + 'WHERE player_id = ? LIMIT 1',
-    ).bind(dbPid).first();
-    // 명단을 믿어도 되는 날인지 봅니다. 한 행만 읽습니다.
-    const size = await db.prepare(
-      'SELECT COUNT(*) AS n FROM kbo_roster').first();
-    rosterSize = size ? Number(size.n) : 0;
-  } catch {
-    // 표가 아직 없는 환경입니다.
-  }
+  // 예전에는 KBO 1군 등록 현황(kbo_roster)과 등번호로 판정했습니다. KBO 이용약관
+  // (2026-10-14 시행)으로 등록 현황을 더 받지 않아 그 표는 멈춘 옛 값입니다. 네이버
+  // 등번호는 은퇴 선수에게도 마지막 번호가 남아 소속 판정에 쓸 수 없습니다.
+  const team = currentTeam(player);
 
   return json({
     ...player,
-    // 1군 등록 현황이 가장 최신 소속입니다. daily 가 매일 새로 받습니다.
-    // 기록의 소속은 그 시즌 것이라 시즌 중 이적이 늦게 반영됩니다.
-    team_id: (roster && roster.team)
-      || latestTeam(batter.results, pitcher.results)
-      || player.team_id,
-    is_active: isActive(batter.results, pitcher.results, cur, roster,
-                        rosterSize, player.back_number) ? 1 : 0,
-    // 1군 등록 상태입니다. null 이면 "모름" 이지 "말소" 가 아닙니다.
-    // **1군 등록 배지는 1군 명단일 때만입니다.** 퓨처스 명단에 있는
-    // 선수에게 '1군 등록' 을 붙이면 틀린 말이 됩니다.
-    first_team: (roster && roster.league !== '퓨처스') ? {
-      team: roster.team,
-      back_number: roster.back_number,
-      role: roster.role,
-      as_of: roster.as_of,
-    } : null,
+    team_id: team || latestTeam(batter.results, pitcher.results),
+    is_active: team ? 1 : 0,
+    // 1군 등록 배지는 등록 현황이 없어 내렸습니다(화면도 쓰지 않음). 키만 남깁니다.
+    first_team: null,
     batter_seasons: batter.results,
     pitcher_seasons: pitcher.results,
   });
 }
 
-/** 가장 최근 시즌에 기록이 있으면 현역으로 봅니다. */
-export function rosterDecides(rosterSize) {
-  // 정상이면 1군 339 + 퓨처스 289 = 628명입니다. 수집이 실패해 표가
-  // 비면 전원이 무소속이 되는데 그건 사고입니다. 너무 작으면 예전처럼
-  // 기록으로 판정합니다.
-  return Number(rosterSize) >= 300;
-}
-
 /**
- * 지금 어느 구단에 속해 있는지입니다.
+ * 지금 소속(팀 이름) 또는 null 입니다.
  *
- * **오늘 KBO 구단 명단에 있는가** 로 봅니다. `kbo_roster` 가 1군과
- * 퓨처스 명단을 함께 담습니다. daily 가 매일 새로 받습니다.
- *
- * 예전에는 "올 시즌 기록이 있나" 로 봤습니다. 그래서 방출된 선수도
- * 현역으로 잡혔습니다. 타무라(56218)는 계약이 끝났는데 올 시즌 1군
- * 기록(17경기)이 있어 두산 소속으로 나왔습니다. 기록은 그 시즌 사실
- * 이라 지워지지 않습니다. 소속 판정에 쓸 값이 아닙니다.
+ * players.team_id 는 네이버 수집(data_collection/naver_players.py)이 정합니다. 올 시즌
+ * 1군 기록의 팀, 없으면 네이버 선수 상세의 올해 소속(은퇴가 아닐 때), 그 밖에는 빈
+ * 값입니다(2026-10-18 evan 결정). 빈 값이면 지금 소속이 없는 선수(은퇴·옛 선수)입니다.
  */
-export function isActive(batterRows, pitcherRows, current, roster,
-                         rosterSize, backNumber) {
-  // 오늘 명단에 있으면 두말할 것 없습니다.
-  if (roster) return true;
-
-  // **명단에 없어도 등번호가 있으면 소속입니다.** 부상으로 1군에서
-  // 내려가고 2군 명단에도 안 오른 선수가 있습니다. 힐리어드(56034)가
-  // 그랬습니다. 명단만 보면 무소속이 되는데 KT 소속입니다.
-  //
-  // 계약 여부를 가르는 것은 등번호입니다. KBO 는 계약이 끝나면 그
-  // 자리를 비웁니다. 명단은 "오늘 어디에 있나", 등번호는 "계약이
-  // 있나" 입니다. 다른 질문입니다.
-  //
-  // 0 과 '00' 도 실제 등번호입니다. 값이 있는지만 봅니다.
-  if (backNumber !== null && backNumber !== undefined && backNumber !== '') {
-    return true;
-  }
-
-  if (rosterDecides(rosterSize)) return false;
-  // 명단을 못 믿는 날입니다. 예전 방식으로 돌아갑니다.
-  if (current == null) return false;
-  for (const r of [...(batterRows || []), ...(pitcherRows || [])]) {
-    if (r && Number(r.season) >= Number(current)) return true;
-  }
-  return false;
+export function currentTeam(player) {
+  const t = player ? player.team_id : null;
+  if (t === null || t === undefined) return null;
+  const s = String(t).trim();
+  return s === '' ? null : s;
 }
 
 /** 시즌 기록 가운데 가장 최근 시즌의 소속입니다. 없으면 null 입니다. */
