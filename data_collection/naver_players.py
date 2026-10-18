@@ -426,7 +426,8 @@ def main(argv=None):
         merge_hands(acc, rows)
         for x in rows:
             for k, nk in (("pitcher_ID", "pitcher"), ("batter_ID", "batter")):
-                if x.get(k):
+                # PBP 에는 선수를 모를 때 -1 이 있습니다(2026-05-09 한 타석). players 에 넣지 않습니다.
+                if x.get(k) and int(x[k]) > 0:
                     pbp_names[int(x[k])] = x.get(nk)
                     last.setdefault(int(x[k]), y)
     throw, bat = finish_hands(acc)
