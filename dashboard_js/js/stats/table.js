@@ -4,7 +4,7 @@
  *
  * 앞 칸(고정 칸)은 opt.idCols = [{ key, label, cls, href?(row) }] 로 받습니다.
  * 없으면 팀 칸 하나입니다(팀 통계). opt.page = { size, index } 를 주면 그
- * 쪽만 그립니다(size 0 은 전체). CSV 는 쪽과 상관없이 전체입니다.
+ * 쪽만 그립니다(size 0 은 전체). CSV 내려받기는 데이터 출처 이용약관에 따라 두지 않습니다.
  */
 (function (root) {
   'use strict';
@@ -131,25 +131,6 @@
     return h + '</tbody></table></div>';
   }
 
-  function csvCell(s) {
-    s = String(s);
-    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-  }
-
-  /** 지금 보이는 칸·정렬 그대로의 CSV 입니다(쪽과 상관없이 전체). 엑셀용 BOM 을 붙입니다. */
-  function toCsv(opt) {
-    const ids = idColsOf(opt);
-    const lines = [['#'].concat(ids.map(c => c.label), opt.cols.map(c => c.label))];
-    sorted(opt).forEach(function (r, i) {
-      lines.push([rankNo(opt, r, i)]
-        .concat(ids.map(c => (missing(r[c.key]) ? '' : r[c.key])), opt.cols.map(c => C().fmt(r[c.key], c.kind))));
-    });
-    if (opt.league) {
-      lines.push([''].concat(ids.map((c, i) => (i === 0 ? '리그 평균' : '')), opt.cols.map(c => C().fmt(opt.league[c.key], c.kind))));
-    }
-    return '\uFEFF' + lines.map(l => l.map(csvCell).join(',')).join('\r\n') + '\r\n';
-  }
-
   /** 머리글에 마우스를 올렸을 때 뜨는 설명 창 내용입니다. */
   function tipHtml(d) {
     if (!d) return '';
@@ -159,7 +140,7 @@
     return h;
   }
 
-  const api = { esc, indexClass, sortRows, pageOf, renderTable, toCsv, tipHtml };
+  const api = { esc, indexClass, sortRows, pageOf, renderTable, tipHtml };
   TS.table = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

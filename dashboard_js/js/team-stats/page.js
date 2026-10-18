@@ -85,12 +85,6 @@
     return defaultSort(st.tab, keys, rows);
   }
 
-  function csvName(st, mode) {
-    const what = { bat: 'batting', pit: 'pitching', rec: 'record' }[st.tab];
-    const when = mode === 'range' ? `${st.start}_${st.end}` : String(st.season);
-    return ['bstats', 'team', what, st.tab === 'rec' ? '' : st.group, when].filter(Boolean).join('_') + '.csv';
-  }
-
   /**
    * 기간 입력의 기본값 { start, end } 입니다(두 주, 순수 함수).
    * 끝: 진행 중인 시즌이면 오늘(한국 시각), 아니면 그 시즌 마지막 정규시즌 경기 날짜,
@@ -451,19 +445,6 @@
     render();
   }
 
-  function downloadCsv() {
-    if (!S.last) return;
-    const csv = TS.table.toCsv(S.last);
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = csvName(S.st, mode());
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-
   async function copyLink() {
     const btn = $('link-btn');
     try {
@@ -555,7 +536,6 @@
       syncRange();
       refresh();
     });
-    $('csv-btn').addEventListener('click', downloadCsv);
     $('link-btn').addEventListener('click', copyLink);
     $('ts-table').addEventListener('click', function (e) {
       const th = e.target.closest('th.sortable');
@@ -629,7 +609,7 @@
     }
   }
 
-  const api = { parseState, toSearch, visibleKeys, defaultSort, pickSort, csvName, dataReady, rangeDefault };
+  const api = { parseState, toSearch, visibleKeys, defaultSort, pickSort, dataReady, rangeDefault };
   TS.page = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (typeof document !== 'undefined' && document.getElementById('ts-table')) {

@@ -6,7 +6,7 @@
  * 데이터는 stats/data.js, 표는 stats/table.js 가 합니다. 위쪽 순수 함수는
  * Node 로 검증하고, 아래 화면 부분은 브라우저에서만 돕니다.
  *
- * 설명 창·CSV·링크 복사는 팀 통계 page.js 와 비슷하지만, 팀 통계를
+ * 설명 창·링크 복사는 팀 통계 page.js 와 비슷하지만, 팀 통계를
  * 건드리지 않으려고 따로 둡니다(설계 6장).
  */
 (function (root) {
@@ -162,10 +162,6 @@
     if (st.tab === 'bat' && st.pos) parts.push(st.pos);
     parts.push(`${minLabel(st.tab, st.min)} ${n}명`);
     return `${st.tab === 'bat' ? '타자' : '투수'} (${parts.join(', ')})`;
-  }
-
-  function csvName(st) {
-    return ['bstats', 'player', st.tab === 'bat' ? 'batting' : 'pitching', st.group, String(st.season)].join('_') + '.csv';
   }
 
   /** 표 아래 쪽 넘기기 줄입니다. pg 는 table.pageOf 결과, size 는 한 쪽 인원(0 = 전체)입니다. */
@@ -417,19 +413,6 @@
     render();
   }
 
-  function downloadCsv() {
-    if (!S.last) return;
-    const csv = TS.table.toCsv(S.last);
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = csvName(S.st);
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-
   async function copyLink() {
     const btn = $('link-btn');
     try {
@@ -521,7 +504,6 @@
       S.st.page = 0;
       refresh();
     });
-    $('csv-btn').addEventListener('click', downloadCsv);
     $('link-btn').addEventListener('click', copyLink);
     $('ts-table').addEventListener('click', function (e) {
       const th = e.target.closest('th.sortable');
@@ -613,7 +595,7 @@
 
   const api = {
     ID_COLS, parseState, toSearch, visibleKeys, defaultSort, pickSort, filterRows, needRegulation,
-    teamsOf, positionsOf, minOptions, minLabel, titleText, csvName, pagerHtml, caveatText, dataReady,
+    teamsOf, positionsOf, minOptions, minLabel, titleText, pagerHtml, caveatText, dataReady,
   };
   TS.playerPage = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
