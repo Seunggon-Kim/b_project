@@ -83,11 +83,11 @@
 /games?season=2019&limit=30
 /games?season=2025&limit=30
 /games?season=2026&limit=30
-/roster
-/roster?team=KIA
-/roster?league=퓨처스
-/roster/moves
-/roster/moves?days=30&limit=100
+410 /roster
+410 /roster?team=KIA
+410 /roster?league=퓨처스
+410 /roster/moves
+410 /roster/moves?days=30&limit=100
 /logo/HT
 
 # wRC+
@@ -117,12 +117,12 @@
 /db/table/players?limit=50&offset=1000
 /db/table/play_by_play?limit=50&offset=0
 /db/table/play_by_play?limit=50&offset=2000000
-# 명단·이동의 player_id, 로고 BLOB(숫자 배열)이 D1 과 같은 모양인지 봅니다.
-/db/table/kbo_roster?limit=50
-/db/table/kbo_roster_moves?limit=50
+# 명단·이동 표는 KBO 이용약관(2026-10-14)으로 데이터 탐색에서 뺐습니다(404).
+404 /db/table/kbo_roster?limit=50
+404 /db/table/kbo_roster_moves?limit=50
+# 로고 BLOB(숫자 배열)이 D1 과 같은 모양인지 봅니다.
 /db/table/team_logos?limit=2
-/db/table/teams/csv?limit=100
-/db/table/franchises/csv?limit=100
-# CSV 한 번 상한(20,000행)까지 흘려보냅니다. 질의하며 흘려보내는 길입니다.
-/db/table/play_by_play/csv?limit=20000&offset=0
+# 표 전체 내려받기(CSV)는 데이터 출처 이용약관으로 닫았습니다(410).
+410 /db/table/teams/csv?limit=100
+410 /db/table/play_by_play/csv?limit=20000&offset=0
 404 /db/table/no_such_table

@@ -316,13 +316,6 @@ class API {
     }
 
     /**
-     * DB Explorer: 테이블 전체 CSV 다운로드 URL
-     */
-    static dbCsvUrl(name) {
-        return `${API_BASE_URL}/db/table/${encodeURIComponent(name)}/csv`;
-    }
-
-    /**
      * 수집 작업이 마지막으로 언제 돌았는지.
      *
      * 예전에는 서버 cron 이 15분마다 다시 쓰던 정적 파일

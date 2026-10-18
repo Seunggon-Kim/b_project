@@ -21,7 +21,7 @@ test('요청마다 MySQL 어댑터를 만들어 env 사본의 MYSQL 에 끼웁�
   assert.equal(closed, true);
 });
 
-test('CSV 는 본문을 다 보낸 뒤에 연결을 닫습니다', async () => {
+test('JSON 이 아닌 흘려보내는 본문은 다 보낸 뒤에 연결을 닫습니다', async () => {
   let closed = false;
   const waits = [];
   const ctx = { waitUntil: (p) => waits.push(p) };

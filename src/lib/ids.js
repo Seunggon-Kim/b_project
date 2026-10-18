@@ -39,11 +39,3 @@ function needsIdFix(tableName) {
   return !TEXT_ID_TABLES.has(tableName);
 }
 
-/**
- * idFixer 를 배열 행에 쓰는 판입니다. `columns` 와 같은 순서로, 그 열 값에
- * intIdOrSame 을 써야 하면 참입니다. idFixer 가 항등이면 모두 거짓입니다.
- */
-export function idFixFlags(tableName, columns) {
-  const on = needsIdFix(tableName);
-  return columns.map((c) => on && TEXT_ID_COLUMNS.has(c));
-}

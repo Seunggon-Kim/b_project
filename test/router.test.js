@@ -30,7 +30,7 @@ test('경로 값의 퍼센트 인코딩을 풉니다', () => {
 });
 
 test('더 긴 경로가 자리표시자에 통째로 들어가지 않습니다', () => {
-  // '/db/table/:name' 이 '/db/table/x/csv' 를 먹으면 CSV 라우트가 죽습니다.
+  // '/db/table/:name' 이 '/db/table/x/csv' 를 먹으면 CSV 경로(지금은 410)가 표 보기로 잘못 갑니다.
   assert.equal(matchPath('/db/table/:name', '/db/table/players/csv'), null);
 });
 

@@ -108,14 +108,13 @@ def test_작은_표는_만들지_않습니다(tmp_path):
     assert made == []
 
 
-def test_상한이_화면과_같습니다():
-    """서로 다르면 화면은 413 을 내는데 파일은 없는 표가 생깁니다."""
-    m = mod()
-    js = (ROOT / "src" / "routes" / "dbexplorer.js").read_text(
-        encoding="utf-8")
-    import re
-    n = int(re.search(r"CSV_MAX_ROWS = (\d+)", js).group(1))
-    assert m.CSV_MAX_ROWS == n, "파이썬 %d / 화면 %d" % (m.CSV_MAX_ROWS, n)
+def test_화면의_표_전체_내려받기는_닫혀_있습니다():
+    """데이터 출처 이용약관(KBO 이용약관 제14조 차항, 2026-10-14 시행)으로 API 의
+    /db/table/:name/csv 가 모든 표에 410 을 돌려줍니다. export_csv.py 는 남겨 두지만
+    화면과 상한을 맞출 일이 없어졌습니다."""
+    js = (ROOT / "src" / "routes" / "dbexplorer.js").read_text(encoding="utf-8")
+    assert "CSV_MAX_ROWS" not in js
+    assert "json({ error: CSV_CLOSED_MESSAGE }, 410)" in js
 
 
 def test_백업_표는_내보내지_않습니다(tmp_path):
@@ -148,12 +147,11 @@ def test_문법이_성립합니다():
 
 # ------------------------------------------------------------ 화면 안내
 
-def test_화면이_내려받기_주소를_알려_줍니다():
-    js = (ROOT / "src" / "routes" / "dbexplorer.js").read_text(
-        encoding="utf-8")
-    assert "DOWNLOAD_URL" in js
-    assert "releases/tag/data-latest" in js
-    assert "download: DOWNLOAD_URL" in js, "413 응답에 주소가 없습니다"
+def test_화면이_Releases_주소를_알려_주지_않습니다():
+    """data-latest Release 는 지웁니다(evan, 2026-10-18). 410 응답에도 주소가 없습니다."""
+    js = (ROOT / "src" / "routes" / "dbexplorer.js").read_text(encoding="utf-8")
+    assert "DOWNLOAD_URL" not in js
+    assert "releases/tag/data-latest" not in js
 
 
 def test_주간_워크플로가_Releases_에_올리지_않습니다():

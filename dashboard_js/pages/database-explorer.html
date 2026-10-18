@@ -501,7 +501,8 @@
         <div id="tab-explorer" class="atab-panel">
         <h1 class="fade-in"><span class="material-symbols-outlined h1-icon">table_view</span>데이터 탐색</h1>
         <p class="text-secondary mb-3">KBO 데이터의 수집 현황과 자동 수집 스케줄을 한눈에 확인하고, DB 테이블과
-            데이터를 SQLite 없이 바로 탐색합니다. 테이블을 클릭하면 컬럼 구조와 데이터를 보고 CSV로 내려받을 수 있습니다.</p>
+            데이터를 SQLite 없이 바로 탐색합니다. 테이블을 클릭하면 컬럼 구조와 데이터를 볼 수 있습니다.
+            표 전체 내려받기는 데이터 출처 이용약관에 따라 제공하지 않습니다.</p>
 
         <!-- 데이터 현황 -->
         <section id="stats-overview" class="mb-3">
@@ -613,10 +614,6 @@
                             다음 <span class="material-symbols-outlined">chevron_right</span>
                         </button>
                         <span class="dbx-pageinfo" id="page-info"></span>
-                        <span class="spacer"></span>
-                        <button class="dbx-btn" id="btn-csv" onclick="downloadCsv()">
-                            <span class="material-symbols-outlined">download</span> 전체 CSV 다운로드
-                        </button>
                     </div>
                     <div id="data-table"></div>
                 </div>
@@ -819,11 +816,6 @@
             state.limit = parseInt(document.getElementById('page-size').value);
             state.offset = 0;
             loadTableData();
-        }
-
-        function downloadCsv() {
-            if (!state.table) return;
-            window.location.href = API.dbCsvUrl(state.table);
         }
 
         // 데이터 현황 (DB 통계 카운트) - 메인에서 이동

@@ -24,9 +24,7 @@ const GUARDS = [
   ['players.js', 'WHERE p.player_name LIKE ? ORDER BY p.player_name, p.player_id LIMIT 50'],
   // futuresplayer.js 의 두 질의는 KBO 이용약관(2026-10-14)으로 경로를 410 으로
   // 바꾸면서 없어졌습니다.
-  ['roster.js', "'ORDER BY kind DESC, team, name LIMIT ?'"],
-  ['roster.js', "'ORDER BY move_date DESC, kind DESC, team, name LIMIT ?'"],
-  ['roster.js', 'CAST(back_number AS SIGNED), name, player_id"'],
+  // roster.js 의 세 질의도 같은 이유(KBO 이용약관)로 경로를 410 으로 바꾸면서 없어졌습니다.
   // 행을 고르는 ORDER BY 와 한 칸으로 잇는 ROW_NUMBER(lib/jsonrows.js)가 같은 ORDER 를 씁니다.
   ['stats.js', "const ORDER = 'b.batting_average DESC, b.player_id';"],
   ['stats.js', "const ORDER = 'ps.earned_run_average ASC, ps.player_id';"],

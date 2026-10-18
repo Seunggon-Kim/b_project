@@ -769,7 +769,6 @@
    "routes": [
     "/dashboard/stats",
     "/db/table/:name",
-    "/db/table/:name/csv",
     "/db/tables",
     "/jobs/status"
    ],
@@ -911,9 +910,7 @@
   {
    "file": "src/routes/dbexplorer.js",
    "live": false,
-   "pages": [
-    "pages/database-explorer.html"
-   ],
+   "pages": [],
    "path": "/db/table/:name/csv",
    "reads_all_tables": true,
    "tables": [
@@ -1168,10 +1165,7 @@
    "pages": [],
    "path": "/roster",
    "reads_all_tables": false,
-   "tables": [
-    "kbo_roster",
-    "kbo_roster_moves"
-   ]
+   "tables": []
   },
   {
    "file": "src/routes/roster.js",
@@ -1179,10 +1173,7 @@
    "pages": [],
    "path": "/roster/moves",
    "reads_all_tables": false,
-   "tables": [
-    "kbo_roster",
-    "kbo_roster_moves"
-   ]
+   "tables": []
   },
   {
    "file": "src/routes/schedule.js",
@@ -2223,10 +2214,7 @@
    "manual_note": null,
    "name": "kbo_roster",
    "pages": [],
-   "routes": [
-    "/roster",
-    "/roster/moves"
-   ],
+   "routes": [],
    "stopped": true,
    "written_by": [
     "data_collection/add_new_players.py",
@@ -2241,10 +2229,7 @@
    "manual_note": null,
    "name": "kbo_roster_moves",
    "pages": [],
-   "routes": [
-    "/roster",
-    "/roster/moves"
-   ],
+   "routes": [],
    "stopped": true,
    "written_by": [
     "data_collection/add_new_players.py",
