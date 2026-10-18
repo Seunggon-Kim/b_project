@@ -18,6 +18,7 @@ import {
 import { dbTables, dbTable, dbTableCsv } from './routes/dbexplorer.js';
 import { purgeCache } from './routes/admin.js';
 import { jobsStatus } from './routes/jobs.js';
+import { opsStorage } from './routes/ops.js';
 import { games } from './routes/games.js';
 import { roster, rosterMoves } from './routes/roster.js';
 import { futuresStandings, futuresLeaders } from './routes/futuresrecord.js';
@@ -117,6 +118,7 @@ router.add('POST', '/admin/purge-cache', purgeCache);
 // 수집이 마지막으로 언제 돌았는지 알려줍니다. 원본에는 없고, EC2 의
 // cron_status.json 정적 파일을 대신합니다.
 router.add('GET', '/jobs/status', jobsStatus);
+router.add('GET', '/ops/storage', opsStorage);
 
 export default {
   async fetch(request, env, ctx) {
