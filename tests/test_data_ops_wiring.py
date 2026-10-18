@@ -69,3 +69,19 @@ def test_페이지는_KBO_주소를_싣지_않고_api_js_를_쓰지_않습니다
     for src in ("../js/config.js", "../js/lineage/model.js", "../js/dataops/model.js", "../js/dataops/view.js"):
         assert src in page
     assert "'/ops/storage'" in view and "'/jobs/status'" in view
+
+
+NAV_PAGES = ["index.html"] + ["pages/%s.html" % p for p in (
+    "article", "database-explorer", "factor-stats", "player-analytics",
+    "player-stats", "team-record", "team-stats", "data-ops")]
+
+
+def test_모든_페이지_메뉴에_데이터_관리가_데이터_탐색_뒤에_있습니다():
+    for rel in NAV_PAGES:
+        html = (ROOT / "dashboard_js" / rel).read_text(encoding="utf-8")
+        nav = html[html.index('<nav class="nav">'):html.index("</nav>")]
+        links = re.findall(r'href="([^"]+)" class="nav-link[^"]*">([^<]+)<', nav)
+        names = [n for _, n in links]
+        assert names[-2:] == ["데이터 탐색", "데이터 관리"], rel
+        href = dict((n, h) for h, n in links)["데이터 관리"]
+        assert href == ("pages/data-ops" if rel == "index.html" else "data-ops"), rel
