@@ -72,3 +72,27 @@
 | 2026 | batter | 364 | 364 | 0 | 0 | ground_outs 364, p_pa 291, go_ao 266, runners_in_scoring_position 19, pinch_hit_batting_average 18, ground_into_double_play 2, extended_runs 2, gw_rbi 1 |
 | 2026 | pitcher | 296 | 296 | 0 | 0 | blown_save 296, save_opportunity 296, total_saves 296, ground_into_double_play 296, ground_outs 296, go_ao 290, batting_average 27, double 27 |
 | 2026 | team_season_rank | 10 | 10 | 0 | 0 |  |
+
+## players(결정 5, `naver_players.py --all --dry-run`)
+
+| 항목 | 값 |
+|---|---|
+| 지금 행 | 1,760 |
+| 새로 만든 행 | 2,173 (PBP·공식 기록에는 있는데 players 에 없던 선수 413명이 새로 들어감) |
+| 네이버 상세 없음 | 15명(네이버가 뺀 투수 10명 포함, PBP 이름·투타만) |
+| 사진 없음 | 597명(네이버 이미지가 404) |
+
+둘 다 값이 있는 행끼리 지금 값과 같은 비율입니다(괄호는 새로 비는 행).
+
+| 칸 | 같음 | 새로 비움 | 메모 |
+|---|---|---|---|
+| throw | 1,499/1,499 (100%) | 253 | 2008 이후 던지지 않은 은퇴 야수 |
+| bat | 1,435/1,437 | 321 | 타석이 없거나 한쪽 80% 미만 |
+| position | 1,512/1,515 | 75 | |
+| birthday | 1,746/1,747 | 13 | |
+| height | 1,711/1,747 | 13 | 네이버가 최근 값 |
+| weight | 1,666/1,747 | 13 | 네이버가 최근 값 |
+| back_number | 1,306/1,605 | 11 | 은퇴 선수는 네이버가 마지막 시즌 번호 |
+| team_id | 535/542 | 196 | 올 시즌 1군 기록이 없는 선수는 소속이 빔(등록 명단이 네이버에 없음) |
+| salary | 586/588 | 675 | 올 시즌 1군 선수만 |
+| career·draft_year·draft_order·signing_bonus | - | 전부 | 결정 5(다) |
