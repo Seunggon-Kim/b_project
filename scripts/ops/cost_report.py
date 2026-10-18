@@ -103,7 +103,10 @@ def make_billing(month, today, budget):
     try:
         rows = bq_rows(bq_client(), table, start)
     except Exception as e:  # noqa: BLE001  칸 하나만 안내로 바꿉니다
-        return None, "결제 데이터를 읽지 못했습니다: %s" % str(e)[:200]
+        msg = str(e)
+        for name in sorted({table, table.rsplit(".", 1)[-1]}, key=len, reverse=True):
+            msg = msg.replace(name, "<결제 표>")  # 결제 계정 ID 가 표 이름에 들어 있습니다
+        return None, "결제 데이터를 읽지 못했습니다: %s" % msg[:200]
     if not rows:
         return None, "결제 내보내기 데이터가 아직 없습니다. 켠 뒤 몇 시간에서 하루가 걸립니다"
     return cost_billing.summarize(rows, month, today, budget), ""
@@ -132,11 +135,15 @@ def screenshot(html_path, png_path):
         shutil.copy(html_path, src)
         shutil.copytree(Path(html_path).parent / "fonts", work / "fonts")
         shot = work / "report.png"
-        subprocess.run([str(EDGE), "--headless=new", "--no-sandbox", "--disable-gpu", "--hide-scrollbars",
-                        "--force-device-scale-factor=1", "--virtual-time-budget=7000",
-                        "--window-size=1200,1900", "--user-data-dir=%s" % (work / "ud").as_posix(),
-                        "--screenshot=%s" % shot, src.as_uri()],
-                       capture_output=True, timeout=120)
+        try:
+            subprocess.run([str(EDGE), "--headless=new", "--no-sandbox", "--disable-gpu", "--hide-scrollbars",
+                            "--force-device-scale-factor=1", "--virtual-time-budget=7000",
+                            "--window-size=1200,1900", "--user-data-dir=%s" % (work / "ud").as_posix(),
+                            "--screenshot=%s" % shot, src.as_uri()],
+                           capture_output=True, timeout=120)
+        except (subprocess.TimeoutExpired, OSError):
+            print("경고: PNG 를 만들지 못했습니다(Edge 응답 없음)")
+            return
         if shot.exists():
             shutil.copy(shot, png_path)
         else:
