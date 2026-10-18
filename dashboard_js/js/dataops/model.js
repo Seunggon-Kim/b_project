@@ -14,9 +14,9 @@
   function fmtBytes(n) {
     if (n === null || n === undefined || !Number.isFinite(Number(n))) return '-';
     const v = Number(n);
-    if (v >= 1e9) return (v / 1e9).toFixed(2) + ' GB';
-    if (v >= 1e6) return (v / 1e6).toFixed(1) + ' MB';
-    return Math.round(v / 1e3) + ' KB';
+    if (v >= 1e9) return (v / 1e9).toFixed(2) + ' GB';
+    if (v >= 1e6) return (v / 1e6).toFixed(1) + ' MB';
+    return Math.round(v / 1e3) + ' KB';
   }
 
   /** MySQL 행 수와 빅쿼리 사본을 견줍니다. 해석은 붙이지 않습니다. */
@@ -24,7 +24,9 @@
     if (!hasBq) return { kind: 'unknown', diff: null };
     if (!bq) return { kind: 'missing', diff: null };
     if (bq.status !== 'ok') return { kind: 'fail', diff: null };
-    const diff = (my.rows || 0) - (bq.rows || 0);
+    // MySQL 행 수를 모르면 0 으로 보지 않습니다(거짓 차이 방지).
+    if (my.rows === null || my.rows === undefined) return { kind: 'unknown', diff: null };
+    const diff = my.rows - (bq.rows || 0);
     return diff === 0 ? { kind: 'same', diff: 0 } : { kind: 'diff', diff: diff };
   }
 

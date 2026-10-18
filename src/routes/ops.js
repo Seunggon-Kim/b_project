@@ -15,13 +15,16 @@ export async function opsStorage(request, env) {
     sizes = (await db.prepare(SIZE_SQL).all()).results || [];
     counts = (await db.prepare(COUNT_SQL).all()).results || [];
   } catch (err) {
-    return dbError(err);
+    // 오류 원문(권한 오류의 계정·주소 등)은 공개 응답에 싣지 않습니다.
+    return dbError(err, { detail: '저장소 현황을 읽지 못했습니다.' });
   }
   // 표가 아직 없거나(첫 주간 실행 전) 읽기에 실패해도 MySQL 부분은 보여 줍니다.
   let bq = null;
   try {
     bq = (await db.prepare(BQ_SQL).all()).results || [];
-  } catch {
+  } catch (err) {
+    // 원문은 남기지 않고 오류 코드만 한 줄 남깁니다.
+    console.warn('ops/storage: meta_bq_tables 읽기 실패', err && err.code);
     bq = null;
   }
   return json(storageBody({ sizes, counts, bq, tables: columnDict().tables || {}, now: new Date() }));

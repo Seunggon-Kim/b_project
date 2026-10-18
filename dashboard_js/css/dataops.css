@@ -39,6 +39,7 @@
 .chip.ok{background:#d1fae5;color:#047857}
 .chip.stop{background:var(--bg-tertiary);color:var(--text-muted);border:1px dashed var(--text-muted)}
 .chip.none{background:#f1f5f9;color:#475569}
+.legend[hidden]{display:none}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.76rem;color:var(--text-muted);margin:10px 0 0}
 .jobs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 .job{border:1px solid var(--border-color);border-radius:var(--border-radius);padding:12px 14px}
@@ -54,7 +55,7 @@
 .job .sw{color:var(--text-muted);font-size:.74rem;font-variant-numeric:tabular-nums}
 .dot{width:9px;height:9px;border-radius:50%;flex:none}
 .dot.ok{background:var(--success)}.dot.warn{background:var(--warning)}.dot.bad{background:var(--danger)}
-.dot.none{background:#cbd5e1}.dot.stop{background:transparent;border:1.5px dashed var(--text-muted)}
+.dot.none{background:var(--plot-axes)}.dot.stop{background:transparent;border:1.5px dashed var(--text-muted)}
 .more{display:inline-flex;align-items:center;gap:4px;font-size:.8rem;color:var(--primary);text-decoration:none;font-weight:600;margin-top:12px}
 .two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:18px}
 .srcs{display:grid;grid-template-columns:1fr;gap:8px}

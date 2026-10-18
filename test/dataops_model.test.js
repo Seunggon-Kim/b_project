@@ -17,9 +17,9 @@ const M = ctx.DataOps.model;
 const L = ctx.Lineage.model;
 
 test('용량 글자', () => {
-  assert.equal(M.fmtBytes(2480000000), '2.48 GB');
-  assert.equal(M.fmtBytes(7500000), '7.5 MB');
-  assert.equal(M.fmtBytes(18000), '18 KB');
+  assert.equal(M.fmtBytes(2480000000), '2.48 GB');
+  assert.equal(M.fmtBytes(7500000), '7.5 MB');
+  assert.equal(M.fmtBytes(18000), '18 KB');
   assert.equal(M.fmtBytes(null), '-');
 });
 
@@ -30,6 +30,9 @@ test('비교 칸은 네 가지와 정보 없음뿐입니다', () => {
   assert.equal(M.compare(my, { rows: 12000, status: 'fail' }, true).kind, 'fail');
   assert.equal(M.compare(my, undefined, true).kind, 'missing');
   assert.equal(M.compare(my, undefined, false).kind, 'unknown');
+  // MySQL 행 수를 모르면 0 으로 보고 거짓 차이를 만들지 않습니다.
+  assert.deepEqual({ ...M.compare({ rows: null }, { rows: 12684, status: 'ok' }, true) }, { kind: 'unknown', diff: null });
+  assert.deepEqual({ ...M.compare({}, { rows: 12684, status: 'ok' }, true) }, { kind: 'unknown', diff: null });
 });
 
 const STORAGE = {

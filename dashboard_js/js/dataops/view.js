@@ -18,7 +18,8 @@
   function num(n) { return n === null || n === undefined ? '-' : Number(n).toLocaleString('ko-KR'); }
   function $(id) { return document.getElementById(id); }
   function getJson(url) { return fetch(url).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }); }
-  function fail(id, what) { $(id).innerHTML = '<p class="ops-msg">' + esc(what) + '을(를) 불러오지 못했습니다.</p>'; }
+  // 부르는 쪽이 완성된 문장을 넘깁니다(조사가 어색해지지 않게).
+  function fail(id, msg) { $(id).innerHTML = '<p class="ops-msg">' + esc(msg) + '</p>'; }
 
   // ---- 저장소 ----
   function cmpChip(c) {
@@ -152,13 +153,24 @@
   // ---- 불러오기 ----
   const lin = getJson('../data/table_lineage.json');
   getJson(API + '/ops/storage').then(renderStorage).catch(() => {
-    fail('ops-st-msg', '저장소 현황');
+    fail('ops-st-msg', '저장소 현황을 불러오지 못했습니다.');
+    $('ops-st-wrap').hidden = true;
+    $('ops-st-legend').hidden = true;
     $('ops-t-my').textContent = '-';
     $('ops-t-bq').textContent = '-';
   });
   Promise.all([lin, getJson(API + '/jobs/status')])
     .then(([l, js]) => renderJobs(l, js.details || {}))
-    .catch(() => fail('ops-jobs', '수집 작업 상태'));
-  lin.then(renderSources).catch(() => fail('ops-src', '출처'));
-  getJson('../data/source_history.json').then(renderHistory).catch(() => fail('ops-hist', '수집 중단 이력'));
+    .catch(() => {
+      fail('ops-jobs', '수집 작업 상태를 불러오지 못했습니다.');
+      $('ops-t-job').textContent = '-';
+    });
+  lin.then(renderSources).catch(() => {
+    fail('ops-src', '출처 정보를 불러오지 못했습니다.');
+    $('ops-t-src').textContent = '-';
+  });
+  // ops-hist 는 <ul> 이라 실패 문구를 <li> 로 넣습니다.
+  getJson('../data/source_history.json').then(renderHistory).catch(() => {
+    $('ops-hist').innerHTML = '<li class="ops-msg">수집 중단 이력을 불러오지 못했습니다.</li>';
+  });
 })();

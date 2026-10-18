@@ -6,7 +6,10 @@
 // 주간 복사가 record_bq_snapshot.py 로 남김). Worker 에는 GCP 자격이 없어
 // 빅쿼리를 직접 읽지 않습니다. 오류 원문(meta_bq_tables.error)은 프로젝트 이름이나
 // 경로가 섞일 수 있어 내보내지 않습니다.
+// 약관(KBO 이용약관 제14조)으로 데이터 탐색에서 뺀 표는 여기서도 뺍니다(lib/tos.js).
 // 설계: docs/superpowers/specs/2026-10-18-data-ops-tab-design.md §4-3
+
+import { KBO_TOS_HIDDEN_TABLES } from './tos.js';
 
 export const SIZE_SQL =
   'SELECT table_name AS name, data_length AS data_bytes, index_length AS index_bytes '
@@ -23,7 +26,7 @@ export const BQ_SQL =
   'SELECT name, bq_rows, bq_bytes, '
   + "DATE_FORMAT(last_ok_at, '%Y-%m-%d %H:%i') AS last_ok_at, "
   + "DATE_FORMAT(last_try_at, '%Y-%m-%d %H:%i') AS last_try_at, status "
-  + 'FROM meta_bq_tables';
+  + "FROM meta_bq_tables WHERE name NOT LIKE 'meta\\_%'";  // SIZE_SQL 과 같은 글자
 
 function num(v) {
   if (v === null || v === undefined || v === '') return null;
@@ -39,8 +42,9 @@ function kstText(d) {
 }
 
 export function storageBody({ sizes, counts, bq, tables, now }) {
+  const shown = r => !KBO_TOS_HIDDEN_TABLES.has(r.name);
   const cnt = new Map((counts || []).map(r => [r.name, r]));
-  const my = (sizes || []).map((r) => {
+  const my = (sizes || []).filter(shown).map((r) => {
     const c = cnt.get(r.name);
     return {
       name: r.name,
@@ -55,8 +59,9 @@ export function storageBody({ sizes, counts, bq, tables, now }) {
     || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 
   let bigquery = null;
-  if (bq) {
-    const list = bq.map(r => ({
+  // 빈 배열은 표만 만들고 아직 복사 기록이 없는 상태입니다(첫 주간 복사 전). 못 읽은 것과 같게 둡니다.
+  if (bq && bq.length) {
+    const list = bq.filter(shown).map(r => ({
       name: r.name, rows: num(r.bq_rows), bytes: num(r.bq_bytes),
       last_ok_at: r.last_ok_at || null, last_try_at: r.last_try_at || null, status: r.status,
     }));

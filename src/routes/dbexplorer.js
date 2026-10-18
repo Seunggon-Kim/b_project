@@ -4,6 +4,7 @@ import { countOf, countsOf } from '../lib/counts.js';
 import { tableNames, tableColumns, columnCounts } from '../lib/schema.js';
 import { columnDict, tableMeta } from '../lib/coldict.js';
 import { idFixer } from '../lib/ids.js';
+import { KBO_TOS_HIDDEN_TABLES } from '../lib/tos.js';
 
 /**
  * 데이터 탐색에서 빼는 표입니다(목록에 없고, 표를 열면 404).
@@ -13,9 +14,7 @@ import { idFixer } from '../lib/ids.js';
  * 더 내보내지 않습니다. 네이버로 대신한 표(공식 기록·팀 순위·선수)는 그대로
  * 보입니다. 표 자체는 DB 에 남겨 둡니다(지울지는 따로 정합니다).
  */
-export const KBO_TOS_HIDDEN_TABLES = new Set([
-  'futures_games', 'futures_season_stats', 'futures_teams', 'kbo_roster', 'kbo_roster_moves',
-]);
+export { KBO_TOS_HIDDEN_TABLES };
 
 /**
  * 화면에 보일 표 이름 전부입니다.

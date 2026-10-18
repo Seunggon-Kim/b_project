@@ -146,9 +146,12 @@ test('dbexplorer: CSV 는 모든 표에 410·no-store 이고 표를 읽지 않�
 
 test('dbexplorer: KBO 사이트에서만 받은 표 다섯은 목록·표 보기에서 빠집니다', () => {
   const src = readFileSync(new URL('../src/routes/dbexplorer.js', import.meta.url), 'utf8');
+  // 목록은 lib/tos.js 에 있고 dbexplorer 와 opsstorage 가 함께 씁니다.
+  const tos = readFileSync(new URL('../src/lib/tos.js', import.meta.url), 'utf8');
   for (const t of ['futures_games', 'futures_season_stats', 'futures_teams', 'kbo_roster', 'kbo_roster_moves']) {
-    assert.ok(src.includes(`'${t}'`), t);
+    assert.ok(tos.includes(`'${t}'`), t);
   }
+  assert.ok(src.includes("from '../lib/tos.js'"));
   assert.ok(src.includes('names.filter((n) => !KBO_TOS_HIDDEN_TABLES.has(n)).sort()'));
 });
 

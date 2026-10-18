@@ -75,7 +75,7 @@
 MySQL 용량은 데이터+인덱스의 추정치입니다.">i</span></h2>
             <p class="sub" id="ops-st-sub"></p>
             <div id="ops-st-msg"></div>
-            <div class="st-wrap">
+            <div class="st-wrap" id="ops-st-wrap">
                 <table class="st" id="ops-st">
                     <thead>
                         <tr><th></th><th></th><th class="grp my" colspan="2">MySQL (원본)</th><th class="grp bq" colspan="2">빅쿼리 (주간 사본)</th><th></th></tr>
@@ -94,7 +94,7 @@ MySQL 용량은 데이터+인덱스의 추정치입니다.">i</span></h2>
                 </table>
             </div>
             <button class="foldbtn" type="button" id="ops-st-fold" hidden></button>
-            <div class="legend"><span><span class="chip same">같음</span> 두 행 수가 같음</span><span><span class="chip diff">차이</span> MySQL − 빅쿼리</span><span><span class="chip bad">복사 실패</span> 지난 복사 실패</span><span><span class="chip none">빅쿼리에 없음</span> 아직 복사 전</span></div>
+            <div class="legend" id="ops-st-legend"><span><span class="chip same">같음</span> 두 행 수가 같음</span><span><span class="chip diff">차이</span> MySQL − 빅쿼리</span><span><span class="chip bad">복사 실패</span> 지난 복사 실패</span><span><span class="chip none">빅쿼리에 없음</span> 아직 복사 전</span></div>
         </section>
 
         <section class="ops-sec">
