@@ -86,3 +86,8 @@ def test_오늘_행은_고정_일평균과_변동_중앙값에_들어가지_않�
 def test_SQL_SKU_점유율_합은_100에_가깝습니다():
     s = b.summarize(month_rows(), "2026-10", dt.date(2026, 10, 18), 30000)
     assert abs(sum(x["share_pct"] for x in s["sql_skus"]) - 100) < 0.5
+
+
+def test_질의는_청구_월도_시작_달부터로_거릅니다():
+    sql = b.billing_sql("p.d.t")
+    assert "invoice.month >= FORMAT_DATE('%Y%m', @start)" in sql

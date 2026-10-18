@@ -775,3 +775,20 @@ def test_dry_run_은_결과_JSON_을_쓰지_않습니다(tmp_path, monkeypatch):
     out = tmp_path / "bq_result.json"
     run_main(tmp_path, monkeypatch, FakeClient(), ["--dry-run", "--result-json", str(out)])
     assert not out.exists()
+
+
+def test_결과_JSON_을_못_써도_복사_결과대로_끝납니다(tmp_path, monkeypatch, capsys):
+    def boom(*a, **k):
+        raise OSError("디스크 가득 TESTONLY")
+
+    monkeypatch.setattr(m, "write_result_json", boom)
+    out = tmp_path / "bq_result.json"
+    ok = tmp_path / "ok"
+    ok.mkdir()
+    code, note, _ = run_main(ok, monkeypatch, FakeClient(), ["--result-json", str(out)])
+    assert code == 0 and "note=" in note
+    assert "경고: 결과 파일을 쓰지 못했습니다" in capsys.readouterr().out
+    bad = tmp_path / "bad"
+    bad.mkdir()
+    code, _, _ = run_main(bad, monkeypatch, FakeClient(fail={"teams"}), ["--result-json", str(out)])
+    assert code == 1

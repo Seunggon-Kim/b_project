@@ -93,19 +93,30 @@ def cf_fetch(token, acct, days):
         return json.loads(res.read().decode("utf-8"))
 
 
+def query_start(month, today):
+    """질의 시작일입니다: 그 달 1일과 today-29일 중 이른 날의 세 달 전 1일."""
+    first = dt.date(int(month[:4]), int(month[5:7]), 1)
+    start = min(first, today - dt.timedelta(days=29))
+    return dt.date(start.year - (start.month <= 3), (start.month - 4) % 12 + 1, 1)
+
+
+def _mask(msg, secrets, label):
+    """오류 글에서 비밀값(긴 것부터)을 label 로 바꿉니다. 자르기 전에 불러야 합니다."""
+    for s in sorted({x for x in secrets if x}, key=len, reverse=True):
+        msg = msg.replace(s, label)
+    return msg
+
+
 def make_billing(month, today, budget):
     table = read_secret("billing_export_table.txt")
     if not table:
         return None, "결제 내보내기 표 이름이 없습니다(~/.bstats/billing_export_table.txt)"
-    first = dt.date(int(month[:4]), int(month[5:7]), 1)
-    start = min(first, today - dt.timedelta(days=29))
-    start = dt.date(start.year - (start.month <= 3), (start.month - 4) % 12 + 1, 1)  # 세 달 전 1일
+    start = query_start(month, today)
     try:
         rows = bq_rows(bq_client(), table, start)
     except Exception as e:  # noqa: BLE001  칸 하나만 안내로 바꿉니다
-        msg = str(e)
-        for name in sorted({table, table.rsplit(".", 1)[-1]}, key=len, reverse=True):
-            msg = msg.replace(name, "<결제 표>")  # 결제 계정 ID 가 표 이름에 들어 있습니다
+        # 결제 계정 ID 가 표 이름에 들어 있습니다
+        msg = _mask(str(e), (table, table.rsplit(".", 1)[-1]), "<결제 표>")
         return None, "결제 데이터를 읽지 못했습니다: %s" % msg[:200]
     if not rows:
         return None, "결제 내보내기 데이터가 아직 없습니다. 켠 뒤 몇 시간에서 하루가 걸립니다"
@@ -120,9 +131,9 @@ def make_cf(utc_today):
     try:
         return cost_cloudflare.summarize(cf_fetch(token, acct, days), days), "", 0
     except cost_cloudflare.SchemaMismatch as e:
-        return None, "Cloudflare 응답 모양이 예상과 다릅니다: %s" % str(e)[:200], 1
+        return None, "Cloudflare 응답 모양이 예상과 다릅니다: %s" % _mask(str(e), (acct, token), "<계정>")[:200], 1
     except Exception as e:  # noqa: BLE001
-        return None, "Cloudflare 를 읽지 못했습니다: %s" % str(e)[:200], 1
+        return None, "Cloudflare 를 읽지 못했습니다: %s" % _mask(str(e), (acct, token), "<계정>")[:200], 1
 
 
 def screenshot(html_path, png_path):

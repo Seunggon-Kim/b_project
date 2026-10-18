@@ -689,7 +689,10 @@ def main(argv=None):
         my.close()
 
     if args.result_json and not args.dry_run:
-        write_result_json(args.result_json, results, tried_at, specs)
+        try:
+            write_result_json(args.result_json, results, tried_at, specs)
+        except Exception as e:  # noqa: BLE001  기록 실패는 복사 판정을 바꾸지 않습니다
+            print("경고: 결과 파일을 쓰지 못했습니다: %s" % e)
     note = summary_note(results)
     print("%s%s (%.0f초)" % ("[dry-run] 올리지 않았습니다. " if args.dry_run else "빅쿼리 복사: ",
                             note, time.time() - t0))
