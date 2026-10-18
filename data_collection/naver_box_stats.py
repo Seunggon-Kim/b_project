@@ -138,6 +138,10 @@ def batter_game(b, pbp_pas=None):
             k["bb_guess"] += t in ("err_if", "err_of")
         if bb:
             k[bb.upper()] += 1  # GO·AO (약어 종류 go 와 겹치지 않게 대문자)
+    if not cs and ((b.get("ab") or 0) or (b.get("bb") or 0)):
+        # 이닝 칸이 통째로 빈 경기(2017-09-23 삼성·한화, PBP 도 없음). 타석·희생타 같은
+        # 칸을 셀 수 없어 표시만 해 두고, 부르는 쪽이 그 선수 시즌의 해당 칸을 비웁니다.
+        k["gap"] += 1
     k["hit"] = b.get("hit") or 0
     k["box_ab"] = b.get("ab") or 0
     k["multi"] = 1 if (b.get("hit") or 0) >= 2 else 0

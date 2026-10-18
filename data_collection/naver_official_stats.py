@@ -154,6 +154,11 @@ def batter_extra(nv, box, pbp, pbp_ok, sb, cs):
           - Decimal("0.32") * cs - Decimal("0.09") * (ab - h - so) - Decimal("0.098") * so
           - Decimal("0.37") * gidp + Decimal("0.37") * sf + Decimal("0.04") * sh)
     out["extended_runs"] = nss.r(xr, 1)
+    if box["gap"]:
+        # 박스 이닝 칸도 PBP 도 없는 경기에 나온 선수: 그 경기 몫을 셀 수 없습니다.
+        for c in ("plate_appearance", "sacrifice_bunts", "sacrifice_fly", "intentional_base_on_balls",
+                  "ground_into_double_play", "ground_outs", "air_outs", "go_ao", "extended_runs"):
+            out[c] = None
     if pbp_ok:
         out["runners_in_scoring_position"] = div(pbp["risp_h"], pbp["risp_ab"], 3) or 0.0
         out["pinch_hit_batting_average"] = div(pbp["ph_h"], pbp["ph_ab"], 3) or 0.0
