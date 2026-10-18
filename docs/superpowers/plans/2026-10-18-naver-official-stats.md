@@ -202,3 +202,17 @@ PBP 적재 뒤 `batter_ID`·`pitcher_ID`·`pos_*_id`·`on_*_id` 가운데 player
 4. **박스스코어 받기(약 3.8시간, 1회):** 결승타·선발승/구원승·교차 확인에 필요. 받지 않으면 gw_rbi·wins_game_started·wins_game_relieved 는 NULL.
 5. **players 에서 네이버가 비운 칸(은퇴 선수 투타·드래프트, 학교 전체 경로, 계약금):** (가) 지금 값 유지 (나) NULL.
 6. **교체 방식:** (가) 같은 표에 덮어쓰기(백업 후) (나) 새 표(`*_naver`)를 만들고 API 를 옮긴 뒤 옛 표 삭제.
+
+## 구현 기록 (2026-10-18, 브랜치 feat/naver-official-stats, push 안 함)
+
+- 새 파일: `data_collection/naver_http.py`(호스트 고정·호출 시작 간격 1.1초), `naver_team_ranks.py`, `naver_season_stats.py`, `naver_boxscore.py`, `naver_box_stats.py`, `pbp_season_stats.py`, `naver_official_stats.py`, `naver_players.py`, `migration/naver_verify.py`, `migration/naver_swap.py`.
+- 박스스코어 2008~2026 정규시즌 12,426경기 받음(`~/.bstats/naver_boxscore/`, 실패 0). 계획과 다르게 DB 표 대신 로컬 파일, daily 는 actions/cache 로 이어 받음.
+- 조사 중 바뀐 판단:
+  - 칸은 세 원천을 섞습니다. 박스 기록지 약어로 타석·희생타·고의4구·병살·멀티히트, 박스 투수 줄로 상대 타자·투구 수·선발·완투·완봉·선발승/구원승, 폭투·보크는 박스 이름(못 이으면 PBP).
+  - 순위결정전(6666…)은 개인 기록에서 뺍니다(KBO·네이버 모두 뺌).
+  - 네이버 시즌 API 의 타자 경기 수는 타석 없는 출장을 1로 셉니다 → 박스 출장 수.
+  - 2011 은 네이버 박스에 투수 줄이 통째로 없고(532경기), 2022 는 10경기가 빕니다 → PBP 로 대신.
+  - 2017-09-23 삼성·한화는 박스 이닝 칸도 PBP 도 없습니다 → 그 경기에 나온 타자의 타석·희생타 등을 비웁니다.
+  - 검증 기준은 "쓴 행의 99%"입니다. PBP 가 온전하지 않은 선수 행은 비우고(틀린 값을 쓰지 않음) 따로 셉니다.
+- 결과: `docs/naver-migration/official-verify.md`(칸×시즌), `database/naver_verified.json`(수집기가 읽음), `docs/naver-migration/dry-run.md`(바뀌는 행), `docs/naver-migration/missing-pitchers.md`(네이버가 뺀 투수 10명).
+- 늘 비는 칸: blown_save·save_opportunity·total_saves(결정 3), p_pa(어느 시즌도 99% 못 넘음, 화면에서 뺌), strikeout_per_pa·base_on_balls_per_pa(쓰는 곳 없음).
