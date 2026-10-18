@@ -173,15 +173,17 @@ CREATE TABLE `meta_bq_tables` (
             echo "| 빅쿼리 현황 기록 | ${{ steps.bq_snapshot.outcome }} |"
 ```
 
+`tests/test_workflow_deps.py` 는 워크플로가 부르는 `python -m …` 모듈을 모두 `ENTRYPOINTS` 에서 찾습니다. `ENTRYPOINTS["weekly.yml"]` 목록에 `"migration/mysql/record_bq_snapshot.py"` 를 더합니다(기존 항목 순서·모양을 따름).
+
 - [ ] **Step 4: 시험을 돌립니다**
 
-Run: `py -m pytest tests/test_data_ops_wiring.py tests/test_sqlite_to_bigquery.py tests/test_collect_workflows.py -q`
+Run: `py -m pytest tests/test_data_ops_wiring.py tests/test_sqlite_to_bigquery.py tests/test_collect_workflows.py tests/test_workflow_deps.py tests/test_mysql_workflows.py -q`
 Expected: 전부 PASS
 
 - [ ] **Step 5: 커밋합니다**
 
 ```bash
-git add migration/mysql/schema.sql .github/workflows/weekly.yml tests/test_data_ops_wiring.py
+git add migration/mysql/schema.sql .github/workflows/weekly.yml tests/test_data_ops_wiring.py tests/test_workflow_deps.py
 git commit -m "feat(weekly): 빅쿼리 복사 결과를 meta_bq_tables 에 기록(실패해도 주간 판정 그대로), schema.sql 에 표 정의
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
@@ -743,14 +745,22 @@ Expected: 새 시험 2개 FAIL(파일 없음)
 
 - [ ] **Step 3: 이력 파일을 씁니다**
 
-날짜는 쓰기 전에 커밋 기록으로 확인합니다: `git log -1 --format=%ad --date=short f91bfc4`(수집 중단), `git log -1 --format=%ad --date=short 4707d4c`(/standings 대체), `git log -1 --format=%ad --date=short 90a2370`(화면 내림). 아래 날짜가 다르면 커밋 날짜로 고칩니다.
+날짜는 쓰기 전에 커밋 기록으로 확인합니다: `git log -1 --format=%ad --date=short f91bfc4`(수집 중단), `git log -1 --format=%ad --date=short 4707d4c`(/standings 대체), `git log -1 --format=%ad --date=short 90a2370`(화면 내림), `b56cad0`·`8a3aaa6`(매일 수집 네이버 전환). 아래 날짜가 다르면 커밋 날짜로 고칩니다. '지난 시즌 공식 기록' 항목의 날짜는 MySQL 에 쓴 날(2026-10-18, 약관 대응 세션 보고)이라 커밋으로 확인하지 않습니다.
 
 ```json
 {
   "events": [
+    { "date": "2026-10-18", "kind": "대체", "sources": ["kbo_record", "kbo_player_search", "kbo_player_detail"],
+      "what": "팀 순위·공식 기록·새 선수 수집",
+      "detail": "매일 작업의 팀 순위·공식 기록·새 선수 단계를 네이버 스포츠(시즌 기록·박스스코어·문자중계)로 바꿨습니다. 1군 기록이 없는 선수의 소속은 주간 작업에서 네이버 선수 상세로 다시 봅니다.",
+      "reason": "KBO 이용약관 제14조" },
     { "date": "2026-10-18", "kind": "대체", "sources": ["kbo_record"],
-      "what": "팀 순위",
-      "detail": "팀 순위를 KBO 기록실 대신 네이버 스포츠에서 읽도록 바꿨습니다.",
+      "what": "지난 시즌 공식 기록·팀 순위",
+      "detail": "2008년부터는 네이버 값으로 다시 채웠습니다. 네이버에 없는 2007년 이전 기록은 지웠고, 만들 수 없는 칸(블론세이브 등)은 비웠습니다.",
+      "reason": "KBO 이용약관 제14조" },
+    { "date": "2026-10-18", "kind": "대체", "sources": ["kbo_record"],
+      "what": "1군 팀 순위 화면",
+      "detail": "실시간 팀 순위를 KBO 기록실 대신 네이버 스포츠에서 읽도록 바꿨습니다.",
       "reason": "KBO 이용약관 제14조" },
     { "date": "2026-10-18", "kind": "중단", "sources": ["kbo_futures", "kbo_register"],
       "what": "퓨처스·1군 등록 명단 화면",
@@ -759,7 +769,7 @@ Expected: 새 시험 2개 FAIL(파일 없음)
     { "date": "2026-10-17", "kind": "중단",
       "sources": ["kbo_record", "kbo_futures", "kbo_register", "kbo_player_search", "kbo_player_detail"],
       "what": "KBO 공식 사이트 수집 전부",
-      "detail": "공식 기록·팀 순위·퓨처스·등록 명단·새 선수 단계와 roster·monthly 예약 실행을 멈췄습니다.",
+      "detail": "공식 기록·팀 순위·퓨처스·등록 명단·새 선수 단계와 roster·monthly 예약 실행을 멈췄습니다. 전체 데이터 CSV 내려받기도 멈췄습니다.",
       "reason": "KBO 이용약관 제14조(자동 수집·재배포 금지)" },
     { "date": "2026-10-14", "kind": "알림", "sources": [],
       "what": "KBO 이용약관 개정 시행",
@@ -824,7 +834,7 @@ Expected: 새 시험 2개 FAIL(파일 없음)
       (r.category || '분류 없음') + ' · MySQL ' + num(r.rows) + '행 · 빅쿼리 ' + (r.bq ? num(r.bq.rows) + '행' : '-'),
       'MySQL 용량 ' + M.fmtBytes(r.bytes) + ' = 데이터 ' + M.fmtBytes(r.data_bytes) + ' + 인덱스 ' + M.fmtBytes(r.index_bytes),
       '행 수 갱신 ' + (r.rows_updated_at || '-') + ' · 빅쿼리 마지막 성공 ' + ((r.bq && r.bq.last_ok_at) || '-'),
-      '차이 = MySQL 행 수 − 빅쿼리 행 수. 빅쿼리는 주 1회 사본이라 그 사이 들어온 행만큼 차이가 납니다.');
+      '차이 = MySQL 행 수 − 빅쿼리 행 수. 빅쿼리는 주 1회 사본입니다.');
     const w = Math.max(r.bytes / (maxBytes || 1) * 100, 0.6).toFixed(1);
     return '<tr' + t + (folded ? ' class="fold"' : '') + '><th scope="row"><code>' + esc(r.name) + '</code></th>'
       + '<td class="cat">' + esc(r.category || '-') + '</td><td>' + num(r.rows) + '</td>'
@@ -862,16 +872,22 @@ Expected: 새 시험 2개 FAIL(파일 없음)
   }
 
   // ---- 수집 작업 ----
+  // 계보의 멈춤 사유에서 괄호 속 바깥 사이트 주소를 뺍니다(공개 화면에 주소를 싣지 않음).
+  function stopReason(lin) {
+    return String(L.stoppedReason(lin) || '').replace(/\s*\([a-z0-9.-]+\.(com|net|kr|org)\)/gi, '');
+  }
   function renderJobs(lin, details) {
     const cards = M.jobCards(lin, details, Date.now(), L.jobStatus);
     $('ops-jobs').innerHTML = cards.map(function (c) {
       const lis = c.items.map(function (it) {
         const st = c.stopped ? ['멈춤', 'stop'] : (STATE[it.state] || STATE.none);
-        const t = tip(it.step + ' · ' + it.key, st[0] + ' · 마지막 실행 ' + (it.at || '-'),
-          it.note ? '메모: ' + it.note : '',
-          c.stopped ? L.stoppedReason(lin) : '오래됨 기준: 마지막 실행 뒤 ' + c.staleHours + '시간이 지나면 오래됨으로 봅니다.');
+        // 멈춘 작업은 시각을 보이지 않습니다. 같은 기록 키를 다른 작업이 함께 써서
+        // (예: add_new_players 는 daily 와 멈춘 roster 가 같이 씀) 남의 실행 시각이 섞이기 때문입니다.
+        const t = tip(it.step + ' · ' + it.key, c.stopped ? st[0] : st[0] + ' · 마지막 실행 ' + (it.at || '-'),
+          c.stopped ? '' : (it.note ? '메모: ' + it.note : ''),
+          c.stopped ? stopReason(lin) : '오래됨 기준: 마지막 실행 뒤 ' + c.staleHours + '시간이 지나면 오래됨으로 봅니다.');
         return '<li' + t + '><span class="dot ' + st[1] + '"></span><span class="sn">' + esc(it.step)
-          + '</span><span class="sw">' + esc(it.at ? it.at.slice(5) : '-') + '</span></li>';
+          + '</span><span class="sw">' + esc(c.stopped ? '멈춤' : (it.at ? it.at.slice(5) : '-')) + '</span></li>';
       }).join('');
       return '<div class="job' + (c.stopped ? ' stopped' : '') + '"><div class="jh"><b>' + esc(c.id) + '</b>'
         + (c.stopped ? '<span class="chip stop">예약 멈춤</span>' : '') + '<span class="js">' + esc(c.schedule) + '</span></div>'
@@ -1001,7 +1017,7 @@ Expected: 새 시험 2개 FAIL(파일 없음)
         <section class="ops-sec">
             <h2>저장소 현황 <span class="info" tabindex="0" data-tip="저장소 현황
 표마다 MySQL(원본)과 빅쿼리(주간 사본)의 행 수·용량을 나란히 봅니다. 줄에 마우스를 올리면 자세한 값이 나옵니다.
-차이 = MySQL 행 수 − 빅쿼리 행 수. 빅쿼리는 주 1회 사본이라 그 사이 들어온 행만큼 차이가 납니다. 해석은 붙이지 않고 숫자만 보여 줍니다.
+차이 = MySQL 행 수 − 빅쿼리 행 수. 빅쿼리는 주 1회 사본입니다. 해석은 붙이지 않고 숫자만 보여 줍니다.
 MySQL 용량은 데이터+인덱스의 추정치입니다.">i</span></h2>
             <p class="sub" id="ops-st-sub"></p>
             <div id="ops-st-msg"></div>

@@ -71,7 +71,7 @@ for i, r in enumerate(rows):
         f"{r['cat']} · MySQL {r['rows']:,}행 · 빅쿼리 {r['bq_rows']:,}행",
         f"MySQL 용량 {size(my)} = 데이터 {size(r['data'])} + 인덱스 {size(r['idx'])}",
         f"빅쿼리 용량 {size(r['bq_bytes'])} · 마지막 복사 {BQ_LAST}",
-        "차이 = MySQL 행 수 − 빅쿼리 행 수. 빅쿼리는 주 1회 사본이라 그 사이 들어온 행만큼 차이가 납니다.",
+        "차이 = MySQL 행 수 − 빅쿼리 행 수. 빅쿼리는 주 1회 사본입니다.",
     )
     trs.append(
         f'<tr{tip}{" class=\"fold\"" if i >= 10 else ""}><th scope="row"><code>{r["name"]}</code></th><td class="cat">{a(r["cat"])}</td>'
