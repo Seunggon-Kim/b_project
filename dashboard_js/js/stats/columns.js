@@ -165,7 +165,7 @@
       dash: GROUPS.bat.dash.slice(),
       std: GROUPS.bat.std.slice(),
       adv: GROUPS.bat.adv.slice(),
-      sit: ['pa', 'risp', 'ph', 'gw', 'multi', 'xr', 'gpa', 'ppa'],
+      sit: ['pa', 'risp', 'ph', 'gw', 'multi', 'xr', 'gpa'],
     },
     pit: {
       dash: GROUPS.pit.dash.slice(),

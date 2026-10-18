@@ -266,13 +266,27 @@ def season(files, pbp_by_game_batter=None, pbp_games=None):
                 for pid, n in pss.count_events(rows, words).items():
                     pit[pid][key] += n
             continue
-        for how, key in (("폭투", "wp"), ("보크", "bk")):
+        gid = Path(f).name.split(".")[0]
+        prow = pgames.get(gid) or []
+        for how, key, words in (("폭투", "wp", ("폭투로", "낫아웃 폭투")), ("보크", "bk", ("보크",))):
+            got = collections.Counter()
+            missed = 0
             for name in etc_names(box, how):
                 pid = resolve(name, sides)
                 if pid:
-                    pit[pid][key] += 1
+                    got[pid] += 1
                 else:
-                    unmatched[how] += 1
+                    missed += 1
+            # 박스 이름을 못 이었거나 PBP 가 더 많이 세면 그 경기는 PBP 로 셉니다. 2024~2026
+            # 폭투가 DB 와 같은 투수: 박스만 288·278·293명, PBP 만 290·280·293명, 섞으면
+            # 291·281·295명(전체 291·281·296명).
+            pc = pss.count_events(prow, words) if prow else None
+            if pc is not None and (missed or sum(pc.values()) > sum(got.values())):
+                got = pc
+            elif missed:
+                unmatched[how] += missed
+            for pid, n in got.items():
+                pit[pid][key] += n
     return bat, pit, unmatched
 
 
