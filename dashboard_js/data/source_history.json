@@ -1,0 +1,29 @@
+{
+  "events": [
+    { "date": "2026-10-18", "kind": "대체", "sources": ["kbo_record", "kbo_player_search", "kbo_player_detail"],
+      "what": "팀 순위·공식 기록·새 선수 수집",
+      "detail": "매일 작업의 팀 순위·공식 기록·새 선수 단계를 네이버 스포츠(시즌 기록·박스스코어·문자중계)로 바꿨습니다. 1군 기록이 없는 선수의 소속은 주간 작업에서 네이버 선수 상세로 다시 봅니다.",
+      "reason": "KBO 이용약관 제14조" },
+    { "date": "2026-10-18", "kind": "대체", "sources": ["kbo_record"],
+      "what": "지난 시즌 공식 기록·팀 순위",
+      "detail": "2008년부터는 네이버 값으로 다시 채웠습니다. 네이버에 없는 2007년 이전 기록은 지웠고, 만들 수 없는 칸(블론세이브 등)은 비웠습니다.",
+      "reason": "KBO 이용약관 제14조" },
+    { "date": "2026-10-18", "kind": "대체", "sources": ["kbo_record"],
+      "what": "1군 팀 순위 화면",
+      "detail": "실시간 팀 순위를 KBO 기록실 대신 네이버 스포츠에서 읽도록 바꿨습니다.",
+      "reason": "KBO 이용약관 제14조" },
+    { "date": "2026-10-18", "kind": "중단", "sources": ["kbo_futures", "kbo_register"],
+      "what": "퓨처스·1군 등록 명단 화면",
+      "detail": "네이버에 같은 자료가 없어 화면을 내렸습니다. 대체하지 않습니다.",
+      "reason": "KBO 이용약관 제14조" },
+    { "date": "2026-10-17", "kind": "중단",
+      "sources": ["kbo_record", "kbo_futures", "kbo_register", "kbo_player_search", "kbo_player_detail"],
+      "what": "KBO 공식 사이트 수집 전부",
+      "detail": "공식 기록·팀 순위·퓨처스·등록 명단·새 선수 단계와 roster·monthly 예약 실행을 멈췄습니다. 전체 데이터 CSV 내려받기도 멈췄습니다.",
+      "reason": "KBO 이용약관 제14조(자동 수집·재배포 금지)" },
+    { "date": "2026-10-14", "kind": "알림", "sources": [],
+      "what": "KBO 이용약관 개정 시행",
+      "detail": "크롤러·스크래퍼 등 자동 수집과 재배포·2차 가공을 금지하는 조항이 시행됐습니다.",
+      "reason": "2026-09-15 공고" }
+  ]
+}

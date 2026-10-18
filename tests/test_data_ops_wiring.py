@@ -41,3 +41,31 @@ def test_현황_기록은_복사_뒤에_돌고_실패해도_판정을_바꾸지_
 def test_요약에_현황_기록_줄이_있습니다():
     summary = next(s for s in weekly_steps() if s.get("name") == "요약")
     assert "| 빅쿼리 현황 기록 | ${{ steps.bq_snapshot.outcome }} |" in summary["run"]
+
+
+import json
+import re
+
+
+def test_이력_파일_모양():
+    data = json.loads((ROOT / "dashboard_js/data/source_history.json").read_text(encoding="utf-8"))
+    lin = json.loads((ROOT / "dashboard_js/data/table_lineage.json").read_text(encoding="utf-8"))
+    ids = {s["id"] for s in lin["sources"]}
+    assert data["events"]
+    for e in data["events"]:
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", e["date"])
+        assert e["kind"] in {"중단", "대체", "재개", "알림"}
+        assert set(e.get("sources", [])) <= ids
+        assert e["what"] and e["reason"]
+
+
+def test_페이지는_KBO_주소를_싣지_않고_api_js_를_쓰지_않습니다():
+    page = (ROOT / "dashboard_js/pages/data-ops.html").read_text(encoding="utf-8")
+    view = (ROOT / "dashboard_js/js/dataops/view.js").read_text(encoding="utf-8")
+    hist = (ROOT / "dashboard_js/data/source_history.json").read_text(encoding="utf-8")
+    for text in (page, view, hist):
+        assert "koreabaseball" not in text
+    assert "js/api.js" not in page
+    for src in ("../js/config.js", "../js/lineage/model.js", "../js/dataops/model.js", "../js/dataops/view.js"):
+        assert src in page
+    assert "'/ops/storage'" in view and "'/jobs/status'" in view
