@@ -78,6 +78,8 @@ ENTRYPOINTS = {
         # 결과 표를 MySQL 에 올린 뒤 빅쿼리에 통째로 복사합니다.
         "migration/mysql/sqlite_to_bigquery.py",
         "data_collection/record_job_run.py",
+        # 1군 기록이 없는 선수의 소속을 네이버 상세로 다시 봅니다(2026-10-18).
+        "data_collection/naver_players.py",
     ],
     "roster.yml": [
         # 오후에 오늘 명단을 다시 받습니다. daily 는 새벽이라 전날

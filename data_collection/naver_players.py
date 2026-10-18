@@ -31,6 +31,11 @@ team_id 는 그 시즌 팀 이름(team_seasons)입니다. team_of 의 차례(올
 
     py data_collection/naver_players.py --all --dry-run       # 2008~ 전원
     py data_collection/naver_players.py --new --season 2026    # daily: PBP 에 처음 나온 선수
+    py data_collection/naver_players.py --refresh-teams        # weekly: 상세로 소속 다시
+
+daily 는 올 시즌 1군 선수 목록(규칙 a)으로만 소속을 맞춥니다. 1군 기록이 없는 선수의
+소속(규칙 b, 네이버 상세)은 weekly 의 --refresh-teams 가 한 주에 한 번 다시 봅니다
+(evan 결정 2026-10-18).
 """
 import argparse
 import collections
@@ -66,9 +71,12 @@ HAND = {"우": "R", "좌": "L", "양": "S"}
 BAT_SHARE = 0.8
 
 
-def detail(pid, season, cl=None, cache=None):
-    """네이버 선수 상세(result.player) 또는 None(400)."""
-    if cache:
+def detail(pid, season, cl=None, cache=None, refresh=False):
+    """네이버 선수 상세(result.player) 또는 None(400).
+
+    refresh 면 캐시를 읽지 않고 다시 받아 캐시를 새로 씁니다(--refresh-teams).
+    """
+    if cache and not refresh:
         p = Path(cache) / ("%d.json" % pid)
         if p.exists():
             d = json.loads(p.read_text(encoding="utf-8"))
@@ -213,8 +221,13 @@ def team_of(pid, d, season, list_teams, names):
     b. 없으면 네이버 선수 상세의 teamId(상세의 year 가 올 시즌이고 은퇴가 아닐 때만)
     c. 그 밖에는 빈 값(은퇴·옛 선수는 지금 소속으로 보이지 않게)
 
+    네이버 상세가 은퇴(isRetire)로 표시한 선수는 a 에 해당해도 빈 값입니다(evan 결정
+    2026-10-18 추가, 박병호·황재균).
+
     돌려주는 값: (팀 이름 또는 None, 'season'|'detail'|None)
     """
+    if d and d.get("isRetire"):
+        return None, None
     if list_teams.get(pid):
         return list_teams[pid], "season"
     if d and d.get("teamId") and not d.get("isRetire") and int(d.get("year") or 0) == int(season):
@@ -249,6 +262,26 @@ def build_row(pid, d, current_team, pbp_throw, pbp_bat, image_url, pbp_name=None
     return row
 
 
+def sync_teams(query, teams, last, season, cache=None, fetch=None):
+    """daily 소속 맞추기에 쓸 {선수 ID: 팀}. 네이버가 은퇴로 표시한 선수는 뺍니다.
+
+    올 시즌 1군 기록이 있어도 은퇴식 특별 출장(2026 황재균·박병호)처럼 은퇴 선수일 수
+    있습니다. 지금 team_id 가 빈 선수만 상세를 한 번 봅니다(대부분 0~몇 명). 이미
+    소속이 있는 선수는 weekly 의 --refresh-teams 가 은퇴를 다시 봅니다.
+    """
+    fetch = fetch or (lambda pid: detail(pid, last.get(pid, season), cache=cache))
+    current = {int(r["player_id"]): (r["team_id"] or "").strip()
+               for r in query("SELECT player_id, team_id FROM players")}
+    out = {}
+    for pid, team in teams.items():
+        if pid in current and not current[pid]:
+            d = fetch(pid)
+            if d and d.get("isRetire"):
+                continue
+        out[pid] = team
+    return out
+
+
 def write(sink, rows, teams=None):
     """있으면 고치고 없으면 넣습니다. created_at 은 그대로 두고 updated_at 을 지금으로.
 
@@ -278,10 +311,93 @@ def current_teams(season, names, cache=None):
     return out
 
 
+def refresh_targets(have_team, cached, last, season):
+    """주간 소속 갱신에서 상세를 다시 받을 선수 ID(정렬).
+
+    - 지금 team_id 가 있는 선수(소속이 바뀌거나 은퇴했을 수 있음)
+    - 캐시의 마지막 상세가 은퇴가 아닌 선수
+    - 캐시가 없을 때(러너 첫 실행 등)를 대비해 지난 시즌 이후 공식 기록이 있는 선수
+    캐시에서 은퇴로 남은 선수는 다시 묻지 않습니다(은퇴를 되돌리는 일은 드뭅니다).
+    """
+    out = set(have_team)
+    out |= {pid for pid, d in cached.items() if d and not d.get("isRetire")}
+    out |= {pid for pid, y in last.items() if y >= season - 1 and not (cached.get(pid) or {}).get("isRetire")}
+    return sorted(out)
+
+
+def team_changes(current, computed):
+    """{선수 ID: 지금 team_id} 와 {선수 ID: 새 team_id 또는 None} → 바꿀 [(ID, 새 값 '')]."""
+    out = []
+    for pid, new in sorted(computed.items()):
+        old = (current.get(pid) or "").strip()
+        new = (new or "").strip()
+        if old != new:
+            out.append((pid, new))
+    return out
+
+
+def write_teams(sink, changes):
+    """team_id 만 고칩니다(다른 칸은 그대로). 화면·API 의 현역 여부는 이 값에서 나옵니다."""
+    n = 0
+    for pid, team in changes:
+        n += sink.execute("UPDATE players SET team_id = %s, updated_at = UTC_TIMESTAMP() "
+                          "WHERE player_id = %s", (team, pid))
+    return n
+
+
+def load_cache(cache):
+    out = {}
+    if not cache or not Path(cache).exists():
+        return out
+    for f in Path(cache).glob("*.json"):
+        if f.stem.isdigit():
+            try:
+                out[int(f.stem)] = json.loads(f.read_text(encoding="utf-8")) or None
+            except ValueError:
+                continue
+    return out
+
+
+def refresh_teams(a, query, season, names, teams):
+    """주간: 네이버 상세를 다시 받아 team_id 를 a > b > c 차례로 다시 정합니다."""
+    current = {int(r["player_id"]): r["team_id"] for r in query("SELECT player_id, team_id FROM players")}
+    last = {}
+    for t in ("kbo_official_batter_stats", "kbo_official_pitcher_stats"):
+        for r in query("SELECT player_id, MAX(season) AS s FROM %s WHERE season >= 2008 GROUP BY player_id" % t):
+            last[int(r["player_id"])] = max(last.get(int(r["player_id"]), 0), int(r["s"]))
+    cached = load_cache(a.detail_cache)
+    have_team = {pid for pid, t in current.items() if (t or "").strip()}
+    ids = [pid for pid in refresh_targets(have_team, cached, last, season) if pid in current]
+    print("다시 받을 선수 %d명, 네이버 호출 %d번(1.1초 간격이면 약 %.0f분)"
+          % (len(ids), len(ids), len(ids) * naver_http.MIN_GAP_SEC / 60), flush=True)
+    computed = {}
+    why = collections.Counter()
+    for i, pid in enumerate(ids, 1):
+        d = detail(pid, last.get(pid, season), cache=a.detail_cache, refresh=True)
+        team, src = team_of(pid, d, season, teams, names)
+        computed[pid] = team
+        why[src] += 1
+        if i % 100 == 0:
+            print("  %d/%d" % (i, len(ids)), flush=True)
+    changes = team_changes(current, computed)
+    print("소속: 시즌 기록 %d · 선수 상세 %d · 없음 %d, 바뀌는 선수 %d명"
+          % (why["season"], why["detail"], why[None], len(changes)))
+    for pid, team in changes[:20]:
+        print("  %d: %s → %s" % (pid, current.get(pid) or "(빈 값)", team or "(빈 값)"))
+    if a.dry_run:
+        print("[미리보기] 넣지 않았습니다.")
+        return 0
+    from mysql_sink import mirror
+    mirror("players_team", lambda sink: write_teams(sink, changes))
+    return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--all", action="store_true", help="2008~ 공식 기록·players 의 선수 전원")
     ap.add_argument("--new", action="store_true", help="그 시즌 PBP 에 나왔는데 players 에 없는 선수")
+    ap.add_argument("--refresh-teams", action="store_true",
+                    help="주간: 은퇴가 아닌 선수의 네이버 상세를 다시 받아 team_id 만 고칩니다")
     ap.add_argument("--season", type=int)
     ap.add_argument("--detail-cache")
     ap.add_argument("--naver-cache")
@@ -294,6 +410,8 @@ def main(argv=None):
     names = {(r["franchise_id"], int(r["season"])): r["team_name"]
              for r in query("SELECT franchise_id, season, team_name FROM team_seasons")}
     teams = current_teams(season, names, a.naver_cache)
+    if a.refresh_teams:
+        return refresh_teams(a, query, season, names, teams)
     have = {int(r["player_id"]) for r in query("SELECT player_id FROM players")}
     last = {}
     for t in ("kbo_official_batter_stats", "kbo_official_pitcher_stats"):
@@ -341,7 +459,8 @@ def main(argv=None):
         print("[미리보기] 넣지 않았습니다.")
         return 0
     from mysql_sink import mirror
-    mirror("players", lambda sink: write(sink, rows, teams if a.new else None))
+    mirror("players", lambda sink: write(sink, rows, sync_teams(query, teams, last, season, a.detail_cache)
+                                        if a.new else None))
     return 0
 
 

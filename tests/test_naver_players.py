@@ -41,6 +41,12 @@ def test_소속은_시즌_기록_상세_빈값_차례():
     assert np_.team_of(4, dict(d, year=2024), 2026, {}, names) == (None, None)
 
 
+def test_은퇴로_표시된_선수는_올_시즌_1군_기록이_있어도_소속이_빕니다():
+    retired = {"teamId": "WO", "year": 2026, "isRetire": True}
+    assert np_.team_of(5, retired, 2026, {5: "키움"}, {}) == (None, None)
+    assert np_.team_of(5, None, 2026, {5: "키움"}, {}) == ("키움", "season")
+
+
 def test_은퇴_선수는_소속_연봉_없이():
     r = np_.build_row(50030, dict(D, isRetire=True), None, {}, {}, None)
     assert r["team_id"] == "" and r["salary"] is None
@@ -71,3 +77,42 @@ def test_표기():
 def test_사진은_404_면_비웁니다():
     assert np_.photo(1, opener=lambda u: 404, gap=0) is None
     assert np_.photo(1, opener=lambda u: 200, gap=0).endswith("/1.png")
+
+
+def test_주간_소속_갱신_대상():
+    cached = {1: {"isRetire": False}, 2: {"isRetire": True}, 3: None, 4: {"isRetire": True}}
+    last = {5: 2025, 6: 2020, 4: 2026}
+    # 지금 소속 있음(7), 캐시 현역(1), 최근 기록(5). 캐시 은퇴(2·4)·옛 선수(6)는 빼되,
+    # 소속이 남아 있으면(4 를 have_team 에) 다시 봅니다.
+    assert np_.refresh_targets({7}, cached, last, 2026) == [1, 5, 7]
+    assert np_.refresh_targets({4}, cached, last, 2026) == [1, 4, 5]
+
+
+def test_주간_소속은_바뀐_것만_team_id_만():
+    cur = {1: "KT", 2: "", 3: None, 4: "LG"}
+    new = {1: "KT", 2: "두산", 3: None, 4: None}
+    assert np_.team_changes(cur, new) == [(2, "두산"), (4, "")]
+
+    class Sink:
+        def __init__(self):
+            self.sql = []
+
+        def execute(self, sql, params):
+            self.sql.append((sql, params))
+            return 1
+    s = Sink()
+    assert np_.write_teams(s, [(2, "두산")]) == 1
+    assert s.sql[0][0].startswith("UPDATE players SET team_id = %s") and s.sql[0][1] == ("두산", 2)
+
+
+def test_daily_소속_맞추기는_은퇴_표시_선수를_뺍니다():
+    q = lambda sql: [{"player_id": 1, "team_id": ""}, {"player_id": 2, "team_id": ""},
+                     {"player_id": 3, "team_id": "LG"}]
+    fetched = []
+
+    def fetch(pid):
+        fetched.append(pid)
+        return {"isRetire": pid == 1}
+    got = np_.sync_teams(q, {1: "KT", 2: "두산", 3: "LG", 4: "NC"}, {}, 2026, fetch=fetch)
+    assert got == {2: "두산", 3: "LG", 4: "NC"}
+    assert fetched == [1, 2]   # 지금 소속이 빈 선수만 상세를 봅니다

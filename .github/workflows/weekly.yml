@@ -157,6 +157,35 @@ jobs:
         timeout-minutes: 40
         run: python -m migration.mysql.sqlite_to_bigquery --db "$KBO_DB"
 
+      # --- 선수 소속(네이버 상세) ---------------------------------------
+      # daily 는 올 시즌 1군 선수 목록으로만 소속을 맞춥니다. 1군 기록이 없는 선수의
+      # 소속(네이버 선수 상세의 올해 팀, 은퇴 아님)은 여기서 한 주에 한 번 다시 봅니다
+      # (evan 결정 2026-10-18). team_id 만 고칩니다. 네이버 호출은 1.1초 간격이고
+      # 선수 800명 안팎이면 15분쯤 걸립니다. 상세 캐시는 다음 주에 은퇴 여부를 보려고 둡니다.
+      - name: 선수 상세 캐시
+        if: ${{ !cancelled() && steps.mysql.outcome == 'success' }}
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/naver_players
+          key: naver-players-${{ github.run_id }}
+          restore-keys: naver-players-
+
+      - name: 선수 소속(네이버 상세)
+        id: players_team
+        if: ${{ !cancelled() && steps.mysql.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 40
+        run: |
+          python data_collection/naver_players.py --refresh-teams \
+            --detail-cache "$RUNNER_TEMP/naver_players"
+
+      - name: 선수 소속 기록
+        if: always()
+        continue-on-error: true
+        run: |
+          python data_collection/record_job_run.py --job players_team \
+            --status ${{ steps.players_team.outcome == 'success' && 'ok' || (steps.players_team.outcome == 'skipped' && 'skip' || 'fail') }}
+
       - name: 결과 기록
         if: always()
         continue-on-error: true
@@ -206,6 +235,7 @@ jobs:
             echo "| 결과 표 적재 | ${{ steps.push.outcome }} |"
             echo "| 캐시 비우기 | ${{ steps.purge.outcome }} |"
             echo "| 빅쿼리 복사 | ${{ steps.bq_copy.outcome }} |"
+            echo "| 선수 소속(네이버 상세) | ${{ steps.players_team.outcome }} |"
             echo "| MySQL 적재 | ${{ steps.mirror_check.outcome }} |"
           } >> $GITHUB_STEP_SUMMARY
 
@@ -213,6 +243,12 @@ jobs:
         if: ${{ always() && (steps.mysql.outcome != 'success' || steps.mirror_check.outcome != 'success') }}
         run: |
           echo "MySQL 연결 또는 적재가 실패했습니다. 요약 표를 보십시오."
+          exit 1
+
+      - name: 선수 소속 판정
+        if: ${{ always() && steps.players_team.outcome == 'failure' }}
+        run: |
+          echo "선수 소속(네이버 상세) 갱신이 실패했습니다. MySQL 적재·빅쿼리 복사와는 따로입니다."
           exit 1
 
       - name: 빅쿼리 복사 판정

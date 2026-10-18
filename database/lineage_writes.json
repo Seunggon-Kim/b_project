@@ -390,10 +390,11 @@
         "kbo_official_pitcher_stats"
       ],
       "status_keys": {
-        "daily": "add_new_players"
+        "daily": "add_new_players",
+        "weekly": "players_team"
       },
       "note": "투타가 네이버에 없으면 PBP 의 투구 손·타석 방향으로 채웁니다. 드래프트·계약금·출신 경로는 비웁니다.",
-      "desc": "올 시즌 PBP 에 처음 나온 선수를 네이버 선수 상세(생년월일·투타·키·몸무게·등번호·포지션·사진)로 MySQL players 에 넣고, 올 시즌 선수 목록의 소속으로 team_id 를 맞춥니다. KBO 선수 검색·등록 명단 대신 씁니다."
+      "desc": "올 시즌 PBP 에 처음 나온 선수를 네이버 선수 상세(생년월일·투타·키·몸무게·등번호·포지션·사진)로 MySQL players 에 넣고, 올 시즌 선수 목록의 소속으로 team_id 를 맞춥니다. KBO 선수 검색·등록 명단 대신 씁니다. 매주(weekly)는 은퇴가 아닌 선수의 네이버 상세를 다시 받아 1군 기록이 없는 선수의 소속(team_id)만 고칩니다."
     }
   },
   "manual_tables": {

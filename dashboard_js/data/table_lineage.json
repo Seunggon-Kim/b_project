@@ -58,6 +58,10 @@
   },
   {
    "from": "job:weekly",
+   "to": "table:players"
+  },
+  {
+   "from": "job:weekly",
    "to": "table:re24_matrix_by_season"
   },
   {
@@ -99,6 +103,10 @@
   {
    "from": "source:naver_stats",
    "to": "job:daily"
+  },
+  {
+   "from": "source:naver_stats",
+   "to": "job:weekly"
   },
   {
    "from": "table:batter_run_value",
@@ -705,6 +713,16 @@
      "name": "빅쿼리 복사",
      "script": "migration/mysql/sqlite_to_bigquery.py",
      "status_key": "bq_copy"
+    },
+    {
+     "name": "선수 소속(네이버 상세)",
+     "script": "data_collection/naver_players.py",
+     "status_key": "players_team"
+    },
+    {
+     "name": "선수 소속 기록",
+     "script": "data_collection/record_job_run.py",
+     "status_key": null
     },
     {
      "name": "결과 기록",
@@ -1612,9 +1630,10 @@
    ]
   },
   {
-   "desc": "올 시즌 PBP 에 처음 나온 선수를 네이버 선수 상세(생년월일·투타·키·몸무게·등번호·포지션·사진)로 MySQL players 에 넣고, 올 시즌 선수 목록의 소속으로 team_id 를 맞춥니다. KBO 선수 검색·등록 명단 대신 씁니다.",
+   "desc": "올 시즌 PBP 에 처음 나온 선수를 네이버 선수 상세(생년월일·투타·키·몸무게·등번호·포지션·사진)로 MySQL players 에 넣고, 올 시즌 선수 목록의 소속으로 team_id 를 맞춥니다. KBO 선수 검색·등록 명단 대신 씁니다. 매주(weekly)는 은퇴가 아닌 선수의 네이버 상세를 다시 받아 1군 기록이 없는 선수의 소속(team_id)만 고칩니다.",
    "jobs": [
-    "daily"
+    "daily",
+    "weekly"
    ],
    "note": "투타가 네이버에 없으면 PBP 의 투구 손·타석 방향으로 채웁니다. 드래프트·계약금·출신 경로는 비웁니다.",
    "path": "data_collection/naver_players.py",
@@ -1628,7 +1647,8 @@
     "naver_stats"
    ],
    "status_keys": {
-    "daily": "add_new_players"
+    "daily": "add_new_players",
+    "weekly": "players_team"
    },
    "stopped": false,
    "writes": [
