@@ -155,7 +155,7 @@ jobs:
         if: ${{ !cancelled() && steps.push.outcome == 'success' }}
         continue-on-error: true
         timeout-minutes: 40
-        run: python -m migration.mysql.sqlite_to_bigquery --db "$KBO_DB"
+        run: python -m migration.mysql.sqlite_to_bigquery --db "$KBO_DB" --result-json "$RUNNER_TEMP/bq_result.json"
 
       # --- 선수 소속(네이버 상세) ---------------------------------------
       # daily 는 올 시즌 1군 선수 목록으로만 소속을 맞춥니다. 1군 기록이 없는 선수의
@@ -207,6 +207,19 @@ jobs:
             --status ${{ steps.bq_copy.outcome == 'success' && 'ok' || 'fail' }} \
             --note "$NOTE"
 
+      # 공개 '데이터 관리' 화면이 읽는 빅쿼리 현황(meta_bq_tables)을 남깁니다.
+      # 실패해도 주간 판정은 바꾸지 않습니다(mysql_sink 실패 기록을 쓰지 않음).
+      - name: 빅쿼리 현황 기록
+        id: bq_snapshot
+        if: always()
+        continue-on-error: true
+        run: |
+          if [ -f "$RUNNER_TEMP/bq_result.json" ]; then
+            python -m migration.mysql.record_bq_snapshot --result-json "$RUNNER_TEMP/bq_result.json"
+          else
+            echo "빅쿼리 복사 결과 파일이 없어 현황을 기록하지 않습니다."
+          fi
+
       - name: MySQL 적재 실패 확인
         id: mirror_check
         if: ${{ always() && steps.mysql.outcome == 'success' }}
@@ -235,6 +248,7 @@ jobs:
             echo "| 결과 표 적재 | ${{ steps.push.outcome }} |"
             echo "| 캐시 비우기 | ${{ steps.purge.outcome }} |"
             echo "| 빅쿼리 복사 | ${{ steps.bq_copy.outcome }} |"
+            echo "| 빅쿼리 현황 기록 | ${{ steps.bq_snapshot.outcome }} |"
             echo "| 선수 소속(네이버 상세) | ${{ steps.players_team.outcome }} |"
             echo "| MySQL 적재 | ${{ steps.mirror_check.outcome }} |"
           } >> $GITHUB_STEP_SUMMARY

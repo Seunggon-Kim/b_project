@@ -279,6 +279,17 @@ CREATE TABLE `meta_table_counts` (
   PRIMARY KEY (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE `meta_bq_tables` (
+  `name` VARCHAR(64) NOT NULL,
+  `bq_rows` BIGINT,
+  `bq_bytes` BIGINT,
+  `last_ok_at` DATETIME,
+  `last_try_at` DATETIME NOT NULL,
+  `status` VARCHAR(8) NOT NULL,
+  `error` VARCHAR(300),
+  PRIMARY KEY (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `play_by_play` (
   `pbp_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `pitch_type` VARCHAR(16),
