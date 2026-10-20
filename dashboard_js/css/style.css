@@ -152,6 +152,29 @@ h4 {
     transition: var(--transition);
     position: relative;
     overflow: hidden;
+    white-space: nowrap;
+}
+
+/* 메뉴가 8개라 노트북 폭(769~1280px)에서는 간격을 줄여 한 줄에 둡니다. 768px 이하는 햄버거 메뉴입니다. */
+@media (min-width: 769px) and (max-width: 1280px) {
+    .header-content {
+        padding: 0 1.25rem;
+    }
+
+    .nav {
+        gap: 0.25rem;
+    }
+
+    .nav-link {
+        padding: 0.6rem 0.7rem;
+    }
+}
+
+@media (min-width: 769px) and (max-width: 1060px) {
+    .nav-link {
+        padding: 0.55rem 0.5rem;
+        font-size: 0.92rem;
+    }
 }
 
 .nav-link::before {
